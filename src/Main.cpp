@@ -162,9 +162,18 @@ void calculate_stereo_view_offset(FFakeStereoRendering* stereo, const int32_t vi
 
 std::unique_ptr<safetyhook::InlineHook> g_cspm{};
 
-Matrix4x4f& calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f& out, const int32_t view_index) {
+Matrix4x4f* calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f& out, const int32_t view_index) {
     //out = glm::identity<Matrix4x4f>();
-    return out;
+    return g_cspm->call<Matrix4x4f*>(stereo, out, view_index);
+}
+
+// "RenderTexture_RenderThread" fallback reference
+std::unique_ptr<safetyhook::InlineHook> g_rtrt{};
+struct FRHICommandListImmediate;
+struct FRHITexture2D;
+
+void render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate& rhi_command_list, FRHITexture2D* backbuffer, FRHITexture2D* src_texture, Vector2f window_size) {
+
 }
 
 void startup_thread(HMODULE poc_module) {
@@ -190,12 +199,14 @@ void startup_thread(HMODULE poc_module) {
 
     const auto stereo_view_offset_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index];
     const auto calculate_stereo_view_offset_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index + 1];
+    const auto render_texture_render_thread_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index + 3];
     
     auto factory = SafetyHookFactory::init();
     auto builder = factory->acquire();
 
     g_csvo = builder.create_inline((void*)stereo_view_offset_func, calculate_stereo_view_offset);
     g_cspm = builder.create_inline((void*)calculate_stereo_view_offset_func, calculate_stereo_projection_matrix);
+    //g_rtrt = builder.create_inline((void*)render_texture_render_thread_func, render_texture_render_thread);
 }
 
 BOOL APIENTRY DllMain(HANDLE handle, DWORD reason, LPVOID reserved) {
