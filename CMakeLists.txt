@@ -207,8 +207,11 @@ set(CMKR_TARGET ue4poc)
 set(ue4poc_SOURCES "")
 
 list(APPEND ue4poc_SOURCES
+	"src/FFakeStereoRenderingHook.cpp"
 	"src/Main.cpp"
+	"src/FFakeStereoRenderingHook.hpp"
 	"src/Math.hpp"
+	"src/StereoStuff.hpp"
 )
 
 list(APPEND ue4poc_SOURCES
