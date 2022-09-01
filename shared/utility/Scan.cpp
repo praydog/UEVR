@@ -174,6 +174,36 @@ namespace utility {
         return std::nullopt;
     }
 
+    std::optional<uintptr_t> scan_mnemonic(uintptr_t ip, size_t num_instructions, const string& mnemonic) {
+        for (size_t i = 0; i < num_instructions; ++i) {
+            INSTRUX ix{};
+            const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
+
+            if (!ND_SUCCESS(status)) {
+                break;
+            }
+
+            if (std::string_view{ix.Mnemonic} == mnemonic) {
+                return ip;
+            }
+
+            ip += ix.Length;
+        }
+
+        return std::nullopt;
+    }
+
+    uint32_t get_insn_size(uintptr_t ip) {
+        INSTRUX ix{};
+        const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
+
+        if (!ND_SUCCESS(status)) {
+            return 0;
+        }
+
+        return ix.Length;
+    }
+
     uintptr_t calculate_absolute(uintptr_t address, uint8_t customOffset /*= 4*/) {
         auto offset = *(int32_t*)address;
 

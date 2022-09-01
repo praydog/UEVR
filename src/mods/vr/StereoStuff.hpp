@@ -40,7 +40,7 @@ struct FRHITexture2D : FRHITexture {
 };
 
 struct FTexture2DRHIRef {
-    char bs[0x100];
+    FRHITexture2D* texture; // we dont care about the reference counting utilities of this, so this is just essentially what this struct is.
 };
 
 struct FIntPoint {

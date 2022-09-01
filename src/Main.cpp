@@ -4,7 +4,7 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 
-#include "FFakeStereoRenderingHook.hpp"
+#include "Framework.hpp"
 
 void startup_thread(HMODULE poc_module) {
     // create spdlog sink
@@ -12,7 +12,7 @@ void startup_thread(HMODULE poc_module) {
     spdlog::flush_on(spdlog::level::info);
     spdlog::info("POC Entry");
 
-    static auto fsr_hook = std::make_unique<FFakeStereoRenderingHook>();
+    g_framework = std::make_unique<Framework>(poc_module);
 }
 
 BOOL APIENTRY DllMain(HANDLE handle, DWORD reason, LPVOID reserved) {

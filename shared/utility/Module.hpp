@@ -12,6 +12,11 @@
 
 #include "Address.hpp"
 
+struct _LIST_ENTRY;
+typedef struct _LIST_ENTRY LIST_ENTRY;
+
+struct _LDR_DATA_TABLE_ENTRY;
+
 namespace utility {
     //
     // Module utilities.

@@ -71,6 +71,24 @@ FetchContent_Declare(safetyhook
 )
 FetchContent_MakeAvailable(safetyhook)
 
+message(STATUS "Fetching openxr (458984d7f59d1ae6dc1b597d94b02e4f7132eaba)...")
+FetchContent_Declare(openxr
+	GIT_REPOSITORY
+		"https://github.com/KhronosGroup/OpenXR-SDK"
+	GIT_TAG
+		458984d7f59d1ae6dc1b597d94b02e4f7132eaba
+)
+FetchContent_MakeAvailable(openxr)
+
+message(STATUS "Fetching json (bc889afb4c5bf1c0d8ee29ef35eaaf4c8bef8a5d)...")
+FetchContent_Declare(json
+	GIT_REPOSITORY
+		"https://github.com/nlohmann/json"
+	GIT_TAG
+		bc889afb4c5bf1c0d8ee29ef35eaaf4c8bef8a5d
+)
+FetchContent_MakeAvailable(json)
+
 # Target spdlog
 set(CMKR_TARGET spdlog)
 set(spdlog_SOURCES "")
@@ -132,6 +150,68 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${glm_static_SOURCES})
 
 target_include_directories(glm_static PUBLIC
 	"dependencies/submodules/glm"
+)
+
+unset(CMKR_TARGET)
+unset(CMKR_SOURCES)
+
+# Target openvr
+set(CMKR_TARGET openvr)
+set(openvr_SOURCES "")
+
+set(CMKR_SOURCES ${openvr_SOURCES})
+add_library(openvr INTERFACE)
+
+if(openvr_SOURCES)
+	target_sources(openvr INTERFACE ${openvr_SOURCES})
+endif()
+
+target_include_directories(openvr INTERFACE
+	"dependencies/openvr/headers"
+)
+
+target_link_libraries(openvr INTERFACE
+	"${CMAKE_SOURCE_DIR}/dependencies/openvr/lib/win64/openvr_api.lib"
+)
+
+file(COPY dependencies/openvr/lib/win64/openvr_api.lib DESTINATION ${CMAKE_BINARY_DIR}/lib)
+file(COPY dependencies/openvr/bin/win64/openvr_api.dll DESTINATION ${CMAKE_BINARY_DIR}/bin)
+
+unset(CMKR_TARGET)
+unset(CMKR_SOURCES)
+
+# Target imgui
+set(CMKR_TARGET imgui)
+set(imgui_SOURCES "")
+
+list(APPEND imgui_SOURCES
+	"dependencies/submodules/imgui/imgui.cpp"
+	"dependencies/submodules/imgui/imgui_demo.cpp"
+	"dependencies/submodules/imgui/imgui_draw.cpp"
+	"dependencies/submodules/imgui/imgui_tables.cpp"
+	"dependencies/submodules/imgui/imgui_widgets.cpp"
+)
+
+list(APPEND imgui_SOURCES
+	cmake.toml
+)
+
+set(CMKR_SOURCES ${imgui_SOURCES})
+add_library(imgui STATIC)
+
+if(imgui_SOURCES)
+	target_sources(imgui PRIVATE ${imgui_SOURCES})
+endif()
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${imgui_SOURCES})
+
+target_compile_definitions(imgui PUBLIC
+	"IMGUI_USER_CONFIG=\"${CMAKE_SOURCE_DIR}/src/ue4poc-imgui/ue4poc_imconfig.hpp\""
+)
+
+target_include_directories(imgui PUBLIC
+	"dependencies/submodules/imgui"
+	"src/ue4poc-imgui"
 )
 
 unset(CMKR_TARGET)
@@ -207,11 +287,49 @@ set(CMKR_TARGET ue4poc)
 set(ue4poc_SOURCES "")
 
 list(APPEND ue4poc_SOURCES
-	"src/FFakeStereoRenderingHook.cpp"
+	"src/ExceptionHandler.cpp"
+	"src/Framework.cpp"
 	"src/Main.cpp"
-	"src/FFakeStereoRenderingHook.hpp"
+	"src/Mods.cpp"
+	"src/hooks/D3D11Hook.cpp"
+	"src/hooks/D3D12Hook.cpp"
+	"src/hooks/WindowsMessageHook.cpp"
+	"src/mods/FrameworkConfig.cpp"
+	"src/mods/VR.cpp"
+	"src/mods/vr/Bindings.cpp"
+	"src/mods/vr/D3D11Component.cpp"
+	"src/mods/vr/D3D12Component.cpp"
+	"src/mods/vr/FFakeStereoRenderingHook.cpp"
+	"src/mods/vr/OverlayComponent.cpp"
+	"src/mods/vr/runtimes/OpenVR.cpp"
+	"src/mods/vr/runtimes/OpenXR.cpp"
+	"src/ue4poc-imgui/imgui_impl_dx11.cpp"
+	"src/ue4poc-imgui/imgui_impl_dx12.cpp"
+	"src/ue4poc-imgui/imgui_impl_win32.cpp"
+	"src/ExceptionHandler.hpp"
+	"src/Framework.hpp"
+	"src/LicenseStrings.hpp"
 	"src/Math.hpp"
-	"src/StereoStuff.hpp"
+	"src/Mod.hpp"
+	"src/Mods.hpp"
+	"src/hooks/D3D11Hook.hpp"
+	"src/hooks/D3D12Hook.hpp"
+	"src/hooks/WindowsMessageHook.hpp"
+	"src/mods/FrameworkConfig.hpp"
+	"src/mods/VR.hpp"
+	"src/mods/vr/D3D11Component.hpp"
+	"src/mods/vr/D3D12Component.hpp"
+	"src/mods/vr/FFakeStereoRenderingHook.hpp"
+	"src/mods/vr/OverlayComponent.hpp"
+	"src/mods/vr/StereoStuff.hpp"
+	"src/mods/vr/runtimes/OpenVR.hpp"
+	"src/mods/vr/runtimes/OpenXR.hpp"
+	"src/mods/vr/runtimes/VRRuntime.hpp"
+	"src/ue4poc-imgui/font_robotomedium.hpp"
+	"src/ue4poc-imgui/ue4poc_imconfig.hpp"
+	"src/ue4poc-imgui/imgui_impl_dx11.h"
+	"src/ue4poc-imgui/imgui_impl_dx12.h"
+	"src/ue4poc-imgui/imgui_impl_win32.h"
 )
 
 list(APPEND ue4poc_SOURCES
@@ -247,7 +365,7 @@ target_include_directories(ue4poc PUBLIC
 	"src/"
 	"include/"
 	"dependencies/enetpp/include"
-	"dependencies/nlohmann"
+	"${OPENXR_SOURCE_DIR}/src"
 )
 
 target_link_libraries(ue4poc PUBLIC
@@ -259,11 +377,17 @@ target_link_libraries(ue4poc PUBLIC
 	winhttp
 	glm_static
 	bddisasm
+	imgui
+	openvr
+	openxr_loader
+	nlohmann_json
 )
 
 set_target_properties(ue4poc PROPERTIES
 	OUTPUT_NAME
 		dinput8
+	LINK_FLAGS
+		"/DELAYLOAD:openvr_api.dll /DELAYLOAD:openxr_loader.dll"
 	RUNTIME_OUTPUT_DIRECTORY_RELEASE
 		"${CMAKE_BINARY_DIR}/bin/${CMKR_TARGET}"
 	RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO
