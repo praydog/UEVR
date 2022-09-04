@@ -53,7 +53,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     auto runtime = vr->get_runtime();
 
     // If m_frame_count is even, we're rendering the left eye.
-    if (vr->m_render_frame_count % 2 == vr->m_left_eye_interval) {
+    if (vr->m_render_frame_count % 2 == vr->m_left_eye_interval && vr->m_use_afr->value()) {
         if (runtime->is_openxr() && runtime->ready()) {
             LOG_VERBOSE("Copying left eye");
             m_openxr.copy(0, backbuffer.Get());
@@ -84,9 +84,14 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 return e;
             }
         }
-    } else {
+    } else if (!vr->m_use_afr->value()) {
         if (runtime->ready()) {
             if (runtime->is_openxr()) {
+                if (!vr->m_use_afr->value()) {
+                    LOG_VERBOSE("Copying left eye");
+                    m_openxr.copy(0, backbuffer.Get());
+                }
+
                 LOG_VERBOSE("Copying right eye");
                 m_openxr.copy(1, backbuffer.Get());
             }
@@ -114,15 +119,17 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         }
 
         if (runtime->is_openvr()) {
-            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
-                runtime->synchronize_frame();
-            }
-
             // Copy the back buffer to the right eye texture.
             context->CopyResource(m_right_eye_tex.Get(), backbuffer.Get());
             vr::Texture_t right_eye{(void*)m_right_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
 
             auto e = vr::VRCompositor()->Submit(vr::Eye_Right, &right_eye, &vr->m_right_bounds);
+
+            // in UE4 it's just one texture, so re-use the right eye texture
+            if (e == vr::VRCompositorError_None && !vr->m_use_afr->value()) {
+                vr::Texture_t left_eye{(void*)m_right_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
+                e = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &vr->m_left_bounds);
+            }
 
             bool submitted = true;
 
@@ -139,7 +146,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             if (vr->m_desktop_fix_skip_present->value()) {
                 hook->ignore_next_present();
             } else {
-                context->CopyResource(real_backbuffer.Get(), m_left_eye_tex.Get());
+                context->CopyResource(real_backbuffer.Get(), m_right_eye_tex.Get());
             }
         }
     }
