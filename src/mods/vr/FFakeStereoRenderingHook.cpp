@@ -177,6 +177,9 @@ bool FFakeStereoRenderingHook::hook() {
 
     spdlog::info("GetRenderTargetManagerptr: {:x}", (uintptr_t)get_render_target_manager_func_ptr);
 
+    const auto is_stereo_enabled_index = 1;
+    const auto is_stereo_enabled_func_ptr = &((uintptr_t*)*vtable)[is_stereo_enabled_index];
+
     const auto adjust_view_rect_index = *stereo_view_offset_index - 3;
     const auto calculate_stereo_projection_matrix_index = *stereo_view_offset_index + 1;
     const auto init_canvas_index = *stereo_view_offset_index + 4;
@@ -197,6 +200,7 @@ bool FFakeStereoRenderingHook::hook() {
     // compiler optimization makes that function get re-used in a lot of places
     // so it's not feasible to just detour it, we need to replace the pointer in the vtable.
     m_get_render_target_manager_hook = std::make_unique<PointerHook>((void**)get_render_target_manager_func_ptr, (void*)&get_render_target_manager_hook);
+    m_is_stereo_enabled_hook = std::make_unique<PointerHook>((void**)is_stereo_enabled_func_ptr, (void*)&is_stereo_enabled);
 
     spdlog::info("Leaving FFakeStereoRenderingHook::hook");
 
@@ -289,6 +293,10 @@ std::optional<uint32_t> FFakeStereoRenderingHook::get_stereo_view_offset_index(u
     return std::nullopt;
 }
 
+bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
+    return !VR::get()->get_runtime()->got_first_sync || VR::get()->is_hmd_active();
+}
+
 void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h) {
 	*w = VR::get()->get_hmd_width() * 2;
     *h = VR::get()->get_hmd_height();
@@ -297,7 +305,7 @@ void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, in
 	*x += *w * (index % 2); // on some versions the index is actually the pass... figure out how to detect that
 }
 
-void FFakeStereoRenderingHook::calculate_stereo_view_offset(FFakeStereoRendering* stereo, const int32_t view_index, Rotator& view_rotation, const float world_to_meters, Vector3f& view_location) {
+void FFakeStereoRenderingHook::calculate_stereo_view_offset(FFakeStereoRendering* stereo, const int32_t view_index, Rotator* view_rotation, const float world_to_meters, Vector3f* view_location) {
     if (view_index % 2 == 0) {
         //VR::get()->update_hmd_state();
     }
@@ -314,6 +322,8 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(FFakeStereoRendering
     }
 
     s_t += 0.01f;*/
+
+    g_hook->m_calculate_stereo_view_offset_hook->call<void*>(stereo, ((view_index + 1) % 2), view_rotation, world_to_meters, view_location);
 }
 
 Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
@@ -338,7 +348,11 @@ void FFakeStereoRenderingHook::render_texture_render_thread(FFakeStereoRendering
 }
 
 IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_hook(FFakeStereoRendering* stereo) {
-    return &g_hook->m_rtm;
+    if (!VR::get()->get_runtime()->got_first_poses || VR::get()->is_hmd_active()) {
+        return &g_hook->m_rtm;
+    }
+
+    return nullptr;
 }
 
 void VRRenderTargetManager::CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) {
