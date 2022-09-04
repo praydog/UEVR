@@ -30,6 +30,9 @@ public:
     void on_pre_imgui_frame() override;
     void on_present() override;
 
+    void update_hmd_state();
+
+
     Vector4f get_position(uint32_t index)  const;
     Vector4f get_velocity(uint32_t index)  const;
     Vector4f get_angular_velocity(uint32_t index)  const;
@@ -40,6 +43,7 @@ public:
     Vector4f get_current_offset();
 
     Matrix4x4f get_current_eye_transform(bool flip = false);
+    Matrix4x4f get_projection_matrix(VRRuntime::Eye eye, bool flip = false);
     Matrix4x4f get_current_projection_matrix(bool flip = false);
 
     bool is_action_active(vr::VRActionHandle_t action, vr::VRInputValueHandle_t source = vr::k_ulInvalidInputValueHandle) const;
@@ -109,7 +113,6 @@ private:
 
     bool detect_controllers();
     bool is_any_action_down();
-    void update_hmd_state();
 
     std::optional<std::string> reinitialize_openvr() {
         spdlog::info("Reinitializing OpenVR");
@@ -173,8 +176,8 @@ private:
     std::vector<int32_t> m_controllers{};
     std::unordered_set<int32_t> m_controllers_set{};
 
-    vr::VRTextureBounds_t m_right_bounds{ 0.0f, 0.0f, 1.0f, 1.0f };
-    vr::VRTextureBounds_t m_left_bounds{ 0.0f, 0.0f, 1.0f, 1.0f };
+    vr::VRTextureBounds_t m_right_bounds{ 0.5f, 0.0f, 1.0f, 1.0f };
+    vr::VRTextureBounds_t m_left_bounds{ 0.0f, 0.0f, 0.5f, 1.0f };
 
     glm::vec3 m_overlay_rotation{-1.550f, 0.0f, -1.330f};
     glm::vec4 m_overlay_position{0.0f, 0.06f, -0.07f, 1.0f};
@@ -189,6 +192,7 @@ private:
     vrmod::D3D11Component m_d3d11{};
     vrmod::D3D12Component m_d3d12{};
     vrmod::OverlayComponent m_overlay_component;
+    bool m_disable_overlay{false};
 
     // Action set handles
     vr::VRActionSetHandle_t m_action_set{};
@@ -233,7 +237,7 @@ private:
     std::chrono::steady_clock::time_point m_last_interaction_display{};
 
     const ModToggle::Ptr m_use_afr{ ModToggle::create(generate_name("AlternateFrameRendering"), false) };
-    const ModToggle::Ptr m_desktop_fix{ ModToggle::create(generate_name("DesktopRecordingFix"), false) };
+    const ModToggle::Ptr m_desktop_fix{ ModToggle::create(generate_name("DesktopRecordingFix"), true) };
     const ModToggle::Ptr m_desktop_fix_skip_present{ ModToggle::create(generate_name("DesktopRecordingFixSkipPresent"), false) };
     const ModSlider::Ptr m_motion_controls_inactivity_timer{ ModSlider::create(generate_name("MotionControlsInactivityTimer"), 30.0f, 100.0f, 30.0f) };
     const ModSlider::Ptr m_joystick_deadzone{ ModSlider::create(generate_name("JoystickDeadzone"), 0.01f, 0.9f, 0.15f) };
@@ -286,4 +290,5 @@ private:
     friend class vrmod::D3D11Component;
     friend class vrmod::D3D12Component;
     friend class vrmod::OverlayComponent;
+    friend class FFakeStereoRenderingHook;
 };

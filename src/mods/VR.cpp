@@ -592,7 +592,9 @@ void VR::on_config_load(const utility::Config& cfg) {
         initialize_openxr_swapchains();
     }
 
-    m_fake_stereo_hook = std::make_unique<FFakeStereoRenderingHook>();
+    if (get_runtime()->loaded) {
+        m_fake_stereo_hook = std::make_unique<FFakeStereoRenderingHook>();
+    }
 }
 
 void VR::on_config_save(utility::Config& cfg) {
@@ -606,7 +608,9 @@ void VR::on_pre_imgui_frame() {
         return;
     }
 
-    m_overlay_component.on_pre_imgui_frame();
+    if (!m_disable_overlay) {
+        m_overlay_component.on_pre_imgui_frame();
+    }
 }
 
 void VR::on_present() {
@@ -667,6 +671,9 @@ void VR::on_present() {
         if (!runtime->got_first_sync) {
             runtime->synchronize_frame();
             runtime->update_poses();
+            runtime->update_matrices(m_nearz, m_farz);
+            m_standing_origin = get_position(vr::k_unTrackedDeviceIndex_Hmd);
+            runtime->got_first_poses = true;
         }
 
         m_is_d3d12 = false;
@@ -686,7 +693,9 @@ void VR::on_present() {
 
     if (m_submitted || runtime->needs_pose_update) {
         if (m_submitted) {
-            m_overlay_component.on_post_compositor_submit();
+            if (!m_disable_overlay) {
+                m_overlay_component.on_post_compositor_submit();
+            }
 
             if (runtime->is_openvr()) {
                 //vr::VRCompositor()->SetExplicitTimingMode(vr::VRCompositorTimingMode_Explicit_ApplicationPerformsPostPresentHandoff);
@@ -770,6 +779,8 @@ void VR::on_draw_ui() {
     }
     
     ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
+    ImGui::DragFloat4("Right Bounds", (float*)&m_right_bounds, 0.005f, -2.0f, 2.0f);
+    ImGui::DragFloat4("Left Bounds", (float*)&m_left_bounds, 0.005f, -2.0f, 2.0f);
     ImGui::Separator();
 
     if (ImGui::Button("Set Standing Height")) {
@@ -808,6 +819,7 @@ void VR::on_draw_ui() {
     ImGui::Checkbox("Disable Projection Matrix Override", &m_disable_projection_matrix_override);
     ImGui::Checkbox("Disable View Matrix Override", &m_disable_view_matrix_override);
     ImGui::Checkbox("Disable Backbuffer Size Override", &m_disable_backbuffer_size_override);
+    ImGui::Checkbox("Disable VR Overlay", &m_disable_overlay);
 
     const double min_ = 0.0;
     const double max_ = 25.0;
@@ -1044,6 +1056,20 @@ Matrix4x4f VR::get_current_eye_transform(bool flip) {
     }
 
     return get_runtime()->eyes[vr::Eye_Right];
+}
+
+Matrix4x4f VR::get_projection_matrix(VRRuntime::Eye eye, bool flip) {
+    if (!is_hmd_active()) {
+        return glm::identity<Matrix4x4f>();
+    }
+
+    std::shared_lock _{get_runtime()->eyes_mtx};
+
+    if ((eye == VRRuntime::Eye::LEFT && !flip) || (eye == VRRuntime::Eye::RIGHT && flip)) {
+        return get_runtime()->projections[(uint32_t)VRRuntime::Eye::LEFT];
+    }
+
+    return get_runtime()->projections[(uint32_t)VRRuntime::Eye::RIGHT];
 }
 
 Matrix4x4f VR::get_current_projection_matrix(bool flip) {

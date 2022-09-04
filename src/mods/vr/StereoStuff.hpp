@@ -7,6 +7,12 @@ enum ETextureCreateFlags {
     NONE = 0
 };
 
+enum EStereoscopicPass {
+    eSSP_FULL,
+    eSSP_PRIMARY,
+    eSSP_SECONDARY
+};
+
 struct Rotator {
     float x, y, z;
 };

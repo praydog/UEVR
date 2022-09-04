@@ -148,8 +148,6 @@ bool FFakeStereoRenderingHook::hook() {
     }
 
     const auto stereo_view_offset_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index];
-    const auto calculate_stereo_view_offset_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index + 1];
-    //const auto render_texture_render_thread_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index + 3];
 
     const auto render_texture_render_thread_func = find_function_from_string_ref(L"RenderTexture_RenderThread");
 
@@ -179,13 +177,20 @@ bool FFakeStereoRenderingHook::hook() {
 
     spdlog::info("GetRenderTargetManagerptr: {:x}", (uintptr_t)get_render_target_manager_func_ptr);
 
+    const auto adjust_view_rect_index = *stereo_view_offset_index - 3;
+    const auto calculate_stereo_projection_matrix_index = *stereo_view_offset_index + 1;
     const auto init_canvas_index = *stereo_view_offset_index + 4;
+
+    const auto adjust_view_rect_func = ((uintptr_t*)*vtable)[adjust_view_rect_index];
+    const auto calculate_stereo_projection_matrix_func = ((uintptr_t*)*vtable)[calculate_stereo_projection_matrix_index];
+    //const auto render_texture_render_thread_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index + 3];
     
     auto factory = SafetyHookFactory::init();
     auto builder = factory->acquire();
 
+    m_adjust_view_rect_hook = builder.create_inline((void*)adjust_view_rect_func, adjust_view_rect);
     m_calculate_stereo_view_offset_hook = builder.create_inline((void*)stereo_view_offset_func, calculate_stereo_view_offset);
-    m_calculate_stereo_projection_matrix_hook = builder.create_inline((void*)calculate_stereo_view_offset_func, calculate_stereo_projection_matrix);
+    m_calculate_stereo_projection_matrix_hook = builder.create_inline((void*)calculate_stereo_projection_matrix_func, calculate_stereo_projection_matrix);
     m_render_texture_render_thread_hook = builder.create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
 
     // This requires a pointer hook because the virtual just returns false
@@ -204,6 +209,7 @@ bool FFakeStereoRenderingHook::hook() {
 
     spdlog::info("Backbuffer Format CVar: {:x}", (uintptr_t)*backbuffer_format_cvar);
 
+    *(int32_t*)(*(uintptr_t*)*backbuffer_format_cvar + 0) = 0; // 8bit RGBA, which is what VR headsets support
     *(int32_t*)(*(uintptr_t*)*backbuffer_format_cvar + 0x4) = 0; // 8bit RGBA, which is what VR headsets support
 
     return true;
@@ -283,9 +289,20 @@ std::optional<uint32_t> FFakeStereoRenderingHook::get_stereo_view_offset_index(u
     return std::nullopt;
 }
 
+void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h) {
+	*w = VR::get()->get_hmd_width() * 2;
+    *h = VR::get()->get_hmd_height();
+    
+    *w = *w / 2;
+	*x += *w * (index % 2); // on some versions the index is actually the pass... figure out how to detect that
+}
 
 void FFakeStereoRenderingHook::calculate_stereo_view_offset(FFakeStereoRendering* stereo, const int32_t view_index, Rotator& view_rotation, const float world_to_meters, Vector3f& view_location) {
-    static float s_t{0.0f};
+    if (view_index % 2 == 0) {
+        //VR::get()->update_hmd_state();
+    }
+    
+    /*static float s_t{0.0f};
     const auto t = cos(s_t);
 
     if (view_index % 2 == 0) {
@@ -296,21 +313,28 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(FFakeStereoRendering
         view_location.x -= t * 100.0f;
     }
 
-    s_t += 0.01f;
+    s_t += 0.01f;*/
 }
 
-Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f& out, const int32_t view_index) {
+Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
     // TODO: grab from VR runtime
-    return g_hook->m_calculate_stereo_projection_matrix_hook->call<Matrix4x4f*>(stereo, out, view_index);
+    g_hook->m_calculate_stereo_projection_matrix_hook->call<Matrix4x4f*>(stereo, out, view_index);
+
+    float old_znear = (*out)[3][2];
+    VR::get()->m_nearz = old_znear;
+    VR::get()->get_runtime()->update_matrices(old_znear, 10000.0f);
+
+    //spdlog::info("NearZ: {}", old_znear);
+
+    *out = VR::get()->get_projection_matrix((VRRuntime::Eye)(view_index % 2));
+    return out;
 }
 
 void FFakeStereoRenderingHook::render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list, FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size) {
-    /*spdlog::info("hello");
-
-    spdlog::info("{}", utility::rtti::get_type_info(src_texture->GetNativeResource())->name());*/
+    //spdlog::info("{:x}", (uintptr_t)src_texture->GetNativeResource());
 
     // maybe the window size is actually a pointer we will find out later.
-    g_hook->m_render_texture_render_thread_hook->call<void*>(stereo, rhi_command_list, backbuffer, src_texture, window_size);
+    //g_hook->m_render_texture_render_thread_hook->call<void*>(stereo, rhi_command_list, backbuffer, src_texture, window_size);
 }
 
 IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_hook(FFakeStereoRendering* stereo) {
@@ -318,7 +342,7 @@ IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_
 }
 
 void VRRenderTargetManager::CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) {
-    InOutSizeX = VR::get()->get_hmd_width();
+    InOutSizeX = VR::get()->get_hmd_width() * 2;
     InOutSizeY = VR::get()->get_hmd_height();
 
     spdlog::info("RenderTargetSize: {}x{}", InOutSizeX, InOutSizeY);
@@ -341,7 +365,8 @@ void VRRenderTargetManager::texture_hook_callback(safetyhook::Context& ctx) {
     spdlog::info("Resulting texture: {:x}", (uintptr_t)texture);
     spdlog::info("Real resource: {:x}", (uintptr_t)texture->GetNativeResource());
 
-    rtm->render_targets[rtm->last_texture_index % 2] = texture;
+    rtm->render_target = texture;
+    rtm->texture_hook_ref = nullptr;
     ++rtm->last_texture_index;
 }
 

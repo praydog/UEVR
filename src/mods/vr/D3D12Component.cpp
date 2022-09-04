@@ -112,6 +112,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
             if (!runtime->got_first_poses) {
                 runtime->update_poses();
+                runtime->update_matrices(vr->m_nearz, vr->m_farz);
             }
         }
 

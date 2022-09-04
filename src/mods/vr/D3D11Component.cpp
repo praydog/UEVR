@@ -35,11 +35,11 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     auto swapchain = hook->get_swap_chain();
 
     // get back buffer
-    //ComPtr<ID3D11Texture2D> backbuffer{};
-    //swapchain->GetBuffer(0, IID_PPV_ARGS(&backbuffer));
+    ComPtr<ID3D11Texture2D> real_backbuffer{};
+    swapchain->GetBuffer(0, IID_PPV_ARGS(&real_backbuffer));
 
     ComPtr<ID3D11Texture2D> backbuffer{};
-    auto ue4_texture = VR::get()->m_fake_stereo_hook->get_render_target_manager()->get_render_target(1);
+    auto ue4_texture = VR::get()->m_fake_stereo_hook->get_render_target_manager()->get_render_target();
 
     if (ue4_texture != nullptr) {
         backbuffer = (ID3D11Texture2D*)ue4_texture->GetNativeResource();
@@ -139,7 +139,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             if (vr->m_desktop_fix_skip_present->value()) {
                 hook->ignore_next_present();
             } else {
-                context->CopyResource(backbuffer.Get(), m_left_eye_tex.Get());
+                context->CopyResource(real_backbuffer.Get(), m_left_eye_tex.Get());
             }
         }
     }
@@ -171,7 +171,7 @@ void D3D11Component::setup() {
     // swapchain->GetBuffer(0, IID_PPV_ARGS(&backbuffer));
 
     ComPtr<ID3D11Texture2D> backbuffer{};
-    auto ue4_texture = VR::get()->m_fake_stereo_hook->get_render_target_manager()->get_render_target(0);
+    auto ue4_texture = VR::get()->m_fake_stereo_hook->get_render_target_manager()->get_render_target();
 
     if (ue4_texture != nullptr) {
         backbuffer = (ID3D11Texture2D*)ue4_texture->GetNativeResource();
@@ -185,6 +185,8 @@ void D3D11Component::setup() {
     // Get backbuffer description.
     D3D11_TEXTURE2D_DESC backbuffer_desc{};
     backbuffer->GetDesc(&backbuffer_desc);
+
+    spdlog::info("W: {}, H: {}", backbuffer_desc.Width, backbuffer_desc.Height);
 
     backbuffer_desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
 

@@ -87,14 +87,35 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
     this->eyes[vr::Eye_Left] = glm::rowMajor4(Matrix4x4f{ *(Matrix3x4f*)&local_left } );
     this->eyes[vr::Eye_Right] = glm::rowMajor4(Matrix4x4f{ *(Matrix3x4f*)&local_right } );
 
-    auto pleft = this->hmd->GetProjectionMatrix(vr::Eye_Left, nearz, farz);
-    auto pright = this->hmd->GetProjectionMatrix(vr::Eye_Right, nearz, farz);
+    //auto pleft = this->hmd->GetProjectionMatrix(vr::Eye_Left, nearz, farz);
+    //auto pright = this->hmd->GetProjectionMatrix(vr::Eye_Right, nearz, farz);
 
-    this->projections[vr::Eye_Left] = glm::rowMajor4(Matrix4x4f{ *(Matrix4x4f*)&pleft } );
-    this->projections[vr::Eye_Right] = glm::rowMajor4(Matrix4x4f{ *(Matrix4x4f*)&pright } );
+    //this->projections[vr::Eye_Left] = glm::rowMajor4(Matrix4x4f{ *(Matrix4x4f*)&pleft } );
+    //this->projections[vr::Eye_Right] = glm::rowMajor4(Matrix4x4f{ *(Matrix4x4f*)&pright } );
 
     this->hmd->GetProjectionRaw(vr::Eye_Left, &this->raw_projections[vr::Eye_Left][0], &this->raw_projections[vr::Eye_Left][1], &this->raw_projections[vr::Eye_Left][2], &this->raw_projections[vr::Eye_Left][3]);
     this->hmd->GetProjectionRaw(vr::Eye_Right, &this->raw_projections[vr::Eye_Right][0], &this->raw_projections[vr::Eye_Right][1], &this->raw_projections[vr::Eye_Right][2], &this->raw_projections[vr::Eye_Right][3]);
+
+    auto get_mat = [&](vr::EVREye eye) {
+        const auto right =  this->raw_projections[eye][0] * -1.0f;
+        const auto left =   this->raw_projections[eye][1] * -1.0f;
+        const auto top =    this->raw_projections[eye][2] * -1.0f;
+        const auto bottom = this->raw_projections[eye][3] * -1.0f;
+        float sum_rl = (right + left);
+        float sum_tb = (top + bottom);
+        float inv_rl = (1.0f / (right - left));
+        float inv_tb = (1.0f / (top - bottom));
+
+        return Matrix4x4f {
+            (2.0f * inv_rl), 0.0f, 0.0f, 0.0f,
+            0.0f, (2.0f * inv_tb), 0.0f, 0.0f,
+            (sum_rl * inv_rl), (sum_tb * inv_tb), 0.0f, 1.0f,
+            0.0f, 0.0f, nearz, 0.0f
+        };
+    };
+
+    this->projections[vr::Eye_Left] = get_mat(vr::Eye_Left);
+    this->projections[vr::Eye_Right] = get_mat(vr::Eye_Right);
 
     return VRRuntime::Error::SUCCESS;
 }

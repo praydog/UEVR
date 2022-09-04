@@ -12,6 +12,8 @@ struct FRHICommandListImmediate;
 
 struct VRRenderTargetManager : IStereoRenderTargetManager {
 public:
+    uint32_t GetNumberOfBufferedFrames() const override { return 1; }
+
     // This seems a bit too complex right now,
     // if anyone can figure this out just make it return true and it will execute the
     // other virtuals in here to allocate the view targets
@@ -27,27 +29,25 @@ public:
 
     virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
         // TODO: check if we need to reallocate
-        const auto ret = !allocated_views;
+        /*const auto ret = !allocated_views;
 
         allocated_views = true;
 
-        return ret;
+        return ret;*/
+
+        return false;
     }
 
     // We will use this to keep track of the game-allocated render targets.
     bool AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips, ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture, FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples = 1) override;
 
 public:
-    FRHITexture2D* get_render_target(uint32_t index) {
-        if (index >= 2) {
-            return nullptr;
-        }
-
-        return render_targets[index];
+    FRHITexture2D* get_render_target() {
+        return render_target;
     }
 
 private:
-    std::array<FRHITexture2D*, 2> render_targets{};
+    FRHITexture2D* render_target{};
     static void texture_hook_callback(safetyhook::Context& ctx);
 
     FTexture2DRHIRef* texture_hook_ref{nullptr};
@@ -71,12 +71,14 @@ private:
     std::optional<uint32_t> get_stereo_view_offset_index(uintptr_t vtable);
 
     // Hooks
+    static void adjust_view_rect(FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h);
     static void calculate_stereo_view_offset(FFakeStereoRendering* stereo, const int32_t view_index, Rotator& view_rotation, const float world_to_meters, Vector3f& view_location);
-    static Matrix4x4f* calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f& out, const int32_t view_index);
+    static Matrix4x4f* calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index);
     static void render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list, FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size);
 
     static IStereoRenderTargetManager* get_render_target_manager_hook(FFakeStereoRendering* stereo);
 
+    std::unique_ptr<safetyhook::InlineHook> m_adjust_view_rect_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_calculate_stereo_view_offset_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_calculate_stereo_projection_matrix_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_render_texture_render_thread_hook{};
