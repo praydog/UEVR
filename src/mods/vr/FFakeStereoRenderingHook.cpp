@@ -1,13 +1,13 @@
 #include <winternl.h>
 
 #include <spdlog/spdlog.h>
-#include <utility/Scan.hpp>
-#include <utility/Module.hpp>
-#include <utility/String.hpp>
 #include <utility/Memory.hpp>
+#include <utility/Module.hpp>
+#include <utility/Scan.hpp>
+#include <utility/String.hpp>
 
-#include <disasmtypes.h>
 #include <bddisasm.h>
+#include <disasmtypes.h>
 
 #include "../VR.hpp"
 
@@ -114,7 +114,9 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str) {
             return std::nullopt;
         }
 
-        if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_MEM && ix.Operands[1].Type == ND_OP_REG && ix.Operands[1].Info.Register.Reg == NDR_RAX) {
+        if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_MEM && ix.Operands[1].Type == ND_OP_REG &&
+            ix.Operands[1].Info.Register.Reg == NDR_RAX) 
+        {
             return (uintptr_t)(ip + ix.Length + ix.Operands[0].Info.Memory.Disp);
         }
 
@@ -186,7 +188,8 @@ bool FFakeStereoRenderingHook::hook() {
 
     spdlog::info("RenderTexture_RenderThread VTable Middle: {:x}", (uintptr_t)*rendertexture_fn_vtable_middle);
 
-    const auto get_render_target_manager_func_ptr = (uintptr_t)(*rendertexture_fn_vtable_middle + sizeof(void*) + (sizeof(void*) * 4 * (size_t)is_4_18));
+    const auto get_render_target_manager_func_ptr =
+        (uintptr_t)(*rendertexture_fn_vtable_middle + sizeof(void*) + (sizeof(void*) * 4 * (size_t)is_4_18));
 
     if (!get_render_target_manager_func_ptr) {
         spdlog::error("Failed to find GetRenderTargetManager");
@@ -194,7 +197,6 @@ bool FFakeStereoRenderingHook::hook() {
     }
 
     spdlog::info("GetRenderTargetManagerptr: {:x}", (uintptr_t)get_render_target_manager_func_ptr);
-
 
     // In 4.18 the destructor virtual doesn't exist.
     const auto is_stereo_enabled_index = utility::scan(*(uintptr_t*)*vtable, 3, "B0 01 C3").value_or(0) == *(uintptr_t*)*vtable ? 0 : 1;
@@ -204,12 +206,12 @@ bool FFakeStereoRenderingHook::hook() {
 
     const auto adjust_view_rect_index = *stereo_view_offset_index - adjust_view_rect_distance;
     const auto calculate_stereo_projection_matrix_index = *stereo_view_offset_index + 1;
-    //const auto init_canvas_index = *stereo_view_offset_index + 4;
+    // const auto init_canvas_index = *stereo_view_offset_index + 4;
 
     const auto adjust_view_rect_func = ((uintptr_t*)*vtable)[adjust_view_rect_index];
     const auto calculate_stereo_projection_matrix_func = ((uintptr_t*)*vtable)[calculate_stereo_projection_matrix_index];
-    //const auto render_texture_render_thread_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index + 3];
-    
+    // const auto render_texture_render_thread_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index + 3];
+
     auto factory = SafetyHookFactory::init();
     auto builder = factory->acquire();
 
@@ -231,9 +233,9 @@ bool FFakeStereoRenderingHook::hook() {
     // In 4.18 this doesn't exist. Not much we can do about that.
     if (backbuffer_format_cvar) {
         spdlog::info("Backbuffer Format CVar: {:x}", (uintptr_t)*backbuffer_format_cvar);
-        *(int32_t*)(*(uintptr_t*)*backbuffer_format_cvar + 0) = 0; // 8bit RGBA, which is what VR headsets support
+        *(int32_t*)(*(uintptr_t*)*backbuffer_format_cvar + 0) = 0;   // 8bit RGBA, which is what VR headsets support
         *(int32_t*)(*(uintptr_t*)*backbuffer_format_cvar + 0x4) = 0; // 8bit RGBA, which is what VR headsets support
-    } else {   
+    } else {
         spdlog::error("Failed to find backbuffer format cvar, continuing anyways...");
     }
 
@@ -282,7 +284,7 @@ std::optional<uint32_t> FFakeStereoRenderingHook::get_stereo_view_offset_index(u
         auto ip = (uint8_t*)func;
         uint32_t xmm_register_usage_count = 0;
 
-        for (auto j=0; j < 1000; ++j) {
+        for (auto j = 0; j < 1000; ++j) {
             if (*ip == 0xC3 || *ip == 0xCC || *ip == 0xE9) {
                 break;
             }
@@ -319,18 +321,19 @@ bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
 }
 
 void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h) {
-	*w = VR::get()->get_hmd_width() * 2;
+    *w = VR::get()->get_hmd_width() * 2;
     *h = VR::get()->get_hmd_height();
-    
+
     *w = *w / 2;
-	*x += *w * (index % 2); // on some versions the index is actually the pass... figure out how to detect that
+    *x += *w * (index % 2); // on some versions the index is actually the pass... figure out how to detect that
 }
 
-void FFakeStereoRenderingHook::calculate_stereo_view_offset(FFakeStereoRendering* stereo, const int32_t view_index, Rotator* view_rotation, const float world_to_meters, Vector3f* view_location) {
+void FFakeStereoRenderingHook::calculate_stereo_view_offset(
+    FFakeStereoRendering* stereo, const int32_t view_index, Rotator* view_rotation, const float world_to_meters, Vector3f* view_location) {
     if (view_index % 2 == 0) {
-        //VR::get()->update_hmd_state();
+        // VR::get()->update_hmd_state();
     }
-    
+
     /*static float s_t{0.0f};
     const auto t = cos(s_t);
 
@@ -347,7 +350,8 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(FFakeStereoRendering
     g_hook->m_calculate_stereo_view_offset_hook->call<void*>(stereo, ((view_index + 1) % 2), view_rotation, world_to_meters, view_location);
 }
 
-Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
+Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(
+    FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
     // TODO: grab from VR runtime
     g_hook->m_calculate_stereo_projection_matrix_hook->call<Matrix4x4f*>(stereo, out, view_index);
 
@@ -355,17 +359,18 @@ Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeSt
     VR::get()->m_nearz = old_znear;
     VR::get()->get_runtime()->update_matrices(old_znear, 10000.0f);
 
-    //spdlog::info("NearZ: {}", old_znear);
+    // spdlog::info("NearZ: {}", old_znear);
 
     *out = VR::get()->get_projection_matrix((VRRuntime::Eye)(view_index % 2));
     return out;
 }
 
-void FFakeStereoRenderingHook::render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list, FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size) {
-    //spdlog::info("{:x}", (uintptr_t)src_texture->GetNativeResource());
+void FFakeStereoRenderingHook::render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list,
+    FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size) {
+    // spdlog::info("{:x}", (uintptr_t)src_texture->GetNativeResource());
 
     // maybe the window size is actually a pointer we will find out later.
-    //g_hook->m_render_texture_render_thread_hook->call<void*>(stereo, rhi_command_list, backbuffer, src_texture, window_size);
+    // g_hook->m_render_texture_render_thread_hook->call<void*>(stereo, rhi_command_list, backbuffer, src_texture, window_size);
 }
 
 IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_hook(FFakeStereoRendering* stereo) {
@@ -405,7 +410,9 @@ void VRRenderTargetManager::texture_hook_callback(safetyhook::Context& ctx) {
     ++rtm->last_texture_index;
 }
 
-bool VRRenderTargetManager::AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips, ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture, FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples) {
+bool VRRenderTargetManager::AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips,
+    ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture,
+    FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples) {
     // So, what's happening here is instead of using this method
     // to actually create our textures, we are going to
     // get the return address, scan forward for the next call instruction
@@ -433,10 +440,11 @@ bool VRRenderTargetManager::AllocateRenderTargetTexture(uint32_t Index, uint32_t
                 spdlog::error("Decoding failed with error {:x}!", (uint32_t)status);
                 return false;
             }
-            
+
             // We are looking for the call instruction
-            // This instruction calls RHICreateTargetableShaderResource2D(TexSizeX, TexSizeY, SceneTargetFormat, 1, TexCreate_None, TexCreate_RenderTargetable, false, CreateInfo, BufferedRTRHI, BufferedSRVRHI);
-            // Which sets up the BufferedRTRHI and BufferedSRVRHI variables.
+            // This instruction calls RHICreateTargetableShaderResource2D(TexSizeX, TexSizeY, SceneTargetFormat, 1, TexCreate_None,
+            // TexCreate_RenderTargetable, false, CreateInfo, BufferedRTRHI, BufferedSRVRHI); Which sets up the BufferedRTRHI and
+            // BufferedSRVRHI variables.
             if (std::string_view{ix.Mnemonic}.starts_with("CALL")) {
                 const auto post_call = (uintptr_t)ip + ix.Length;
                 spdlog::info("AllocateRenderTargetTexture post_call: {:x}", post_call);
@@ -449,12 +457,12 @@ bool VRRenderTargetManager::AllocateRenderTargetTexture(uint32_t Index, uint32_t
 
                 return false;
             }
-    
+
             ip += ix.Length;
         }
 
         spdlog::error("Failed to find call instruction!");
     }
-    
+
     return false;
 }
