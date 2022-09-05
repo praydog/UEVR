@@ -4,6 +4,7 @@
 #include <utility/Scan.hpp>
 #include <utility/Module.hpp>
 #include <utility/String.hpp>
+#include <utility/Memory.hpp>
 
 #include <disasmtypes.h>
 #include <bddisasm.h>
@@ -147,13 +148,30 @@ bool FFakeStereoRenderingHook::hook() {
         return false;
     }
 
+    const auto stereo_projection_matrix_index = *stereo_view_offset_index + 1;
+    const auto is_4_18 = stereo_view_offset_index <= 6;
+
     const auto stereo_view_offset_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index];
 
-    const auto render_texture_render_thread_func = find_function_from_string_ref(L"RenderTexture_RenderThread");
+    auto render_texture_render_thread_func = find_function_from_string_ref(L"RenderTexture_RenderThread");
 
     if (!render_texture_render_thread_func) {
-        spdlog::error("Failed to find RenderTexture_RenderThread");
-        return false;
+        // Fallback scan to checking for the first non-default virtual function (4.18)
+        spdlog::info("Failed to find RenderTexture_RenderThread, falling back to first non-default virtual function");
+
+        for (auto i = 2; i < 10; ++i) {
+            const auto func = ((uintptr_t*)*vtable)[stereo_projection_matrix_index + i];
+
+            if (!utility::is_stub_code((uint8_t*)func)) {
+                render_texture_render_thread_func = func;
+                break;
+            }
+        }
+
+        if (!render_texture_render_thread_func) {
+            spdlog::error("Failed to find RenderTexture_RenderThread");
+            return false;
+        }
     }
 
     spdlog::info("RenderTexture_RenderThread: {:x}", (uintptr_t)*render_texture_render_thread_func);
@@ -168,7 +186,7 @@ bool FFakeStereoRenderingHook::hook() {
 
     spdlog::info("RenderTexture_RenderThread VTable Middle: {:x}", (uintptr_t)*rendertexture_fn_vtable_middle);
 
-    const auto get_render_target_manager_func_ptr = (uintptr_t)(*rendertexture_fn_vtable_middle + sizeof(void*));
+    const auto get_render_target_manager_func_ptr = (uintptr_t)(*rendertexture_fn_vtable_middle + sizeof(void*) + (sizeof(void*) * 4 * (size_t)is_4_18));
 
     if (!get_render_target_manager_func_ptr) {
         spdlog::error("Failed to find GetRenderTargetManager");
@@ -177,12 +195,16 @@ bool FFakeStereoRenderingHook::hook() {
 
     spdlog::info("GetRenderTargetManagerptr: {:x}", (uintptr_t)get_render_target_manager_func_ptr);
 
-    const auto is_stereo_enabled_index = 1;
+
+    // In 4.18 the destructor virtual doesn't exist.
+    const auto is_stereo_enabled_index = utility::scan(*(uintptr_t*)*vtable, 3, "B0 01 C3").value_or(0) == *(uintptr_t*)*vtable ? 0 : 1;
     const auto is_stereo_enabled_func_ptr = &((uintptr_t*)*vtable)[is_stereo_enabled_index];
 
-    const auto adjust_view_rect_index = *stereo_view_offset_index - 3;
+    const auto adjust_view_rect_distance = is_4_18 ? 2 : 3;
+
+    const auto adjust_view_rect_index = *stereo_view_offset_index - adjust_view_rect_distance;
     const auto calculate_stereo_projection_matrix_index = *stereo_view_offset_index + 1;
-    const auto init_canvas_index = *stereo_view_offset_index + 4;
+    //const auto init_canvas_index = *stereo_view_offset_index + 4;
 
     const auto adjust_view_rect_func = ((uintptr_t*)*vtable)[adjust_view_rect_index];
     const auto calculate_stereo_projection_matrix_func = ((uintptr_t*)*vtable)[calculate_stereo_projection_matrix_index];
@@ -206,15 +228,14 @@ bool FFakeStereoRenderingHook::hook() {
 
     const auto backbuffer_format_cvar = find_cvar_by_description(L"Defines the default back buffer pixel format.");
 
-    if (!backbuffer_format_cvar) {
-        spdlog::error("Failed to find backbuffer format cvar");
-        return false;
+    // In 4.18 this doesn't exist. Not much we can do about that.
+    if (backbuffer_format_cvar) {
+        spdlog::info("Backbuffer Format CVar: {:x}", (uintptr_t)*backbuffer_format_cvar);
+        *(int32_t*)(*(uintptr_t*)*backbuffer_format_cvar + 0) = 0; // 8bit RGBA, which is what VR headsets support
+        *(int32_t*)(*(uintptr_t*)*backbuffer_format_cvar + 0x4) = 0; // 8bit RGBA, which is what VR headsets support
+    } else {   
+        spdlog::error("Failed to find backbuffer format cvar, continuing anyways...");
     }
-
-    spdlog::info("Backbuffer Format CVar: {:x}", (uintptr_t)*backbuffer_format_cvar);
-
-    *(int32_t*)(*(uintptr_t*)*backbuffer_format_cvar + 0) = 0; // 8bit RGBA, which is what VR headsets support
-    *(int32_t*)(*(uintptr_t*)*backbuffer_format_cvar + 0x4) = 0; // 8bit RGBA, which is what VR headsets support
 
     return true;
 }
