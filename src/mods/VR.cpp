@@ -77,6 +77,8 @@ and place the openxr_loader.dll in the same folder.)";
 }
 
 std::optional<std::string> VR::initialize_openvr() {
+    spdlog::info("Attempting to load OpenVR");
+
     m_openvr = std::make_shared<runtimes::OpenVR>();
     m_openvr->loaded = false;
 
@@ -98,6 +100,8 @@ std::optional<std::string> VR::initialize_openvr() {
     m_openvr->got_first_poses = false;
     m_openvr->is_hmd_active = true;
     m_openvr->was_hmd_active = true;
+
+    spdlog::info("Attempting to call vr::VR_Init");
 
     auto error = vr::VRInitError_None;
 	m_openvr->hmd = vr::VR_Init(&error, vr::VRApplication_Scene);

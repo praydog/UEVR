@@ -618,6 +618,7 @@ bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_para
             }
             return false;
         }
+        break;
     case WM_ACTIVATE:
         if (LOWORD(w_param) == WA_INACTIVE) {
             return false;
@@ -625,7 +626,7 @@ bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_para
         break;
     case WM_INPUT: {
         // RIM_INPUT means the window has focus
-        if (GET_RAWINPUT_CODE_WPARAM(w_param) == RIM_INPUT) {
+        /*if (GET_RAWINPUT_CODE_WPARAM(w_param) == RIM_INPUT) {
             uint32_t size = sizeof(RAWINPUT);
             RAWINPUT raw{};
             
@@ -643,7 +644,7 @@ bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_para
                     is_mouse_moving = true;
                 }
             }
-        }
+        }*/
     } break;
 
     /*case RE_TOGGLE_CURSOR: {
