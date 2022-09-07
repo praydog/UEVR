@@ -14,7 +14,7 @@ enum EStereoscopicPass {
 };
 
 struct Rotator {
-    float x, y, z;
+    float pitch, yaw, roll;
 };
 
 struct FRHIResource {
@@ -68,6 +68,17 @@ struct IStereoRenderTargetManager {
 	virtual bool AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips, ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture, FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples = 1) { return false; }
 	virtual bool AllocateDepthTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips, ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture, FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples = 1) { return false; }
 	virtual bool AllocateShadingRateTexture(uint32_t Index, uint32_t RenderSizeX, uint32_t RenderSizeY, uint8_t Format, uint32_t NumMips, ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTexture, FIntPoint& OutTextureSize) { return false; }
+};
+
+struct IStereoRenderTargetManager_418 {
+	virtual bool ShouldUseSeparateRenderTarget() const = 0;
+	virtual void UpdateViewport(bool bUseSeparateRenderTarget, const class FViewport& Viewport, class SViewport* ViewportWidget = nullptr) = 0;
+	virtual void CalculateRenderTargetSize(const class FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) = 0;
+	virtual bool NeedReAllocateViewportRenderTarget(const class FViewport& Viewport) = 0;
+	virtual bool NeedReAllocateDepthTexture(const void* DepthTarget) { return false; }
+	virtual uint32_t GetNumberOfBufferedFrames() const { return 1; }
+	virtual bool AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips, uint32_t Flags, uint32_t TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture, FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples = 1) { return false; }
+	virtual bool AllocateDepthTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips, uint32_t Flags, uint32_t TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture, FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples = 1) { return false; }
 };
 
 struct FFakeStereoRendering {

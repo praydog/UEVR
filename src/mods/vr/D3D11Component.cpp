@@ -102,6 +102,8 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 if (!runtime->got_first_poses) {
                     runtime->update_poses();
                 }
+
+                VR::get()->update_hmd_state();
             }
         }
 

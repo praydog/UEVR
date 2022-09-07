@@ -1154,6 +1154,30 @@ void VR::trigger_haptic_vibration(float seconds_from_now, float duration, float 
     }
 }
 
+float VR::get_standing_height() {
+    std::shared_lock _{ get_runtime()->pose_mtx };
+
+    return m_standing_origin.y;
+}
+
+Vector4f VR::get_standing_origin() {
+    std::shared_lock _{ get_runtime()->pose_mtx };
+
+    return m_standing_origin;
+}
+
+void VR::set_standing_origin(const Vector4f& origin) {
+    std::unique_lock _{ get_runtime()->pose_mtx };
+    
+    m_standing_origin = origin;
+}
+
+glm::quat VR::get_rotation_offset() {
+    std::shared_lock _{ m_rotation_mtx };
+
+    return m_rotation_offset;
+}
+
 void VR::set_rotation_offset(const glm::quat& offset) {
     std::unique_lock _{ m_rotation_mtx };
 

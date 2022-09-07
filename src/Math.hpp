@@ -32,12 +32,34 @@ static float fix_angle(float ang);
 static void fix_angles(const glm::vec3& angles);
 static float clamp_pitch(float ang);
 
-// RE engine's way of storing euler angles or I'm just an idiot.
-static vec3 euler_angles(const glm::mat4& rot) {
+static vec3 euler_angles_from_steamvr(const glm::mat4& rot) {
     float pitch = 0.0f;
     float yaw = 0.0f;
     float roll = 0.0f;
+    const auto m = rot *
+        Matrix4x4f {
+            1, 0, 0, 0,
+            0, 0, 1, 0,
+            0, 1, 0, 0,
+            0, 0, 0, 1
+        };
     glm::extractEulerAngleYZX(rot, yaw, roll, pitch);
+
+    return { pitch, -yaw, -roll };
+}
+
+static vec3 euler_angles_from_steamvr(const glm::quat& q) {
+    const auto m = glm::mat4{q};
+    return euler_angles_from_steamvr(m);
+}
+
+static vec3 euler_angles_from_ue4(const glm::quat q) {
+    const auto m = glm::mat4{q};
+
+    float pitch = 0.0f;
+    float yaw = 0.0f;
+    float roll = 0.0f;
+    glm::extractEulerAngleYZX(m, yaw, roll, pitch);
 
     return { pitch, yaw, roll };
 }

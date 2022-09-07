@@ -54,6 +54,11 @@ public:
 
     void trigger_haptic_vibration(float seconds_from_now, float duration, float frequency, float amplitude, vr::VRInputValueHandle_t source = vr::k_ulInvalidInputValueHandle);
     
+    float get_standing_height();
+    Vector4f get_standing_origin();
+    void set_standing_origin(const Vector4f& origin);
+
+    glm::quat get_rotation_offset();
     void set_rotation_offset(const glm::quat& offset);
     void recenter_view();
 
