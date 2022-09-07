@@ -234,7 +234,7 @@ bool FFakeStereoRenderingHook::hook() {
     // it's not always the case. We can scan for a call to the tanf function in one of the virtual functions to find it.
     for (auto i = 0; i < 10; ++i) {
         const auto potential_func = ((uintptr_t*)*vtable)[calculate_stereo_projection_matrix_index + i];
-        if (potential_func == 0 || utility::is_stub_code((uint8_t*)potential_func) || IsBadReadPtr((void*)potential_func, 1)) {
+        if (potential_func == 0 || IsBadReadPtr((void*)potential_func, 1) || utility::is_stub_code((uint8_t*)potential_func)) {
             continue;
         }
 
@@ -250,6 +250,11 @@ bool FFakeStereoRenderingHook::hook() {
 
             if (!ND_SUCCESS(status)) {
                 spdlog::info("Decoding failed with error {:x}!", (uint32_t)status);
+                break;
+            }
+
+            if (ix.Category == ND_CAT_RET || ix.InstructionBytes[0] == 0xE9) {
+                spdlog::info("Encountered RET or JMP, aborting scan");
                 break;
             }
 
