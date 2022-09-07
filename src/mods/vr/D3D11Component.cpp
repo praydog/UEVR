@@ -84,7 +84,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 return e;
             }
         }
-    } else if (!vr->m_use_afr->value()) {
+    } else {
         if (runtime->ready()) {
             if (runtime->is_openxr()) {
                 if (!vr->m_use_afr->value()) {
@@ -187,7 +187,7 @@ void D3D11Component::setup() {
     }
 
     if (backbuffer == nullptr) {
-        spdlog::error("[VR] Failed to get back buffer.");
+        spdlog::error("[VR] Failed to get back buffer (D3D11).");
         return;
     }
 

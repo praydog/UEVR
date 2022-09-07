@@ -240,6 +240,8 @@ bool FFakeStereoRenderingHook::hook() {
         spdlog::error("Failed to find backbuffer format cvar, continuing anyways...");
     }
 
+    spdlog::info("Finished hooking FFakeStereoRendering!");
+
     return true;
 }
 

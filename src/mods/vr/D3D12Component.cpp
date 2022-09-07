@@ -23,15 +23,12 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     auto swapchain = hook->get_swap_chain();
 
     // get back buffer
+    // get back buffer
     ComPtr<ID3D12Resource> backbuffer{};
+    auto ue4_texture = VR::get()->m_fake_stereo_hook->get_render_target_manager()->get_render_target();
 
-    if (m_prev_backbuffer == nullptr) {
-        m_prev_backbuffer = backbuffer;
-    }
-
-    if (FAILED(swapchain->GetBuffer(swapchain->GetCurrentBackBufferIndex(), IID_PPV_ARGS(&backbuffer)))) {
-        spdlog::error("[VR] Failed to get back buffer");
-        return vr::VRCompositorError_None;
+    if (ue4_texture != nullptr) {
+        backbuffer = (ID3D12Resource*)ue4_texture->GetNativeResource();
     }
 
     if (backbuffer == nullptr) {
@@ -42,8 +39,21 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     auto runtime = vr->get_runtime();
     const auto frame_count = vr->m_render_frame_count;
 
+    if (vr->m_render_frame_count % 2 == vr->m_right_eye_interval || !vr->m_use_afr->value()) {
+        //if ((runtime->ready() && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE)) {
+            runtime->synchronize_frame();
+
+            if (!runtime->got_first_poses) {
+                runtime->update_poses();
+                runtime->update_matrices(vr->m_nearz, vr->m_farz);
+            }
+
+            VR::get()->update_hmd_state();
+        //}
+    }
+
     // If m_frame_count is even, we're rendering the left eye.
-    if (frame_count % 2 == vr->m_left_eye_interval) {
+    if (vr->m_render_frame_count % 2 == vr->m_left_eye_interval && vr->m_use_afr->value()) {
         // OpenXR texture
         if (runtime->is_openxr() && vr->m_openxr->ready()) {
             m_openxr.copy(0, backbuffer.Get());
@@ -90,6 +100,17 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
             auto e = vr::VRCompositor()->Submit(vr::Eye_Right, &right_eye, &vr->m_right_bounds);
 
+            // in UE4 it's just one texture, so re-use the right eye texture
+            if (e == vr::VRCompositorError_None && !vr->m_use_afr->value()) {
+                vr::Texture_t left_eye{(void*)&right, vr::TextureType_DirectX12, vr::ColorSpace_Auto};
+                auto le = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &vr->m_left_bounds);
+
+                if (le != vr::VRCompositorError_None) {
+                    spdlog::error("[VR] VRCompositor failed to submit left eye: {}", (int)le);
+                    return le;
+                }
+            }
+
             if (e != vr::VRCompositorError_None) {
                 spdlog::error("[VR] VRCompositor failed to submit right eye: {}", (int)e);
                 return e;
@@ -103,19 +124,10 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
     vr::EVRCompositorError e = vr::EVRCompositorError::VRCompositorError_None;
 
-    if (frame_count % 2 == vr->m_right_eye_interval) {
+    if (frame_count % 2 == vr->m_right_eye_interval || !vr->m_use_afr->value()) {
         ////////////////////////////////////////////////////////////////////////////////
         // OpenXR start ////////////////////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////////////////////////
-        if (runtime->ready() && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE) {
-            runtime->synchronize_frame();
-
-            if (!runtime->got_first_poses) {
-                runtime->update_poses();
-                runtime->update_matrices(vr->m_nearz, vr->m_farz);
-            }
-        }
-
         if (runtime->is_openxr() && vr->m_openxr->ready()) {
             if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !vr->m_openxr->frame_began) {
                 vr->m_openxr->begin_frame();
@@ -208,8 +220,14 @@ void D3D12Component::setup() {
 
     ComPtr<ID3D12Resource> backbuffer{};
 
-    if (FAILED(swapchain->GetBuffer(0, IID_PPV_ARGS(&backbuffer)))) {
-        spdlog::error("[VR] Failed to get back buffer.");
+    auto ue4_texture = VR::get()->m_fake_stereo_hook->get_render_target_manager()->get_render_target();
+
+    if (ue4_texture != nullptr) {
+        backbuffer = (ID3D12Resource*)ue4_texture->GetNativeResource();
+    }
+
+    if (backbuffer == nullptr) {
+        spdlog::error("[VR] Failed to get back buffer (D3D12).");
         return;
     }
 

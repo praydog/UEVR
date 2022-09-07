@@ -482,21 +482,21 @@ void Framework::on_frame_d3d12() {
         }
     }
 
-    if (!m_has_frame) {
-        if (!is_init_ok) {
+    //if (!m_has_frame) {
+        //if (!is_init_ok) {
             update_fonts();
             invalidate_device_objects();
 
             ImGui_ImplDX12_NewFrame();
             // hooks don't run until after initialization, so we just render the imgui window while initalizing.
             run_imgui_frame(true);
-        } else {   
+    /*    } else {   
             return;
         }
     } else {
         invalidate_device_objects();
         ImGui_ImplDX12_NewFrame();
-    }
+    }*/
 
     if (is_init_ok) {
         m_mods->on_present();
