@@ -257,6 +257,22 @@ namespace utility {
         return module;
     }
 
+    HMODULE find_partial_module(std::wstring_view name) {
+        HMODULE module = nullptr;
+
+        foreach_module([&](LIST_ENTRY* entry, _LDR_DATA_TABLE_ENTRY* ldr_entry) {
+            if (module != nullptr) {
+                return;
+            }
+
+            if (std::wstring_view{ldr_entry->FullDllName.Buffer}.find(name) != std::wstring_view::npos) {
+                module = (HMODULE)ldr_entry->DllBase;
+            }
+        });
+
+        return module;
+    }
+
     void foreach_module(std::function<void(LIST_ENTRY*, _LDR_DATA_TABLE_ENTRY*)> callback) try {
         if (!callback) {
             return;

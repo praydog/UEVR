@@ -15,13 +15,13 @@
 
 FFakeStereoRenderingHook* g_hook = nullptr;
 
-std::optional<uintptr_t> find_function_start(uintptr_t middle) {
-    const auto middle_rva = middle - (uintptr_t)utility::get_executable();
+std::optional<uintptr_t> find_function_start(uintptr_t middle, uintptr_t module = (uintptr_t)utility::get_executable()) {
+    const auto middle_rva = middle - module;
 
     // This function abuses the fact that most non-obfuscated binaries have
     // an exception directory containing a list of function start and end addresses.
     // Get the PE header, and then the exception directory
-    const auto dos_header = (PIMAGE_DOS_HEADER)utility::get_executable();
+    const auto dos_header = (PIMAGE_DOS_HEADER)module;
     const auto nt_header = (PIMAGE_NT_HEADERS)((uintptr_t)dos_header + dos_header->e_lfanew);
     const auto exception_directory = (PIMAGE_DATA_DIRECTORY)&nt_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION];
 
@@ -41,22 +41,22 @@ std::optional<uintptr_t> find_function_start(uintptr_t middle) {
         // Check if the middle address is within the range of the function
         if (entry.BeginAddress <= middle_rva && middle_rva <= entry.EndAddress) {
             // Return the start address of the function
-            return (uintptr_t)utility::get_executable() + entry.BeginAddress;
+            return module + entry.BeginAddress;
         }
     }
 
     return std::nullopt;
 }
 
-std::optional<uintptr_t> find_function_from_string_ref(std::wstring_view str) {
-    const auto str_data = utility::scan_string(utility::get_executable(), str.data());
+std::optional<uintptr_t> find_function_from_string_ref(std::wstring_view str, HMODULE module = utility::get_executable()) {
+    const auto str_data = utility::scan_string(module, str.data());
 
     if (!str_data) {
         spdlog::error("Failed to find string for {}", utility::narrow(str.data()));
         return std::nullopt;
     }
 
-    const auto str_ref = utility::scan_reference(utility::get_executable(), *str_data);
+    const auto str_ref = utility::scan_reference(module, *str_data);
 
     if (!str_ref) {
         spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
@@ -74,14 +74,23 @@ std::optional<uintptr_t> find_function_from_string_ref(std::wstring_view str) {
 }
 
 std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str) {
-    const auto str_data = utility::scan_string(utility::get_executable(), str.data());
+    auto found_in_module = utility::get_executable();
+    auto str_data = utility::scan_string(utility::get_executable(), str.data());
+
+    if (!str_data) {
+        found_in_module = utility::find_partial_module(L"-Renderer-Win64-Shipping.dll");
+
+        if (found_in_module != nullptr) {
+            str_data = utility::scan_string(found_in_module, str.data());
+        }
+    }
 
     if (!str_data) {
         spdlog::error("Failed to find string for {}", utility::narrow(str.data()));
         return std::nullopt;
     }
 
-    const auto str_ref = utility::scan_reference(utility::get_executable(), *str_data);
+    const auto str_ref = utility::scan_reference(found_in_module, *str_data);
 
     if (!str_ref) {
         spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
@@ -136,6 +145,7 @@ bool FFakeStereoRenderingHook::hook() {
     spdlog::info("Entering FFakeStereoRenderingHook::hook");
 
     const auto game = (uintptr_t)utility::get_executable();
+    const auto engine_dll = utility::find_partial_module(L"-Engine-Win64-Shipping.dll");
     const auto vtable = locate_fake_stereo_rendering_vtable();
 
     if (!vtable) {
@@ -143,6 +153,7 @@ bool FFakeStereoRenderingHook::hook() {
         return false;
     }
 
+    const auto module_vtable_within = utility::get_module_within(*vtable);
     const auto stereo_view_offset_index = get_stereo_view_offset_index(*vtable);
 
     if (!stereo_view_offset_index) {
@@ -156,6 +167,10 @@ bool FFakeStereoRenderingHook::hook() {
     const auto stereo_view_offset_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index];
 
     auto render_texture_render_thread_func = find_function_from_string_ref(L"RenderTexture_RenderThread");
+
+    if (!render_texture_render_thread_func && engine_dll != nullptr) {
+         render_texture_render_thread_func = find_function_from_string_ref(L"RenderTexture_RenderThread", engine_dll);
+    }
 
     if (!render_texture_render_thread_func) {
         // Fallback scan to checking for the first non-default virtual function (4.18)
@@ -179,7 +194,11 @@ bool FFakeStereoRenderingHook::hook() {
     spdlog::info("RenderTexture_RenderThread: {:x}", (uintptr_t)*render_texture_render_thread_func);
 
     // Scan for the function pointer, it should be in the middle of the vtable.
-    const auto rendertexture_fn_vtable_middle = utility::scan_ptr((HMODULE)game, *render_texture_render_thread_func);
+    auto rendertexture_fn_vtable_middle = utility::scan_ptr((HMODULE)game, *render_texture_render_thread_func);
+
+    if (!rendertexture_fn_vtable_middle && engine_dll != nullptr) {
+        rendertexture_fn_vtable_middle = utility::scan_ptr((HMODULE)engine_dll, *render_texture_render_thread_func);
+    }
 
     if (!rendertexture_fn_vtable_middle) {
         spdlog::error("Failed to find RenderTexture_RenderThread VTable Middle");
@@ -201,12 +220,77 @@ bool FFakeStereoRenderingHook::hook() {
 
     // In 4.18 the destructor virtual doesn't exist.
     const auto is_stereo_enabled_index = utility::scan(*(uintptr_t*)*vtable, 3, "B0 01 C3").value_or(0) == *(uintptr_t*)*vtable ? 0 : 1;
+    spdlog::info("IsStereoEnabled Index: {}", is_stereo_enabled_index);
     const auto is_stereo_enabled_func_ptr = &((uintptr_t*)*vtable)[is_stereo_enabled_index];
 
     const auto adjust_view_rect_distance = is_4_18 ? 2 : 3;
 
     const auto adjust_view_rect_index = *stereo_view_offset_index - adjust_view_rect_distance;
-    const auto calculate_stereo_projection_matrix_index = *stereo_view_offset_index + 1;
+    auto calculate_stereo_projection_matrix_index = *stereo_view_offset_index + 1;
+
+    // While generally most of the time the stereo projection matrix func is the next one after the stereo view offset func,
+    // it's not always the case. We can scan for a call to the tanf function in one of the virtual functions to find it.
+    for (auto i = 0; i < 10; ++i) {
+        const auto potential_func = ((uintptr_t*)*vtable)[calculate_stereo_projection_matrix_index + i];
+        if (potential_func == 0 || utility::is_stub_code((uint8_t*)potential_func) || IsBadReadPtr((void*)potential_func, 1)) {
+            continue;
+        }
+
+        auto ip = (uint8_t*)potential_func;
+        bool found = false;
+
+        spdlog::info("Scanning {:x}...", (uintptr_t)ip);
+
+        for (auto j = 0; j < 50; ++j) {
+            INSTRUX ix{};
+
+            const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
+
+            if (!ND_SUCCESS(status)) {
+                spdlog::info("Decoding failed with error {:x}!", (uint32_t)status);
+                break;
+            }
+
+            if (ix.InstructionBytes[0] == 0xE8) {
+                const auto called_func = (uintptr_t)(ip + ix.Length + (int32_t)ix.RelativeOffset);
+                const auto inner_ins = utility::decode_one((uint8_t*)called_func);
+
+                spdlog::info("called {:x}", (uintptr_t)called_func);
+
+                // Check if this function is jmping into the "tanf" export in ucrtbase.dll
+                if (inner_ins) {
+                    if (inner_ins->InstructionBytes[0] == 0xFF && inner_ins->InstructionBytes[1] == 0x25) {
+                        const auto called_func_ptr = (uintptr_t*)(called_func + inner_ins->Length + (int32_t)inner_ins->Displacement);
+                        const auto called_func_ptr_val = *called_func_ptr;
+
+                        spdlog::info("called ptr {:x}", (uintptr_t)called_func_ptr_val);
+
+                        const auto module_within = utility::get_module_within(called_func_ptr_val);
+
+                        if (module_within && called_func_ptr_val == (uintptr_t)GetProcAddress(*module_within, "tanf")) {
+                            spdlog::info("Found CalculateStereoProjectionMatrix: {} {:x}", calculate_stereo_projection_matrix_index + i, called_func);
+                            calculate_stereo_projection_matrix_index += i;
+                            found = true;
+                            break;
+                        } else {
+                            spdlog::info("Function did not call tanf, skipping");
+                        }
+                    } else {
+                        spdlog::info("Inner instruction was not a jmp [{}]", inner_ins->Mnemonic);
+                    }
+                } else {
+                    spdlog::info("Failed to decode inner instruction");
+                }
+            }
+
+            ip += ix.Length;
+        }
+
+        if (found) {
+            break;
+        }
+    }
+
     // const auto init_canvas_index = *stereo_view_offset_index + 4;
 
     const auto adjust_view_rect_func = ((uintptr_t*)*vtable)[adjust_view_rect_index];
@@ -215,6 +299,10 @@ bool FFakeStereoRenderingHook::hook() {
 
     auto factory = SafetyHookFactory::init();
     auto builder = factory->acquire();
+
+    spdlog::info("AdjustViewRect: {:x}", (uintptr_t)adjust_view_rect_func);
+    spdlog::info("CalculateStereoProjectionMatrix: {:x}", (uintptr_t)calculate_stereo_projection_matrix_func);
+    spdlog::info("IsStereoEnabled: {:x}", (uintptr_t)*is_stereo_enabled_func_ptr);
 
     m_adjust_view_rect_hook = builder.create_inline((void*)adjust_view_rect_func, adjust_view_rect);
     m_calculate_stereo_view_offset_hook = builder.create_inline((void*)stereo_view_offset_func, calculate_stereo_view_offset);
@@ -246,10 +334,22 @@ bool FFakeStereoRenderingHook::hook() {
 }
 
 std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_vtable() {
+    const auto engine_dll = utility::find_partial_module(L"-Engine-Win64-Shipping.dll");
+
+    spdlog::info("Engine: {:p}, size {:x}", (void*)engine_dll, *utility::get_module_size(engine_dll));
+
     auto fake_stereo_rendering_constructor = find_function_from_string_ref(L"r.StereoEmulationHeight");
+
+    if (!fake_stereo_rendering_constructor && engine_dll != nullptr) {
+        fake_stereo_rendering_constructor = find_function_from_string_ref(L"r.StereoEmulationHeight", engine_dll);
+    }
 
     if (!fake_stereo_rendering_constructor) {
         fake_stereo_rendering_constructor = find_function_from_string_ref(L"r.StereoEmulationFOV");
+
+        if (!fake_stereo_rendering_constructor && engine_dll != nullptr) {
+            fake_stereo_rendering_constructor = find_function_from_string_ref(L"r.StereoEmulationFOV", engine_dll);
+        }
 
         if (!fake_stereo_rendering_constructor) {
             spdlog::error("Failed to find FFakeStereoRendering constructor");
@@ -384,13 +484,14 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
     g_hook->m_calculate_stereo_projection_matrix_hook->call<Matrix4x4f*>(stereo, out, view_index);
 
-    float old_znear = (*out)[3][2];
-    VR::get()->m_nearz = old_znear;
-    VR::get()->get_runtime()->update_matrices(old_znear, 10000.0f);
-
     // spdlog::info("NearZ: {}", old_znear);
 
-    *out = VR::get()->get_projection_matrix((VRRuntime::Eye)(view_index % 2));
+    if (out != nullptr) {
+        float old_znear = (*out)[3][2];
+        VR::get()->m_nearz = old_znear;
+        VR::get()->get_runtime()->update_matrices(old_znear, 10000.0f);
+        *out = VR::get()->get_projection_matrix((VRRuntime::Eye)(view_index % 2));
+    }
     return out;
 }
 

@@ -46,6 +46,7 @@ namespace utility {
     HMODULE get_executable();
     HMODULE unlink(HMODULE module);
     HMODULE safe_unlink(HMODULE module);
+    HMODULE find_partial_module(std::wstring_view name);
 
     void foreach_module(std::function<void(LIST_ENTRY*, _LDR_DATA_TABLE_ENTRY*)> callback);
     size_t get_module_count(std::wstring_view name);

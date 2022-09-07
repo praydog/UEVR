@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 
+#include <bddisasm.h>
 #include <Windows.h>
 
 namespace utility {
@@ -28,4 +29,6 @@ namespace utility {
     uint32_t get_insn_size(uintptr_t ip);
 
     uintptr_t calculate_absolute(uintptr_t address, uint8_t custom_offset = 4);
+
+    std::optional<INSTRUX> decode_one(uint8_t* ip);
 }

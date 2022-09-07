@@ -209,4 +209,15 @@ namespace utility {
 
         return address + customOffset + offset;
     }
+
+    std::optional<INSTRUX> decode_one(uint8_t* ip) {
+        INSTRUX ix{};
+        const auto status = NdDecodeEx(&ix, ip, 1000, ND_CODE_64, ND_DATA_64);
+
+        if (!ND_SUCCESS(status)) {
+            return {};
+        }
+
+        return ix;
+    }
 }
