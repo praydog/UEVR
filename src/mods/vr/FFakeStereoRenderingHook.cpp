@@ -49,6 +49,8 @@ std::optional<uintptr_t> find_function_start(uintptr_t middle, uintptr_t module 
 }
 
 std::optional<uintptr_t> find_function_from_string_ref(std::wstring_view str, HMODULE module = utility::get_executable()) {
+    spdlog::info("Scanning module {} for string reference {}", *utility::get_module_path(module), utility::narrow(str));
+
     const auto str_data = utility::scan_string(module, str.data());
 
     if (!str_data) {
@@ -63,7 +65,7 @@ std::optional<uintptr_t> find_function_from_string_ref(std::wstring_view str, HM
         return std::nullopt;
     }
 
-    const auto func_start = find_function_start(*str_ref);
+    const auto func_start = find_function_start(*str_ref, (uintptr_t)module);
 
     if (!func_start) {
         spdlog::error("Failed to find function start for {}", utility::narrow(str.data()));
@@ -106,11 +108,21 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str) {
         return std::nullopt;
     }
 
-    const auto raw_cvar_ref = utility::scan_mnemonic(*cvar_creation_ref + utility::get_insn_size(*cvar_creation_ref), 100, "CALL");
+    auto raw_cvar_ref = utility::scan_mnemonic(*cvar_creation_ref + utility::get_insn_size(*cvar_creation_ref), 100, "CALL");
 
     if (!raw_cvar_ref) {
         spdlog::error("Failed to find raw cvar reference for {}", utility::narrow(str.data()));
         return std::nullopt;
+    }
+
+    const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
+
+    // we need to check that the reference uses a register in its operand
+    // otherwise it's the wrong call. find the next call if it is.
+    if (decoded_ref) {
+        if (decoded_ref->OperandsCount == 0 || decoded_ref->Operands[0].Type != ND_OP_REG) {
+            raw_cvar_ref = utility::scan_mnemonic(*raw_cvar_ref + utility::get_insn_size(*raw_cvar_ref), 100, "CALL");
+        }
     }
 
     // Look for a mov {ptr}, rax
@@ -343,7 +355,9 @@ bool FFakeStereoRenderingHook::hook() {
 std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_vtable() {
     const auto engine_dll = utility::find_partial_module(L"-Engine-Win64-Shipping.dll");
 
-    spdlog::info("Engine: {:p}, size {:x}", (void*)engine_dll, *utility::get_module_size(engine_dll));
+    if (engine_dll != nullptr) {
+        spdlog::info("Engine: {:p}, size {:x}", (void*)engine_dll, *utility::get_module_size(engine_dll));
+    }
 
     auto fake_stereo_rendering_constructor = find_function_from_string_ref(L"r.StereoEmulationHeight");
 
