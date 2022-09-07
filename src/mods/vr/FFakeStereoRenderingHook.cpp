@@ -115,13 +115,32 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str) {
         return std::nullopt;
     }
 
+    spdlog::info("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
     const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
 
     // we need to check that the reference uses a register in its operand
     // otherwise it's the wrong call. find the next call if it is.
     if (decoded_ref) {
-        if (decoded_ref->OperandsCount == 0 || decoded_ref->Operands[0].Type != ND_OP_REG) {
+        for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
+            spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
+        }
+
+        if (decoded_ref->OperandsCount == 0 || 
+            decoded_ref->Operands[0].Type != ND_OP_MEM || 
+            decoded_ref->Operands[0].Info.Memory.Base == ND_REG_NOT_PRESENT)
+        {
+            spdlog::info("Scanning again, instruction at {:x} doesn't use a register", *raw_cvar_ref);
             raw_cvar_ref = utility::scan_mnemonic(*raw_cvar_ref + utility::get_insn_size(*raw_cvar_ref), 100, "CALL");
+
+            if (raw_cvar_ref) {
+                const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
+
+                for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
+                    spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
+                }
+
+                spdlog::info("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
+            }
         }
     }
 
