@@ -97,7 +97,9 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str) {
         return std::nullopt;
     }
 
-    const auto cvar_creation_ref = utility::scan_mnemonic(*str_ref, 100, "CALL");
+    spdlog::info("Found string ref for \"{}\" at {:x}", utility::narrow(str.data()), *str_ref);
+
+    const auto cvar_creation_ref = utility::scan_mnemonic(*str_ref + 4, 100, "CALL");
 
     if (!cvar_creation_ref) {
         spdlog::error("Failed to find cvar creation reference for {}", utility::narrow(str.data()));
