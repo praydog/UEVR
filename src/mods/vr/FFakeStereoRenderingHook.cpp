@@ -333,53 +333,52 @@ void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, in
 
 void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     FFakeStereoRendering* stereo, const int32_t view_index, Rotator* view_rotation, 
-    const float world_to_meters, Vector3f* view_location) 
+    const float world_to_meters, Vector3f* view_location)
 {
+    const auto view_mat = glm::yawPitchRoll(
+        glm::radians(view_rotation->yaw),
+        glm::radians(view_rotation->pitch),
+        glm::radians(view_rotation->roll));
+
+    const auto view_mat_inverse = glm::yawPitchRoll(
+        glm::radians(-view_rotation->yaw),
+        glm::radians(view_rotation->pitch),
+        glm::radians(view_rotation->roll));
+
     const auto view_quat_inverse = glm::quat {
-        Vector3f {
-            glm::radians(view_rotation->pitch),
-            glm::radians(-view_rotation->yaw),
-            glm::radians(view_rotation->roll)
-        }
+        view_mat_inverse
     };
 
     const auto view_quat = glm::quat {
-        Vector3f {
-            glm::radians(view_rotation->pitch),
-            glm::radians(view_rotation->yaw),
-            glm::radians(view_rotation->roll)
-        }
+        view_mat
     };
-
-    /*const auto new_quat = glm::normalize(view_quat * glm::quat{utility::math::euler_angles_ue4(VR::get()->get_rotation(0))});
-    const auto euler = glm::degrees(utility::math::euler_angles(Matrix4x4f{new_quat}));
-
-    view_rotation->pitch = euler.x;
-    view_rotation->yaw = euler.y;
-    view_rotation->roll = euler.z;*/
-
-    // y and z are flipped because of UE4's coordinate system
-    const auto corrected_quat = glm::quat(view_quat.w, -view_quat.z, view_quat.x, view_quat.y);
 
     auto vr = VR::get();
     const auto rotation_offset = vr->get_rotation_offset();
     const auto current_hmd_rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(0)});
 
     const auto new_rotation = glm::normalize(view_quat_inverse * current_hmd_rotation);
-    
-    //const auto pos = VR::get()->get_position(0);
-    auto pos = rotation_offset * (vr->get_position(0) - vr->get_standing_origin()) /*+ current_relative_eye_pos*/;
-    pos.w = 0.0f;
 
-    *view_location += glm::normalize(corrected_quat) * (Vector3f{-pos.z, pos.x, pos.y} * world_to_meters);
+    const auto true_index = ((view_index) % 2);
+    const auto eye_offset = glm::vec3{vr->get_eye_offset((VRRuntime::Eye)(true_index))};
+
+    const auto pos = glm::vec3{rotation_offset * ((vr->get_position(0) - vr->get_standing_origin()))};
+
+    const auto quat_asdf = glm::quat{Matrix4x4f {
+        0, 0, -1, 0,
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 0, 1
+    }};
+
+    *view_location -= quat_asdf * (glm::normalize(view_quat_inverse) * (pos * world_to_meters));
+    *view_location -= quat_asdf * (glm::normalize(new_rotation) * (eye_offset * world_to_meters));
 
     const auto euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
-    //const auto euler = glm::degrees(utility::math::euler_angles_from_ue4(view_quat));
+
     view_rotation->pitch = euler.x;
     view_rotation->yaw = euler.y;
     view_rotation->roll = euler.z;
-
-    g_hook->m_calculate_stereo_view_offset_hook->call<void*>(stereo, ((view_index + 1) % 2), view_rotation, world_to_meters, view_location);
 }
 
 Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {

@@ -1027,6 +1027,20 @@ vr::HmdMatrix34_t VR::get_raw_transform(uint32_t index) const {
     }
 }
 
+Vector4f VR::get_eye_offset(VRRuntime::Eye eye) const {
+    if (!is_hmd_active()) {
+        return Vector4f{};
+    }
+
+    std::shared_lock _{ get_runtime()->eyes_mtx };
+
+    if (eye == VRRuntime::Eye::LEFT) {
+        return get_runtime()->eyes[vr::Eye_Left][3];
+    }
+    
+    return get_runtime()->eyes[vr::Eye_Right][3];
+}
+
 Vector4f VR::get_current_offset() {
     if (!is_hmd_active()) {
         return Vector4f{};

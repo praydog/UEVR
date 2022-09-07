@@ -43,7 +43,7 @@ static vec3 euler_angles_from_steamvr(const glm::mat4& rot) {
             0, 1, 0, 0,
             0, 0, 0, 1
         };
-    glm::extractEulerAngleYZX(rot, yaw, roll, pitch);
+    glm::extractEulerAngleYXZ(rot, yaw, pitch, roll);
 
     return { pitch, -yaw, -roll };
 }
@@ -62,6 +62,14 @@ static vec3 euler_angles_from_ue4(const glm::quat q) {
     glm::extractEulerAngleYZX(m, yaw, roll, pitch);
 
     return { pitch, yaw, roll };
+}
+
+static glm::quat glm_to_ue4(const glm::quat q) {
+    return glm::quat{ q.w, -q.z, q.x, q.y };
+}
+
+static vec3 glm_to_ue4(const glm::vec3 v) {
+    return vec3{ -v.z, v.x, v.y };
 }
 
 static float fix_angle(float ang) {

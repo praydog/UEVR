@@ -40,6 +40,7 @@ public:
     Matrix4x4f get_transform(uint32_t index) const;
     vr::HmdMatrix34_t get_raw_transform(uint32_t index) const;
 
+    Vector4f get_eye_offset(VRRuntime::Eye eye) const;
     Vector4f get_current_offset();
 
     Matrix4x4f get_current_eye_transform(bool flip = false);
