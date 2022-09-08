@@ -15,11 +15,15 @@ namespace utility {
     std::optional<uintptr_t> scan_reverse(uintptr_t start, size_t length, const std::string& pattern);
     
     std::optional<uintptr_t> scan_data(HMODULE, const uint8_t* data, size_t size);
+    std::optional<uintptr_t> scan_data(uintptr_t start, size_t length, const uint8_t* data, size_t size);
+    std::optional<uintptr_t> scan_data_reverse(uintptr_t start, size_t length, const uint8_t* data, size_t size);
     std::optional<uintptr_t> scan_ptr(HMODULE module, uintptr_t ptr);
+    std::optional<uintptr_t> scan_ptr(uintptr_t start, size_t length, uintptr_t ptr);
     std::optional<uintptr_t> scan_string(HMODULE module, const std::string& str);
     std::optional<uintptr_t> scan_string(HMODULE module, const std::wstring& str);
 
     std::optional<uintptr_t> scan_reference(HMODULE module, uintptr_t ptr, bool relative = true);
+    std::optional<uintptr_t> scan_reference(uintptr_t start, size_t length, uintptr_t ptr, bool relative = true);
     std::optional<uintptr_t> scan_relative_reference_strict(HMODULE module, uintptr_t ptr, const std::string& preceded_by);
 
     std::optional<uintptr_t> scan_opcode(uintptr_t ip, size_t num_instructions, uint8_t opcode);

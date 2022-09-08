@@ -97,13 +97,13 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
     this->hmd->GetProjectionRaw(vr::Eye_Right, &this->raw_projections[vr::Eye_Right][0], &this->raw_projections[vr::Eye_Right][1], &this->raw_projections[vr::Eye_Right][2], &this->raw_projections[vr::Eye_Right][3]);
 
     auto get_mat = [&](vr::EVREye eye) {
-        const auto right =  this->raw_projections[eye][0] * -1.0f;
-        const auto left =   this->raw_projections[eye][1] * -1.0f;
+        const auto left =   this->raw_projections[eye][0] * -1.0f;
+        const auto right =  this->raw_projections[eye][1] * -1.0f;
         const auto top =    this->raw_projections[eye][2] * -1.0f;
         const auto bottom = this->raw_projections[eye][3] * -1.0f;
-        float sum_rl = (right + left);
+        float sum_rl = (left + right);
         float sum_tb = (top + bottom);
-        float inv_rl = (1.0f / (right - left));
+        float inv_rl = (1.0f / (left - right));
         float inv_tb = (1.0f / (top - bottom));
 
         return Matrix4x4f {

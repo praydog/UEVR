@@ -75,31 +75,100 @@ std::optional<uintptr_t> find_function_from_string_ref(std::wstring_view str, HM
     return func_start;
 }
 
-std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str) {
+// In some games, likely due to obfuscation, the cvar description is missing
+// so we must do an alternative scan for the cvar name itself, which is a bit tougher
+// because the cvar name is usually referenced in multiple places, whereas
+// the description is only referenced once, in the cvar registration function
+std::optional<uintptr_t> find_alternate_cvar_ref(std::wstring_view str, uint32_t known_default) {
+    spdlog::info("Performing alternate scan for cvar \"{}\"", utility::narrow(str));
+
+    const auto str_data = utility::scan_string(utility::get_executable(), str.data());
+
+    if (!str_data) {
+        spdlog::error("Failed to find string for cvar \"{}\"", utility::narrow(str.data()));
+        return std::nullopt;
+    }
+
+    const auto module_base = (uintptr_t)utility::get_executable();
+    const auto module_size = utility::get_module_size(utility::get_executable());
+    auto str_ref = utility::scan_reference(utility::get_executable(), *str_data);
+    std::optional<uintptr_t> result{};
+
+    while (str_ref) {
+        // This is a last resort so maybe come up with something more robust later...
+        std::array<uint8_t, 6+8> mov_r8d_mov_rsp { 
+            0x41, 0xB8, 0x00, 0x00, 0x00, 0x00,
+            0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00 
+        };
+
+        *(uint32_t*)&mov_r8d_mov_rsp[2] = known_default;
+        *(uint32_t*)&mov_r8d_mov_rsp[10] = known_default;
+
+        // Scan for this behind the string reference
+        /*
+        mov     r8d, 4
+        mov     [rsp+20h], 4
+        */
+        result = utility::scan_data_reverse(*str_ref, 50, mov_r8d_mov_rsp.data(), mov_r8d_mov_rsp.size());
+
+        if (result) {
+            spdlog::info("Found alternate cvar reference at {:x}", *result);
+            break;
+        }
+
+        const auto delta = *module_size - ((*str_ref + 1) - module_base);
+        str_ref = utility::scan_reference(*str_ref + 1, delta, *str_data);
+    }
+
+    if (!result) {
+        spdlog::error("Failed to find alternate cvar reference for \"{}\"", utility::narrow(str.data()));
+        return std::nullopt;
+    }
+    
+    return result;
+}
+
+std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::wstring_view cvar_name, uint32_t known_default = 0) {
     auto found_in_module = utility::get_executable();
     auto str_data = utility::scan_string(utility::get_executable(), str.data());
 
     if (!str_data) {
-        found_in_module = utility::find_partial_module(L"-Renderer-Win64-Shipping.dll");
+        const auto renderer_module = utility::find_partial_module(L"-Renderer-Win64-Shipping.dll");
 
-        if (found_in_module != nullptr) {
+        if (renderer_module != nullptr) {
             str_data = utility::scan_string(found_in_module, str.data());
+
+            if (str_data) {
+                found_in_module = renderer_module;
+            }
         }
     }
 
+    bool has_description_ref = str_data.has_value();
+    std::optional<uintptr_t> str_ref{};
+
+    // Fallback to alternate scan if the description is missing
     if (!str_data) {
+        str_ref = find_alternate_cvar_ref(cvar_name, known_default);
+        has_description_ref = str_ref.has_value();
+    }
+
+    if (!str_data && !str_ref) {
         spdlog::error("Failed to find string for {}", utility::narrow(str.data()));
         return std::nullopt;
     }
 
-    const auto str_ref = utility::scan_reference(found_in_module, *str_data);
-
+    // This scans for the cvar description string ref.
     if (!str_ref) {
-        spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
-        return std::nullopt;
-    }
+        str_ref = utility::scan_reference(found_in_module, *str_data);
 
-    spdlog::info("Found string ref for \"{}\" at {:x}", utility::narrow(str.data()), *str_ref);
+        if (!str_ref) {
+            spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
+            return std::nullopt;
+        }
+
+        spdlog::info("Found string ref for \"{}\" at {:x}", utility::narrow(str.data()), *str_ref);
+    }
 
     const auto cvar_creation_ref = utility::scan_mnemonic(*str_ref + 4, 100, "CALL");
 
@@ -355,7 +424,7 @@ bool FFakeStereoRenderingHook::hook() {
 
     spdlog::info("Leaving FFakeStereoRenderingHook::hook");
 
-    const auto backbuffer_format_cvar = find_cvar_by_description(L"Defines the default back buffer pixel format.");
+    const auto backbuffer_format_cvar = find_cvar_by_description(L"Defines the default back buffer pixel format.", L"r.DefaultBackBufferPixelFormat", 4);
 
     // In 4.18 this doesn't exist. Not much we can do about that.
     if (backbuffer_format_cvar) {

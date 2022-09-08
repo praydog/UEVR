@@ -60,11 +60,53 @@ namespace utility {
         return {};
     }
 
+    optional<uintptr_t> scan_data(uintptr_t start, size_t length, const uint8_t* data, size_t size) {
+        if (start == 0 || length == 0) {
+            return {};
+        }
+
+        for (auto i = start; i < start + length; i += sizeof(uint8_t)) {
+            if (memcmp((void*)i, data, size) == 0) {
+                return i;
+            }
+        }
+
+        return {};
+    }
+
+    optional<uintptr_t> scan_data_reverse(uintptr_t start, size_t length, const uint8_t* data, size_t size) {
+        if (start == 0 || length == 0) {
+            return {};
+        }
+
+        for (auto i = start; i >= start - length; i -= sizeof(uint8_t)) {
+            if (memcmp((void*)i, data, size) == 0) {
+                return i;
+            }
+        }
+
+        return {};
+    }
+
     optional<uintptr_t> scan_ptr(HMODULE module, uintptr_t ptr) {
         const auto module_size = get_module_size(module).value_or(0);
         const auto end = (uintptr_t)module + module_size;
 
         for (auto i = (uintptr_t)module; i < end; i += sizeof(void*)) {
+            if (*(uintptr_t*)i == ptr) {
+                return i;
+            }
+        }
+
+        return std::nullopt;
+    }
+
+    std::optional<uintptr_t> scan_ptr(uintptr_t start, size_t length, uintptr_t ptr) {
+        if (start == 0 || length == 0) {
+            return {};
+        }
+
+        for (auto i = start; i < start + length; i += sizeof(void*)) {
             if (*(uintptr_t*)i == ptr) {
                 return i;
             }
@@ -104,6 +146,22 @@ namespace utility {
         const auto end = (uintptr_t)module + module_size;
         
         for (auto i = (uintptr_t)module; i < end; i += sizeof(uint8_t)) {
+            if (calculate_absolute(i, 4) == ptr) {
+                return i;
+            }
+        }
+
+        return {};
+    }
+
+    optional<uintptr_t> scan_reference(uintptr_t start, size_t length, uintptr_t ptr, bool relative) {
+        if (!relative) {
+            return scan_ptr(start, length, ptr);
+        }
+
+        const auto end = start + length;
+
+        for (auto i = start; i < end; i += sizeof(uint8_t)) {
             if (calculate_absolute(i, 4) == ptr) {
                 return i;
             }
