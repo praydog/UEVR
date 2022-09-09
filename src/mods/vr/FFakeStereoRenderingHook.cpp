@@ -354,39 +354,43 @@ bool FFakeStereoRenderingHook::hook() {
             }
 
             if (ix.Category == ND_CAT_RET || ix.InstructionBytes[0] == 0xE9) {
-                spdlog::info("Encountered RET or JMP, aborting scan");
+                spdlog::info("Encountered RET or JMP at {:x}, aborting scan", (uintptr_t)ip);
                 break;
             }
 
             if (ix.InstructionBytes[0] == 0xE8) {
-                const auto called_func = (uintptr_t)(ip + ix.Length + (int32_t)ix.RelativeOffset);
-                const auto inner_ins = utility::decode_one((uint8_t*)called_func);
+                auto called_func = (uintptr_t)(ip + ix.Length + (int32_t)ix.RelativeOffset);
+                auto inner_ins = utility::decode_one((uint8_t*)called_func);
 
                 spdlog::info("called {:x}", (uintptr_t)called_func);
+                uintptr_t final_func = 0;
+
+                // Fully resolve the pointer jmps until we reach another module.
+                while (inner_ins && inner_ins->InstructionBytes[0] == 0xFF && inner_ins->InstructionBytes[1] == 0x25) {
+                    const auto called_func_ptr = (uintptr_t*)(called_func + inner_ins->Length + (int32_t)inner_ins->Displacement);
+                    const auto called_func_ptr_val = *called_func_ptr;
+
+                    spdlog::info("called ptr {:x}", (uintptr_t)called_func_ptr_val);
+
+                    inner_ins = utility::decode_one((uint8_t*)called_func_ptr_val);
+                    final_func = called_func_ptr_val;
+                    called_func = called_func_ptr_val;
+                }
 
                 // Check if this function is jmping into the "tanf" export in ucrtbase.dll
-                if (inner_ins) {
-                    if (inner_ins->InstructionBytes[0] == 0xFF && inner_ins->InstructionBytes[1] == 0x25) {
-                        const auto called_func_ptr = (uintptr_t*)(called_func + inner_ins->Length + (int32_t)inner_ins->Displacement);
-                        const auto called_func_ptr_val = *called_func_ptr;
+                if (final_func != 0) {
+                    const auto module_within = utility::get_module_within(final_func);
 
-                        spdlog::info("called ptr {:x}", (uintptr_t)called_func_ptr_val);
-
-                        const auto module_within = utility::get_module_within(called_func_ptr_val);
-
-                        if (module_within && called_func_ptr_val == (uintptr_t)GetProcAddress(*module_within, "tanf")) {
-                            spdlog::info("Found CalculateStereoProjectionMatrix: {} {:x}", calculate_stereo_projection_matrix_index + i, called_func);
-                            calculate_stereo_projection_matrix_index += i;
-                            found = true;
-                            break;
-                        } else {
-                            spdlog::info("Function did not call tanf, skipping");
-                        }
+                    if (module_within && final_func == (uintptr_t)GetProcAddress(*module_within, "tanf")) {
+                        spdlog::info("Found CalculateStereoProjectionMatrix: {} {:x}", calculate_stereo_projection_matrix_index + i, called_func);
+                        calculate_stereo_projection_matrix_index += i;
+                        found = true;
+                        break;
                     } else {
-                        spdlog::info("Inner instruction was not a jmp [{}]", inner_ins->Mnemonic);
+                        spdlog::info("Function did not call tanf, skipping");
                     }
                 } else {
-                    spdlog::info("Failed to decode inner instruction");
+                    spdlog::info("Failed to resolve inner pointer");
                 }
             }
 
