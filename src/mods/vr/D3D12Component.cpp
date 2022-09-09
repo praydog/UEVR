@@ -40,7 +40,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     const auto frame_count = vr->m_render_frame_count;
 
     if (vr->m_render_frame_count % 2 == vr->m_right_eye_interval || !vr->m_use_afr->value()) {
-        //if ((runtime->ready() && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE)) {
+        if ((runtime->ready() && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE) || !runtime->got_first_sync) {
             runtime->synchronize_frame();
 
             if (!runtime->got_first_poses) {
@@ -49,7 +49,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             }
 
             VR::get()->update_hmd_state();
-        //}
+        }
     }
 
     // If m_frame_count is even, we're rendering the left eye.
