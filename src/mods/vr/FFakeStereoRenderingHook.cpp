@@ -255,6 +255,8 @@ bool FFakeStereoRenderingHook::hook() {
         return false;
     }
 
+    patch_vtable_checks();
+
     const auto module_vtable_within = utility::get_module_within(*vtable);
     const auto stereo_view_offset_index = get_stereo_view_offset_index(*vtable);
 
@@ -307,7 +309,8 @@ bool FFakeStereoRenderingHook::hook() {
         return false;
     }
 
-    spdlog::info("RenderTexture_RenderThread VTable Middle: {:x}", (uintptr_t)*rendertexture_fn_vtable_middle);
+    const auto rendertexture_fn_vtable_index = (*rendertexture_fn_vtable_middle - *vtable) / sizeof(uintptr_t);    
+    spdlog::info("RenderTexture_RenderThread VTable Middle: {} {:x}", rendertexture_fn_vtable_index, (uintptr_t)*rendertexture_fn_vtable_middle);
 
     // This is NOT confirmed to work on 4.18, more investigation is needed!!!!!
     const auto get_render_target_manager_func_ptr =
@@ -444,7 +447,13 @@ bool FFakeStereoRenderingHook::hook() {
     return true;
 }
 
-std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_vtable() {
+std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_constructor() {
+    static std::optional<uintptr_t> cached_result{};
+
+    if (cached_result) {
+        return cached_result;
+    }
+
     const auto engine_dll = utility::find_partial_module(L"-Engine-Win64-Shipping.dll");
 
     if (engine_dll != nullptr) {
@@ -470,6 +479,30 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_
         }
     }
 
+    if (!fake_stereo_rendering_constructor) {
+        spdlog::error("Failed to find FFakeStereoRendering constructor");
+        return std::nullopt;
+    }
+
+    spdlog::info("FFakeStereoRendering constructor: {:x}", (uintptr_t)*fake_stereo_rendering_constructor);
+    cached_result = *fake_stereo_rendering_constructor;
+
+    return *fake_stereo_rendering_constructor;
+}
+
+std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_vtable() {
+    static std::optional<uintptr_t> cached_result{};
+
+    if (cached_result) {
+        return cached_result;
+    }
+
+    const auto fake_stereo_rendering_constructor = locate_fake_stereo_rendering_constructor();
+
+    if (!fake_stereo_rendering_constructor) {
+        return std::nullopt;
+    }
+
     const auto vtable_ref = utility::scan(*fake_stereo_rendering_constructor, 100, "48 8D 05 ? ? ? ?");
 
     if (!vtable_ref) {
@@ -485,6 +518,7 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_
     }
 
     spdlog::info("FFakeStereoRendering VTable: {:x}", (uintptr_t)vtable);
+    cached_result = vtable;
 
     return vtable;
 }
@@ -532,11 +566,65 @@ std::optional<uint32_t> FFakeStereoRenderingHook::get_stereo_view_offset_index(u
     return std::nullopt;
 }
 
+// DISCLAIMER: I've only seen this in one game so far...
+// So, there's some kind of compiler optimization for inlined virtuals
+// that checks whether the vtable pointer matches the base FFakeStereoRendering class.
+// if it matches, it just calls an inlined version of the function.
+// otherwise it actually calls the function within the vtable.
+bool FFakeStereoRenderingHook::patch_vtable_checks() {
+    spdlog::info("Attempting to patch inlined vtable checks...");
+
+    const auto fake_stereo_rendering_constructor = locate_fake_stereo_rendering_constructor();
+    const auto fake_stereo_rendering_vtable = locate_fake_stereo_rendering_vtable();
+
+    if (!fake_stereo_rendering_constructor || !fake_stereo_rendering_vtable) {
+        spdlog::error("Cannot patch vtables, constructor or vtable not found!");
+        return false;
+    }
+
+    const auto vtable_module_within = utility::get_module_within(*fake_stereo_rendering_vtable);
+    const auto module_size = utility::get_module_size(*vtable_module_within);
+    const auto module_end = (uintptr_t)*vtable_module_within + *module_size;
+
+    spdlog::info("{:x} {:x} {:x}", *fake_stereo_rendering_vtable, (uintptr_t)*vtable_module_within, *module_size);
+
+    for (auto ref = utility::scan_reference(*vtable_module_within, *fake_stereo_rendering_vtable); 
+        ref.has_value();
+        ref = utility::scan_reference((uintptr_t)*ref + 4, (module_end - *ref) - sizeof(void*), *fake_stereo_rendering_vtable)) 
+    {
+        const auto distance_from_constructor = *ref - *fake_stereo_rendering_constructor;
+
+        // We don't want to mess with the one within the constructor.
+        if (distance_from_constructor < 0x100) {
+            spdlog::info("Skipping vtable reference within constructor");
+            continue;
+        }
+
+        // Change the bytes to be some random number
+        // this causes the vtable check to fail and will call the function within the vtable.
+        DWORD old{};
+        VirtualProtect((void*)*ref, 4, PAGE_EXECUTE_READWRITE, &old);
+        *(uint32_t*)*ref = 0x12345678;
+        VirtualProtect((void*)*ref, 4, old, &old);
+        spdlog::info("Patched vtable check at {:x}", (uintptr_t)*ref);
+    }
+
+    spdlog::info("Finished patching inlined vtable checks.");
+    return true;
+}
+
 bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("is stereo enabled called!");
+#endif
     return !VR::get()->get_runtime()->got_first_sync || VR::get()->is_hmd_active();
 }
 
 void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("adjust view rect called!");
+#endif
+
     *w = VR::get()->get_hmd_width() * 2;
     *h = VR::get()->get_hmd_height();
 
@@ -548,6 +636,10 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     FFakeStereoRendering* stereo, const int32_t view_index, Rotator* view_rotation, 
     const float world_to_meters, Vector3f* view_location)
 {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("calculate stereo view offset called!");
+#endif
+
     const auto view_mat = glm::yawPitchRoll(
         glm::radians(view_rotation->yaw),
         glm::radians(view_rotation->pitch),
@@ -595,6 +687,10 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 }
 
 Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("calculate stereo projection matrix called!");
+#endif
+
     g_hook->m_calculate_stereo_projection_matrix_hook->call<Matrix4x4f*>(stereo, out, view_index);
 
     // spdlog::info("NearZ: {}", old_znear);
@@ -609,7 +705,12 @@ Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeSt
 }
 
 void FFakeStereoRenderingHook::render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list,
-    FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size) {
+    FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size) 
+{
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("render texture render thread called!");
+#endif
+
     // spdlog::info("{:x}", (uintptr_t)src_texture->GetNativeResource());
 
     // maybe the window size is actually a pointer we will find out later.
@@ -617,6 +718,10 @@ void FFakeStereoRenderingHook::render_texture_render_thread(FFakeStereoRendering
 }
 
 IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_hook(FFakeStereoRendering* stereo) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("get render target manager hook called!");
+#endif
+
     if (!VR::get()->get_runtime()->got_first_poses || VR::get()->is_hmd_active()) {
         return &g_hook->m_rtm;
     }
@@ -625,6 +730,10 @@ IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_
 }
 
 void VRRenderTargetManager::CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("calculate render target size called!");
+#endif
+
     InOutSizeX = VR::get()->get_hmd_width() * 2;
     InOutSizeY = VR::get()->get_hmd_height();
 

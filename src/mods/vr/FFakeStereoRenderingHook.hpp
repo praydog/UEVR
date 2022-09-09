@@ -95,8 +95,11 @@ public:
 
 private:
     bool hook();
+    std::optional<uintptr_t> locate_fake_stereo_rendering_constructor();
     std::optional<uintptr_t> locate_fake_stereo_rendering_vtable();
     std::optional<uint32_t> get_stereo_view_offset_index(uintptr_t vtable);
+
+    bool patch_vtable_checks();
 
     // Hooks
     static bool is_stereo_enabled(FFakeStereoRendering* stereo);
