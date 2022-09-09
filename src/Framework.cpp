@@ -910,7 +910,7 @@ void Framework::draw_about() {
     ImGui::TreePush("About");
 
     ImGui::Text("Author: praydog");
-    ImGui::Text("Dead project revived.");
+    ImGui::Text("Unreal Engine VR");
     ImGui::Text("https://github.com/praydog/Framework");
     ImGui::Text("http://praydog.com");
 
@@ -925,10 +925,10 @@ void Framework::draw_about() {
         static std::array<License, 6> licenses{
             License{ "glm", license::glm },
             License{ "imgui", license::imgui },
-            License{ "minhook", license::minhook },
+            License{ "safetyhook", license::safetyhook },
             License{ "spdlog", license::spdlog },
             License{ "json", license::json },
-            License{ "zydis", utility::narrow(license::zydis) }
+            License{ "bddisasm", utility::narrow(license::bddisasm) }
         };
 
         for (const auto& license : licenses) {
