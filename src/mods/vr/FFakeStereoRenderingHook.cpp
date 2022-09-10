@@ -15,7 +15,8 @@
 
 FFakeStereoRenderingHook* g_hook = nullptr;
 
-std::optional<uintptr_t> find_function_start(uintptr_t middle, uintptr_t module = (uintptr_t)utility::get_executable()) {
+std::optional<uintptr_t> find_function_start(uintptr_t middle) {
+    const auto module = (uintptr_t)*utility::get_module_within(middle);
     const auto middle_rva = middle - module;
 
     // This function abuses the fact that most non-obfuscated binaries have
@@ -65,7 +66,7 @@ std::optional<uintptr_t> find_function_from_string_ref(std::wstring_view str, HM
         return std::nullopt;
     }
 
-    const auto func_start = find_function_start(*str_ref, (uintptr_t)module);
+    const auto func_start = find_function_start(*str_ref);
 
     if (!func_start) {
         spdlog::error("Failed to find function start for {}", utility::narrow(str.data()));
