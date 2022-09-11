@@ -29,6 +29,7 @@ public:
     void on_draw_ui() override;
     void on_pre_imgui_frame() override;
     void on_present() override;
+    void on_post_present() override;
 
     void update_hmd_state();
 

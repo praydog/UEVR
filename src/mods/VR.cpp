@@ -537,6 +537,7 @@ bool VR::is_any_action_down() {
 }
 
 void VR::update_hmd_state() {
+    std::scoped_lock _{m_openvr_mtx};
     auto runtime = get_runtime();
     
     if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
@@ -578,6 +579,11 @@ void VR::update_hmd_state() {
     // On first run, set the standing origin to the headset position
     if (!runtime->got_first_poses) {
         m_standing_origin = get_position(vr::k_unTrackedDeviceIndex_Hmd);
+    }
+
+    if (!runtime->got_first_poses && runtime->is_openvr()) {
+        std::unique_lock _{m_openvr->pose_mtx};
+        m_openvr->pose_queue.clear();
     }
 
     runtime->got_first_poses = true;
@@ -674,11 +680,11 @@ void VR::on_present() {
         // if we don't do this then D3D11 OpenXR freezes for some reason.
         if (!runtime->got_first_sync) {
             spdlog::info("Attempting to sync!");
-            runtime->synchronize_frame();
-            runtime->update_poses();
-            runtime->update_matrices(m_nearz, m_farz);
-            m_standing_origin = get_position(vr::k_unTrackedDeviceIndex_Hmd);
-            runtime->got_first_poses = true;
+            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::LATE) {
+                runtime->synchronize_frame();
+            }
+
+            update_hmd_state();
         }
 
         m_is_d3d12 = false;
@@ -704,11 +710,11 @@ void VR::on_present() {
 
             if (runtime->is_openvr()) {
                 //vr::VRCompositor()->SetExplicitTimingMode(vr::VRCompositorTimingMode_Explicit_ApplicationPerformsPostPresentHandoff);
-                vr::VRCompositor()->PostPresentHandoff();
+                //vr::VRCompositor()->PostPresentHandoff();
             }
         }
 
-        runtime->needs_pose_update = true;
+        //runtime->needs_pose_update = true;
         m_submitted = false;
     }
 
@@ -717,6 +723,39 @@ void VR::on_present() {
     }
 
     ++m_render_frame_count;
+}
+
+void VR::on_post_present() {
+    auto runtime = get_runtime();
+
+    if (!get_runtime()->loaded) {
+        return;
+    }
+
+    if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
+        const auto had_sync = runtime->got_first_sync;
+        runtime->synchronize_frame();
+
+        if (!runtime->got_first_poses || !had_sync) {
+            update_hmd_state();
+            if (runtime->is_openvr()) {
+                std::unique_lock _{m_openvr->pose_mtx};
+                m_openvr->pose_queue.clear();
+            }
+        }
+    }
+
+    std::scoped_lock _{m_openvr_mtx};
+
+    if (runtime->wants_reinitialize) {
+        if (runtime->is_openvr()) {
+            m_openvr->wants_reinitialize = false;
+            reinitialize_openvr();
+        } else if (runtime->is_openxr()) {
+            m_openxr->wants_reinitialize = false;
+            reinitialize_openxr();
+        }
+    }
 }
 
 void VR::on_draw_ui() {

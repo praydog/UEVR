@@ -95,16 +95,6 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 LOG_VERBOSE("Copying right eye");
                 m_openxr.copy(1, backbuffer.Get());
             }
-
-            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
-                runtime->synchronize_frame();
-
-                if (!runtime->got_first_poses) {
-                    runtime->update_poses();
-                }
-
-                VR::get()->update_hmd_state();
-            }
         }
 
         if (runtime->is_openxr() && vr->m_openxr->ready()) {
@@ -123,14 +113,24 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         if (runtime->is_openvr()) {
             // Copy the back buffer to the right eye texture.
             context->CopyResource(m_right_eye_tex.Get(), backbuffer.Get());
-            vr::Texture_t right_eye{(void*)m_right_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
 
-            auto e = vr::VRCompositor()->Submit(vr::Eye_Right, &right_eye, &vr->m_right_bounds);
+            auto openvr = vr->get_runtime<runtimes::OpenVR>();
+            const auto submit_pose = openvr->get_pose_for_submit();
+
+            vr::VRTextureWithPose_t right_eye{
+                (void*)m_right_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto,
+                submit_pose
+            };
+
+            auto e = vr::VRCompositor()->Submit(vr::Eye_Right, &right_eye, &vr->m_right_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
 
             // in UE4 it's just one texture, so re-use the right eye texture
             if (e == vr::VRCompositorError_None && !vr->m_use_afr->value()) {
-                vr::Texture_t left_eye{(void*)m_right_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
-                e = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &vr->m_left_bounds);
+                vr::VRTextureWithPose_t left_eye{
+                    (void*)m_right_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto,
+                    submit_pose
+                };
+                e = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &vr->m_left_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
             }
 
             bool submitted = true;

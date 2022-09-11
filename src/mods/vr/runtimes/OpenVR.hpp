@@ -1,5 +1,6 @@
 #pragma once
 
+#include <deque>
 #include <openvr.h>
 
 #include "VRRuntime.hpp"
@@ -38,6 +39,8 @@ struct OpenVR final : public VRRuntime {
 
     void destroy() override;
 
+    vr::HmdMatrix34_t get_pose_for_submit();
+
     bool is_hmd_active{false};
     bool was_hmd_active{true};
 
@@ -53,5 +56,7 @@ struct OpenVR final : public VRRuntime {
     std::array<vr::TrackedDevicePose_t, vr::k_unMaxTrackedDeviceCount> game_poses;
 
     std::chrono::system_clock::time_point last_hmd_active_time{};
+
+    std::deque<vr::HmdMatrix34_t> pose_queue{};
 };
 }

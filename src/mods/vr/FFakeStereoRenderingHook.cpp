@@ -641,6 +641,21 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     spdlog::info("calculate stereo view offset called!");
 #endif
 
+    auto vr = VR::get();
+
+    /*if (view_index % 2 == 1 && VR::get()->get_runtime()->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
+        std::scoped_lock _{ vr->get_runtime()->render_mtx };
+        spdlog::info("SYNCING!!!");
+        //vr->get_runtime()->synchronize_frame();
+        vr->update_hmd_state();
+    }*/
+
+    if (view_index % 2 == 1) {
+        std::scoped_lock _{ vr->m_openvr_mtx };
+        vr->get_runtime()->consume_events(nullptr);
+        vr->update_hmd_state();
+    }
+
     const auto view_mat = glm::yawPitchRoll(
         glm::radians(view_rotation->yaw),
         glm::radians(view_rotation->pitch),

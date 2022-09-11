@@ -8,6 +8,7 @@ VRRuntime::Error OpenVR::synchronize_frame() {
         return VRRuntime::Error::SUCCESS;
     }
 
+    //std::unique_lock _{ this->pose_mtx };
     vr::VRCompositor()->SetTrackingSpace(vr::TrackingUniverseStanding);
     auto ret = vr::VRCompositor()->WaitGetPoses(this->real_render_poses.data(), vr::k_unMaxTrackedDeviceCount, this->real_game_poses.data(), vr::k_unMaxTrackedDeviceCount);
 
@@ -25,7 +26,12 @@ VRRuntime::Error OpenVR::update_poses() {
 
     std::unique_lock _{ this->pose_mtx };
 
-    memcpy(this->render_poses.data(), this->real_render_poses.data(), sizeof(this->render_poses));
+    //memcpy(this->render_poses.data(), this->real_render_poses.data(), sizeof(this->render_poses));
+
+    // get the exact poses RIGHT NOW without using WaitGetPoses, we will pass these to VRTextureWithPose_t
+    this->hmd->GetDeviceToAbsoluteTrackingPose(vr::ETrackingUniverseOrigin::TrackingUniverseStanding, vr::VRCompositor()->GetFrameTimeRemaining(), this->render_poses.data(), 1);
+    this->pose_queue.push_back(this->render_poses[vr::k_unTrackedDeviceIndex_Hmd].mDeviceToAbsoluteTracking);
+
     this->needs_pose_update = false;
     return VRRuntime::Error::SUCCESS;
 }
@@ -124,6 +130,21 @@ void OpenVR::destroy() {
     if (this->loaded) {
         vr::VR_Shutdown();
     }
+}
+
+vr::HmdMatrix34_t OpenVR::get_pose_for_submit() {
+    std::unique_lock _{ this->pose_mtx };
+
+    if (this->pose_queue.size() > 2) {
+        this->pose_queue.clear();
+    }
+
+    const auto last_pose = this->pose_queue.empty() ? this->real_render_poses[0].mDeviceToAbsoluteTracking : this->pose_queue.front();
+    if (!this->pose_queue.empty()) {
+        this->pose_queue.pop_front();
+    }
+
+    return last_pose;
 }
 }
 

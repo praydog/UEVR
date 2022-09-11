@@ -39,19 +39,6 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     auto runtime = vr->get_runtime();
     const auto frame_count = vr->m_render_frame_count;
 
-    if (vr->m_render_frame_count % 2 == vr->m_right_eye_interval || !vr->m_use_afr->value()) {
-        if ((runtime->ready() && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE) || !runtime->got_first_sync) {
-            runtime->synchronize_frame();
-
-            if (!runtime->got_first_poses) {
-                runtime->update_poses();
-                runtime->update_matrices(vr->m_nearz, vr->m_farz);
-            }
-
-            VR::get()->update_hmd_state();
-        }
-    }
-
     // If m_frame_count is even, we're rendering the left eye.
     if (vr->m_render_frame_count % 2 == vr->m_left_eye_interval && vr->m_use_afr->value()) {
         // OpenXR texture
@@ -60,7 +47,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         }
 
         // OpenVR texture
-        // Copy the back buffer to the left eye texture (m_left_eye_tex0 holds the intermediate frame).
+        // Copy the back buffer to the left eye texture
         if (runtime->is_openvr()) {
             m_openvr.copy_left(backbuffer.Get());
 
@@ -96,14 +83,24 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 0
             };
 
-            vr::Texture_t right_eye{(void*)&right, vr::TextureType_DirectX12, vr::ColorSpace_Auto};
+            auto openvr = vr->get_runtime<runtimes::OpenVR>();
+            const auto submit_pose = openvr->get_pose_for_submit();
 
-            auto e = vr::VRCompositor()->Submit(vr::Eye_Right, &right_eye, &vr->m_right_bounds);
+            vr::VRTextureWithPose_t right_eye{
+                (void*)&right, vr::TextureType_DirectX12, vr::ColorSpace_Auto,
+                submit_pose
+            };
+
+            auto e = vr::VRCompositor()->Submit(vr::Eye_Right, &right_eye, &vr->m_right_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
 
             // in UE4 it's just one texture, so re-use the right eye texture
             if (e == vr::VRCompositorError_None && !vr->m_use_afr->value()) {
-                vr::Texture_t left_eye{(void*)&right, vr::TextureType_DirectX12, vr::ColorSpace_Auto};
-                auto le = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &vr->m_left_bounds);
+                vr::VRTextureWithPose_t left_eye{
+                    (void*)&right, vr::TextureType_DirectX12, vr::ColorSpace_Auto,
+                    submit_pose
+                };
+
+                auto le = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &vr->m_left_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
 
                 if (le != vr::VRCompositorError_None) {
                     spdlog::error("[VR] VRCompositor failed to submit left eye: {}", (int)le);
@@ -119,6 +116,12 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             }
 
             ++m_openvr.texture_counter;
+        }
+    }
+
+    if (vr->m_render_frame_count % 2 == vr->m_right_eye_interval || !vr->m_use_afr->value()) {
+        if ((runtime->ready() && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE) || !runtime->got_first_sync) {
+            //vr->update_hmd_state();
         }
     }
 
