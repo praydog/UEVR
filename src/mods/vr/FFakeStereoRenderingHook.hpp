@@ -98,6 +98,7 @@ private:
     std::optional<uint32_t> get_stereo_view_offset_index(uintptr_t vtable);
 
     bool patch_vtable_checks();
+    bool attempt_runtime_inject_stereo();
 
     // Hooks
     static bool is_stereo_enabled(FFakeStereoRendering* stereo);

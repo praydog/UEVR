@@ -5,6 +5,7 @@
 #include <utility/Module.hpp>
 #include <utility/Scan.hpp>
 #include <utility/String.hpp>
+#include <utility/Thread.hpp>
 
 #include <bddisasm.h>
 #include <disasmtypes.h>
@@ -129,49 +130,8 @@ std::optional<uintptr_t> find_alternate_cvar_ref(std::wstring_view str, uint32_t
     return result;
 }
 
-std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::wstring_view cvar_name, uint32_t known_default = 0) {
-    auto found_in_module = utility::get_executable();
-    auto str_data = utility::scan_string(utility::get_executable(), str.data());
-
-    if (!str_data) {
-        const auto renderer_module = utility::find_partial_module(L"-Renderer-Win64-Shipping.dll");
-
-        if (renderer_module != nullptr) {
-            str_data = utility::scan_string(found_in_module, str.data());
-
-            if (str_data) {
-                found_in_module = renderer_module;
-            }
-        }
-    }
-
-    bool has_description_ref = str_data.has_value();
-    std::optional<uintptr_t> str_ref{};
-
-    // Fallback to alternate scan if the description is missing
-    if (!str_data) {
-        str_ref = find_alternate_cvar_ref(cvar_name, known_default);
-        has_description_ref = str_ref.has_value();
-    }
-
-    if (!str_data && !str_ref) {
-        spdlog::error("Failed to find string for {}", utility::narrow(str.data()));
-        return std::nullopt;
-    }
-
-    // This scans for the cvar description string ref.
-    if (!str_ref) {
-        str_ref = utility::scan_reference(found_in_module, *str_data);
-
-        if (!str_ref) {
-            spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
-            return std::nullopt;
-        }
-
-        spdlog::info("Found string ref for \"{}\" at {:x}", utility::narrow(str.data()), *str_ref);
-    }
-
-    const auto cvar_creation_ref = utility::scan_mnemonic(*str_ref + 4, 100, "CALL");
+std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring_view str) {
+    const auto cvar_creation_ref = utility::scan_mnemonic(start, 100, "CALL");
 
     if (!cvar_creation_ref) {
         spdlog::error("Failed to find cvar creation reference for {}", utility::narrow(str.data()));
@@ -237,6 +197,51 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::ws
 
     spdlog::error("Failed to find cvar for {}", utility::narrow(str.data()));
     return std::nullopt;
+}
+
+std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::wstring_view cvar_name, uint32_t known_default = 0) {
+    auto found_in_module = utility::get_executable();
+    auto str_data = utility::scan_string(utility::get_executable(), str.data());
+
+    if (!str_data) {
+        const auto renderer_module = utility::find_partial_module(L"-Renderer-Win64-Shipping.dll");
+
+        if (renderer_module != nullptr) {
+            str_data = utility::scan_string(found_in_module, str.data());
+
+            if (str_data) {
+                found_in_module = renderer_module;
+            }
+        }
+    }
+
+    bool has_description_ref = str_data.has_value();
+    std::optional<uintptr_t> str_ref{};
+
+    // Fallback to alternate scan if the description is missing
+    if (!str_data) {
+        str_ref = find_alternate_cvar_ref(cvar_name, known_default);
+        has_description_ref = str_ref.has_value();
+    }
+
+    if (!str_data && !str_ref) {
+        spdlog::error("Failed to find string for {}", utility::narrow(str.data()));
+        return std::nullopt;
+    }
+
+    // This scans for the cvar description string ref.
+    if (!str_ref) {
+        str_ref = utility::scan_reference(found_in_module, *str_data);
+
+        if (!str_ref) {
+            spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
+            return std::nullopt;
+        }
+
+        spdlog::info("Found string ref for \"{}\" at {:x}", utility::narrow(str.data()), *str_ref);
+    }
+
+    return resolve_cvar_from_address(*str_ref + 4, cvar_name);
 }
 
 FFakeStereoRenderingHook::FFakeStereoRenderingHook() {
@@ -445,6 +450,8 @@ bool FFakeStereoRenderingHook::hook() {
         spdlog::error("Failed to find backbuffer format cvar, continuing anyways...");
     }
 
+    attempt_runtime_inject_stereo();
+
     spdlog::info("Finished hooking FFakeStereoRendering!");
 
     return true;
@@ -613,6 +620,134 @@ bool FFakeStereoRenderingHook::patch_vtable_checks() {
     }
 
     spdlog::info("Finished patching inlined vtable checks.");
+    return true;
+}
+
+bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
+    // This attempts to create a new StereoRenderingDevice in the GEngine
+    // if it doesn't already exist via using -emulatestereo.
+    static void** engine = []() -> void** {
+        spdlog::info("Attempting to locate GEngine...");
+
+        const auto partial_module = utility::find_partial_module(L"-Engine-Win64-Shipping.dll");
+        const auto module = partial_module != nullptr ? partial_module : utility::get_executable();
+        const auto calibrate_tilt_fn = find_function_from_string_ref(L"CALIBRATEMOTION", module);
+
+        if (!calibrate_tilt_fn) {
+            spdlog::error("Failed to find CalibrateTilt function!");
+            return (void**)nullptr;
+        }
+
+        spdlog::info("CalibrateTilt function: {:x}", (uintptr_t)*calibrate_tilt_fn);
+
+        // Use bddisasm to find the first ptr mov into a register
+        uint8_t* ip = (uint8_t*)*calibrate_tilt_fn;
+
+        for (auto i = 0; i < 50; ++i) {
+            INSTRUX ix{};
+            const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
+
+            if (!ND_SUCCESS(status)) {
+                spdlog::info("Decoding failed with error {:x}!", (uint32_t)status);
+                break;
+            }
+
+            if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_REG && ix.Operands[1].Type == ND_OP_MEM && ix.Operands[1].Info.Memory.IsRipRel) {
+                const auto offset = ix.Operands[1].Info.Memory.Disp;
+                const auto result = (void**)((uint8_t*)ip + ix.Length + offset);
+
+                spdlog::info("Found GEngine at {:x}", (uintptr_t)result);
+                return result;
+            }
+
+            ip += ix.Length;
+        }
+
+        return nullptr;
+    }();
+
+    if (engine == nullptr) {
+        spdlog::error("Failed to locate GEngine, cannot inject stereo rendering device at runtime.");
+        return false;
+    }
+
+    static auto enable_stereo_emulation_cvar = []() -> std::optional<uintptr_t> {
+        spdlog::info("Attempting to locate r.EnableStereoEmulation cvar...");
+
+        const auto partial_module = utility::find_partial_module(L"-Engine-Win64-Shipping.dll");
+        const auto module = partial_module != nullptr ? partial_module : utility::get_executable();
+        const auto str = utility::scan_string(module, L"r.EnableStereoEmulation");
+
+        if (!str) {
+            spdlog::error("Failed to find r.EnableStereoEmulation string!");
+            return std::nullopt;
+        }
+
+        const auto str_ref = utility::scan_reference(module, *str);
+
+        if (!str_ref) {
+            spdlog::error("Failed to find r.EnableStereoEmulation string reference!");
+            return std::nullopt;
+        }
+
+        const auto result = resolve_cvar_from_address(*str_ref + 4, L"r.EnableStereoEmulation");
+        if (result) {
+            spdlog::info("Found r.EnableStereoEmulation at {:x}", (uintptr_t)*result);
+        }
+
+        return result;
+    }();
+
+    if (!enable_stereo_emulation_cvar) {
+        spdlog::error("Failed to locate r.EnableStereoEmulation cvar, cannot inject stereo rendering device at runtime.");
+        return false;
+    }
+
+    static auto initialize_hmd_device = []() -> std::optional<uintptr_t> {
+        const auto enable_stereo_emulation_cvar_ref = utility::scan_reference(*utility::get_module_within(*enable_stereo_emulation_cvar), *enable_stereo_emulation_cvar);
+
+        if (!enable_stereo_emulation_cvar_ref) {
+            spdlog::error("Failed to find r.EnableStereoEmulation cvar reference!");
+            return std::nullopt;
+        }
+
+        auto result = find_function_start(*enable_stereo_emulation_cvar_ref);
+
+        // scan backwards for the function start until it's no longer some random label within a function, but the function start itself.
+        while (result) {
+            // This means it's a valid vtable function, and we have found the function start.
+            if (utility::scan_ptr(*utility::get_module_within(*result), *result)) {
+                break;
+            }
+
+            spdlog::info("result was not really the function, scanning again...");
+            result = find_function_start(*result - 1);
+        }
+
+        if (result) {
+            spdlog::info("Found InitializeHMDDevice at {:x}", (uintptr_t)*result);
+        }
+
+        return result;
+    }();
+
+    if (!initialize_hmd_device) {
+        spdlog::error("Failed to locate InitializeHMDDevice function, cannot inject stereo rendering device at runtime.");
+        return false;
+    }
+
+    spdlog::info("Calling InitializeHMDDevice...");
+
+    utility::ThreadSuspender _{};
+
+    *(int32_t*)(*(uintptr_t*)*enable_stereo_emulation_cvar + 0x0) = 1;
+    *(int32_t*)(*(uintptr_t*)*enable_stereo_emulation_cvar + 0x4) = 1;
+
+    const auto fn = (void(*)(void*))*initialize_hmd_device;
+    fn(*engine);
+
+    spdlog::info("Called InitializeHMDDevice.");
+
     return true;
 }
 
