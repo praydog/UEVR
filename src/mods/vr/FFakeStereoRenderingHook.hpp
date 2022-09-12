@@ -10,19 +10,16 @@
 
 struct FRHICommandListImmediate;
 struct VRRenderTargetManager_418;
+struct FSceneView;
+struct UCanvas;
+struct IStereoLayers;
 
 struct VRRenderTargetManager : IStereoRenderTargetManager {
     uint32_t GetNumberOfBufferedFrames() const override { return 1; }
-
-    // This seems a bit too complex right now,
-    // if anyone can figure this out just make it return true and it will execute the
-    // other virtuals in here to allocate the view targets
     virtual bool ShouldUseSeparateRenderTarget() const override { return true; }
 
     virtual void UpdateViewport(
-        bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override {
-        // do nothing
-    }
+        bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override;
 
     virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override;
 
@@ -42,6 +39,8 @@ struct VRRenderTargetManager : IStereoRenderTargetManager {
         ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture,
         FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples = 1) override;
 
+    bool allocate_render_target_texture_wrapper(uintptr_t return_address, FTexture2DRHIRef* tex);
+
 public:
     FRHITexture2D* get_render_target() { return render_target; }
 
@@ -57,34 +56,33 @@ private:
 };
 
 struct VRRenderTargetManager_418 : IStereoRenderTargetManager_418 {
-    uint32_t GetNumberOfBufferedFrames() const override { return 1; }
-
-    // This seems a bit too complex right now,
-    // if anyone can figure this out just make it return true and it will execute the
-    // other virtuals in here to allocate the view targets
-    virtual bool ShouldUseSeparateRenderTarget() const override { return true; }
-
-    virtual void UpdateViewport(bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override {
-        // do nothing
+    VRRenderTargetManager_418(VRRenderTargetManager* manager) 
+    : real_manager(manager) 
+    {
     }
 
-    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override;
+    uint32_t GetNumberOfBufferedFrames() const override { return this->real_manager->GetNumberOfBufferedFrames(); }
+    virtual bool ShouldUseSeparateRenderTarget() const override { return this->real_manager->ShouldUseSeparateRenderTarget(); }
+
+    virtual void UpdateViewport(bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override {
+        this->real_manager->UpdateViewport(bUseSeparateRenderTarget, Viewport, ViewportWidget);
+    }
+
+    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override {
+        return this->real_manager->CalculateRenderTargetSize(Viewport, InOutSizeX, InOutSizeY);
+    }
 
     virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
-        // TODO: check if we need to reallocate
-        /*const auto ret = !allocated_views;
-
-        allocated_views = true;
-
-        return ret;*/
-
-        return false;
+        return this->real_manager->NeedReAllocateViewportRenderTarget(Viewport);
     }
 
     // We will use this to keep track of the game-allocated render targets.
     bool AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips, uint32_t Flags,
         uint32_t TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture, FTexture2DRHIRef& OutShaderResourceTexture,
         uint32_t NumSamples = 1);
+
+public:
+    VRRenderTargetManager* real_manager{nullptr};
 };
 
 class FFakeStereoRenderingHook {
@@ -120,6 +118,8 @@ private:
     std::unique_ptr<PointerHook> m_is_stereo_enabled_hook{};
     std::unique_ptr<PointerHook> m_get_render_target_manager_hook{};
 
-    // Does nothing at the moment.
     VRRenderTargetManager m_rtm{};
+    VRRenderTargetManager_418 m_rtm_418{&m_rtm};
+
+    bool m_418_detected{false};
 };

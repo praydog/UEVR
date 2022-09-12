@@ -269,6 +269,8 @@ bool FFakeStereoRenderingHook::hook() {
     const auto stereo_projection_matrix_index = *stereo_view_offset_index + 1;
     const auto is_4_18 = stereo_view_offset_index <= 6;
 
+    m_418_detected = stereo_view_offset_index <= 11;
+
     const auto stereo_view_offset_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index];
 
     auto render_texture_render_thread_func = find_function_from_string_ref(L"RenderTexture_RenderThread");
@@ -623,14 +625,24 @@ bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
 
 void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("adjust view rect called!");
+    spdlog::info("adjust view rect called! {}", index);
 #endif
+
+    static bool index_starts_from_one = true;
+
+    if (index == 2) {
+        index_starts_from_one = true;
+    } else if (index == 0) {
+        index_starts_from_one = false;
+    }
 
     *w = VR::get()->get_hmd_width() * 2;
     *h = VR::get()->get_hmd_height();
 
     *w = *w / 2;
-    *x += *w * (index % 2); // on some versions the index is actually the pass... figure out how to detect that
+
+    const auto true_index = index_starts_from_one ? ((index + 1) % 2) : (index % 2);
+    *x += *w * true_index;
 }
 
 void FFakeStereoRenderingHook::calculate_stereo_view_offset(
@@ -638,8 +650,18 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     const float world_to_meters, Vector3f* view_location)
 {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("calculate stereo view offset called!");
+    spdlog::info("calculate stereo view offset called! {}", view_index);
 #endif
+
+    static bool index_starts_from_one = true;
+
+    if (view_index == 2) {
+        index_starts_from_one = true;
+    } else if (view_index == 0) {
+        index_starts_from_one = false;
+    }
+
+    const auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
 
     auto vr = VR::get();
 
@@ -650,7 +672,7 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         vr->update_hmd_state();
     }*/
 
-    if (view_index % 2 == 1) {
+    if (true_index == 0) {
         std::scoped_lock _{ vr->m_openvr_mtx };
         vr->get_runtime()->consume_events(nullptr);
         vr->update_hmd_state();
@@ -674,13 +696,10 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         view_mat
     };
 
-    auto vr = VR::get();
     const auto rotation_offset = vr->get_rotation_offset();
     const auto current_hmd_rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(0)});
 
     const auto new_rotation = glm::normalize(view_quat_inverse * current_hmd_rotation);
-
-    const auto true_index = ((view_index) % 2);
     const auto eye_offset = glm::vec3{vr->get_eye_offset((VRRuntime::Eye)(true_index))};
 
     const auto pos = glm::vec3{rotation_offset * ((vr->get_position(0) - vr->get_standing_origin()))};
@@ -704,19 +723,33 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
 Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("calculate stereo projection matrix called!");
+    spdlog::info("calculate stereo projection matrix called! {} from {:x}", view_index, (uintptr_t)_ReturnAddress());
 #endif
+
+    static bool index_starts_from_one = true;
+
+    if (view_index == 2) {
+        index_starts_from_one = true;
+    } else if (view_index == 0) {
+        index_starts_from_one = false;
+    }
 
     g_hook->m_calculate_stereo_projection_matrix_hook->call<Matrix4x4f*>(stereo, out, view_index);
 
     // spdlog::info("NearZ: {}", old_znear);
 
     if (out != nullptr) {
+        const auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
+
         float old_znear = (*out)[3][2];
         VR::get()->m_nearz = old_znear;
+
         VR::get()->get_runtime()->update_matrices(old_znear, 10000.0f);
-        *out = VR::get()->get_projection_matrix((VRRuntime::Eye)(view_index % 2));
+        *out = VR::get()->get_projection_matrix((VRRuntime::Eye)(true_index));
+    } else {
+        spdlog::error("CalculateStereoProjectionMatrix returned nullptr!");
     }
+    
     return out;
 }
 
@@ -739,10 +772,19 @@ IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_
 #endif
 
     if (!VR::get()->get_runtime()->got_first_poses || VR::get()->is_hmd_active()) {
+        if (g_hook->m_418_detected) {
+            return (IStereoRenderTargetManager*)&g_hook->m_rtm_418;
+        }
+
         return &g_hook->m_rtm;
     }
 
     return nullptr;
+}
+
+
+void VRRenderTargetManager::UpdateViewport(bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget) {
+    //spdlog::info("Widget: {:x}", (uintptr_t)ViewportWidget);
 }
 
 void VRRenderTargetManager::CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) {
@@ -791,10 +833,13 @@ bool VRRenderTargetManager::AllocateRenderTargetTexture(uint32_t Index, uint32_t
     // to the engine that we are letting the engine itself
     // create the texture, rather than us creating it ourselves.
     // This should allow maximum compatibility across engine versions.
-    this->texture_hook_ref = &OutTargetableTexture;
+    return allocate_render_target_texture_wrapper((uintptr_t)_ReturnAddress(), &OutTargetableTexture);
+}
+
+bool VRRenderTargetManager::allocate_render_target_texture_wrapper(uintptr_t return_address, FTexture2DRHIRef* tex) {
+    this->texture_hook_ref = tex;
 
     if (!this->set_up_texture_hook) {
-        const auto return_address = (uintptr_t)_ReturnAddress();
         spdlog::info("AllocateRenderTargetTexture retaddr: {:x}", return_address);
 
         spdlog::info("Scanning for call instr...");
@@ -833,4 +878,11 @@ bool VRRenderTargetManager::AllocateRenderTargetTexture(uint32_t Index, uint32_t
     }
 
     return false;
+}
+
+bool VRRenderTargetManager_418::AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips, uint32_t Flags,
+        uint32_t TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture, FTexture2DRHIRef& OutShaderResourceTexture,
+        uint32_t NumSamples) 
+{
+    return this->real_manager->allocate_render_target_texture_wrapper((uintptr_t)_ReturnAddress(), &OutTargetableTexture);
 }
