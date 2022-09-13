@@ -98,7 +98,13 @@ class FFakeStereoRenderingHook {
 public:
     FFakeStereoRenderingHook();
 
-    VRRenderTargetManager* get_render_target_manager() { return &m_rtm; }
+    VRRenderTargetManager_Base* get_render_target_manager() {
+        if (m_418_detected) {
+            return static_cast<VRRenderTargetManager_Base*>(&m_rtm_418);
+        } 
+
+        return static_cast<VRRenderTargetManager_Base*>(&m_rtm);
+    }
     bool has_pixel_format_cvar() const {
         return m_pixel_format_cvar_found;
     }
