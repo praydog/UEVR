@@ -46,9 +46,11 @@ public:
 
 private:
     FRHITexture2D* render_target{};
+    static void pre_texture_hook_callback(safetyhook::Context& ctx); // only used if pixel format cvar is missing
     static void texture_hook_callback(safetyhook::Context& ctx);
 
     FTexture2DRHIRef* texture_hook_ref{nullptr};
+    std::unique_ptr<safetyhook::MidHook> pre_texture_hook{}; // only used if pixel format cvar is missing
     std::unique_ptr<safetyhook::MidHook> texture_hook{};
     uint32_t last_texture_index{0};
     bool allocated_views{false};
@@ -90,6 +92,9 @@ public:
     FFakeStereoRenderingHook();
 
     VRRenderTargetManager* get_render_target_manager() { return &m_rtm; }
+    bool has_pixel_format_cvar() const {
+        return m_pixel_format_cvar_found;
+    }
 
     void on_frame() {
         if (!m_injected_stereo_at_runtime) {
@@ -134,5 +139,6 @@ private:
     VRRenderTargetManager_418 m_rtm_418{&m_rtm};
 
     bool m_418_detected{false};
+    bool m_pixel_format_cvar_found{false};
     bool m_injected_stereo_at_runtime{false};
 };

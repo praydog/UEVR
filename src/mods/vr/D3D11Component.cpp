@@ -195,7 +195,8 @@ void D3D11Component::setup() {
     D3D11_TEXTURE2D_DESC backbuffer_desc{};
     backbuffer->GetDesc(&backbuffer_desc);
 
-    spdlog::info("W: {}, H: {}", backbuffer_desc.Width, backbuffer_desc.Height);
+    spdlog::info("[VR] W: {}, H: {}", backbuffer_desc.Width, backbuffer_desc.Height);
+    spdlog::info("[VR] Format: {}", backbuffer_desc.Format);
 
     backbuffer_desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
 

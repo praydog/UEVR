@@ -450,6 +450,7 @@ bool FFakeStereoRenderingHook::hook() {
     spdlog::info("Leaving FFakeStereoRenderingHook::hook");
 
     const auto backbuffer_format_cvar = find_cvar_by_description(L"Defines the default back buffer pixel format.", L"r.DefaultBackBufferPixelFormat", 4);
+    m_pixel_format_cvar_found = backbuffer_format_cvar.has_value();
 
     // In 4.18 this doesn't exist. Not much we can do about that.
     if (backbuffer_format_cvar) {
@@ -1032,6 +1033,11 @@ void VRRenderTargetManager::CalculateRenderTargetSize(const FViewport& Viewport,
     spdlog::info("RenderTargetSize: {}x{}", InOutSizeX, InOutSizeY);
 }
 
+void VRRenderTargetManager::pre_texture_hook_callback(safetyhook::Context& ctx) {
+    spdlog::info("PreTextureHook called! {}", ctx.r8);
+    ctx.r8 = 2; // PF_B8G8R8A8
+}
+
 void VRRenderTargetManager::texture_hook_callback(safetyhook::Context& ctx) {
     auto rtm = g_hook->get_render_target_manager();
 
@@ -1100,6 +1106,12 @@ bool VRRenderTargetManager::allocate_render_target_texture_wrapper(uintptr_t ret
                 auto builder = factory->acquire();
 
                 this->texture_hook = builder.create_mid((void*)post_call, &VRRenderTargetManager::texture_hook_callback);
+
+                if (!g_hook->has_pixel_format_cvar()) {
+                    spdlog::info("No pixel format cvar found, setting up pre texture hook...");
+                    this->pre_texture_hook = builder.create_mid((void*)ip, &VRRenderTargetManager::pre_texture_hook_callback);
+                }
+
                 this->set_up_texture_hook = true;
 
                 return false;
