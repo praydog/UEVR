@@ -135,7 +135,7 @@ void OpenVR::destroy() {
 vr::HmdMatrix34_t OpenVR::get_pose_for_submit() {
     std::unique_lock _{ this->pose_mtx };
 
-    if (this->pose_queue.size() > 2) {
+    if (this->pose_queue.size() > 3) {
         this->pose_queue.clear();
     }
 
