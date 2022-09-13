@@ -320,9 +320,8 @@ bool FFakeStereoRenderingHook::hook() {
     const auto rendertexture_fn_vtable_index = (*rendertexture_fn_vtable_middle - *vtable) / sizeof(uintptr_t);    
     spdlog::info("RenderTexture_RenderThread VTable Middle: {} {:x}", rendertexture_fn_vtable_index, (uintptr_t)*rendertexture_fn_vtable_middle);
 
-    // This is NOT confirmed to work on 4.18, more investigation is needed!!!!!
     const auto get_render_target_manager_func_ptr =
-        (uintptr_t)(*rendertexture_fn_vtable_middle + sizeof(void*) + (sizeof(void*) * 4 * (size_t)is_4_18));
+        (uintptr_t)(*rendertexture_fn_vtable_middle + sizeof(void*) + (sizeof(void*) * 2 * (size_t)is_4_18));
 
     if (!get_render_target_manager_func_ptr) {
         spdlog::error("Failed to find GetRenderTargetManager");
