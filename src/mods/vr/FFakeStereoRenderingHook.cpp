@@ -713,12 +713,25 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
     }
 
     static auto initialize_hmd_device = []() -> std::optional<uintptr_t> {
-        const auto enable_stereo_emulation_cvar_ref = utility::scan_reference(*utility::get_module_within(*enable_stereo_emulation_cvar), *enable_stereo_emulation_cvar);
+        spdlog::info("Searching for InitializeHMDDevice function...");
+
+        const auto module_within = utility::get_module_within(*enable_stereo_emulation_cvar);
+
+        if (!module_within) {
+            spdlog::error("Failed to find module containing r.EnableStereoEmulation cvar!");
+            return std::nullopt;
+        }
+
+        spdlog::info("Module containing r.EnableStereoEmulation cvar: {:x}", (uintptr_t)*module_within);
+
+        const auto enable_stereo_emulation_cvar_ref = utility::scan_reference(*module_within, *enable_stereo_emulation_cvar);
 
         if (!enable_stereo_emulation_cvar_ref) {
             spdlog::error("Failed to find r.EnableStereoEmulation cvar reference!");
             return std::nullopt;
         }
+
+        spdlog::info("Found r.EnableStereoEmulation cvar reference at {:x}", (uintptr_t)*enable_stereo_emulation_cvar_ref);
 
         auto result = find_function_start(*enable_stereo_emulation_cvar_ref);
 
