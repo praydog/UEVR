@@ -14,32 +14,21 @@ struct FSceneView;
 struct UCanvas;
 struct IStereoLayers;
 
-struct VRRenderTargetManager : IStereoRenderTargetManager {
-    uint32_t GetNumberOfBufferedFrames() const override { return 1; }
-    virtual bool ShouldUseSeparateRenderTarget() const override { return true; }
+// Injector-specific structure for VRRenderTargetManager that they will all secondarily inherit from
+// because different engine versions can have a different IStereoRenderTargetManager virtual table
+// so we need a unified way of storing data that can be used for all versions
+struct VRRenderTargetManager_Base {
+public:
+    bool allocate_render_target_texture(uintptr_t return_address, FTexture2DRHIRef* tex);
 
-    virtual void UpdateViewport(
-        bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override;
+    uint32_t get_number_of_buffered_frames() const { return 1; }
 
-    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override;
+    bool should_use_separate_render_target() const { return true; }
 
-    virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
-        // TODO: check if we need to reallocate
-        /*const auto ret = !allocated_views;
+    void update_viewport(bool use_separate_rt, const FViewport& vp, class SViewport* vp_widget = nullptr);
 
-        allocated_views = true;
-
-        return ret;*/
-
-        return false;
-    }
-
-    // We will use this to keep track of the game-allocated render targets.
-    bool AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips,
-        ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture,
-        FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples = 1) override;
-
-    bool allocate_render_target_texture_wrapper(uintptr_t return_address, FTexture2DRHIRef* tex);
+    void calculate_render_target_size(const FViewport& viewport, uint32_t& x, uint32_t& y);
+    bool need_reallocate_view_target(const FViewport& Viewport);
 
 public:
     FRHITexture2D* get_render_target() { return render_target; }
@@ -57,34 +46,52 @@ private:
     bool set_up_texture_hook{false};
 };
 
-struct VRRenderTargetManager_418 : IStereoRenderTargetManager_418 {
-    VRRenderTargetManager_418(VRRenderTargetManager* manager) 
-    : real_manager(manager) 
+struct VRRenderTargetManager : IStereoRenderTargetManager, VRRenderTargetManager_Base {
+public:
+    uint32_t GetNumberOfBufferedFrames() const override { return VRRenderTargetManager_Base::get_number_of_buffered_frames(); }
+    virtual bool ShouldUseSeparateRenderTarget() const override { return VRRenderTargetManager_Base::should_use_separate_render_target(); }
+
+    virtual void UpdateViewport(
+        bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override 
     {
+        VRRenderTargetManager_Base::update_viewport(bUseSeparateRenderTarget, Viewport, ViewportWidget);
     }
 
-    uint32_t GetNumberOfBufferedFrames() const override { return this->real_manager->GetNumberOfBufferedFrames(); }
-    virtual bool ShouldUseSeparateRenderTarget() const override { return this->real_manager->ShouldUseSeparateRenderTarget(); }
-
-    virtual void UpdateViewport(bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override {
-        this->real_manager->UpdateViewport(bUseSeparateRenderTarget, Viewport, ViewportWidget);
-    }
-
-    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override {
-        return this->real_manager->CalculateRenderTargetSize(Viewport, InOutSizeX, InOutSizeY);
+    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override 
+    {
+        VRRenderTargetManager_Base::calculate_render_target_size(Viewport, InOutSizeX, InOutSizeY);
     }
 
     virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
-        return this->real_manager->NeedReAllocateViewportRenderTarget(Viewport);
+        return VRRenderTargetManager_Base::need_reallocate_view_target(Viewport);
+    }
+
+    // We will use this to keep track of the game-allocated render targets.
+    bool AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips,
+        ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture,
+        FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples = 1) override;
+};
+
+struct VRRenderTargetManager_418 : IStereoRenderTargetManager_418, VRRenderTargetManager_Base {
+    uint32_t GetNumberOfBufferedFrames() const override { return VRRenderTargetManager_Base::get_number_of_buffered_frames(); }
+    virtual bool ShouldUseSeparateRenderTarget() const override { return VRRenderTargetManager_Base::should_use_separate_render_target(); }
+
+    virtual void UpdateViewport(bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override {
+        VRRenderTargetManager_Base::update_viewport(bUseSeparateRenderTarget, Viewport, ViewportWidget);
+    }
+
+    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override {
+        VRRenderTargetManager_Base::calculate_render_target_size(Viewport, InOutSizeX, InOutSizeY);
+    }
+
+    virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
+        return VRRenderTargetManager_Base::need_reallocate_view_target(Viewport);
     }
 
     // We will use this to keep track of the game-allocated render targets.
     bool AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips, uint32_t Flags,
         uint32_t TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture, FTexture2DRHIRef& OutShaderResourceTexture,
-        uint32_t NumSamples = 1);
-
-public:
-    VRRenderTargetManager* real_manager{nullptr};
+        uint32_t NumSamples = 1) override;
 };
 
 class FFakeStereoRenderingHook {

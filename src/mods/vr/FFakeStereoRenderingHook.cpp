@@ -1031,27 +1031,31 @@ IStereoLayers* FFakeStereoRenderingHook::get_stereo_layers_hook(FFakeStereoRende
     return nullptr;
 }
 
-void VRRenderTargetManager::UpdateViewport(bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget) {
+void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const FViewport& vp, class SViewport* vp_widget) {
     //spdlog::info("Widget: {:x}", (uintptr_t)ViewportWidget);
 }
 
-void VRRenderTargetManager::CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) {
+void VRRenderTargetManager_Base::calculate_render_target_size(const FViewport& viewport, uint32_t& x, uint32_t& y) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("calculate render target size called!");
 #endif
 
-    InOutSizeX = VR::get()->get_hmd_width() * 2;
-    InOutSizeY = VR::get()->get_hmd_height();
+    x = VR::get()->get_hmd_width() * 2;
+    y = VR::get()->get_hmd_height();
 
-    spdlog::info("RenderTargetSize: {}x{}", InOutSizeX, InOutSizeY);
+    spdlog::info("RenderTargetSize: {}x{}", x, y);
 }
 
-void VRRenderTargetManager::pre_texture_hook_callback(safetyhook::Context& ctx) {
+bool VRRenderTargetManager_Base::need_reallocate_view_target(const FViewport& Viewport) {
+    return false;
+}
+
+void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& ctx) {
     spdlog::info("PreTextureHook called! {}", ctx.r8);
     ctx.r8 = 2; // PF_B8G8R8A8
 }
 
-void VRRenderTargetManager::texture_hook_callback(safetyhook::Context& ctx) {
+void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx) {
     auto rtm = g_hook->get_render_target_manager();
 
     spdlog::info("Ref: {:x}", (uintptr_t)rtm->texture_hook_ref);
@@ -1073,23 +1077,7 @@ void VRRenderTargetManager::texture_hook_callback(safetyhook::Context& ctx) {
     ++rtm->last_texture_index;
 }
 
-bool VRRenderTargetManager::AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips,
-    ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture,
-    FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples) {
-    // So, what's happening here is instead of using this method
-    // to actually create our textures, we are going to
-    // get the return address, scan forward for the next call instruction
-    // and insert a midhook after the next call instruction.
-    // The purpose of this is to get the texture that is being created
-    // by the engine itself after we return false from this function.
-    // When we return false from this function, it indicates
-    // to the engine that we are letting the engine itself
-    // create the texture, rather than us creating it ourselves.
-    // This should allow maximum compatibility across engine versions.
-    return allocate_render_target_texture_wrapper((uintptr_t)_ReturnAddress(), &OutTargetableTexture);
-}
-
-bool VRRenderTargetManager::allocate_render_target_texture_wrapper(uintptr_t return_address, FTexture2DRHIRef* tex) {
+bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return_address, FTexture2DRHIRef* tex) {
     this->texture_hook_ref = tex;
 
     if (!this->set_up_texture_hook) {
@@ -1139,9 +1127,25 @@ bool VRRenderTargetManager::allocate_render_target_texture_wrapper(uintptr_t ret
     return false;
 }
 
+bool VRRenderTargetManager::AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips,
+    ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture,
+    FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples) {
+    // So, what's happening here is instead of using this method
+    // to actually create our textures, we are going to
+    // get the return address, scan forward for the next call instruction
+    // and insert a midhook after the next call instruction.
+    // The purpose of this is to get the texture that is being created
+    // by the engine itself after we return false from this function.
+    // When we return false from this function, it indicates
+    // to the engine that we are letting the engine itself
+    // create the texture, rather than us creating it ourselves.
+    // This should allow maximum compatibility across engine versions.
+    return this->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &OutTargetableTexture);
+}
+
 bool VRRenderTargetManager_418::AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips, uint32_t Flags,
         uint32_t TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture, FTexture2DRHIRef& OutShaderResourceTexture,
         uint32_t NumSamples) 
 {
-    return this->real_manager->allocate_render_target_texture_wrapper((uintptr_t)_ReturnAddress(), &OutTargetableTexture);
+    return this->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &OutTargetableTexture);
 }
