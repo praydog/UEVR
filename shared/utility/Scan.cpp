@@ -145,7 +145,7 @@ namespace utility {
         const auto module_size = get_module_size(module).value_or(0);
         const auto end = (uintptr_t)module + module_size;
         
-        for (auto i = (uintptr_t)module; i < end; i += sizeof(uint8_t)) {
+        for (auto i = (uintptr_t)module; i < end - sizeof(void*); i += sizeof(uint8_t)) {
             if (calculate_absolute(i, 4) == ptr) {
                 return i;
             }
