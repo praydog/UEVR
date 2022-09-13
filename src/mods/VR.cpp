@@ -634,6 +634,8 @@ void VR::on_present() {
         return;
     }
 
+    m_fake_stereo_hook->on_frame();
+
     auto openvr = get_runtime<runtimes::OpenVR>();
 
     if (runtime->is_openvr()) {
@@ -836,7 +838,7 @@ void VR::on_draw_ui() {
     }
 
     if (ImGui::Button("Recenter View")) {
-        //recenter_view();
+        recenter_view();
     }
 
     if (ImGui::Button("Reinitialize Runtime")) {

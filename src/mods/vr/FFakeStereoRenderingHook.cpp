@@ -317,18 +317,26 @@ bool FFakeStereoRenderingHook::hook() {
         return false;
     }
 
-    const auto rendertexture_fn_vtable_index = (*rendertexture_fn_vtable_middle - *vtable) / sizeof(uintptr_t);    
+    const auto rendertexture_fn_vtable_index = (*rendertexture_fn_vtable_middle - *vtable) / sizeof(uintptr_t);
     spdlog::info("RenderTexture_RenderThread VTable Middle: {} {:x}", rendertexture_fn_vtable_index, (uintptr_t)*rendertexture_fn_vtable_middle);
 
     const auto get_render_target_manager_func_ptr =
         (uintptr_t)(*rendertexture_fn_vtable_middle + sizeof(void*) + (sizeof(void*) * 2 * (size_t)is_4_18));
+    
+    const auto get_stereo_layers_func_ptr = (uintptr_t)(get_render_target_manager_func_ptr + sizeof(void*));
 
-    if (!get_render_target_manager_func_ptr) {
+    if (get_render_target_manager_func_ptr == 0) {
         spdlog::error("Failed to find GetRenderTargetManager");
         return false;
     }
 
+    if (get_stereo_layers_func_ptr == 0) {
+        spdlog::error("Failed to find GetStereoLayers");
+        return false;
+    }
+
     spdlog::info("GetRenderTargetManagerptr: {:x}", (uintptr_t)get_render_target_manager_func_ptr);
+    spdlog::info("GetStereoLayersptr: {:x}", (uintptr_t)get_stereo_layers_func_ptr);
 
     // In 4.18 the destructor virtual doesn't exist.
     const auto is_stereo_enabled_index = utility::scan(*(uintptr_t*)*vtable, 3, "B0 01 C3").value_or(0) == *(uintptr_t*)*vtable ? 0 : 1;
@@ -412,10 +420,11 @@ bool FFakeStereoRenderingHook::hook() {
         }
     }
 
-    // const auto init_canvas_index = *stereo_view_offset_index + 4;
+    const auto init_canvas_index = calculate_stereo_projection_matrix_index + 1;
 
     const auto adjust_view_rect_func = ((uintptr_t*)*vtable)[adjust_view_rect_index];
     const auto calculate_stereo_projection_matrix_func = ((uintptr_t*)*vtable)[calculate_stereo_projection_matrix_index];
+    const auto init_canvas_func_ptr = &((uintptr_t*)*vtable)[init_canvas_index];
     // const auto render_texture_render_thread_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index + 3];
 
     auto factory = SafetyHookFactory::init();
@@ -434,7 +443,9 @@ bool FFakeStereoRenderingHook::hook() {
     // compiler optimization makes that function get re-used in a lot of places
     // so it's not feasible to just detour it, we need to replace the pointer in the vtable.
     m_get_render_target_manager_hook = std::make_unique<PointerHook>((void**)get_render_target_manager_func_ptr, (void*)&get_render_target_manager_hook);
+    //m_get_stereo_layers_hook = std::make_unique<PointerHook>((void**)get_stereo_layers_func_ptr, (void*)&get_stereo_layers_hook);
     m_is_stereo_enabled_hook = std::make_unique<PointerHook>((void**)is_stereo_enabled_func_ptr, (void*)&is_stereo_enabled);
+    //m_init_canvas_hook = std::make_unique<PointerHook>((void**)init_canvas_func_ptr, (void*)&init_canvas);
 
     spdlog::info("Leaving FFakeStereoRenderingHook::hook");
 
@@ -448,8 +459,6 @@ bool FFakeStereoRenderingHook::hook() {
     } else {
         spdlog::error("Failed to find backbuffer format cvar, continuing anyways...");
     }
-
-    attempt_runtime_inject_stereo();
 
     spdlog::info("Finished hooking FFakeStereoRendering!");
 
@@ -900,6 +909,79 @@ void FFakeStereoRenderingHook::render_texture_render_thread(FFakeStereoRendering
     // g_hook->m_render_texture_render_thread_hook->call<void*>(stereo, rhi_command_list, backbuffer, src_texture, window_size);
 }
 
+void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneView* view, UCanvas* canvas) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("init canvas called!");
+#endif
+
+    // Since the FSceneView and UCanvas structures will probably vary wildly
+    // in terms of field offsets and size, we will need to dynamically scan
+    // from the return address of this function to find the ViewProjectionMatrix offset.
+    // in the FSceneView and also the UCanvas.
+    // it happens in the else block of the conditional statement that calls this function
+    static uint32_t fsceneview_viewproj_offset = 0;
+    static uint32_t ucanvas_viewproj_offset = 0;
+
+    if (fsceneview_viewproj_offset == 0 || ucanvas_viewproj_offset == 0) {
+        spdlog::info("Searching for FSceneView and UCanvas offsets...");
+        spdlog::info("Canvas: {:x}", (uintptr_t)canvas);
+
+        const auto return_address = (uintptr_t)_ReturnAddress();
+        const auto containing_function = find_function_start(return_address);
+
+        spdlog::info("Found containing function at {:x}", *containing_function);
+
+        auto find_offsets = [](uintptr_t start, uintptr_t end) -> bool {
+            for (auto ip = (uintptr_t)start; ip < end + 0x100;) {
+                const auto ix = utility::decode_one((uint8_t*)ip);
+
+                if (!ix) {
+                    spdlog::error("Failed to decode instruction at {:x}", ip);
+                    break;
+                }
+
+                // The initial instructions look something like this
+                /*
+                0F 28 86 C0 03 00 00                          movaps  xmm0, xmmword ptr [rsi+3C0h]
+                41 0F 11 87 80 02 00 00                       movups  xmmword ptr [r15+280h], xmm0
+                */
+                if (std::string_view{ix->Mnemonic} == "MOVAPS" && ix->Operands[1].Type == ND_OP_MEM) {
+                    const auto next = utility::decode_one((uint8_t*)(ip + ix->Length));
+
+                    if (next) {
+                        if (std::string_view{next->Mnemonic} == "MOVUPS" && next->Operands[0].Type == ND_OP_MEM) {
+                            fsceneview_viewproj_offset = ix->Operands[1].Info.Memory.Disp;
+                            ucanvas_viewproj_offset = next->Operands[0].Info.Memory.Disp;
+                            
+                            spdlog::info("Found at {:x}", ip);
+                            spdlog::info("Found FSceneView ViewProjectionMatrix offset: {:x}", fsceneview_viewproj_offset);
+                            spdlog::info("Found UCanvas ViewProjectionMatrix offset: {:x}", ucanvas_viewproj_offset);
+                            return true;
+                            break;
+                        }
+                    }
+                }
+
+                ip += ix->Length;
+            }
+
+            return false;
+        };
+
+        if (!find_offsets(*containing_function, return_address)) {
+            // If we still didn't find it at this stage, re-scan from the previous function from the previous function call instead.
+            const auto potential_func = utility::calculate_absolute(return_address - 4);
+            if (!find_offsets(potential_func, potential_func + 0x100)) {
+                spdlog::error("Failed to find offsets!");
+                return;
+            }
+        }
+    }
+
+    //*(Matrix4x4f*)((uintptr_t)view + fsceneview_viewproj_offset) = VR::get()->get_projection_matrix(VRRuntime::Eye::LEFT);
+    *(Matrix4x4f*)((uintptr_t)canvas + ucanvas_viewproj_offset) = *(Matrix4x4f*)((uintptr_t)view + fsceneview_viewproj_offset);
+}
+
 IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_hook(FFakeStereoRendering* stereo) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("get render target manager hook called!");
@@ -916,6 +998,24 @@ IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_
     return nullptr;
 }
 
+IStereoLayers* FFakeStereoRenderingHook::get_stereo_layers_hook(FFakeStereoRendering* stereo) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("get stereo layers hook called!");
+#endif
+
+    if (!VR::get()->get_runtime()->got_first_poses || VR::get()->is_hmd_active()) {
+        /*static uint8_t fake_data[0x100]{};
+
+        if (*(uintptr_t*)&fake_data == 0) {
+            *(uintptr_t*)&fake_data = (uintptr_t)utility::get_executable() + 0x3D13420; // test
+        }
+
+        //return &g_hook->m_sl;
+        return (IStereoLayers*)&fake_data;*/
+    }
+
+    return nullptr;
+}
 
 void VRRenderTargetManager::UpdateViewport(bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget) {
     //spdlog::info("Widget: {:x}", (uintptr_t)ViewportWidget);

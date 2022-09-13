@@ -91,6 +91,13 @@ public:
 
     VRRenderTargetManager* get_render_target_manager() { return &m_rtm; }
 
+    void on_frame() {
+        if (!m_injected_stereo_at_runtime) {
+            attempt_runtime_inject_stereo();
+            m_injected_stereo_at_runtime = true;
+        }
+    }
+
 private:
     bool hook();
     std::optional<uintptr_t> locate_fake_stereo_rendering_constructor();
@@ -108,8 +115,10 @@ private:
     static Matrix4x4f* calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index);
     static void render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list,
         FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size);
+    static void init_canvas(FFakeStereoRendering* stereo, FSceneView* view, UCanvas* canvas);
 
     static IStereoRenderTargetManager* get_render_target_manager_hook(FFakeStereoRendering* stereo);
+    static IStereoLayers* get_stereo_layers_hook(FFakeStereoRendering* stereo);
 
     std::unique_ptr<safetyhook::InlineHook> m_adjust_view_rect_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_calculate_stereo_view_offset_hook{};
@@ -118,9 +127,12 @@ private:
 
     std::unique_ptr<PointerHook> m_is_stereo_enabled_hook{};
     std::unique_ptr<PointerHook> m_get_render_target_manager_hook{};
+    std::unique_ptr<PointerHook> m_get_stereo_layers_hook{};
+    std::unique_ptr<PointerHook> m_init_canvas_hook{};
 
     VRRenderTargetManager m_rtm{};
     VRRenderTargetManager_418 m_rtm_418{&m_rtm};
 
     bool m_418_detected{false};
+    bool m_injected_stereo_at_runtime{false};
 };
