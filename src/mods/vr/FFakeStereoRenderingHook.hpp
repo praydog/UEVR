@@ -143,7 +143,7 @@ private:
     std::unique_ptr<PointerHook> m_init_canvas_hook{};
 
     VRRenderTargetManager m_rtm{};
-    VRRenderTargetManager_418 m_rtm_418{&m_rtm};
+    VRRenderTargetManager_418 m_rtm_418{};
 
     bool m_418_detected{false};
     bool m_pixel_format_cvar_found{false};
