@@ -77,6 +77,51 @@ std::optional<uintptr_t> find_function_from_string_ref(std::wstring_view str, HM
     return func_start;
 }
 
+void** get_engine() {
+    static void** engine = []() -> void** {
+        spdlog::info("Attempting to locate GEngine...");
+
+        const auto partial_module = utility::find_partial_module(L"-Engine-Win64-Shipping.dll");
+        const auto module = partial_module != nullptr ? partial_module : utility::get_executable();
+        const auto calibrate_tilt_fn = find_function_from_string_ref(L"CALIBRATEMOTION", module);
+
+        if (!calibrate_tilt_fn) {
+            spdlog::error("Failed to find CalibrateTilt function!");
+            return (void**)nullptr;
+        }
+
+        spdlog::info("CalibrateTilt function: {:x}", (uintptr_t)*calibrate_tilt_fn);
+
+        // Use bddisasm to find the first ptr mov into a register
+        uint8_t* ip = (uint8_t*)*calibrate_tilt_fn;
+
+        for (auto i = 0; i < 50; ++i) {
+            INSTRUX ix{};
+            const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
+
+            if (!ND_SUCCESS(status)) {
+                spdlog::info("Decoding failed with error {:x}!", (uint32_t)status);
+                break;
+            }
+
+            if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_REG && ix.Operands[1].Type == ND_OP_MEM && ix.Operands[1].Info.Memory.IsRipRel) {
+                const auto offset = ix.Operands[1].Info.Memory.Disp;
+                const auto result = (void**)((uint8_t*)ip + ix.Length + offset);
+
+                spdlog::info("Found GEngine at {:x}", (uintptr_t)result);
+                return result;
+            }
+
+            ip += ix.Length;
+        }
+
+        spdlog::error("Failed to find GEngine!");
+        return nullptr;
+    }();
+
+    return engine;
+}
+
 // In some games, likely due to obfuscation, the cvar description is missing
 // so we must do an alternative scan for the cvar name itself, which is a bit tougher
 // because the cvar name is usually referenced in multiple places, whereas
@@ -246,25 +291,33 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::ws
 
 FFakeStereoRenderingHook::FFakeStereoRenderingHook() {
     g_hook = this;
-    hook();
 }
 
 bool FFakeStereoRenderingHook::hook() {
     spdlog::info("Entering FFakeStereoRenderingHook::hook");
 
-    const auto game = (uintptr_t)utility::get_executable();
-    const auto engine_dll = utility::find_partial_module(L"-Engine-Win64-Shipping.dll");
+    m_tried_hooking = true;
+
     const auto vtable = locate_fake_stereo_rendering_vtable();
 
     if (!vtable) {
-        spdlog::error("Failed to locate Fake Stereo Rendering VTable");
-        return false;
+        spdlog::error("Failed to locate Fake Stereo Rendering VTable, attempting to perform nonstandard hook");
+        return nonstandard_create_stereo_device_hook();
     }
+
+    return standard_fake_stereo_hook(*vtable);
+}
+
+bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
+    spdlog::info("Performing standard fake stereo hook");
+
+    const auto game = (uintptr_t)utility::get_executable();
+    const auto engine_dll = utility::find_partial_module(L"-Engine-Win64-Shipping.dll");
 
     patch_vtable_checks();
 
-    const auto module_vtable_within = utility::get_module_within(*vtable);
-    const auto stereo_view_offset_index = get_stereo_view_offset_index(*vtable);
+    const auto module_vtable_within = utility::get_module_within(vtable);
+    const auto stereo_view_offset_index = get_stereo_view_offset_index(vtable);
 
     if (!stereo_view_offset_index) {
         spdlog::error("Failed to locate Stereo View Offset Index");
@@ -276,7 +329,7 @@ bool FFakeStereoRenderingHook::hook() {
 
     m_418_detected = stereo_view_offset_index <= 11;
 
-    const auto stereo_view_offset_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index];
+    const auto stereo_view_offset_func = ((uintptr_t*)vtable)[*stereo_view_offset_index];
 
     auto render_texture_render_thread_func = find_function_from_string_ref(L"RenderTexture_RenderThread");
 
@@ -289,7 +342,7 @@ bool FFakeStereoRenderingHook::hook() {
         spdlog::info("Failed to find RenderTexture_RenderThread, falling back to first non-default virtual function");
 
         for (auto i = 2; i < 10; ++i) {
-            const auto func = ((uintptr_t*)*vtable)[stereo_projection_matrix_index + i];
+            const auto func = ((uintptr_t*)vtable)[stereo_projection_matrix_index + i];
 
             if (!utility::is_stub_code((uint8_t*)func)) {
                 render_texture_render_thread_func = func;
@@ -317,7 +370,7 @@ bool FFakeStereoRenderingHook::hook() {
         return false;
     }
 
-    const auto rendertexture_fn_vtable_index = (*rendertexture_fn_vtable_middle - *vtable) / sizeof(uintptr_t);
+    const auto rendertexture_fn_vtable_index = (*rendertexture_fn_vtable_middle - vtable) / sizeof(uintptr_t);
     spdlog::info("RenderTexture_RenderThread VTable Middle: {} {:x}", rendertexture_fn_vtable_index, (uintptr_t)*rendertexture_fn_vtable_middle);
 
     const auto get_render_target_manager_func_ptr =
@@ -339,9 +392,9 @@ bool FFakeStereoRenderingHook::hook() {
     spdlog::info("GetStereoLayersptr: {:x}", (uintptr_t)get_stereo_layers_func_ptr);
 
     // In 4.18 the destructor virtual doesn't exist.
-    const auto is_stereo_enabled_index = utility::scan(*(uintptr_t*)*vtable, 3, "B0 01 C3").value_or(0) == *(uintptr_t*)*vtable ? 0 : 1;
+    const auto is_stereo_enabled_index = utility::scan(*(uintptr_t*)vtable, 3, "B0 01 C3").value_or(0) == *(uintptr_t*)vtable ? 0 : 1;
     spdlog::info("IsStereoEnabled Index: {}", is_stereo_enabled_index);
-    const auto is_stereo_enabled_func_ptr = &((uintptr_t*)*vtable)[is_stereo_enabled_index];
+    const auto is_stereo_enabled_func_ptr = &((uintptr_t*)vtable)[is_stereo_enabled_index];
 
     const auto adjust_view_rect_distance = is_4_18 ? 2 : 3;
 
@@ -351,7 +404,7 @@ bool FFakeStereoRenderingHook::hook() {
     // While generally most of the time the stereo projection matrix func is the next one after the stereo view offset func,
     // it's not always the case. We can scan for a call to the tanf function in one of the virtual functions to find it.
     for (auto i = 0; i < 10; ++i) {
-        const auto potential_func = ((uintptr_t*)*vtable)[calculate_stereo_projection_matrix_index + i];
+        const auto potential_func = ((uintptr_t*)vtable)[calculate_stereo_projection_matrix_index + i];
         if (potential_func == 0 || IsBadReadPtr((void*)potential_func, 1) || utility::is_stub_code((uint8_t*)potential_func)) {
             continue;
         }
@@ -422,9 +475,9 @@ bool FFakeStereoRenderingHook::hook() {
 
     const auto init_canvas_index = calculate_stereo_projection_matrix_index + 1;
 
-    const auto adjust_view_rect_func = ((uintptr_t*)*vtable)[adjust_view_rect_index];
-    const auto calculate_stereo_projection_matrix_func = ((uintptr_t*)*vtable)[calculate_stereo_projection_matrix_index];
-    const auto init_canvas_func_ptr = &((uintptr_t*)*vtable)[init_canvas_index];
+    const auto adjust_view_rect_func = ((uintptr_t*)vtable)[adjust_view_rect_index];
+    const auto calculate_stereo_projection_matrix_func = ((uintptr_t*)vtable)[calculate_stereo_projection_matrix_index];
+    const auto init_canvas_func_ptr = &((uintptr_t*)vtable)[init_canvas_index];
     // const auto render_texture_render_thread_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index + 3];
 
     auto factory = SafetyHookFactory::init();
@@ -461,7 +514,122 @@ bool FFakeStereoRenderingHook::hook() {
         spdlog::error("Failed to find backbuffer format cvar, continuing anyways...");
     }
 
+    m_finished_hooking = true;
     spdlog::info("Finished hooking FFakeStereoRendering!");
+
+    return true;
+}
+
+bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
+    // This may only work on one game for now, but it should be a good placeholder
+    // for creating a stereo device for games that don't have one.
+    // We can figure out how to make it work for other games when we run into one
+    // that needs this same functionality.
+
+    // The reason why this function is needed is because in the one game that
+    // the FFakeStereoRenderingHook doesn't work through the standard method,
+    // is because the VR pipeline seems to have been heavily modified,
+    // and so the -emulatestereo command line argument doesn't work, and
+    // the FFakeStereoRendering vtable does not seem to exist
+    // However the StereoRenderingDevice within GEngine seems to still exist
+    // so we can take advantage of that and create our own stereo device
+    // the downside is it will be much more difficult to figure out the 
+    // proper vtable indices for the functions we need to hook
+    // and we will need to actually implement some of the functions
+    spdlog::info("Attempting to create a stereo device for the game using nonstandard method");
+    m_fallback_vtable.resize(30);
+
+    // Give all of the functions placeholders.
+    for (auto i = 0; i < m_fallback_vtable.size(); ++i) {
+        m_fallback_vtable[i] = +[](FFakeStereoRendering* stereo) -> void* {
+            return nullptr;
+        };
+    }
+
+    // Actually implement the ones we care about now.
+    auto idx = 0;
+    //m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo) -> void { spdlog::info("Destructor called?");  }; // destructor.
+    m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo) -> bool { 
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        spdlog::info("IsStereoEnabled called: {:x}", (uintptr_t)_ReturnAddress());
+#endif
+
+        return g_hook->is_stereo_enabled(stereo); 
+    }; // IsStereoEnabled
+    m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo) -> bool { return g_hook->is_stereo_enabled(stereo); }; // IsStereoEnabledOnNextFrame
+    m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo) -> bool { return g_hook->is_stereo_enabled(stereo); }; // EnableStereo
+
+    ++idx; // idk waht this is.
+
+    m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h) { 
+        return g_hook->adjust_view_rect(stereo, index, x, y, w, h);
+    }; // AdjustViewRect
+
+    // in this version the index is passed...?
+    m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo, uint32_t index, Vector2f* bounds) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        spdlog::info("GetTextSafeRegionBounds called");
+#endif
+
+        bounds->x = 0.75f;
+        bounds->y = 0.75f;
+
+        return bounds;
+    }; // GetTextSafeRegionBounds
+
+    m_fallback_vtable[idx++] = 
+    +[](FFakeStereoRendering* stereo, const int32_t view_index, Rotator* view_rotation, const float world_to_meters, Vector3f* view_location) {
+        return g_hook->calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location);
+    }; // CalculateStereoViewOffset
+
+    m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        spdlog::info("CalculateStereoProjectionMatrix called: {:x} {} {:x}", (uintptr_t)_ReturnAddress(), view_index, (uintptr_t)out);
+#endif
+
+        (*out)[3][2] = 10.0f; // Need to pre-set the Z value to something, otherwise it will be 0.0f & probably break something.
+
+        return g_hook->calculate_stereo_projection_matrix(stereo, out, view_index);
+    }; // CalculateStereoProjectionMatrix
+
+    m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo, void* a2) {
+        // do nothing
+    }; // not sure what this one is. think it sets the FOV. Not present in newer UE4 versions.
+
+    idx++; // just leave this one as a placeholder for now. Returns false.
+
+    m_fallback_vtable[idx++] = 
+    +[](FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list, FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size) {
+        return g_hook->render_texture_render_thread(stereo, rhi_command_list, backbuffer, src_texture, window_size);
+    };
+
+    idx++; // just leave this one as a placeholder for now. Probably SetClippingPlanes.
+
+    m_fallback_vtable[13] = +[](FFakeStereoRendering* stereo) { return g_hook->get_render_target_manager_hook(stereo); }; // GetRenderTargetManager
+    //m_fallback_vtable[13] = +[](FFakeStereoRendering* stereo) { return nullptr; }; // GetRenderTargetManager
+
+    auto engine_ptr = get_engine();
+
+    if (engine_ptr == nullptr) {
+        spdlog::error("Failed to get engine pointer! Cannot create stereo device!");
+        return false;
+    }
+    
+    auto engine = *engine_ptr;
+
+    if (engine == nullptr) {
+        spdlog::error("Failed to get engine! Cannot create stereo device!");
+        return false;
+    }
+
+    //m_418_detected = true;
+    m_special_detected = true;
+    m_fallback_device.vtable = m_fallback_vtable.data();
+    *(uintptr_t*)((uintptr_t)engine + 0xAC8) = (uintptr_t)&m_fallback_device; // TODO: Automatically find this offset.
+
+    spdlog::info("Finished creating stereo device for the game using nonstandard method");
+
+    m_finished_hooking = true;
 
     return true;
 }
@@ -635,45 +803,7 @@ bool FFakeStereoRenderingHook::patch_vtable_checks() {
 bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
     // This attempts to create a new StereoRenderingDevice in the GEngine
     // if it doesn't already exist via using -emulatestereo.
-    static void** engine = []() -> void** {
-        spdlog::info("Attempting to locate GEngine...");
-
-        const auto partial_module = utility::find_partial_module(L"-Engine-Win64-Shipping.dll");
-        const auto module = partial_module != nullptr ? partial_module : utility::get_executable();
-        const auto calibrate_tilt_fn = find_function_from_string_ref(L"CALIBRATEMOTION", module);
-
-        if (!calibrate_tilt_fn) {
-            spdlog::error("Failed to find CalibrateTilt function!");
-            return (void**)nullptr;
-        }
-
-        spdlog::info("CalibrateTilt function: {:x}", (uintptr_t)*calibrate_tilt_fn);
-
-        // Use bddisasm to find the first ptr mov into a register
-        uint8_t* ip = (uint8_t*)*calibrate_tilt_fn;
-
-        for (auto i = 0; i < 50; ++i) {
-            INSTRUX ix{};
-            const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
-
-            if (!ND_SUCCESS(status)) {
-                spdlog::info("Decoding failed with error {:x}!", (uint32_t)status);
-                break;
-            }
-
-            if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_REG && ix.Operands[1].Type == ND_OP_MEM && ix.Operands[1].Info.Memory.IsRipRel) {
-                const auto offset = ix.Operands[1].Info.Memory.Disp;
-                const auto result = (void**)((uint8_t*)ip + ix.Length + offset);
-
-                spdlog::info("Found GEngine at {:x}", (uintptr_t)result);
-                return result;
-            }
-
-            ip += ix.Length;
-        }
-
-        return nullptr;
-    }();
+    auto engine = get_engine();
 
     if (engine == nullptr) {
         spdlog::error("Failed to locate GEngine, cannot inject stereo rendering device at runtime.");
@@ -876,6 +1006,10 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     view_rotation->pitch = euler.x;
     view_rotation->yaw = euler.y;
     view_rotation->roll = euler.z;
+
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("Finished calculating stereo view offset!");
+#endif
 }
 
 Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
@@ -891,7 +1025,10 @@ Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeSt
         index_starts_from_one = false;
     }
 
-    g_hook->m_calculate_stereo_projection_matrix_hook->call<Matrix4x4f*>(stereo, out, view_index);
+    // Can happen if we hooked this differently.
+    if (g_hook->m_calculate_stereo_projection_matrix_hook) {
+        g_hook->m_calculate_stereo_projection_matrix_hook->call<Matrix4x4f*>(stereo, out, view_index);
+    }
 
     // spdlog::info("NearZ: {}", old_znear);
 
@@ -906,6 +1043,10 @@ Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeSt
     } else {
         spdlog::error("CalculateStereoProjectionMatrix returned nullptr!");
     }
+
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("Finished calculating stereo projection matrix!");
+#endif
     
     return out;
 }
@@ -1006,6 +1147,10 @@ IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_
             return (IStereoRenderTargetManager*)&g_hook->m_rtm_418;
         }
 
+        if (g_hook->m_special_detected) {
+            return (IStereoRenderTargetManager*)&g_hook->m_rtm_special;
+        }
+
         return &g_hook->m_rtm;
     }
 
@@ -1040,19 +1185,41 @@ void VRRenderTargetManager_Base::calculate_render_target_size(const FViewport& v
     spdlog::info("calculate render target size called!");
 #endif
 
+    spdlog::info("RenderTargetSize Before: {}x{}", x, y);
+
     x = VR::get()->get_hmd_width() * 2;
     y = VR::get()->get_hmd_height();
 
-    spdlog::info("RenderTargetSize: {}x{}", x, y);
+    spdlog::info("RenderTargetSize After: {}x{}", x, y);
 }
 
 bool VRRenderTargetManager_Base::need_reallocate_view_target(const FViewport& Viewport) {
+    /*const auto w = VR::get()->get_hmd_width();
+    const auto h = VR::get()->get_hmd_height();
+
+    if (w != this->last_width || h != this->last_height) {
+        this->last_width = w;
+        this->last_height = h;
+        return true;
+    }*/
+
     return false;
 }
 
 void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& ctx) {
     spdlog::info("PreTextureHook called! {}", ctx.r8);
-    ctx.r8 = 2; // PF_B8G8R8A8
+
+    // maybe do some work later to bruteforce the registers/offsets for these
+    // a la emulation or something more rudimentary
+    // since it always seems to access a global right before, which
+    // refers to the current pixel format, which we can overwrite (which may not be safe)
+    // so we could just follow how the global is being written to registers or the stack
+    // and then just overwrite the registers/stack with our own values
+    if (g_hook->get_render_target_manager()->is_pre_texture_call_e8) {
+        ctx.r8 = 2; // PF_B8G8R8A8
+    } else {
+        *((uint8_t*)ctx.rsp + 0x28) = 2; // PF_B8G8R8A8
+    }
 }
 
 void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx) {
@@ -1110,6 +1277,13 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
 
                 if (!g_hook->has_pixel_format_cvar()) {
                     spdlog::info("No pixel format cvar found, setting up pre texture hook...");
+                    if (*(uint8_t*)ip == 0xE8) {
+                        spdlog::info("E8 call found!");
+                        this->is_pre_texture_call_e8 = true;
+                    } else {
+                        spdlog::info("E8 call not found, assuming register call!");
+                    }
+
                     this->pre_texture_hook = builder.create_mid((void*)ip, &VRRenderTargetManager::pre_texture_hook_callback);
                 }
 
@@ -1146,6 +1320,13 @@ bool VRRenderTargetManager::AllocateRenderTargetTexture(uint32_t Index, uint32_t
 bool VRRenderTargetManager_418::AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips, uint32_t Flags,
         uint32_t TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture, FTexture2DRHIRef& OutShaderResourceTexture,
         uint32_t NumSamples) 
+{
+    return this->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &OutTargetableTexture);
+}
+
+bool VRRenderTargetManager_Special::AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips,
+    ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture,
+    FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples) 
 {
     return this->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &OutTargetableTexture);
 }

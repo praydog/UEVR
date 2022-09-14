@@ -44,6 +44,10 @@ private:
     uint32_t last_texture_index{0};
     bool allocated_views{false};
     bool set_up_texture_hook{false};
+    bool is_pre_texture_call_e8{false};
+
+    uint32_t last_width{0};
+    uint32_t last_height{0};
 };
 
 struct VRRenderTargetManager : IStereoRenderTargetManager, VRRenderTargetManager_Base {
@@ -94,6 +98,28 @@ struct VRRenderTargetManager_418 : IStereoRenderTargetManager_418, VRRenderTarge
         uint32_t NumSamples = 1) override;
 };
 
+struct VRRenderTargetManager_Special : IStereoRenderTargetManager_Special, VRRenderTargetManager_Base {
+    uint32_t GetNumberOfBufferedFrames() const override { return VRRenderTargetManager_Base::get_number_of_buffered_frames(); }
+    virtual bool ShouldUseSeparateRenderTarget() const override { return VRRenderTargetManager_Base::should_use_separate_render_target(); }
+
+    virtual void UpdateViewport(bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override {
+        VRRenderTargetManager_Base::update_viewport(bUseSeparateRenderTarget, Viewport, ViewportWidget);
+    }
+
+    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override {
+        VRRenderTargetManager_Base::calculate_render_target_size(Viewport, InOutSizeX, InOutSizeY);
+    }
+
+    virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
+        return VRRenderTargetManager_Base::need_reallocate_view_target(Viewport);
+    }
+
+    // We will use this to keep track of the game-allocated render targets.
+    bool AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips,
+        ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture,
+        FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples = 1) override;
+};
+
 class FFakeStereoRenderingHook {
 public:
     FFakeStereoRenderingHook();
@@ -101,7 +127,11 @@ public:
     VRRenderTargetManager_Base* get_render_target_manager() {
         if (m_418_detected) {
             return static_cast<VRRenderTargetManager_Base*>(&m_rtm_418);
-        } 
+        }
+
+        if (m_special_detected) {
+            return static_cast<VRRenderTargetManager_Base*>(&m_rtm_special);
+        }
 
         return static_cast<VRRenderTargetManager_Base*>(&m_rtm);
     }
@@ -110,14 +140,24 @@ public:
     }
 
     void on_frame() {
-        if (!m_injected_stereo_at_runtime) {
-            attempt_runtime_inject_stereo();
-            m_injected_stereo_at_runtime = true;
+        if (!m_finished_hooking) {
+            if (!m_tried_hooking) {
+                if (!m_injected_stereo_at_runtime) {
+                    attempt_runtime_inject_stereo();
+                    m_injected_stereo_at_runtime = true;
+                }
+                
+                m_hooked = hook();
+            }
+
+            return;
         }
     }
 
 private:
     bool hook();
+    bool standard_fake_stereo_hook(uintptr_t vtable);
+    bool nonstandard_create_stereo_device_hook();
     std::optional<uintptr_t> locate_fake_stereo_rendering_constructor();
     std::optional<uintptr_t> locate_fake_stereo_rendering_vtable();
     std::optional<uint32_t> get_stereo_view_offset_index(uintptr_t vtable);
@@ -150,8 +190,18 @@ private:
 
     VRRenderTargetManager m_rtm{};
     VRRenderTargetManager_418 m_rtm_418{};
+    VRRenderTargetManager_Special m_rtm_special{};
 
+    bool m_hooked{false};
+    bool m_tried_hooking{false};
+    bool m_finished_hooking{false};
     bool m_418_detected{false};
+    bool m_special_detected{false};
     bool m_pixel_format_cvar_found{false};
     bool m_injected_stereo_at_runtime{false};
+
+    struct FallbackDevice {
+        void* vtable;
+    } m_fallback_device;
+    std::vector<void*> m_fallback_vtable{};
 };
