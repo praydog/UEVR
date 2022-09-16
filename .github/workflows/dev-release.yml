@@ -1,0 +1,38 @@
+name: Dev Release
+on: [push, workflow_dispatch]
+env:
+  BUILD_TYPE: Release
+jobs:
+  dev-release:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [ue4poc]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Configure CMake
+        run: cmake -S ${{github.workspace}} -B ${{github.workspace}}/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ${{matrix.target}}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2.3.1
+        with:
+          name: ${{matrix.target}}
+          path: ${{github.workspace}}/build/bin/${{matrix.target}}/dinput8.dll
+          if-no-files-found: error
+
+      - name: Compress release
+        run: |
+          echo ${{github.sha}} > ${{github.workspace}}/uevr_revision.txt
+          7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/uevr_revision.txt
+          7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/build/bin/${{matrix.target}}/dinput8.dll
+
+      - name: Set outputs
+        id: vars
+        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
