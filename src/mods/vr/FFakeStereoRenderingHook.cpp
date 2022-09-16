@@ -973,7 +973,7 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     const auto view_mat_inverse = glm::yawPitchRoll(
         glm::radians(-view_rotation->yaw),
         glm::radians(view_rotation->pitch),
-        glm::radians(view_rotation->roll));
+        glm::radians(-view_rotation->roll));
 
     const auto view_quat_inverse = glm::quat {
         view_mat_inverse
