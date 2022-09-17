@@ -77,12 +77,36 @@ std::optional<uintptr_t> find_function_from_string_ref(std::wstring_view str, HM
     return func_start;
 }
 
+// Finds a module matching the given name
+// in a release build, it would be "-{name}-Win64-Shipping.dll"
+// in the UnrealEditor, it would be "UnrealEditor-{name}.dll"
+// otherwise, if everything is statically linked, it will just return the executable
+HMODULE get_ue_module(const std::wstring& name) {
+    const auto current_executable = utility::get_executable();
+    const auto exe_name = utility::get_module_path(current_executable);
+
+    if (exe_name && exe_name->ends_with("UnrealEditor.exe")) {
+        const auto mod = utility::find_partial_module(L"UnrealEditor-" + name + L".dll");
+
+        if (mod != nullptr) {
+            return mod;
+        }
+    }
+
+    const auto partial_module = utility::find_partial_module(L"-" + name + L"-Win64-Shipping.dll");
+
+    if (partial_module != nullptr) {
+        return partial_module;
+    }
+
+    return current_executable;
+}
+
 void** get_engine() {
     static void** engine = []() -> void** {
         spdlog::info("Attempting to locate GEngine...");
 
-        const auto partial_module = utility::find_partial_module(L"-Engine-Win64-Shipping.dll");
-        const auto module = partial_module != nullptr ? partial_module : utility::get_executable();
+        const auto module = get_ue_module(L"Engine");
         const auto calibrate_tilt_fn = find_function_from_string_ref(L"CALIBRATEMOTION", module);
 
         if (!calibrate_tilt_fn) {
@@ -126,19 +150,19 @@ void** get_engine() {
 // so we must do an alternative scan for the cvar name itself, which is a bit tougher
 // because the cvar name is usually referenced in multiple places, whereas
 // the description is only referenced once, in the cvar registration function
-std::optional<uintptr_t> find_alternate_cvar_ref(std::wstring_view str, uint32_t known_default) {
+std::optional<uintptr_t> find_alternate_cvar_ref(std::wstring_view str, uint32_t known_default, HMODULE module = utility::get_executable()) {
     spdlog::info("Performing alternate scan for cvar \"{}\"", utility::narrow(str));
 
-    const auto str_data = utility::scan_string(utility::get_executable(), str.data());
+    const auto str_data = utility::scan_string(module, str.data());
 
     if (!str_data) {
         spdlog::error("Failed to find string for cvar \"{}\"", utility::narrow(str.data()));
         return std::nullopt;
     }
 
-    const auto module_base = (uintptr_t)utility::get_executable();
-    const auto module_size = utility::get_module_size(utility::get_executable());
-    auto str_ref = utility::scan_reference(utility::get_executable(), *str_data);
+    const auto module_base = (uintptr_t)module;
+    const auto module_size = utility::get_module_size(module);
+    auto str_ref = utility::scan_reference(module, *str_data);
     std::optional<uintptr_t> result{};
 
     while (str_ref) {
@@ -244,29 +268,14 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
     return std::nullopt;
 }
 
-std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::wstring_view cvar_name, uint32_t known_default = 0) {
-    auto found_in_module = utility::get_executable();
-    auto str_data = utility::scan_string(utility::get_executable(), str.data());
+std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::wstring_view cvar_name, uint32_t known_default = 0, HMODULE module = utility::get_executable()) {
+    auto str_data = utility::scan_string(module, str.data());
 
-    if (!str_data) {
-        const auto renderer_module = utility::find_partial_module(L"-Renderer-Win64-Shipping.dll");
-
-        if (renderer_module != nullptr) {
-            str_data = utility::scan_string(found_in_module, str.data());
-
-            if (str_data) {
-                found_in_module = renderer_module;
-            }
-        }
-    }
-
-    bool has_description_ref = str_data.has_value();
     std::optional<uintptr_t> str_ref{};
 
     // Fallback to alternate scan if the description is missing
     if (!str_data) {
-        str_ref = find_alternate_cvar_ref(cvar_name, known_default);
-        has_description_ref = str_ref.has_value();
+        str_ref = find_alternate_cvar_ref(cvar_name, known_default, module);
     }
 
     if (!str_data && !str_ref) {
@@ -276,7 +285,7 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::ws
 
     // This scans for the cvar description string ref.
     if (!str_ref) {
-        str_ref = utility::scan_reference(found_in_module, *str_data);
+        str_ref = utility::scan_reference(module, *str_data);
 
         if (!str_ref) {
             spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
@@ -311,8 +320,7 @@ bool FFakeStereoRenderingHook::hook() {
 bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     spdlog::info("Performing standard fake stereo hook");
 
-    const auto game = (uintptr_t)utility::get_executable();
-    const auto engine_dll = utility::find_partial_module(L"-Engine-Win64-Shipping.dll");
+    const auto game = get_ue_module(L"Engine");
 
     patch_vtable_checks();
 
@@ -331,11 +339,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     const auto stereo_view_offset_func = ((uintptr_t*)vtable)[*stereo_view_offset_index];
 
-    auto render_texture_render_thread_func = find_function_from_string_ref(L"RenderTexture_RenderThread");
-
-    if (!render_texture_render_thread_func && engine_dll != nullptr) {
-         render_texture_render_thread_func = find_function_from_string_ref(L"RenderTexture_RenderThread", engine_dll);
-    }
+    auto render_texture_render_thread_func = find_function_from_string_ref(L"RenderTexture_RenderThread", game);
 
     if (!render_texture_render_thread_func) {
         // Fallback scan to checking for the first non-default virtual function (4.18)
@@ -360,10 +364,6 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     // Scan for the function pointer, it should be in the middle of the vtable.
     auto rendertexture_fn_vtable_middle = utility::scan_ptr((HMODULE)game, *render_texture_render_thread_func);
-
-    if (!rendertexture_fn_vtable_middle && engine_dll != nullptr) {
-        rendertexture_fn_vtable_middle = utility::scan_ptr((HMODULE)engine_dll, *render_texture_render_thread_func);
-    }
 
     if (!rendertexture_fn_vtable_middle) {
         spdlog::error("Failed to find RenderTexture_RenderThread VTable Middle");
@@ -502,7 +502,8 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     spdlog::info("Leaving FFakeStereoRenderingHook::hook");
 
-    const auto backbuffer_format_cvar = find_cvar_by_description(L"Defines the default back buffer pixel format.", L"r.DefaultBackBufferPixelFormat", 4);
+    const auto renderer_module = get_ue_module(L"Renderer");
+    const auto backbuffer_format_cvar = find_cvar_by_description(L"Defines the default back buffer pixel format.", L"r.DefaultBackBufferPixelFormat", 4, renderer_module);
     m_pixel_format_cvar_found = backbuffer_format_cvar.has_value();
 
     // In 4.18 this doesn't exist. Not much we can do about that.
@@ -641,24 +642,12 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_
         return cached_result;
     }
 
-    const auto engine_dll = utility::find_partial_module(L"-Engine-Win64-Shipping.dll");
+    const auto engine_dll = get_ue_module(L"Engine");
 
-    if (engine_dll != nullptr) {
-        spdlog::info("Engine: {:p}, size {:x}", (void*)engine_dll, *utility::get_module_size(engine_dll));
-    }
-
-    auto fake_stereo_rendering_constructor = find_function_from_string_ref(L"r.StereoEmulationHeight");
-
-    if (!fake_stereo_rendering_constructor && engine_dll != nullptr) {
-        fake_stereo_rendering_constructor = find_function_from_string_ref(L"r.StereoEmulationHeight", engine_dll);
-    }
+    auto fake_stereo_rendering_constructor = find_function_from_string_ref(L"r.StereoEmulationHeight", engine_dll);
 
     if (!fake_stereo_rendering_constructor) {
-        fake_stereo_rendering_constructor = find_function_from_string_ref(L"r.StereoEmulationFOV");
-
-        if (!fake_stereo_rendering_constructor && engine_dll != nullptr) {
-            fake_stereo_rendering_constructor = find_function_from_string_ref(L"r.StereoEmulationFOV", engine_dll);
-        }
+        fake_stereo_rendering_constructor = find_function_from_string_ref(L"r.StereoEmulationFOV", engine_dll);
 
         if (!fake_stereo_rendering_constructor) {
             spdlog::error("Failed to find FFakeStereoRendering constructor");
@@ -813,8 +802,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
     static auto enable_stereo_emulation_cvar = []() -> std::optional<uintptr_t> {
         spdlog::info("Attempting to locate r.EnableStereoEmulation cvar...");
 
-        const auto partial_module = utility::find_partial_module(L"-Engine-Win64-Shipping.dll");
-        const auto module = partial_module != nullptr ? partial_module : utility::get_executable();
+        const auto module = get_ue_module(L"Engine");
         const auto str = utility::scan_string(module, L"r.EnableStereoEmulation");
 
         if (!str) {
