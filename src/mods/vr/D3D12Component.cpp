@@ -28,7 +28,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     auto ue4_texture = VR::get()->m_fake_stereo_hook->get_render_target_manager()->get_render_target();
 
     if (ue4_texture != nullptr) {
-        backbuffer = (ID3D12Resource*)ue4_texture->GetNativeResource();
+        backbuffer = (ID3D12Resource*)ue4_texture->get_native_resource();
     }
 
     if (backbuffer == nullptr) {
@@ -226,7 +226,7 @@ void D3D12Component::setup() {
     auto ue4_texture = VR::get()->m_fake_stereo_hook->get_render_target_manager()->get_render_target();
 
     if (ue4_texture != nullptr) {
-        backbuffer = (ID3D12Resource*)ue4_texture->GetNativeResource();
+        backbuffer = (ID3D12Resource*)ue4_texture->get_native_resource();
     }
 
     if (backbuffer == nullptr) {

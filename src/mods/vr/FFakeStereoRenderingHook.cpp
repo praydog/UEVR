@@ -544,25 +544,15 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         spdlog::info("Performing hooks on embedded RenderTargetManager");
 
         // To be seen if any of these need further automated analysis.
-        const auto calculate_render_target_size_index = rendertexture_fn_vtable_index;
+        const auto calculate_render_target_size_index = rendertexture_fn_vtable_index + 2;
         const auto calculate_render_target_size_func_ptr = &((uintptr_t*)vtable)[calculate_render_target_size_index];
 
-        const auto should_use_separate_render_target_index = calculate_render_target_size_index + 4;
+        const auto should_use_separate_render_target_index = calculate_render_target_size_index + 2;
         const auto should_use_separate_render_target_func_ptr = &((uintptr_t*)vtable)[should_use_separate_render_target_index];
 
         // This was calculated earlier when we were searching for the GetRenderTargetManager index.
         const auto allocate_render_target_index = render_target_manager_vtable_index + 3;
         const auto allocate_render_target_func_ptr = &((uintptr_t*)vtable)[allocate_render_target_index];
-
-        m_embedded_rtm.should_use_separate_render_target_hook = 
-            std::make_unique<PointerHook>((void**)should_use_separate_render_target_func_ptr, +[](void* self) -> bool {
-            #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-                spdlog::info("ShouldUseSeparateRenderTarget (embedded)");
-            #endif
-
-                return true;
-            }
-        );
 
         m_embedded_rtm.calculate_render_target_size_hook = 
             std::make_unique<PointerHook>((void**)calculate_render_target_size_func_ptr, +[](void* self, const FViewport& viewport, uint32_t& x, uint32_t& y) {
@@ -584,6 +574,16 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
             #endif
 
                 return g_hook->get_render_target_manager()->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &out_texture);
+            }
+        );
+
+        m_embedded_rtm.should_use_separate_render_target_hook = 
+            std::make_unique<PointerHook>((void**)should_use_separate_render_target_func_ptr, +[](void* self) -> bool {
+            #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+                spdlog::info("ShouldUseSeparateRenderTarget (embedded)");
+            #endif
+
+                return VR::get()->is_hmd_active();
             }
         );
     }
@@ -1317,7 +1317,7 @@ void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx)
 
     spdlog::info("last texture index: {}", rtm->last_texture_index);
     spdlog::info("Resulting texture: {:x}", (uintptr_t)texture);
-    spdlog::info("Real resource: {:x}", (uintptr_t)texture->GetNativeResource());
+    spdlog::info("Real resource: {:x}", (uintptr_t)texture->get_native_resource());
 
     rtm->render_target = texture;
     rtm->texture_hook_ref = nullptr;
@@ -1348,7 +1348,7 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
             // BufferedSRVRHI variables.
             if (std::string_view{ix.Mnemonic}.starts_with("CALL")) {
                 const auto post_call = (uintptr_t)ip + ix.Length;
-                spdlog::info("AllocateRenderTargetTexture post_call: {:x}", post_call);
+                spdlog::info("AllocateRenderTargetTexture post_call: {:x}", post_call - (uintptr_t)*utility::get_module_within((void*)post_call));
 
                 auto factory = SafetyHookFactory::init();
                 auto builder = factory->acquire();

@@ -301,6 +301,7 @@ list(APPEND ue4poc_SOURCES
 	"src/mods/vr/D3D12Component.cpp"
 	"src/mods/vr/FFakeStereoRenderingHook.cpp"
 	"src/mods/vr/OverlayComponent.cpp"
+	"src/mods/vr/StereoStuff.cpp"
 	"src/mods/vr/runtimes/OpenVR.cpp"
 	"src/mods/vr/runtimes/OpenXR.cpp"
 	"src/ue4poc-imgui/imgui_impl_dx11.cpp"

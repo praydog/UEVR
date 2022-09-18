@@ -15,7 +15,7 @@ struct FRHIResource {
 };
 
 struct FRHITexture : FRHIResource {
-    virtual struct FRHITexture2D* GetTexture2D() { return nullptr; }
+    /*virtual struct FRHITexture2D* GetTexture2D() { return nullptr; }
     virtual struct FRHITexture2DArray* GetTexture2DArray() { return nullptr; }
     virtual struct FRHITexture3D* GetTexture3D() { return nullptr; }
     virtual struct FRHITextureCube* GetTextureCube() { return nullptr; }
@@ -27,7 +27,9 @@ struct FRHITexture : FRHIResource {
     virtual void* GetNativeResource() const { return nullptr; }
     virtual void* GetNativeShaderResourceView() const { return nullptr; }
 
-    // maybe some other virtuals we don't care about
+    // maybe some other virtuals we don't care about*/
+
+    void* get_native_resource() const;
 };
 
 struct FRHITexture2D : FRHITexture {};

@@ -42,7 +42,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     auto ue4_texture = VR::get()->m_fake_stereo_hook->get_render_target_manager()->get_render_target();
 
     if (ue4_texture != nullptr) {
-        backbuffer = (ID3D11Texture2D*)ue4_texture->GetNativeResource();
+        backbuffer = (ID3D11Texture2D*)ue4_texture->get_native_resource();
     }
 
     if (backbuffer == nullptr) {
@@ -170,6 +170,8 @@ void D3D11Component::on_reset(VR* vr) {
 }
 
 void D3D11Component::setup() {
+    spdlog::info("[VR] Setting up D3D11 textures...");
+
     // Get device and swapchain.
     auto& hook = g_framework->get_d3d11_hook();
     auto device = hook->get_device();
@@ -183,7 +185,7 @@ void D3D11Component::setup() {
     auto ue4_texture = VR::get()->m_fake_stereo_hook->get_render_target_manager()->get_render_target();
 
     if (ue4_texture != nullptr) {
-        backbuffer = (ID3D11Texture2D*)ue4_texture->GetNativeResource();
+        backbuffer = (ID3D11Texture2D*)ue4_texture->get_native_resource();
     }
 
     if (backbuffer == nullptr) {
