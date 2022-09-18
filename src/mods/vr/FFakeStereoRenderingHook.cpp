@@ -652,14 +652,15 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
     m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo) -> bool { return g_hook->is_stereo_enabled(stereo); }; // IsStereoEnabledOnNextFrame
     m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo) -> bool { return g_hook->is_stereo_enabled(stereo); }; // EnableStereo
 
-    ++idx; // idk waht this is.
-
     m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h) { 
         return g_hook->adjust_view_rect(stereo, index, x, y, w, h);
     }; // AdjustViewRect
 
+
+    ++idx; // idk waht this is.
+
     // in this version the index is passed...?
-    m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo, uint32_t index, Vector2f* bounds) {
+    /*m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo, uint32_t index, Vector2f* bounds) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
         spdlog::info("GetTextSafeRegionBounds called");
 #endif
@@ -668,19 +669,22 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
         bounds->y = 0.75f;
 
         return bounds;
-    }; // GetTextSafeRegionBounds
+    };*/ // GetTextSafeRegionBounds
 
     m_fallback_vtable[idx++] = 
     +[](FFakeStereoRendering* stereo, const int32_t view_index, Rotator* view_rotation, const float world_to_meters, Vector3f* view_location) {
         return g_hook->calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location);
     }; // CalculateStereoViewOffset
 
+    
+    idx++;
+
     m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
         spdlog::info("CalculateStereoProjectionMatrix called: {:x} {} {:x}", (uintptr_t)_ReturnAddress(), view_index, (uintptr_t)out);
 #endif
 
-        (*out)[3][2] = 10.0f; // Need to pre-set the Z value to something, otherwise it will be 0.0f & probably break something.
+        (*out)[3][2] = 0.1f; // Need to pre-set the Z value to something, otherwise it will be 0.0f & probably break something.
 
         return g_hook->calculate_stereo_projection_matrix(stereo, out, view_index);
     }; // CalculateStereoProjectionMatrix
@@ -993,6 +997,7 @@ bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
 void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("adjust view rect called! {}", index);
+    spdlog::info(" x: {}, y: {}, w: {}, h: {}", *x, *y, *w, *h);
 #endif
 
     static bool index_starts_from_one = true;
