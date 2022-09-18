@@ -335,11 +335,12 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     const auto stereo_projection_matrix_index = *stereo_view_offset_index + 1;
     const auto is_4_18 = stereo_view_offset_index <= 6;
 
-    m_418_detected = stereo_view_offset_index <= 11;
-
     const auto stereo_view_offset_func = ((uintptr_t*)vtable)[*stereo_view_offset_index];
 
     auto render_texture_render_thread_func = find_function_from_string_ref(L"RenderTexture_RenderThread", game);
+
+    // Seems more robust than simply just checking the vtable index.
+    m_uses_old_rendertarget_manager = stereo_view_offset_index <= 11 && !render_texture_render_thread_func;
 
     if (!render_texture_render_thread_func) {
         // Fallback scan to checking for the first non-default virtual function (4.18)
@@ -373,8 +374,41 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     const auto rendertexture_fn_vtable_index = (*rendertexture_fn_vtable_middle - vtable) / sizeof(uintptr_t);
     spdlog::info("RenderTexture_RenderThread VTable Middle: {} {:x}", rendertexture_fn_vtable_index, (uintptr_t)*rendertexture_fn_vtable_middle);
 
-    const auto get_render_target_manager_func_ptr =
-        (uintptr_t)(*rendertexture_fn_vtable_middle + sizeof(void*) + (sizeof(void*) * 2 * (size_t)is_4_18));
+    auto render_target_manager_vtable_index = rendertexture_fn_vtable_index + 1 + (2 * (size_t)is_4_18);
+
+    // verify first that the render target manager index is returning a null pointer
+    // and if not, scan forward until we run into a vfunc that returns a null pointer
+    auto get_render_target_manager_func_ptr = &((uintptr_t*)vtable)[render_target_manager_vtable_index];
+
+    if (!utility::scan(*(uintptr_t*)get_render_target_manager_func_ptr, 3, "33 C0 C3")) {
+        spdlog::info("Expected GetRenderTargetManager function at index {} does not return null, scanning forward for return nullptr.", render_target_manager_vtable_index);
+
+        for (;;++render_target_manager_vtable_index) {
+            get_render_target_manager_func_ptr = &((uintptr_t*)vtable)[render_target_manager_vtable_index];
+
+            if (IsBadReadPtr(*(void**)get_render_target_manager_func_ptr, 1)) {
+                spdlog::error("Failed to find GetRenderTargetManager vtable index, a crash is imminent");
+                return false;
+            }
+
+            if (utility::scan(*(uintptr_t*)get_render_target_manager_func_ptr, 3, "33 C0 C3")) {
+                const auto distance_from_rendertexture_fn = render_target_manager_vtable_index - rendertexture_fn_vtable_index;
+
+                // means it's 4.17 I think.
+                if (distance_from_rendertexture_fn == 11) {
+                    m_rendertarget_manager_embedded_in_stereo_device = true;
+                    spdlog::info("Render target manager appears to be directly embedded in the stereo device vtable");
+                } else {
+                    spdlog::info("Found potential GetRenderTargetManager function at index {}", render_target_manager_vtable_index);
+                    spdlog::info("Distance: {}", distance_from_rendertexture_fn);
+                }
+
+                break;
+            }
+        }
+    } else {
+        spdlog::info("GetRenderTargetManager function at index {} appears to be valid.", render_target_manager_vtable_index);
+    }
     
     const auto get_stereo_layers_func_ptr = (uintptr_t)(get_render_target_manager_func_ptr + sizeof(void*));
 
@@ -490,12 +524,70 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     m_adjust_view_rect_hook = builder.create_inline((void*)adjust_view_rect_func, adjust_view_rect);
     m_calculate_stereo_view_offset_hook = builder.create_inline((void*)stereo_view_offset_func, calculate_stereo_view_offset);
     m_calculate_stereo_projection_matrix_hook = builder.create_inline((void*)calculate_stereo_projection_matrix_func, calculate_stereo_projection_matrix);
-    m_render_texture_render_thread_hook = builder.create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
+
+    // When this is the case, then the CalculateRenderTargetSize index is the RenderTextureRenderThread index.
+    if (!m_rendertarget_manager_embedded_in_stereo_device) {
+        m_render_texture_render_thread_hook = builder.create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
+    }
 
     // This requires a pointer hook because the virtual just returns false
     // compiler optimization makes that function get re-used in a lot of places
     // so it's not feasible to just detour it, we need to replace the pointer in the vtable.
-    m_get_render_target_manager_hook = std::make_unique<PointerHook>((void**)get_render_target_manager_func_ptr, (void*)&get_render_target_manager_hook);
+    if (!m_rendertarget_manager_embedded_in_stereo_device) {
+        // Seems to exist in 4.18+
+        m_get_render_target_manager_hook = std::make_unique<PointerHook>((void**)get_render_target_manager_func_ptr, (void*)&get_render_target_manager_hook);
+    } else {
+        // When the render target manager is embedded in the stereo device, it just means
+        // that all of the virtuals are now part of FFakeStereoRendering
+        // instead of being a part of IStereoRenderTargetManager and being returned via GetRenderTargetManager.
+        // Only seen in 4.17 and below.
+        spdlog::info("Performing hooks on embedded RenderTargetManager");
+
+        // To be seen if any of these need further automated analysis.
+        const auto calculate_render_target_size_index = rendertexture_fn_vtable_index;
+        const auto calculate_render_target_size_func_ptr = &((uintptr_t*)vtable)[calculate_render_target_size_index];
+
+        const auto should_use_separate_render_target_index = calculate_render_target_size_index + 4;
+        const auto should_use_separate_render_target_func_ptr = &((uintptr_t*)vtable)[should_use_separate_render_target_index];
+
+        // This was calculated earlier when we were searching for the GetRenderTargetManager index.
+        const auto allocate_render_target_index = render_target_manager_vtable_index + 3;
+        const auto allocate_render_target_func_ptr = &((uintptr_t*)vtable)[allocate_render_target_index];
+
+        m_embedded_rtm.should_use_separate_render_target_hook = 
+            std::make_unique<PointerHook>((void**)should_use_separate_render_target_func_ptr, +[](void* self) -> bool {
+            #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+                spdlog::info("ShouldUseSeparateRenderTarget (embedded)");
+            #endif
+
+                return true;
+            }
+        );
+
+        m_embedded_rtm.calculate_render_target_size_hook = 
+            std::make_unique<PointerHook>((void**)calculate_render_target_size_func_ptr, +[](void* self, const FViewport& viewport, uint32_t& x, uint32_t& y) {
+            #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+                spdlog::info("CalculateRenderTargetSize (embedded)");
+            #endif
+
+                return g_hook->get_render_target_manager()->calculate_render_target_size(viewport, x, y);
+            }
+        );
+
+        m_embedded_rtm.allocate_render_target_texture_hook = 
+            std::make_unique<PointerHook>((void**)allocate_render_target_func_ptr, +[](void* self, 
+                uint32_t index, uint32_t w, uint32_t h, uint8_t format, uint32_t num_mips,
+                ETextureCreateFlags lags, ETextureCreateFlags targetable_texture_flags, FTexture2DRHIRef& out_texture,
+                FTexture2DRHIRef& out_shader_resource, uint32_t num_samples) -> bool {
+            #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+                spdlog::info("AllocateRenderTargetTexture (embedded)");
+            #endif
+
+                return g_hook->get_render_target_manager()->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &out_texture);
+            }
+        );
+    }
+    
     //m_get_stereo_layers_hook = std::make_unique<PointerHook>((void**)get_stereo_layers_func_ptr, (void*)&get_stereo_layers_hook);
     m_is_stereo_enabled_hook = std::make_unique<PointerHook>((void**)is_stereo_enabled_func_ptr, (void*)&is_stereo_enabled);
     //m_init_canvas_hook = std::make_unique<PointerHook>((void**)init_canvas_func_ptr, (void*)&init_canvas);
@@ -1131,7 +1223,7 @@ IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_
 #endif
 
     if (!VR::get()->get_runtime()->got_first_poses || VR::get()->is_hmd_active()) {
-        if (g_hook->m_418_detected) {
+        if (g_hook->m_uses_old_rendertarget_manager) {
             return (IStereoRenderTargetManager*)&g_hook->m_rtm_418;
         }
 

@@ -125,7 +125,7 @@ public:
     FFakeStereoRenderingHook();
 
     VRRenderTargetManager_Base* get_render_target_manager() {
-        if (m_418_detected) {
+        if (m_uses_old_rendertarget_manager) {
             return static_cast<VRRenderTargetManager_Base*>(&m_rtm_418);
         }
 
@@ -135,6 +135,7 @@ public:
 
         return static_cast<VRRenderTargetManager_Base*>(&m_rtm);
     }
+    
     bool has_pixel_format_cvar() const {
         return m_pixel_format_cvar_found;
     }
@@ -195,7 +196,8 @@ private:
     bool m_hooked{false};
     bool m_tried_hooking{false};
     bool m_finished_hooking{false};
-    bool m_418_detected{false};
+    bool m_uses_old_rendertarget_manager{false};
+    bool m_rendertarget_manager_embedded_in_stereo_device{false}; // 4.17 and below...?
     bool m_special_detected{false};
     bool m_pixel_format_cvar_found{false};
     bool m_injected_stereo_at_runtime{false};
@@ -204,4 +206,11 @@ private:
         void* vtable;
     } m_fallback_device;
     std::vector<void*> m_fallback_vtable{};
+
+    // Seems to be the case in <= 4.17
+    struct EmbeddedRenderTargetManagerInfo {
+        std::unique_ptr<PointerHook> should_use_separate_render_target_hook{};
+        std::unique_ptr<PointerHook> calculate_render_target_size_hook{};
+        std::unique_ptr<PointerHook> allocate_render_target_texture_hook{};
+    } m_embedded_rtm;
 };
