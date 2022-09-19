@@ -972,17 +972,75 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
         return false;
     }
 
-    spdlog::info("Calling InitializeHMDDevice...");
+    auto is_stereo_rendering_device_setup = []() {
+        auto engine = (uintptr_t)*get_engine();
 
-    utility::ThreadSuspender _{};
+        if (engine == 0) {
+            spdlog::error("GEngine does not appear to be instantiated, cannot verify stereo rendering device is setup.");
+            return false;
+        }
 
-    *(int32_t*)(*(uintptr_t*)*enable_stereo_emulation_cvar + 0x0) = 1;
-    *(int32_t*)(*(uintptr_t*)*enable_stereo_emulation_cvar + 0x4) = 1;
+        spdlog::info("Checking engine pointers for StereoRenderingDevice...");
+        auto fake_stereo_device_vtable = locate_fake_stereo_rendering_vtable();
 
-    const auto fn = (void(*)(void*))*initialize_hmd_device;
-    fn(*engine);
+        if (!fake_stereo_device_vtable) {
+            spdlog::error("Failed to locate fake stereo rendering device vtable, cannot verify stereo rendering device is setup.");
+            return false;
+        }
 
-    spdlog::info("Called InitializeHMDDevice.");
+        for (auto i = 0; i < 0x2000; i += sizeof(void*)) {
+            const auto ptr = *(uintptr_t*)(engine + i);
+
+            if (ptr == 0 || IsBadReadPtr((void*)ptr, sizeof(void*))) {
+                continue;
+            }
+
+            auto potential_vtable = *(uintptr_t*)ptr;
+
+            if (potential_vtable == *fake_stereo_device_vtable) {
+                spdlog::info("Found fake stereo rendering device at {:x}", ptr);
+                return true;
+            }
+        }
+
+        spdlog::info("Fake stereo rendering device not found.");
+        return false;
+    };
+
+    if (!is_stereo_rendering_device_setup()) {
+        spdlog::info("Calling InitializeHMDDevice...");
+
+        utility::ThreadSuspender _{};
+
+        const auto fn = (void(*)(void*))*initialize_hmd_device;
+        fn(*engine);
+
+        spdlog::info("Called InitializeHMDDevice.");
+
+        if (!is_stereo_rendering_device_setup()) {
+            spdlog::info("Previous call to InitializeHMDDevice did not setup the stereo rendering device, attempting to call again...");
+
+            // We don't call this before because the cvar will not be set up
+            // until it's referenced once. after we set this we need to call the function again.
+            *(int32_t*)(*(uintptr_t*)*enable_stereo_emulation_cvar + 0x0) = 1;
+            *(int32_t*)(*(uintptr_t*)*enable_stereo_emulation_cvar + 0x4) = 1;
+
+            spdlog::info("Calling InitializeHMDDevice... AGAIN");
+
+            fn(*engine);
+
+            spdlog::info("Called InitializeHMDDevice again.");
+        }
+
+        if (is_stereo_rendering_device_setup()) {
+            spdlog::info("Stereo rendering device setup successfully.");
+        } else {
+            spdlog::error("Failed to setup stereo rendering device.");
+            return false;
+        }
+    } else {
+        spdlog::info("Not necessary to call InitializeHMDDevice, stereo rendering device is already setup.");
+    }
 
     return true;
 }

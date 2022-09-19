@@ -15,20 +15,6 @@ struct FRHIResource {
 };
 
 struct FRHITexture : FRHIResource {
-    /*virtual struct FRHITexture2D* GetTexture2D() { return nullptr; }
-    virtual struct FRHITexture2DArray* GetTexture2DArray() { return nullptr; }
-    virtual struct FRHITexture3D* GetTexture3D() { return nullptr; }
-    virtual struct FRHITextureCube* GetTextureCube() { return nullptr; }
-    virtual struct FRHITextureReference* GetTextureReference() { return nullptr; }
-    virtual glm::vec<2, int> GetSizeXYZ() const = 0;
-
-    // Maybe bruteforce scan for this instead?
-    // most D3D types should have RTTI so we can use that
-    virtual void* GetNativeResource() const { return nullptr; }
-    virtual void* GetNativeShaderResourceView() const { return nullptr; }
-
-    // maybe some other virtuals we don't care about*/
-
     void* get_native_resource() const;
 };
 
