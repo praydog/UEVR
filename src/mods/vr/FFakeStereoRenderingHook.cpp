@@ -486,7 +486,10 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 if (final_func != 0) {
                     const auto module_within = utility::get_module_within(final_func);
 
-                    if (module_within && final_func == (uintptr_t)GetProcAddress(*module_within, "tanf")) {
+                    if (module_within &&
+                        (final_func == (uintptr_t)GetProcAddress(*module_within, "tanf") ||
+                        final_func == (uintptr_t)GetProcAddress(*module_within, "tan"))) 
+                    {
                         spdlog::info("Found CalculateStereoProjectionMatrix: {} {:x}", calculate_stereo_projection_matrix_index + i, potential_func);
                         calculate_stereo_projection_matrix_index += i;
                         found = true;
