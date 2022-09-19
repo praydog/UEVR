@@ -82,12 +82,14 @@ std::optional<std::string> VR::initialize_openvr() {
     m_openvr = std::make_shared<runtimes::OpenVR>();
     m_openvr->loaded = false;
 
-    if (utility::load_module_from_current_directory(L"openvr_api.dll") == nullptr) {
-        spdlog::info("[VR] Could not load openvr_api.dll");
+    if (GetModuleHandleW(L"openvr_api.dll") == nullptr) {
+        if (utility::load_module_from_current_directory(L"openvr_api.dll") == nullptr) {
+            spdlog::info("[VR] Could not load openvr_api.dll");
 
-        m_openvr->dll_missing = true;
-        m_openvr->error = "Could not load openvr_api.dll";
-        return Mod::on_initialize();
+            m_openvr->dll_missing = true;
+            m_openvr->error = "Could not load openvr_api.dll";
+            return Mod::on_initialize();
+        }
     }
 
     if (g_framework->is_dx12()) {
