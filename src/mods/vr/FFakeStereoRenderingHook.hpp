@@ -159,7 +159,7 @@ private:
     bool hook();
     bool standard_fake_stereo_hook(uintptr_t vtable);
     bool nonstandard_create_stereo_device_hook();
-    std::optional<uintptr_t> locate_fake_stereo_rendering_constructor();
+    
     static std::optional<uintptr_t> locate_fake_stereo_rendering_constructor();
     static std::optional<uintptr_t> locate_fake_stereo_rendering_vtable();
     std::optional<uint32_t> get_stereo_view_offset_index(uintptr_t vtable);
