@@ -82,7 +82,8 @@ compile-options = ["/EHa", "/MP"]
 compile-features = ["cxx_std_20"]
 link-libraries = [
     "spdlog",
-    "bddisasm"
+    "bddisasm",
+    "bdshemu",
 ]
 
 [target.ue4poc]
@@ -107,7 +108,6 @@ link-libraries = [
     "safetyhook",
     "winhttp",
     "glm_static",
-    "bddisasm",
     "imgui",
     "openvr",
     "openxr_loader",

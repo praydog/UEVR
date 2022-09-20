@@ -224,6 +224,7 @@ set(utility_SOURCES "")
 list(APPEND utility_SOURCES
 	"shared/utility/Address.cpp"
 	"shared/utility/Config.cpp"
+	"shared/utility/Emulation.cpp"
 	"shared/utility/Input.cpp"
 	"shared/utility/Memory.cpp"
 	"shared/utility/Module.cpp"
@@ -238,6 +239,7 @@ list(APPEND utility_SOURCES
 	"shared/utility/VtableHook.cpp"
 	"shared/utility/Address.hpp"
 	"shared/utility/Config.hpp"
+	"shared/utility/Emulation.hpp"
 	"shared/utility/Input.hpp"
 	"shared/utility/Memory.hpp"
 	"shared/utility/Module.hpp"
@@ -277,6 +279,7 @@ target_compile_options(utility PUBLIC
 target_link_libraries(utility PUBLIC
 	spdlog
 	bddisasm
+	bdshemu
 )
 
 unset(CMKR_TARGET)
@@ -377,7 +380,6 @@ target_link_libraries(ue4poc PUBLIC
 	safetyhook
 	winhttp
 	glm_static
-	bddisasm
 	imgui
 	openvr
 	openxr_loader
