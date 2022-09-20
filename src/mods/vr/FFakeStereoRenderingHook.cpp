@@ -79,6 +79,43 @@ std::optional<uintptr_t> find_function_from_string_ref(std::wstring_view str, HM
     return func_start;
 }
 
+// Same as the previous, but it keeps going upwards until utility::scan_ptr returns something
+std::optional<uintptr_t> find_virtual_function_from_string_ref(std::wstring_view str, HMODULE module = utility::get_executable()) {
+    spdlog::info("Scanning module {} for string reference {}", *utility::get_module_path(module), utility::narrow(str));
+
+    const auto str_data = utility::scan_string(module, str.data());
+
+    if (!str_data) {
+        spdlog::error("Failed to find string for {}", utility::narrow(str.data()));
+        return std::nullopt;
+    }
+
+    const auto str_ref = utility::scan_reference(module, *str_data);
+
+    if (!str_ref) {
+        spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
+        return std::nullopt;
+    }
+
+    auto func_start = find_function_start(*str_ref);
+
+    do {
+        if (!func_start) {
+            spdlog::error("Failed to find function start for {}", utility::narrow(str.data()));
+            return std::nullopt;
+        }
+
+        if (utility::scan_ptr(module, *func_start)) {
+            spdlog::info("Found virtual function for {} @ {:x}", utility::narrow(str.data()), *func_start);
+            return func_start;
+        }
+
+        func_start = find_function_start(*func_start - 1);
+    } while(func_start);
+
+    return std::nullopt;
+}
+
 // Finds a module matching the given name
 // in a release build, it would be "-{name}-Win64-Shipping.dll"
 // in the UnrealEditor, it would be "UnrealEditor-{name}.dll"
@@ -389,7 +426,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     const auto stereo_view_offset_func = ((uintptr_t*)vtable)[*stereo_view_offset_index];
 
-    auto render_texture_render_thread_func = find_function_from_string_ref(L"RenderTexture_RenderThread", game);
+    auto render_texture_render_thread_func = find_virtual_function_from_string_ref(L"RenderTexture_RenderThread", game);
 
     // Seems more robust than simply just checking the vtable index.
     m_uses_old_rendertarget_manager = stereo_view_offset_index <= 11 && !render_texture_render_thread_func;
