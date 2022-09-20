@@ -364,7 +364,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     spdlog::info("RenderTexture_RenderThread: {:x}", (uintptr_t)*render_texture_render_thread_func);
 
     // Scan for the function pointer, it should be in the middle of the vtable.
-    auto rendertexture_fn_vtable_middle = utility::scan_ptr((HMODULE)game, *render_texture_render_thread_func);
+    auto rendertexture_fn_vtable_middle = utility::scan_ptr(vtable + ((stereo_projection_matrix_index + 2) * sizeof(void*)), 50 * sizeof(void*), *render_texture_render_thread_func);
 
     if (!rendertexture_fn_vtable_middle) {
         spdlog::error("Failed to find RenderTexture_RenderThread VTable Middle");
