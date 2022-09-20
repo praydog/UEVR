@@ -6,7 +6,9 @@
 #include <utility/Scan.hpp>
 #include <utility/String.hpp>
 #include <utility/Thread.hpp>
+#include <utility/Emulation.hpp>
 
+#include <bdshemu.h>
 #include <bddisasm.h>
 #include <disasmtypes.h>
 
@@ -325,6 +327,56 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     patch_vtable_checks();
 
     const auto module_vtable_within = utility::get_module_within(vtable);
+
+    auto is_vfunc_pattern = [](uintptr_t addr, std::string_view pattern) {
+        if (utility::scan(addr, 100, pattern.data()).value_or(0) == addr) {
+            return true;
+        }
+
+        // In some very rare cases, there can be obfuscation that makes the above scan fail.
+        // One such form of obfuscation is multiple jmps and/or calls to reach the real function.
+        // We can use emulation to find the real function.
+        const auto module_within = utility::get_module_within(addr);
+
+        if (!module_within) {
+            spdlog::error("Cannot perform emulation, module not found to create pseudo shellcode");
+            return false;
+        }
+
+        spdlog::info("Performing emulation to find real function...");
+
+        utility::ShemuContext ctx{ *module_within };
+
+        ctx.ctx->Registers.RegRip = addr;
+        bool prev_was_branch = true;
+
+        do {
+            prev_was_branch = ctx.ctx->InstructionsCount == 0 || ctx.ctx->Instruction.BranchInfo.IsBranch;
+
+            if (prev_was_branch) {
+                spdlog::info("Branch!");
+            }
+
+            spdlog::info("Emulating at {:x}", ctx.ctx->Registers.RegRip);
+
+            if (prev_was_branch && !IsBadReadPtr((void*)ctx.ctx->Registers.RegRip, 4)) {
+                if (utility::scan(ctx.ctx->Registers.RegRip, 100, pattern.data()).value_or(0) == ctx.ctx->Registers.RegRip) {
+                    spdlog::info("Encountered true vfunc at {:x}", ctx.ctx->Registers.RegRip);
+                    return true;
+                }
+            }
+        } while(ctx.emulate() == SHEMU_SUCCESS && ctx.ctx->InstructionsCount < 50);
+
+        spdlog::error("Failed to find true vfunc at {:x}, reason {}", addr, ctx.status);
+        return false;
+    };
+
+    // In 4.18 the destructor virtual doesn't exist or is at the very end of the vtable.
+    const auto is_stereo_enabled_index = is_vfunc_pattern(*(uintptr_t*)vtable, "B0 01") ? 0 : 1;
+    const auto is_stereo_enabled_func_ptr = &((uintptr_t*)vtable)[is_stereo_enabled_index];
+
+    spdlog::info("IsStereoEnabled Index: {}", is_stereo_enabled_index);
+
     const auto stereo_view_offset_index = get_stereo_view_offset_index(vtable);
 
     if (!stereo_view_offset_index) {
@@ -333,7 +385,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     }
 
     const auto stereo_projection_matrix_index = *stereo_view_offset_index + 1;
-    const auto is_4_18 = stereo_view_offset_index <= 6;
+    const auto is_4_18_or_lower = stereo_view_offset_index <= 6;
 
     const auto stereo_view_offset_func = ((uintptr_t*)vtable)[*stereo_view_offset_index];
 
@@ -374,13 +426,15 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     const auto rendertexture_fn_vtable_index = (*rendertexture_fn_vtable_middle - vtable) / sizeof(uintptr_t);
     spdlog::info("RenderTexture_RenderThread VTable Middle: {} {:x}", rendertexture_fn_vtable_index, (uintptr_t)*rendertexture_fn_vtable_middle);
 
-    auto render_target_manager_vtable_index = rendertexture_fn_vtable_index + 1 + (2 * (size_t)is_4_18);
+    auto render_target_manager_vtable_index = rendertexture_fn_vtable_index + 1 + (2 * (size_t)is_4_18_or_lower);
 
     // verify first that the render target manager index is returning a null pointer
     // and if not, scan forward until we run into a vfunc that returns a null pointer
     auto get_render_target_manager_func_ptr = &((uintptr_t*)vtable)[render_target_manager_vtable_index];
 
-    if (!utility::scan(*(uintptr_t*)get_render_target_manager_func_ptr, 3, "33 C0 C3")) {
+    bool is_4_11 = false;
+
+    if (!is_vfunc_pattern(*(uintptr_t*)get_render_target_manager_func_ptr, "33 C0")) {
         spdlog::info("Expected GetRenderTargetManager function at index {} does not return null, scanning forward for return nullptr.", render_target_manager_vtable_index);
 
         for (;;++render_target_manager_vtable_index) {
@@ -391,11 +445,12 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 return false;
             }
 
-            if (utility::scan(*(uintptr_t*)get_render_target_manager_func_ptr, 3, "33 C0 C3")) {
+            if (is_vfunc_pattern(*(uintptr_t*)get_render_target_manager_func_ptr, "33 C0")) {
                 const auto distance_from_rendertexture_fn = render_target_manager_vtable_index - rendertexture_fn_vtable_index;
 
-                // means it's 4.17 I think.
-                if (distance_from_rendertexture_fn == 11) {
+                // means it's 4.17 I think. 12 means 4.11.
+                if (distance_from_rendertexture_fn == 11 || distance_from_rendertexture_fn == 12) {
+                    is_4_11 = distance_from_rendertexture_fn == 12;
                     m_rendertarget_manager_embedded_in_stereo_device = true;
                     spdlog::info("Render target manager appears to be directly embedded in the stereo device vtable");
                 } else {
@@ -425,14 +480,9 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     spdlog::info("GetRenderTargetManagerptr: {:x}", (uintptr_t)get_render_target_manager_func_ptr);
     spdlog::info("GetStereoLayersptr: {:x}", (uintptr_t)get_stereo_layers_func_ptr);
 
-    // In 4.18 the destructor virtual doesn't exist.
-    const auto is_stereo_enabled_index = utility::scan(*(uintptr_t*)vtable, 3, "B0 01 C3").value_or(0) == *(uintptr_t*)vtable ? 0 : 1;
-    spdlog::info("IsStereoEnabled Index: {}", is_stereo_enabled_index);
-    const auto is_stereo_enabled_func_ptr = &((uintptr_t*)vtable)[is_stereo_enabled_index];
-
-    const auto adjust_view_rect_distance = is_4_18 ? 2 : 3;
-
+    const auto adjust_view_rect_distance = is_4_18_or_lower ? 2 : 3;
     const auto adjust_view_rect_index = *stereo_view_offset_index - adjust_view_rect_distance;
+    
     auto calculate_stereo_projection_matrix_index = *stereo_view_offset_index + 1;
 
     // While generally most of the time the stereo projection matrix func is the next one after the stereo view offset func,
