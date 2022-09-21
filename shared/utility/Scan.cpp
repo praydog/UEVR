@@ -347,6 +347,31 @@ namespace utility {
     }
 
     // Same as the previous, but it keeps going upwards until utility::scan_ptr returns something
+    std::optional<uintptr_t> find_virtual_function_start(uintptr_t middle) {
+        auto module = utility::get_module_within(middle).value_or(nullptr);
+
+        if (module == nullptr) {
+            return {};
+        }
+
+        auto func_start = find_function_start(middle);
+
+        do {
+            if (!func_start) {
+                return std::nullopt;
+            }
+
+            if (utility::scan_ptr(module, *func_start)) {
+                return func_start;
+            }
+
+            func_start = find_function_start(*func_start - 1);
+        } while(func_start);
+
+        return std::nullopt;
+    }
+
+    // Same as the previous, but it keeps going upwards until utility::scan_ptr returns something
     std::optional<uintptr_t> find_virtual_function_from_string_ref(HMODULE module, std::wstring_view str) {
         spdlog::info("Scanning module {} for string reference {}", utility::get_module_path(module).value_or("UNKNOWN"), utility::narrow(str));
 
@@ -364,22 +389,6 @@ namespace utility {
             return std::nullopt;
         }
 
-        auto func_start = find_function_start(*str_ref);
-
-        do {
-            if (!func_start) {
-                spdlog::error("Failed to find function start for {}", utility::narrow(str.data()));
-                return std::nullopt;
-            }
-
-            if (utility::scan_ptr(module, *func_start)) {
-                spdlog::info("Found virtual function for {} @ {:x}", utility::narrow(str.data()), *func_start);
-                return func_start;
-            }
-
-            func_start = find_function_start(*func_start - 1);
-        } while(func_start);
-
-        return std::nullopt;
+        return find_virtual_function_start(*str_ref);
     }
 }

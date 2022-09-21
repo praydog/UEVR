@@ -40,5 +40,6 @@ namespace utility {
     std::optional<uintptr_t> find_function_from_string_ref(HMODULE module, std::wstring_view str);
 
     // Same as the previous, but it keeps going upwards until utility::scan_ptr returns something
+    std::optional<uintptr_t> find_virtual_function_start(uintptr_t middle);
     std::optional<uintptr_t> find_virtual_function_from_string_ref(HMODULE module, std::wstring_view str);
 }

@@ -87,18 +87,7 @@ void UEngine::initialize_hmd_device() {
 
         spdlog::info("Found r.EnableStereoEmulation cvar reference at {:x}", (uintptr_t)*enable_stereo_emulation_cvar_ref);
 
-        auto result = utility::find_function_start(*enable_stereo_emulation_cvar_ref);
-
-        // scan backwards for the function start until it's no longer some random label within a function, but the function start itself.
-        while (result) {
-            // This means it's a valid vtable function, and we have found the function start.
-            if (utility::scan_ptr(*utility::get_module_within(*result), *result)) {
-                break;
-            }
-
-            spdlog::info("result was not really the function, scanning again...");
-            result = utility::find_function_start(*result - 1);
-        }
+        auto result = utility::find_virtual_function_start(*enable_stereo_emulation_cvar_ref);
 
         if (result) {
             spdlog::info("Found InitializeHMDDevice at {:x}", (uintptr_t)*result);
