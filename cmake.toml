@@ -86,6 +86,20 @@ link-libraries = [
     "bdshemu",
 ]
 
+[target.sdk]
+type = "static"
+sources = ["shared/sdk/**.cpp", "shared/sdk/**.c"]
+headers = ["shared/sdk/**.hpp", "shared/sdk/**.h"]
+include-directories = ["shared/"]
+compile-options = ["/EHa", "/MP"]
+compile-features = ["cxx_std_20"]
+link-libraries = [
+    "spdlog",
+    "utility",
+    "bddisasm",
+    "bdshemu"
+]
+
 [target.ue4poc]
 type = "shared"
 sources = ["src/**.cpp", "src/**.c"]
@@ -102,6 +116,7 @@ compile-features = ["cxx_std_20"]
 compile-definitions = ["_WINSOCKAPI_"]
 link-libraries = [
     "utility",
+    "sdk",
     "shlwapi",
     "d3d11",
     "d3d12",

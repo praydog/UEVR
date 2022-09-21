@@ -8,6 +8,9 @@
 #include <utility/Thread.hpp>
 #include <utility/Emulation.hpp>
 
+#include <sdk/EngineModule.hpp>
+#include <sdk/UEngine.hpp>
+
 #include <bdshemu.h>
 #include <bddisasm.h>
 #include <disasmtypes.h>
@@ -16,174 +19,8 @@
 
 #include "FFakeStereoRenderingHook.hpp"
 
+
 FFakeStereoRenderingHook* g_hook = nullptr;
-
-std::optional<uintptr_t> find_function_start(uintptr_t middle) {
-    const auto module = (uintptr_t)*utility::get_module_within(middle);
-    const auto middle_rva = middle - module;
-
-    // This function abuses the fact that most non-obfuscated binaries have
-    // an exception directory containing a list of function start and end addresses.
-    // Get the PE header, and then the exception directory
-    const auto dos_header = (PIMAGE_DOS_HEADER)module;
-    const auto nt_header = (PIMAGE_NT_HEADERS)((uintptr_t)dos_header + dos_header->e_lfanew);
-    const auto exception_directory = (PIMAGE_DATA_DIRECTORY)&nt_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION];
-
-    // Get the exception directory RVA and size
-    const auto exception_directory_rva = exception_directory->VirtualAddress;
-    const auto exception_directory_size = exception_directory->Size;
-
-    // Get the exception directory
-    const auto exception_directory_ptr = (PIMAGE_RUNTIME_FUNCTION_ENTRY)((uintptr_t)dos_header + exception_directory_rva);
-
-    // Get the number of entries in the exception directory
-    const auto exception_directory_entries = exception_directory_size / sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY);
-
-    for (auto i = 0; i < exception_directory_entries; i++) {
-        const auto entry = exception_directory_ptr[i];
-
-        // Check if the middle address is within the range of the function
-        if (entry.BeginAddress <= middle_rva && middle_rva <= entry.EndAddress) {
-            // Return the start address of the function
-            return module + entry.BeginAddress;
-        }
-    }
-
-    return std::nullopt;
-}
-
-std::optional<uintptr_t> find_function_from_string_ref(std::wstring_view str, HMODULE module = utility::get_executable()) {
-    spdlog::info("Scanning module {} for string reference {}", *utility::get_module_path(module), utility::narrow(str));
-
-    const auto str_data = utility::scan_string(module, str.data());
-
-    if (!str_data) {
-        spdlog::error("Failed to find string for {}", utility::narrow(str.data()));
-        return std::nullopt;
-    }
-
-    const auto str_ref = utility::scan_reference(module, *str_data);
-
-    if (!str_ref) {
-        spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
-        return std::nullopt;
-    }
-
-    const auto func_start = find_function_start(*str_ref);
-
-    if (!func_start) {
-        spdlog::error("Failed to find function start for {}", utility::narrow(str.data()));
-        return std::nullopt;
-    }
-
-    return func_start;
-}
-
-// Same as the previous, but it keeps going upwards until utility::scan_ptr returns something
-std::optional<uintptr_t> find_virtual_function_from_string_ref(std::wstring_view str, HMODULE module = utility::get_executable()) {
-    spdlog::info("Scanning module {} for string reference {}", *utility::get_module_path(module), utility::narrow(str));
-
-    const auto str_data = utility::scan_string(module, str.data());
-
-    if (!str_data) {
-        spdlog::error("Failed to find string for {}", utility::narrow(str.data()));
-        return std::nullopt;
-    }
-
-    const auto str_ref = utility::scan_reference(module, *str_data);
-
-    if (!str_ref) {
-        spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
-        return std::nullopt;
-    }
-
-    auto func_start = find_function_start(*str_ref);
-
-    do {
-        if (!func_start) {
-            spdlog::error("Failed to find function start for {}", utility::narrow(str.data()));
-            return std::nullopt;
-        }
-
-        if (utility::scan_ptr(module, *func_start)) {
-            spdlog::info("Found virtual function for {} @ {:x}", utility::narrow(str.data()), *func_start);
-            return func_start;
-        }
-
-        func_start = find_function_start(*func_start - 1);
-    } while(func_start);
-
-    return std::nullopt;
-}
-
-// Finds a module matching the given name
-// in a release build, it would be "-{name}-Win64-Shipping.dll"
-// in the UnrealEditor, it would be "UnrealEditor-{name}.dll"
-// otherwise, if everything is statically linked, it will just return the executable
-HMODULE get_ue_module(const std::wstring& name) {
-    const auto current_executable = utility::get_executable();
-    const auto exe_name = utility::get_module_path(current_executable);
-
-    if (exe_name && exe_name->ends_with("UnrealEditor.exe")) {
-        const auto mod = utility::find_partial_module(L"UnrealEditor-" + name + L".dll");
-
-        if (mod != nullptr) {
-            return mod;
-        }
-    }
-
-    const auto partial_module = utility::find_partial_module(L"-" + name + L"-Win64-Shipping.dll");
-
-    if (partial_module != nullptr) {
-        return partial_module;
-    }
-
-    return current_executable;
-}
-
-void** get_engine() {
-    static void** engine = []() -> void** {
-        spdlog::info("Attempting to locate GEngine...");
-
-        const auto module = get_ue_module(L"Engine");
-        const auto calibrate_tilt_fn = find_function_from_string_ref(L"CALIBRATEMOTION", module);
-
-        if (!calibrate_tilt_fn) {
-            spdlog::error("Failed to find CalibrateTilt function!");
-            return (void**)nullptr;
-        }
-
-        spdlog::info("CalibrateTilt function: {:x}", (uintptr_t)*calibrate_tilt_fn);
-
-        // Use bddisasm to find the first ptr mov into a register
-        uint8_t* ip = (uint8_t*)*calibrate_tilt_fn;
-
-        for (auto i = 0; i < 50; ++i) {
-            INSTRUX ix{};
-            const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
-
-            if (!ND_SUCCESS(status)) {
-                spdlog::info("Decoding failed with error {:x}!", (uint32_t)status);
-                break;
-            }
-
-            if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_REG && ix.Operands[1].Type == ND_OP_MEM && ix.Operands[1].Info.Memory.IsRipRel) {
-                const auto offset = ix.Operands[1].Info.Memory.Disp;
-                const auto result = (void**)((uint8_t*)ip + ix.Length + offset);
-
-                spdlog::info("Found GEngine at {:x}", (uintptr_t)result);
-                return result;
-            }
-
-            ip += ix.Length;
-        }
-
-        spdlog::error("Failed to find GEngine!");
-        return nullptr;
-    }();
-
-    return engine;
-}
 
 // In some games, likely due to obfuscation, the cvar description is missing
 // so we must do an alternative scan for the cvar name itself, which is a bit tougher
@@ -397,7 +234,7 @@ bool FFakeStereoRenderingHook::hook() {
 bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     spdlog::info("Performing standard fake stereo hook");
 
-    const auto game = get_ue_module(L"Engine");
+    const auto game = sdk::get_ue_module(L"Engine");
 
     patch_vtable_checks();
 
@@ -464,7 +301,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     const auto stereo_view_offset_func = ((uintptr_t*)vtable)[*stereo_view_offset_index];
 
-    auto render_texture_render_thread_func = find_virtual_function_from_string_ref(L"RenderTexture_RenderThread", game);
+    auto render_texture_render_thread_func = utility::find_virtual_function_from_string_ref(game, L"RenderTexture_RenderThread");
 
     // Seems more robust than simply just checking the vtable index.
     m_uses_old_rendertarget_manager = stereo_view_offset_index <= 11 && !render_texture_render_thread_func;
@@ -726,7 +563,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     spdlog::info("Leaving FFakeStereoRenderingHook::hook");
 
-    const auto renderer_module = get_ue_module(L"Renderer");
+    const auto renderer_module = sdk::get_ue_module(L"Renderer");
     const auto backbuffer_format_cvar = find_cvar_by_description(L"Defines the default back buffer pixel format.", L"r.DefaultBackBufferPixelFormat", 4, renderer_module);
     m_pixel_format_cvar_found = backbuffer_format_cvar.has_value();
 
@@ -842,17 +679,10 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
     m_fallback_vtable[13] = +[](FFakeStereoRendering* stereo) { return g_hook->get_render_target_manager_hook(stereo); }; // GetRenderTargetManager
     //m_fallback_vtable[13] = +[](FFakeStereoRendering* stereo) { return nullptr; }; // GetRenderTargetManager
 
-    auto engine_ptr = get_engine();
-
-    if (engine_ptr == nullptr) {
-        spdlog::error("Failed to get engine pointer! Cannot create stereo device!");
-        return false;
-    }
-    
-    auto engine = *engine_ptr;
+    auto engine = sdk::UEngine::get();
 
     if (engine == nullptr) {
-        spdlog::error("Failed to get engine! Cannot create stereo device!");
+        spdlog::error("Failed to get engine pointer! Cannot create stereo device!");
         return false;
     }
 
@@ -875,12 +705,12 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_
         return cached_result;
     }
 
-    const auto engine_dll = get_ue_module(L"Engine");
+    const auto engine_dll = sdk::get_ue_module(L"Engine");
 
-    auto fake_stereo_rendering_constructor = find_function_from_string_ref(L"r.StereoEmulationHeight", engine_dll);
+    auto fake_stereo_rendering_constructor = utility::find_function_from_string_ref(engine_dll, L"r.StereoEmulationHeight");
 
     if (!fake_stereo_rendering_constructor) {
-        fake_stereo_rendering_constructor = find_function_from_string_ref(L"r.StereoEmulationFOV", engine_dll);
+        fake_stereo_rendering_constructor = utility::find_function_from_string_ref(engine_dll, L"r.StereoEmulationFOV");
 
         if (!fake_stereo_rendering_constructor) {
             spdlog::error("Failed to find FFakeStereoRendering constructor");
@@ -1025,7 +855,7 @@ bool FFakeStereoRenderingHook::patch_vtable_checks() {
 bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
     // This attempts to create a new StereoRenderingDevice in the GEngine
     // if it doesn't already exist via using -emulatestereo.
-    auto engine = get_engine();
+    auto engine = sdk::UEngine::get();
 
     if (engine == nullptr) {
         spdlog::error("Failed to locate GEngine, cannot inject stereo rendering device at runtime.");
@@ -1035,7 +865,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
     static auto enable_stereo_emulation_cvar = []() -> std::optional<uintptr_t> {
         spdlog::info("Attempting to locate r.EnableStereoEmulation cvar...");
 
-        const auto module = get_ue_module(L"Engine");
+        const auto module = sdk::get_ue_module(L"Engine");
         const auto str = utility::scan_string(module, L"r.EnableStereoEmulation");
 
         if (!str) {
@@ -1084,7 +914,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
 
         spdlog::info("Found r.EnableStereoEmulation cvar reference at {:x}", (uintptr_t)*enable_stereo_emulation_cvar_ref);
 
-        auto result = find_function_start(*enable_stereo_emulation_cvar_ref);
+        auto result = utility::find_function_start(*enable_stereo_emulation_cvar_ref);
 
         // scan backwards for the function start until it's no longer some random label within a function, but the function start itself.
         while (result) {
@@ -1094,7 +924,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
             }
 
             spdlog::info("result was not really the function, scanning again...");
-            result = find_function_start(*result - 1);
+            result = utility::find_function_start(*result - 1);
         }
 
         if (result) {
@@ -1110,7 +940,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
     }
 
     auto is_stereo_rendering_device_setup = []() {
-        auto engine = (uintptr_t)*get_engine();
+        auto engine = (uintptr_t)sdk::UEngine::get();
 
         if (engine == 0) {
             spdlog::error("GEngine does not appear to be instantiated, cannot verify stereo rendering device is setup.");
@@ -1149,8 +979,8 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
 
         utility::ThreadSuspender _{};
 
-        const auto fn = (void(*)(void*))*initialize_hmd_device;
-        fn(*engine);
+        const auto fn = (void(*)(sdk::UEngine*))*initialize_hmd_device;
+        fn(engine);
 
         spdlog::info("Called InitializeHMDDevice.");
 
@@ -1164,7 +994,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
 
             spdlog::info("Calling InitializeHMDDevice... AGAIN");
 
-            fn(*engine);
+            fn(engine);
 
             spdlog::info("Called InitializeHMDDevice again.");
         }
@@ -1401,7 +1231,7 @@ void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneV
         spdlog::info("Canvas: {:x}", (uintptr_t)canvas);
 
         const auto return_address = (uintptr_t)_ReturnAddress();
-        const auto containing_function = find_function_start(return_address);
+        const auto containing_function = utility::find_function_start(return_address);
 
         spdlog::info("Found containing function at {:x}", *containing_function);
 

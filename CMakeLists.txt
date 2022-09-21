@@ -285,6 +285,55 @@ target_link_libraries(utility PUBLIC
 unset(CMKR_TARGET)
 unset(CMKR_SOURCES)
 
+# Target sdk
+set(CMKR_TARGET sdk)
+set(sdk_SOURCES "")
+
+list(APPEND sdk_SOURCES
+	"shared/sdk/EngineModule.cpp"
+	"shared/sdk/UEngine.cpp"
+	"shared/sdk/UGameEngine.cpp"
+	"shared/sdk/EngineModule.hpp"
+	"shared/sdk/UEngine.hpp"
+	"shared/sdk/UGameEngine.hpp"
+)
+
+list(APPEND sdk_SOURCES
+	cmake.toml
+)
+
+set(CMKR_SOURCES ${sdk_SOURCES})
+add_library(sdk STATIC)
+
+if(sdk_SOURCES)
+	target_sources(sdk PRIVATE ${sdk_SOURCES})
+endif()
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${sdk_SOURCES})
+
+target_compile_features(sdk PUBLIC
+	cxx_std_20
+)
+
+target_compile_options(sdk PUBLIC
+	"/EHa"
+	"/MP"
+)
+
+target_include_directories(sdk PUBLIC
+	"shared/"
+)
+
+target_link_libraries(sdk PUBLIC
+	spdlog
+	utility
+	bddisasm
+	bdshemu
+)
+
+unset(CMKR_TARGET)
+unset(CMKR_SOURCES)
+
 # Target ue4poc
 set(CMKR_TARGET ue4poc)
 set(ue4poc_SOURCES "")
@@ -374,6 +423,7 @@ target_include_directories(ue4poc PUBLIC
 
 target_link_libraries(ue4poc PUBLIC
 	utility
+	sdk
 	shlwapi
 	d3d11
 	d3d12

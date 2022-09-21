@@ -1,3 +1,4 @@
+#include <spdlog/spdlog.h>
 #include <bddisasm.h>
 
 #include "Pattern.hpp"
@@ -277,5 +278,108 @@ namespace utility {
         }
 
         return ix;
+    }
+
+    std::optional<uintptr_t> find_function_start(uintptr_t middle) {
+        const auto module = (uintptr_t)utility::get_module_within(middle).value_or(nullptr);
+
+        if (module == 0) {
+            return {};
+        }
+
+        const auto middle_rva = middle - module;
+
+        // This function abuses the fact that most non-obfuscated binaries have
+        // an exception directory containing a list of function start and end addresses.
+        // Get the PE header, and then the exception directory
+        const auto dos_header = (PIMAGE_DOS_HEADER)module;
+        const auto nt_header = (PIMAGE_NT_HEADERS)((uintptr_t)dos_header + dos_header->e_lfanew);
+        const auto exception_directory = (PIMAGE_DATA_DIRECTORY)&nt_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION];
+
+        // Get the exception directory RVA and size
+        const auto exception_directory_rva = exception_directory->VirtualAddress;
+        const auto exception_directory_size = exception_directory->Size;
+
+        // Get the exception directory
+        const auto exception_directory_ptr = (PIMAGE_RUNTIME_FUNCTION_ENTRY)((uintptr_t)dos_header + exception_directory_rva);
+
+        // Get the number of entries in the exception directory
+        const auto exception_directory_entries = exception_directory_size / sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY);
+
+        for (auto i = 0; i < exception_directory_entries; i++) {
+            const auto entry = exception_directory_ptr[i];
+
+            // Check if the middle address is within the range of the function
+            if (entry.BeginAddress <= middle_rva && middle_rva <= entry.EndAddress) {
+                // Return the start address of the function
+                return module + entry.BeginAddress;
+            }
+        }
+
+        return std::nullopt;
+    }
+
+    std::optional<uintptr_t> find_function_from_string_ref(HMODULE module, std::wstring_view str) {
+        spdlog::info("Scanning module {} for string reference {}", utility::get_module_path(module).value_or("UNKNOWN"), utility::narrow(str));
+
+        const auto str_data = utility::scan_string(module, str.data());
+
+        if (!str_data) {
+            spdlog::error("Failed to find string for {}", utility::narrow(str.data()));
+            return std::nullopt;
+        }
+
+        const auto str_ref = utility::scan_reference(module, *str_data);
+
+        if (!str_ref) {
+            spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
+            return std::nullopt;
+        }
+
+        const auto func_start = find_function_start(*str_ref);
+
+        if (!func_start) {
+            spdlog::error("Failed to find function start for {}", utility::narrow(str.data()));
+            return std::nullopt;
+        }
+
+        return func_start;
+    }
+
+    // Same as the previous, but it keeps going upwards until utility::scan_ptr returns something
+    std::optional<uintptr_t> find_virtual_function_from_string_ref(HMODULE module, std::wstring_view str) {
+        spdlog::info("Scanning module {} for string reference {}", utility::get_module_path(module).value_or("UNKNOWN"), utility::narrow(str));
+
+        const auto str_data = utility::scan_string(module, str.data());
+
+        if (!str_data) {
+            spdlog::error("Failed to find string for {}", utility::narrow(str.data()));
+            return std::nullopt;
+        }
+
+        const auto str_ref = utility::scan_reference(module, *str_data);
+
+        if (!str_ref) {
+            spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
+            return std::nullopt;
+        }
+
+        auto func_start = find_function_start(*str_ref);
+
+        do {
+            if (!func_start) {
+                spdlog::error("Failed to find function start for {}", utility::narrow(str.data()));
+                return std::nullopt;
+            }
+
+            if (utility::scan_ptr(module, *func_start)) {
+                spdlog::info("Found virtual function for {} @ {:x}", utility::narrow(str.data()), *func_start);
+                return func_start;
+            }
+
+            func_start = find_function_start(*func_start - 1);
+        } while(func_start);
+
+        return std::nullopt;
     }
 }
