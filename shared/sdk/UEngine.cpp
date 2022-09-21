@@ -2,6 +2,9 @@
 #include <bddisasm.h>
 
 #include <utility/Scan.hpp>
+#include <utility/Module.hpp>
+
+#include "CVar.hpp"
 
 #include "EngineModule.hpp"
 #include "UEngine.hpp"
@@ -56,6 +59,60 @@ UEngine* UEngine::get() {
 }
 
 void UEngine::initialize_hmd_device() {
+    static auto enable_stereo_emulation_cvar = vr::get_enable_stereo_emulation_cvar();
 
+    if (!enable_stereo_emulation_cvar) {
+        spdlog::error("Failed to locate r.EnableStereoEmulation cvar, cannot inject stereo rendering device at runtime.");
+        return;
+    }
+
+    static auto addr = []() -> std::optional<uintptr_t> {
+        spdlog::info("Searching for InitializeHMDDevice function...");
+
+        const auto module_within = utility::get_module_within(*enable_stereo_emulation_cvar);
+
+        if (!module_within) {
+            spdlog::error("Failed to find module containing r.EnableStereoEmulation cvar!");
+            return std::nullopt;
+        }
+
+        spdlog::info("Module containing r.EnableStereoEmulation cvar: {:x}", (uintptr_t)*module_within);
+
+        const auto enable_stereo_emulation_cvar_ref = utility::scan_reference(*module_within, *enable_stereo_emulation_cvar);
+
+        if (!enable_stereo_emulation_cvar_ref) {
+            spdlog::error("Failed to find r.EnableStereoEmulation cvar reference!");
+            return std::nullopt;
+        }
+
+        spdlog::info("Found r.EnableStereoEmulation cvar reference at {:x}", (uintptr_t)*enable_stereo_emulation_cvar_ref);
+
+        auto result = utility::find_function_start(*enable_stereo_emulation_cvar_ref);
+
+        // scan backwards for the function start until it's no longer some random label within a function, but the function start itself.
+        while (result) {
+            // This means it's a valid vtable function, and we have found the function start.
+            if (utility::scan_ptr(*utility::get_module_within(*result), *result)) {
+                break;
+            }
+
+            spdlog::info("result was not really the function, scanning again...");
+            result = utility::find_function_start(*result - 1);
+        }
+
+        if (result) {
+            spdlog::info("Found InitializeHMDDevice at {:x}", (uintptr_t)*result);
+        }
+
+        return result;
+    }();
+
+    if (!addr) {
+        spdlog::error("Failed to locate InitializeHMDDevice function, cannot inject stereo rendering device at runtime.");
+        return;
+    }
+
+    auto fn = (void(*)(UEngine*))*addr;
+    fn(this);
 }
 }

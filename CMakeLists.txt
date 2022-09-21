@@ -290,9 +290,11 @@ set(CMKR_TARGET sdk)
 set(sdk_SOURCES "")
 
 list(APPEND sdk_SOURCES
+	"shared/sdk/CVar.cpp"
 	"shared/sdk/EngineModule.cpp"
 	"shared/sdk/UEngine.cpp"
 	"shared/sdk/UGameEngine.cpp"
+	"shared/sdk/CVar.hpp"
 	"shared/sdk/EngineModule.hpp"
 	"shared/sdk/UEngine.hpp"
 	"shared/sdk/UGameEngine.hpp"

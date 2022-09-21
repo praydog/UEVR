@@ -22,158 +22,6 @@
 
 FFakeStereoRenderingHook* g_hook = nullptr;
 
-// In some games, likely due to obfuscation, the cvar description is missing
-// so we must do an alternative scan for the cvar name itself, which is a bit tougher
-// because the cvar name is usually referenced in multiple places, whereas
-// the description is only referenced once, in the cvar registration function
-std::optional<uintptr_t> find_alternate_cvar_ref(std::wstring_view str, uint32_t known_default, HMODULE module = utility::get_executable()) {
-    spdlog::info("Performing alternate scan for cvar \"{}\"", utility::narrow(str));
-
-    const auto str_data = utility::scan_string(module, str.data());
-
-    if (!str_data) {
-        spdlog::error("Failed to find string for cvar \"{}\"", utility::narrow(str.data()));
-        return std::nullopt;
-    }
-
-    const auto module_base = (uintptr_t)module;
-    const auto module_size = utility::get_module_size(module);
-    auto str_ref = utility::scan_reference(module, *str_data);
-    std::optional<uintptr_t> result{};
-
-    while (str_ref) {
-        // This is a last resort so maybe come up with something more robust later...
-        std::array<uint8_t, 6+8> mov_r8d_mov_rsp { 
-            0x41, 0xB8, 0x00, 0x00, 0x00, 0x00,
-            0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00 
-        };
-
-        *(uint32_t*)&mov_r8d_mov_rsp[2] = known_default;
-        *(uint32_t*)&mov_r8d_mov_rsp[10] = known_default;
-
-        // Scan for this behind the string reference
-        /*
-        mov     r8d, 4
-        mov     [rsp+20h], 4
-        */
-        result = utility::scan_data_reverse(*str_ref, 50, mov_r8d_mov_rsp.data(), mov_r8d_mov_rsp.size());
-
-        if (result) {
-            spdlog::info("Found alternate cvar reference at {:x}", *result);
-            break;
-        }
-
-        const auto delta = *module_size - ((*str_ref + 1) - module_base);
-        str_ref = utility::scan_reference(*str_ref + 1, delta, *str_data);
-    }
-
-    if (!result) {
-        spdlog::error("Failed to find alternate cvar reference for \"{}\"", utility::narrow(str.data()));
-        return std::nullopt;
-    }
-    
-    return result;
-}
-
-std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring_view str) {
-    const auto cvar_creation_ref = utility::scan_mnemonic(start, 100, "CALL");
-
-    if (!cvar_creation_ref) {
-        spdlog::error("Failed to find cvar creation reference for {}", utility::narrow(str.data()));
-        return std::nullopt;
-    }
-
-    auto raw_cvar_ref = utility::scan_mnemonic(*cvar_creation_ref + utility::get_insn_size(*cvar_creation_ref), 100, "CALL");
-
-    if (!raw_cvar_ref) {
-        spdlog::error("Failed to find raw cvar reference for {}", utility::narrow(str.data()));
-        return std::nullopt;
-    }
-
-    spdlog::info("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
-    const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
-
-    // we need to check that the reference uses a register in its operand
-    // otherwise it's the wrong call. find the next call if it is.
-    if (decoded_ref) {
-        for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
-            spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
-        }
-
-        if (decoded_ref->OperandsCount == 0 || 
-            decoded_ref->Operands[0].Type != ND_OP_MEM || 
-            decoded_ref->Operands[0].Info.Memory.Base == ND_REG_NOT_PRESENT)
-        {
-            spdlog::info("Scanning again, instruction at {:x} doesn't use a register", *raw_cvar_ref);
-            raw_cvar_ref = utility::scan_mnemonic(*raw_cvar_ref + utility::get_insn_size(*raw_cvar_ref), 100, "CALL");
-
-            if (raw_cvar_ref) {
-                const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
-
-                for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
-                    spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
-                }
-
-                spdlog::info("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
-            }
-        }
-    }
-
-    // Look for a mov {ptr}, rax
-    auto ip = (uint8_t*)*raw_cvar_ref;
-
-    for (auto i = 0; i < 100; ++i) {
-        INSTRUX ix{};
-        const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
-
-        if (!ND_SUCCESS(status)) {
-            spdlog::error("Failed to decode instruction for {}", utility::narrow(str.data()));
-            return std::nullopt;
-        }
-
-        if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_MEM && ix.Operands[1].Type == ND_OP_REG &&
-            ix.Operands[1].Info.Register.Reg == NDR_RAX) 
-        {
-            return (uintptr_t)(ip + ix.Length + ix.Operands[0].Info.Memory.Disp);
-        }
-
-        ip += ix.Length;
-    }
-
-    spdlog::error("Failed to find cvar for {}", utility::narrow(str.data()));
-    return std::nullopt;
-}
-
-std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::wstring_view cvar_name, uint32_t known_default = 0, HMODULE module = utility::get_executable()) {
-    auto str_data = utility::scan_string(module, str.data());
-
-    std::optional<uintptr_t> str_ref{};
-
-    // Fallback to alternate scan if the description is missing
-    if (!str_data) {
-        str_ref = find_alternate_cvar_ref(cvar_name, known_default, module);
-    }
-
-    if (!str_data && !str_ref) {
-        spdlog::error("Failed to find string for {}", utility::narrow(str.data()));
-        return std::nullopt;
-    }
-
-    // This scans for the cvar description string ref.
-    if (!str_ref) {
-        str_ref = utility::scan_reference(module, *str_data);
-
-        if (!str_ref) {
-            spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
-            return std::nullopt;
-        }
-
-        spdlog::info("Found string ref for \"{}\" at {:x}", utility::narrow(str.data()), *str_ref);
-    }
-
-    return resolve_cvar_from_address(*str_ref + 4, cvar_name);
-}
-
 // Scan through function instructions to detect usage of double
 // floating point precision instructions.
 bool is_using_double_precision(uintptr_t addr) {
@@ -564,7 +412,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     spdlog::info("Leaving FFakeStereoRenderingHook::hook");
 
     const auto renderer_module = sdk::get_ue_module(L"Renderer");
-    const auto backbuffer_format_cvar = find_cvar_by_description(L"Defines the default back buffer pixel format.", L"r.DefaultBackBufferPixelFormat", 4, renderer_module);
+    const auto backbuffer_format_cvar = sdk::find_cvar_by_description(L"Defines the default back buffer pixel format.", L"r.DefaultBackBufferPixelFormat", 4, renderer_module);
     m_pixel_format_cvar_found = backbuffer_format_cvar.has_value();
 
     // In 4.18 this doesn't exist. Not much we can do about that.
@@ -862,80 +710,10 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
         return false;
     }
 
-    static auto enable_stereo_emulation_cvar = []() -> std::optional<uintptr_t> {
-        spdlog::info("Attempting to locate r.EnableStereoEmulation cvar...");
-
-        const auto module = sdk::get_ue_module(L"Engine");
-        const auto str = utility::scan_string(module, L"r.EnableStereoEmulation");
-
-        if (!str) {
-            spdlog::error("Failed to find r.EnableStereoEmulation string!");
-            return std::nullopt;
-        }
-
-        const auto str_ref = utility::scan_reference(module, *str);
-
-        if (!str_ref) {
-            spdlog::error("Failed to find r.EnableStereoEmulation string reference!");
-            return std::nullopt;
-        }
-
-        const auto result = resolve_cvar_from_address(*str_ref + 4, L"r.EnableStereoEmulation");
-        if (result) {
-            spdlog::info("Found r.EnableStereoEmulation at {:x}", (uintptr_t)*result);
-        }
-
-        return result;
-    }();
+    static auto enable_stereo_emulation_cvar = sdk::vr::get_enable_stereo_emulation_cvar();
 
     if (!enable_stereo_emulation_cvar) {
         spdlog::error("Failed to locate r.EnableStereoEmulation cvar, cannot inject stereo rendering device at runtime.");
-        return false;
-    }
-
-    static auto initialize_hmd_device = []() -> std::optional<uintptr_t> {
-        spdlog::info("Searching for InitializeHMDDevice function...");
-
-        const auto module_within = utility::get_module_within(*enable_stereo_emulation_cvar);
-
-        if (!module_within) {
-            spdlog::error("Failed to find module containing r.EnableStereoEmulation cvar!");
-            return std::nullopt;
-        }
-
-        spdlog::info("Module containing r.EnableStereoEmulation cvar: {:x}", (uintptr_t)*module_within);
-
-        const auto enable_stereo_emulation_cvar_ref = utility::scan_reference(*module_within, *enable_stereo_emulation_cvar);
-
-        if (!enable_stereo_emulation_cvar_ref) {
-            spdlog::error("Failed to find r.EnableStereoEmulation cvar reference!");
-            return std::nullopt;
-        }
-
-        spdlog::info("Found r.EnableStereoEmulation cvar reference at {:x}", (uintptr_t)*enable_stereo_emulation_cvar_ref);
-
-        auto result = utility::find_function_start(*enable_stereo_emulation_cvar_ref);
-
-        // scan backwards for the function start until it's no longer some random label within a function, but the function start itself.
-        while (result) {
-            // This means it's a valid vtable function, and we have found the function start.
-            if (utility::scan_ptr(*utility::get_module_within(*result), *result)) {
-                break;
-            }
-
-            spdlog::info("result was not really the function, scanning again...");
-            result = utility::find_function_start(*result - 1);
-        }
-
-        if (result) {
-            spdlog::info("Found InitializeHMDDevice at {:x}", (uintptr_t)*result);
-        }
-
-        return result;
-    }();
-
-    if (!initialize_hmd_device) {
-        spdlog::error("Failed to locate InitializeHMDDevice function, cannot inject stereo rendering device at runtime.");
         return false;
     }
 
@@ -979,8 +757,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
 
         utility::ThreadSuspender _{};
 
-        const auto fn = (void(*)(sdk::UEngine*))*initialize_hmd_device;
-        fn(engine);
+        engine->initialize_hmd_device();
 
         spdlog::info("Called InitializeHMDDevice.");
 
@@ -994,7 +771,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
 
             spdlog::info("Calling InitializeHMDDevice... AGAIN");
 
-            fn(engine);
+            engine->initialize_hmd_device();
 
             spdlog::info("Called InitializeHMDDevice again.");
         }

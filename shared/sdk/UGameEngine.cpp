@@ -6,7 +6,7 @@
 #include "UGameEngine.hpp"
 
 namespace sdk {
-uintptr_t UGameEngine::get_tick_address() {
+std::optional<uintptr_t> UGameEngine::get_tick_address() {
     static auto addr = []() -> uintptr_t {
         spdlog::info("UGameEngine::get_tick_address: scanning for address");
 
@@ -22,6 +22,10 @@ uintptr_t UGameEngine::get_tick_address() {
 
         return *result;
     }();
+
+    if (addr == 0) {
+        return std::nullopt;
+    }
 
     return addr;
 }
