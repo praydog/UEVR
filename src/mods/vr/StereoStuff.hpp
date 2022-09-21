@@ -6,8 +6,9 @@
 enum ETextureCreateFlags { NONE = 0 };
 enum EStereoscopicPass { eSSP_FULL, eSSP_PRIMARY, eSSP_SECONDARY };
 
+template<typename T>
 struct Rotator {
-    float pitch, yaw, roll;
+    T pitch, yaw, roll;
 };
 
 struct FRHIResource {

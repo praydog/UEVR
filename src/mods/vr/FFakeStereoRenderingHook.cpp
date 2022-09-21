@@ -337,6 +337,44 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::ws
     return resolve_cvar_from_address(*str_ref + 4, cvar_name);
 }
 
+// Scan through function instructions to detect usage of double
+// floating point precision instructions.
+bool is_using_double_precision(uintptr_t addr) {
+    spdlog::info("Scanning function at {:x} for double precision usage", addr);
+
+    INSTRUX ix{};
+
+    auto ip = (uint8_t*)addr;
+
+    // Stop on RETN.
+    while (true) {
+        const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
+
+        if (!ND_SUCCESS(status)) {
+            spdlog::error("Failed to decode instruction at {:x}", (uintptr_t)ip);
+            return false;
+        }
+
+        if (ix.Instruction == ND_INS_RETN) {
+            break;
+        }
+
+        if (ix.Instruction == ND_INS_MOVSD && ix.Operands[0].Type == ND_OP_MEM && ix.Operands[1].Type == ND_OP_REG) {
+            spdlog::info("[UE5 Detected] Detected Double precision MOVSD at {:x}", (uintptr_t)ip);
+            return true;
+        }
+
+        if (ix.Instruction == ND_INS_ADDSD) {
+            spdlog::info("[UE5 Detected] Detected Double precision ADDSD at {:x}", (uintptr_t)ip);
+            return true;
+        }
+
+        ip += ix.Length;
+    }
+
+    return false;
+}
+
 FFakeStereoRenderingHook::FFakeStereoRenderingHook() {
     g_hook = this;
 }
@@ -519,6 +557,8 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     const auto adjust_view_rect_distance = is_4_18_or_lower ? 2 : 3;
     const auto adjust_view_rect_index = *stereo_view_offset_index - adjust_view_rect_distance;
+
+    spdlog::info("AdjustViewRect Index: {}", adjust_view_rect_index);
     
     auto calculate_stereo_projection_matrix_index = *stereo_view_offset_index + 1;
 
@@ -610,6 +650,8 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     spdlog::info("AdjustViewRect: {:x}", (uintptr_t)adjust_view_rect_func);
     spdlog::info("CalculateStereoProjectionMatrix: {:x}", (uintptr_t)calculate_stereo_projection_matrix_func);
     spdlog::info("IsStereoEnabled: {:x}", (uintptr_t)*is_stereo_enabled_func_ptr);
+
+    m_has_double_precision = is_using_double_precision(stereo_view_offset_func) || is_using_double_precision(calculate_stereo_projection_matrix_func);
 
     m_adjust_view_rect_hook = builder.create_inline((void*)adjust_view_rect_func, adjust_view_rect);
     m_calculate_stereo_view_offset_hook = builder.create_inline((void*)stereo_view_offset_func, calculate_stereo_view_offset);
@@ -762,7 +804,7 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
     };*/ // GetTextSafeRegionBounds
 
     m_fallback_vtable[idx++] = 
-    +[](FFakeStereoRendering* stereo, const int32_t view_index, Rotator* view_rotation, const float world_to_meters, Vector3f* view_location) {
+    +[](FFakeStereoRendering* stereo, const int32_t view_index, Rotator<float>* view_rotation, const float world_to_meters, Vector3f* view_location) {
         return g_hook->calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location);
     }; // CalculateStereoViewOffset
 
@@ -774,7 +816,12 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
         spdlog::info("CalculateStereoProjectionMatrix called: {:x} {} {:x}", (uintptr_t)_ReturnAddress(), view_index, (uintptr_t)out);
 #endif
 
-        (*out)[3][2] = 0.1f; // Need to pre-set the Z value to something, otherwise it will be 0.0f & probably break something.
+        if (!g_hook->m_has_double_precision) {
+            (*out)[3][2] = 0.1f; // Need to pre-set the Z value to something, otherwise it will be 0.0f & probably break something.
+        } else {
+            auto dmat = (Matrix4x4d*)out;
+            (*dmat)[3][2] = 0.1;
+        }
 
         return g_hook->calculate_stereo_projection_matrix(stereo, out, view_index);
     }; // CalculateStereoProjectionMatrix
@@ -1166,7 +1213,7 @@ void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, in
 }
 
 void FFakeStereoRenderingHook::calculate_stereo_view_offset(
-    FFakeStereoRendering* stereo, const int32_t view_index, Rotator* view_rotation, 
+    FFakeStereoRendering* stereo, const int32_t view_index, Rotator<float>* view_rotation, 
     const float world_to_meters, Vector3f* view_location)
 {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
@@ -1181,7 +1228,10 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         index_starts_from_one = false;
     }
 
+    const auto has_double_precision = g_hook->m_has_double_precision;
     const auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
+    const auto rot_d = (Rotator<double>*)view_rotation;
+    const auto view_d = (Vector3d*)view_location;
 
     auto vr = VR::get();
 
@@ -1198,15 +1248,25 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         vr->update_hmd_state();
     }
 
-    const auto view_mat = glm::yawPitchRoll(
-        glm::radians(view_rotation->yaw),
-        glm::radians(view_rotation->pitch),
-        glm::radians(view_rotation->roll));
+    const auto view_mat = !has_double_precision ? 
+        glm::yawPitchRoll(
+            glm::radians(view_rotation->yaw),
+            glm::radians(view_rotation->pitch),
+            glm::radians(view_rotation->roll)) : 
+        glm::yawPitchRoll(
+            glm::radians((float)rot_d->yaw),
+            glm::radians((float)rot_d->pitch),
+            glm::radians((float)rot_d->roll));
 
-    const auto view_mat_inverse = glm::yawPitchRoll(
-        glm::radians(-view_rotation->yaw),
-        glm::radians(view_rotation->pitch),
-        glm::radians(-view_rotation->roll));
+    const auto view_mat_inverse = !has_double_precision ? 
+        glm::yawPitchRoll(
+            glm::radians(-view_rotation->yaw),
+            glm::radians(view_rotation->pitch),
+            glm::radians(-view_rotation->roll)) : 
+        glm::yawPitchRoll(
+            glm::radians(-(float)rot_d->yaw),
+            glm::radians((float)rot_d->pitch),
+            glm::radians(-(float)rot_d->roll));
 
     const auto view_quat_inverse = glm::quat {
         view_mat_inverse
@@ -1231,14 +1291,28 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         0, 0, 0, 1
     }};
 
-    *view_location -= quat_asdf * (glm::normalize(view_quat_inverse) * (pos * world_to_meters));
-    *view_location -= quat_asdf * (glm::normalize(new_rotation) * (eye_offset * world_to_meters));
+    const auto offset1 = quat_asdf * (glm::normalize(view_quat_inverse) * (pos * world_to_meters));
+    const auto offset2 = quat_asdf * (glm::normalize(new_rotation) * (eye_offset * world_to_meters));
+
+    if (!has_double_precision) {
+        *view_location -= offset1;
+        *view_location -= offset2;
+    } else {
+        *view_d -= offset1;
+        *view_d -= offset2;
+    }
 
     const auto euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
 
-    view_rotation->pitch = euler.x;
-    view_rotation->yaw = euler.y;
-    view_rotation->roll = euler.z;
+    if (!has_double_precision) {
+        view_rotation->pitch = euler.x;
+        view_rotation->yaw = euler.y;
+        view_rotation->roll = euler.z;
+    } else {
+        rot_d->pitch = euler.x;
+        rot_d->yaw = euler.y;
+        rot_d->roll = euler.z;
+    }
 
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("Finished calculating stereo view offset!");
@@ -1267,12 +1341,24 @@ Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeSt
 
     if (out != nullptr) {
         const auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
+        auto& double_matrix = *(Matrix4x4d*)out;
 
-        float old_znear = (*out)[3][2];
-        VR::get()->m_nearz = old_znear;
+        if (!g_hook->m_has_double_precision) {
+            float old_znear = (*out)[3][2];
+            VR::get()->m_nearz = old_znear;            
+            VR::get()->get_runtime()->update_matrices(old_znear, 10000.0f);
+        } else {
+            double old_znear = (double_matrix)[3][2];
+            VR::get()->m_nearz = (float)old_znear;
+            VR::get()->get_runtime()->update_matrices((float)old_znear, 10000.0f);
+        }
 
-        VR::get()->get_runtime()->update_matrices(old_znear, 10000.0f);
-        *out = VR::get()->get_projection_matrix((VRRuntime::Eye)(true_index));
+        if (!g_hook->m_has_double_precision) {
+            *out = VR::get()->get_projection_matrix((VRRuntime::Eye)(true_index));
+        } else {
+            const auto fmat = VR::get()->get_projection_matrix((VRRuntime::Eye)(true_index));
+            double_matrix = fmat;
+        }
     } else {
         spdlog::error("CalculateStereoProjectionMatrix returned nullptr!");
     }

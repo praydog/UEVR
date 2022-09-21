@@ -170,7 +170,7 @@ private:
     // Hooks
     static bool is_stereo_enabled(FFakeStereoRendering* stereo);
     static void adjust_view_rect(FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h);
-    static void calculate_stereo_view_offset(FFakeStereoRendering* stereo, const int32_t view_index, Rotator* view_rotation,
+    static void calculate_stereo_view_offset(FFakeStereoRendering* stereo, const int32_t view_index, Rotator<float>* view_rotation,
         const float world_to_meters, Vector3f* view_location);
     static Matrix4x4f* calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index);
     static void render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list,
@@ -202,6 +202,7 @@ private:
     bool m_special_detected{false};
     bool m_pixel_format_cvar_found{false};
     bool m_injected_stereo_at_runtime{false};
+    bool m_has_double_precision{false}; // for the projection matrix... AND the view offset... IS UE5 DOING THIS NOW???
 
     struct FallbackDevice {
         void* vtable;
