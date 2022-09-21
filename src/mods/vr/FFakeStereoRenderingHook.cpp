@@ -1486,6 +1486,8 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
         spdlog::info("Scanning for call instr...");
         auto ip = (uint8_t*)return_address;
 
+        bool next_call_is_not_the_right_one = false;
+
         for (auto i = 0; i < 100; ++i) {
             INSTRUX ix{};
             const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
@@ -1495,11 +1497,19 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                 return false;
             }
 
+            // mov dl, 32h
+            // seen in UE5 or debug builds?
+            if (ip[0] == 0xB2 && ip[1] == 0x32) {
+                next_call_is_not_the_right_one = true;
+            }
+
             // We are looking for the call instruction
             // This instruction calls RHICreateTargetableShaderResource2D(TexSizeX, TexSizeY, SceneTargetFormat, 1, TexCreate_None,
             // TexCreate_RenderTargetable, false, CreateInfo, BufferedRTRHI, BufferedSRVRHI); Which sets up the BufferedRTRHI and
             // BufferedSRVRHI variables.
-            if (std::string_view{ix.Mnemonic}.starts_with("CALL")) {
+            const auto is_call = std::string_view{ix.Mnemonic}.starts_with("CALL");
+
+            if (is_call && !next_call_is_not_the_right_one) {
                 const auto post_call = (uintptr_t)ip + ix.Length;
                 spdlog::info("AllocateRenderTargetTexture post_call: {:x}", post_call - (uintptr_t)*utility::get_module_within((void*)post_call));
 
@@ -1523,6 +1533,10 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                 this->set_up_texture_hook = true;
 
                 return false;
+            }
+
+            if (is_call) {
+                next_call_is_not_the_right_one = false;
             }
 
             ip += ix.Length;
