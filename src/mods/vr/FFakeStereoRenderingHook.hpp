@@ -140,18 +140,17 @@ public:
         return m_pixel_format_cvar_found;
     }
 
-    void on_frame() {
-        if (!m_finished_hooking) {
-            if (!m_tried_hooking) {
-                if (!m_injected_stereo_at_runtime) {
-                    attempt_runtime_inject_stereo();
-                    m_injected_stereo_at_runtime = true;
-                }
-                
-                m_hooked = hook();
-            }
+    void attempt_hooking();
+    void attempt_hook_game_engine_tick();
 
-            return;
+    void on_frame() {
+        attempt_hook_game_engine_tick();
+
+        // Ideally we want to do all hooking
+        // from game engine tick. if it fails
+        // we will fall back to doing it here.
+        if (!m_hooked_game_engine_tick && m_attemped_hook_game_engine_tick) {
+            attempt_hooking();
         }
     }
 
@@ -180,6 +179,7 @@ private:
     static IStereoRenderTargetManager* get_render_target_manager_hook(FFakeStereoRendering* stereo);
     static IStereoLayers* get_stereo_layers_hook(FFakeStereoRendering* stereo);
 
+    std::unique_ptr<safetyhook::InlineHook> m_tick_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_adjust_view_rect_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_calculate_stereo_view_offset_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_calculate_stereo_projection_matrix_hook{};
@@ -197,6 +197,8 @@ private:
     bool m_hooked{false};
     bool m_tried_hooking{false};
     bool m_finished_hooking{false};
+    bool m_hooked_game_engine_tick{false};
+    bool m_attemped_hook_game_engine_tick{false};
     bool m_uses_old_rendertarget_manager{false};
     bool m_rendertarget_manager_embedded_in_stereo_device{false}; // 4.17 and below...?
     bool m_special_detected{false};

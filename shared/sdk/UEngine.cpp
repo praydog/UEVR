@@ -59,15 +59,15 @@ UEngine* UEngine::get() {
 }
 
 void UEngine::initialize_hmd_device() {
-    static auto enable_stereo_emulation_cvar = vr::get_enable_stereo_emulation_cvar();
-
-    if (!enable_stereo_emulation_cvar) {
-        spdlog::error("Failed to locate r.EnableStereoEmulation cvar, cannot inject stereo rendering device at runtime.");
-        return;
-    }
-
-    static auto addr = []() -> std::optional<uintptr_t> {
+    static const auto addr = []() -> std::optional<uintptr_t> {
         spdlog::info("Searching for InitializeHMDDevice function...");
+
+        const auto enable_stereo_emulation_cvar = vr::get_enable_stereo_emulation_cvar();
+
+        if (!enable_stereo_emulation_cvar) {
+            spdlog::error("Failed to locate r.EnableStereoEmulation cvar, cannot inject stereo rendering device at runtime.");
+            return std::nullopt;
+        }
 
         const auto module_within = utility::get_module_within(*enable_stereo_emulation_cvar);
 
@@ -87,7 +87,7 @@ void UEngine::initialize_hmd_device() {
 
         spdlog::info("Found r.EnableStereoEmulation cvar reference at {:x}", (uintptr_t)*enable_stereo_emulation_cvar_ref);
 
-        auto result = utility::find_virtual_function_start(*enable_stereo_emulation_cvar_ref);
+        const auto result = utility::find_virtual_function_start(*enable_stereo_emulation_cvar_ref);
 
         if (result) {
             spdlog::info("Found InitializeHMDDevice at {:x}", (uintptr_t)*result);

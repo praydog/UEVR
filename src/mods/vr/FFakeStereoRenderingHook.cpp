@@ -42,7 +42,7 @@ bool is_using_double_precision(uintptr_t addr) {
             return false;
         }
 
-        if (ix.Instruction == ND_INS_RETN) {
+        if (ix.Instruction == ND_INS_RETN || ix.Instruction == ND_INS_INT3 || ix.Instruction == ND_INS_JMPFD || ix.Instruction == ND_INS_JMPFI) {
             break;
         }
 
@@ -66,6 +66,45 @@ FFakeStereoRenderingHook::FFakeStereoRenderingHook() {
     g_hook = this;
 }
 
+void FFakeStereoRenderingHook::attempt_hooking() {
+    if (m_finished_hooking || m_tried_hooking) {
+        return;
+    }
+
+    if (!m_injected_stereo_at_runtime) {
+        attempt_runtime_inject_stereo();
+        m_injected_stereo_at_runtime = true;
+    }
+    
+    m_hooked = hook();
+}
+
+void FFakeStereoRenderingHook::attempt_hook_game_engine_tick() {
+    if (m_hooked_game_engine_tick) {
+        return;
+    }
+    
+    spdlog::info("Attempting to hook UGameEngine::Tick!");
+
+    m_attemped_hook_game_engine_tick = true;
+
+    const auto func = sdk::UGameEngine::get_tick_address();
+
+    if (!func) {
+        spdlog::error("Cannot hook UGameEngine::Tick");
+        return;
+    }
+
+    auto factory = SafetyHookFactory::init();
+    auto builder = factory->acquire();
+
+    m_tick_hook = builder.create_inline((void*)*func, +[](sdk::UGameEngine* engine, float delta, bool idle) {
+        g_hook->attempt_hooking();        
+        g_hook->m_tick_hook->call<void*>(engine, delta, idle);
+    });
+
+    m_hooked_game_engine_tick = true;
+}
 bool FFakeStereoRenderingHook::hook() {
     spdlog::info("Entering FFakeStereoRenderingHook::hook");
 
