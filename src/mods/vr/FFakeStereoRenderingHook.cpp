@@ -10,6 +10,8 @@
 
 #include <sdk/EngineModule.hpp>
 #include <sdk/UEngine.hpp>
+#include <sdk/UGameEngine.hpp>
+#include <sdk/CVar.hpp>
 
 #include <bdshemu.h>
 #include <bddisasm.h>
