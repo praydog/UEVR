@@ -1172,12 +1172,22 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
         return;
     }
 
-    const auto vfunc = utility::find_virtual_function_start(g_hook->m_calculate_stereo_projection_matrix_post_hook->target());
+    auto vfunc = utility::find_virtual_function_start(g_hook->m_calculate_stereo_projection_matrix_post_hook->target());
 
     if (!vfunc) {
-        g_hook->m_fixed_localplayer_view_count = true;
-        spdlog::error("Failed to find virtual function start for post calculate_stereo_projection_matrix!");
-        return;
+        spdlog::info("Could not find function via normal means, scanning for int3s...");
+
+        const auto ref = utility::scan_reverse(g_hook->m_calculate_stereo_projection_matrix_post_hook->target(), 0x2000, "CC CC CC");
+
+        if (ref) {
+            vfunc = *ref + 3;
+        }
+
+        if (!vfunc) {
+            g_hook->m_fixed_localplayer_view_count = true;
+            spdlog::error("Failed to find virtual function start for post calculate_stereo_projection_matrix!");
+            return;
+        }
     }
 
     // Scan forward until we find an assignment of the RCX register into a storage register.
@@ -1228,12 +1238,23 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
 
     const auto localplayer = *register_to_context[found_register.value_or(0)];
     spdlog::info("Local player: {:x}", localplayer);
+
+    if (localplayer == 0) {
+        g_hook->m_fixed_localplayer_view_count = true;
+        spdlog::error("Failed to find local player, cannot call PostInitProperties!");
+        return;
+    }
+
     spdlog::info("Searching for PostInitProperties virtual function...");
 
     std::optional<uint32_t> idx{};
     const auto engine = sdk::UEngine::get_lvalue();
 
     for (auto i = 1; i < 25; ++i) {
+        if (idx) {
+            break;
+        }
+
         const auto vfunc = (*(uintptr_t**)localplayer)[i];
 
         if (vfunc == 0 || IsBadReadPtr((void*)vfunc, 1)) {
@@ -1260,7 +1281,7 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
             // PostInitProperties for the player always accesses GEngine->StereoRenderingDevice
             // none of the other early vfuncs will do this.
             if (utility::resolve_displacement((uintptr_t)ip).value_or(0) == (uintptr_t)engine) {
-                spdlog::info("Found PostInitProperties at {:x}!", (uintptr_t)ip + j);
+                spdlog::info("Found PostInitProperties at {} {:x}!", i, (uintptr_t)vfunc);
                 idx = i;
                 break;
             }

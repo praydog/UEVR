@@ -411,8 +411,6 @@ namespace utility {
             }
         }
 
-        spdlog::error("Failed to resolve displacement for instruction at 0x{:x}", ip);
-
         return std::nullopt;
     }
 }
