@@ -171,7 +171,7 @@ std::optional<uintptr_t> vr::get_enable_stereo_emulation_cvar() {
             return std::nullopt;
         }
 
-        const auto str_ref = utility::scan_reference(module, *str);
+        const auto str_ref = utility::scan_relative_reference_displacement(module, *str);
 
         if (!str_ref) {
             spdlog::error("Failed to find r.EnableStereoEmulation string reference!");

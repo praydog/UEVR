@@ -194,6 +194,27 @@ namespace utility {
         return {};
     }
 
+    std::optional<uintptr_t> scan_relative_reference_displacement(HMODULE module, uintptr_t ptr) {
+        const auto module_size = get_module_size(module).value_or(0);
+        const auto end = (uintptr_t)module + module_size;
+
+        for (auto i = (uintptr_t)module; i < end; i += sizeof(uint8_t)) {
+            if (calculate_absolute(i, 4) == ptr) {
+                const auto resolved = utility::resolve_instruction(i);
+
+                if (resolved) {
+                    const auto displacement = utility::resolve_displacement(resolved->addr);
+
+                    if (displacement && *displacement == ptr) {
+                        return i;
+                    }
+                }
+            }
+        }
+
+        return {};
+    }
+
     
     std::optional<uintptr_t> scan_opcode(uintptr_t ip, size_t num_instructions, uint8_t opcode) {
         for (size_t i = 0; i < num_instructions; ++i) {
@@ -409,6 +430,36 @@ namespace utility {
                     return ip + ix->Length + mem.Disp;
                 }
             }
+        }
+
+        return std::nullopt;
+    }
+
+    std::optional<Resolved> resolve_instruction(uintptr_t middle) {
+        const auto reference_point = find_function_start(middle);
+
+        if (!reference_point) {
+            spdlog::error("Failed to find function start for 0x{:x}, cannot resolve instruction", middle);
+            return std::nullopt;
+        }
+
+        spdlog::info("Reference point for {:x}: {:x}", middle, *reference_point);
+
+        // Now keep disassembling forward until we run into an instruction
+        // whose address is <= middle or address + size > middle
+        for (auto ip = (uint8_t*)*reference_point;;) {
+            const auto ix = decode_one(ip);
+
+            if (!ix) {
+                spdlog::error("Failed to decode instruction at 0x{:x}, cannot resolve instruction", (uintptr_t)ip);
+                return std::nullopt;
+            }
+
+            if (middle >= (uintptr_t)ip && middle < (uintptr_t)ip + ix->Length) {
+                return Resolved{(uintptr_t)ip, *ix};
+            }
+
+            ip += ix->Length;
         }
 
         return std::nullopt;

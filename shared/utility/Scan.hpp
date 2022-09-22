@@ -25,6 +25,7 @@ namespace utility {
     std::optional<uintptr_t> scan_reference(HMODULE module, uintptr_t ptr, bool relative = true);
     std::optional<uintptr_t> scan_reference(uintptr_t start, size_t length, uintptr_t ptr, bool relative = true);
     std::optional<uintptr_t> scan_relative_reference_strict(HMODULE module, uintptr_t ptr, const std::string& preceded_by);
+    std::optional<uintptr_t> scan_relative_reference_displacement(HMODULE module, uintptr_t ptr);
 
     std::optional<uintptr_t> scan_opcode(uintptr_t ip, size_t num_instructions, uint8_t opcode);
     std::optional<uintptr_t> scan_disasm(uintptr_t ip, size_t num_instructions, const std::string& pattern);
@@ -44,4 +45,10 @@ namespace utility {
     std::optional<uintptr_t> find_virtual_function_from_string_ref(HMODULE module, std::wstring_view str);
 
     std::optional<uintptr_t> resolve_displacement(uintptr_t ip);
+
+    struct Resolved {
+        uintptr_t addr{};
+        INSTRUX instrux{};
+    };
+    std::optional<Resolved> resolve_instruction(uintptr_t middle); // finds the start of the instruction given an address in the middle of the instruction 
 }
