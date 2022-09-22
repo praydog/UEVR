@@ -84,7 +84,7 @@ void UEngine::initialize_hmd_device() {
 
         spdlog::info("Module containing r.EnableStereoEmulation cvar: {:x}", (uintptr_t)*module_within);
 
-        const auto enable_stereo_emulation_cvar_ref = utility::scan_reference(*module_within, *enable_stereo_emulation_cvar);
+        const auto enable_stereo_emulation_cvar_ref = utility::scan_displacement_reference(*module_within, *enable_stereo_emulation_cvar);
 
         if (!enable_stereo_emulation_cvar_ref) {
             spdlog::error("Failed to find r.EnableStereoEmulation cvar reference!");

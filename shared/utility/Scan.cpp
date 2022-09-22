@@ -194,11 +194,20 @@ namespace utility {
         return {};
     }
 
-    std::optional<uintptr_t> scan_relative_reference_displacement(HMODULE module, uintptr_t ptr) {
-        const auto module_size = get_module_size(module).value_or(0);
-        const auto end = (uintptr_t)module + module_size;
+    std::optional<uintptr_t> scan_displacement_reference(HMODULE module, uintptr_t ptr) {
+        const auto module_size = get_module_size(module);
 
-        for (auto i = (uintptr_t)module; i < end; i += sizeof(uint8_t)) {
+        if (!module_size) {
+            return {};
+        }
+
+        return scan_displacement_reference((uintptr_t)module, *module_size, ptr);
+    }
+
+    std::optional<uintptr_t> scan_displacement_reference(uintptr_t start, size_t length, uintptr_t ptr) {
+        const auto end = (start + length) - sizeof(void*);
+
+        for (auto i = (uintptr_t)start; i < end; i += sizeof(uint8_t)) {
             if (calculate_absolute(i, 4) == ptr) {
                 const auto resolved = utility::resolve_instruction(i);
 
@@ -214,7 +223,6 @@ namespace utility {
 
         return {};
     }
-
     
     std::optional<uintptr_t> scan_opcode(uintptr_t ip, size_t num_instructions, uint8_t opcode) {
         for (size_t i = 0; i < num_instructions; ++i) {
@@ -350,7 +358,7 @@ namespace utility {
             return std::nullopt;
         }
 
-        const auto str_ref = utility::scan_reference(module, *str_data);
+        const auto str_ref = utility::scan_displacement_reference(module, *str_data);
 
         if (!str_ref) {
             spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
@@ -403,7 +411,7 @@ namespace utility {
             return std::nullopt;
         }
 
-        const auto str_ref = utility::scan_reference(module, *str_data);
+        const auto str_ref = utility::scan_displacement_reference(module, *str_data);
 
         if (!str_ref) {
             spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));

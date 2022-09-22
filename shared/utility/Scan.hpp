@@ -25,7 +25,8 @@ namespace utility {
     std::optional<uintptr_t> scan_reference(HMODULE module, uintptr_t ptr, bool relative = true);
     std::optional<uintptr_t> scan_reference(uintptr_t start, size_t length, uintptr_t ptr, bool relative = true);
     std::optional<uintptr_t> scan_relative_reference_strict(HMODULE module, uintptr_t ptr, const std::string& preceded_by);
-    std::optional<uintptr_t> scan_relative_reference_displacement(HMODULE module, uintptr_t ptr);
+    std::optional<uintptr_t> scan_displacement_reference(HMODULE module, uintptr_t ptr);
+    std::optional<uintptr_t> scan_displacement_reference(uintptr_t start, size_t length, uintptr_t ptr);
 
     std::optional<uintptr_t> scan_opcode(uintptr_t ip, size_t num_instructions, uint8_t opcode);
     std::optional<uintptr_t> scan_disasm(uintptr_t ip, size_t num_instructions, const std::string& pattern);

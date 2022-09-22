@@ -724,9 +724,9 @@ bool FFakeStereoRenderingHook::patch_vtable_checks() {
 
     spdlog::info("{:x} {:x} {:x}", *fake_stereo_rendering_vtable, (uintptr_t)*vtable_module_within, *module_size);
 
-    for (auto ref = utility::scan_reference(*vtable_module_within, *fake_stereo_rendering_vtable); 
+    for (auto ref = utility::scan_displacement_reference(*vtable_module_within, *fake_stereo_rendering_vtable); 
         ref.has_value();
-        ref = utility::scan_reference((uintptr_t)*ref + 4, (module_end - *ref) - sizeof(void*), *fake_stereo_rendering_vtable)) 
+        ref = utility::scan_displacement_reference((uintptr_t)*ref + 4, (module_end - *ref) - sizeof(void*), *fake_stereo_rendering_vtable)) 
     {
         const auto distance_from_constructor = *ref - *fake_stereo_rendering_constructor;
 

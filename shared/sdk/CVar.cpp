@@ -23,7 +23,7 @@ std::optional<uintptr_t> find_alternate_cvar_ref(std::wstring_view str, uint32_t
 
     const auto module_base = (uintptr_t)module;
     const auto module_size = utility::get_module_size(module);
-    auto str_ref = utility::scan_reference(module, *str_data);
+    auto str_ref = utility::scan_displacement_reference(module, *str_data);
     std::optional<uintptr_t> result{};
 
     while (str_ref) {
@@ -49,7 +49,7 @@ std::optional<uintptr_t> find_alternate_cvar_ref(std::wstring_view str, uint32_t
         }
 
         const auto delta = *module_size - ((*str_ref + 1) - module_base);
-        str_ref = utility::scan_reference(*str_ref + 1, delta, *str_data);
+        str_ref = utility::scan_displacement_reference(*str_ref + 1, delta, *str_data);
     }
 
     if (!result) {
@@ -146,7 +146,7 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::ws
 
     // This scans for the cvar description string ref.
     if (!str_ref) {
-        str_ref = utility::scan_reference(module, *str_data);
+        str_ref = utility::scan_displacement_reference(module, *str_data);
 
         if (!str_ref) {
             spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
@@ -171,7 +171,7 @@ std::optional<uintptr_t> vr::get_enable_stereo_emulation_cvar() {
             return std::nullopt;
         }
 
-        const auto str_ref = utility::scan_relative_reference_displacement(module, *str);
+        const auto str_ref = utility::scan_displacement_reference(module, *str);
 
         if (!str_ref) {
             spdlog::error("Failed to find r.EnableStereoEmulation string reference!");
