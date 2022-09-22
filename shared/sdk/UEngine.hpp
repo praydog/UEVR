@@ -3,6 +3,7 @@
 namespace sdk {
 class UEngine {
 public:
+    static UEngine** get_lvalue();
     static UEngine* get();
 
 public:

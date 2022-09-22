@@ -179,11 +179,15 @@ private:
     static IStereoRenderTargetManager* get_render_target_manager_hook(FFakeStereoRendering* stereo);
     static IStereoLayers* get_stereo_layers_hook(FFakeStereoRendering* stereo);
 
+    static void post_calculate_stereo_projection_matrix(safetyhook::Context& ctx);
+
     std::unique_ptr<safetyhook::InlineHook> m_tick_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_adjust_view_rect_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_calculate_stereo_view_offset_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_calculate_stereo_projection_matrix_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_render_texture_render_thread_hook{};
+
+    std::unique_ptr<safetyhook::MidHook> m_calculate_stereo_projection_matrix_post_hook{};
 
     std::unique_ptr<PointerHook> m_is_stereo_enabled_hook{};
     std::unique_ptr<PointerHook> m_get_render_target_manager_hook{};
@@ -205,6 +209,7 @@ private:
     bool m_pixel_format_cvar_found{false};
     bool m_injected_stereo_at_runtime{false};
     bool m_has_double_precision{false}; // for the projection matrix... AND the view offset... IS UE5 DOING THIS NOW???
+    bool m_fixed_localplayer_view_count{false};
 
     struct FallbackDevice {
         void* vtable;

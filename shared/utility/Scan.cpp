@@ -391,4 +391,28 @@ namespace utility {
 
         return find_virtual_function_start(*str_ref);
     }
+
+    std::optional<uintptr_t> resolve_displacement(uintptr_t ip) {
+        const auto ix = decode_one((uint8_t*)ip);
+
+        if (!ix) {
+            spdlog::error("Failed to decode instruction at 0x{:x}", ip);
+            return std::nullopt;
+        }
+
+        for (auto i = 0; i < ix->OperandsCount; ++i) {
+            const auto& operand = ix->Operands[i];
+
+            if (operand.Type == ND_OP_MEM) {
+                const auto& mem = operand.Info.Memory;
+                if (mem.HasDisp) {
+                    return ip + ix->Length + mem.Disp;
+                }
+            }
+        }
+
+        spdlog::error("Failed to resolve displacement for instruction at 0x{:x}", ip);
+
+        return std::nullopt;
+    }
 }

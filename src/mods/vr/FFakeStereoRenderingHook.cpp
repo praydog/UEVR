@@ -99,12 +99,20 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick() {
     auto builder = factory->acquire();
 
     m_tick_hook = builder.create_inline((void*)*func, +[](sdk::UGameEngine* engine, float delta, bool idle) {
+        static bool once = true;
+
+        if (once) {
+            spdlog::info("First time calling UGameEngine::Tick!");
+            once = false;
+        }
+
         g_hook->attempt_hooking();        
         g_hook->m_tick_hook->call<void*>(engine, delta, idle);
     });
 
     m_hooked_game_engine_tick = true;
 }
+
 bool FFakeStereoRenderingHook::hook() {
     spdlog::info("Entering FFakeStereoRenderingHook::hook");
 
@@ -796,7 +804,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
     if (!is_stereo_rendering_device_setup()) {
         spdlog::info("Calling InitializeHMDDevice...");
 
-        utility::ThreadSuspender _{};
+        //utility::ThreadSuspender _{};
 
         engine->initialize_hmd_device();
 
@@ -825,6 +833,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
         }
     } else {
         spdlog::info("Not necessary to call InitializeHMDDevice, stereo rendering device is already setup.");
+        m_fixed_localplayer_view_count = true; // Everything was set up beforehand, we don't need to do anything, so just set it to true.
     }
 
     return true;
@@ -969,8 +978,23 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
 Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("calculate stereo projection matrix called! {} from {:x}", view_index, (uintptr_t)_ReturnAddress());
+    spdlog::info("calculate stereo projection matrix called! {} from {:x}", view_index, (uintptr_t)_ReturnAddress() - (uintptr_t)utility::get_module_within((uintptr_t)_ReturnAddress()).value_or(nullptr));
 #endif
+
+    if (!g_hook->m_fixed_localplayer_view_count) {
+        if (g_hook->m_calculate_stereo_projection_matrix_post_hook == nullptr) {
+            spdlog::info("Inserting midhook after CalculateStereoProjectionMatrix...");
+
+            auto factory = SafetyHookFactory::init();
+            auto builder = factory->acquire();
+
+            const auto return_address = (uintptr_t)_ReturnAddress();
+            g_hook->m_calculate_stereo_projection_matrix_post_hook = builder.create_mid((void*)return_address, &FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix);
+        }
+    } else if (g_hook->m_calculate_stereo_projection_matrix_post_hook != nullptr) {
+        spdlog::info("Removing midhook after CalculateStereoProjectionMatrix, job is done...");
+        g_hook->m_calculate_stereo_projection_matrix_post_hook.reset();
+    }
 
     static bool index_starts_from_one = true;
 
@@ -1141,6 +1165,126 @@ IStereoLayers* FFakeStereoRenderingHook::get_stereo_layers_hook(FFakeStereoRende
     }
 
     return nullptr;
+}
+
+void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhook::Context& ctx) {
+    if (g_hook->m_fixed_localplayer_view_count) {
+        return;
+    }
+
+    const auto vfunc = utility::find_virtual_function_start(g_hook->m_calculate_stereo_projection_matrix_post_hook->target());
+
+    if (!vfunc) {
+        g_hook->m_fixed_localplayer_view_count = true;
+        spdlog::error("Failed to find virtual function start for post calculate_stereo_projection_matrix!");
+        return;
+    }
+
+    // Scan forward until we find an assignment of the RCX register into a storage register.
+    std::unordered_map<uint32_t, uintptr_t*> register_to_context {
+        { NDR_RBX, &ctx.rbx },
+        { NDR_RCX, &ctx.rcx },
+        { NDR_RDX, &ctx.rdx },
+        { NDR_RSI, &ctx.rsi },
+        { NDR_RDI, &ctx.rdi },
+        { NDR_RBP, &ctx.rbp },
+        { NDR_RSP, &ctx.rsp },
+        { NDR_R8, &ctx.r8 },
+        { NDR_R9, &ctx.r9 },
+        { NDR_R10, &ctx.r10 },
+        { NDR_R11, &ctx.r11 },
+        { NDR_R12, &ctx.r12 },
+        { NDR_R13, &ctx.r13 },
+        { NDR_R14, &ctx.r14 },
+        { NDR_R15, &ctx.r15 },
+    };
+
+    INSTRUX ix{};
+    std::optional<uint32_t> found_register{};
+    auto ip = (uint8_t*)vfunc.value_or(0);
+
+    while (true) {
+        const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
+
+        if (!ND_SUCCESS(status)) {
+            spdlog::info("Decoding failed with error {:x}!", (uint32_t)status);
+            break;
+        }
+
+        if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_REG && ix.Operands[1].Type == ND_OP_REG && ix.Operands[1].Info.Register.Reg == NDR_RCX) {
+            spdlog::info("Found assignment of RCX to storage register at {:x} ({})!", (uintptr_t)ip, ix.Operands[0].Info.Register.Reg);
+            found_register = ix.Operands[0].Info.Register.Reg;
+            break;
+        }
+
+        ip += ix.Length;
+    }
+
+    if (!found_register) {
+        g_hook->m_fixed_localplayer_view_count = true;
+        spdlog::error("Failed to find assignment of RCX to storage register!");
+        return;
+    }
+
+    const auto localplayer = *register_to_context[found_register.value_or(0)];
+    spdlog::info("Local player: {:x}", localplayer);
+    spdlog::info("Searching for PostInitProperties virtual function...");
+
+    std::optional<uint32_t> idx{};
+    const auto engine = sdk::UEngine::get_lvalue();
+
+    for (auto i = 1; i < 25; ++i) {
+        const auto vfunc = (*(uintptr_t**)localplayer)[i];
+
+        if (vfunc == 0 || IsBadReadPtr((void*)vfunc, 1)) {
+            spdlog::error("Encountered invalid vfunc at index {}!", i);
+            break;
+        }
+
+        spdlog::info("Scanning vfunc at index {} ({:x})...", i, vfunc);
+
+        ip = (uint8_t*)vfunc;
+
+        for (auto j = 0; j < 25; ++j) {
+            const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
+
+            if (!ND_SUCCESS(status)) {
+                spdlog::info("Decoding failed with error {:x}!", (uint32_t)status);
+                break;
+            }
+
+            if (ix.Instruction == ND_INS_RETN || ix.Instruction == ND_INS_INT3 || ix.Instruction == ND_INS_JMPFD || ix.Instruction == ND_INS_JMPFI) {
+                break;
+            }
+
+            // PostInitProperties for the player always accesses GEngine->StereoRenderingDevice
+            // none of the other early vfuncs will do this.
+            if (utility::resolve_displacement((uintptr_t)ip).value_or(0) == (uintptr_t)engine) {
+                spdlog::info("Found PostInitProperties at {:x}!", (uintptr_t)ip + j);
+                idx = i;
+                break;
+            }
+
+            ip += ix.Length;
+        }
+    }
+
+    if (!idx) {
+        spdlog::error("Failed to find PostInitProperties virtual function! A crash may occur!");
+    }
+
+    // Now call PostInitProperties.
+    // The purpose of this is setting up the view for the other eye.
+    // Just creating the StereoRenderingDevice does not automatically do it, so we have to do it manually.
+    // Usually the game just calls this function near startup after calling InitializeHMDDevice.
+    if (idx) {
+        spdlog::info("Calling PostInitProperties on local player!");
+
+        const void (*post_init_properties)(uintptr_t) = (*(decltype(post_init_properties)**)localplayer)[*idx];
+        post_init_properties(localplayer);
+    }
+
+    g_hook->m_fixed_localplayer_view_count = true;
 }
 
 void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const FViewport& vp, class SViewport* vp_widget) {

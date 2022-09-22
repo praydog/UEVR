@@ -10,7 +10,7 @@
 #include "UEngine.hpp"
 
 namespace sdk {
-UEngine* UEngine::get() {
+UEngine** UEngine::get_lvalue() {
     static auto engine = []() -> UEngine** {
         spdlog::info("Attempting to locate GEngine...");
 
@@ -50,6 +50,12 @@ UEngine* UEngine::get() {
         spdlog::error("Failed to find GEngine!");
         return nullptr;
     }();
+
+    return engine;
+}
+
+UEngine* UEngine::get() {
+    auto engine = get_lvalue();
 
     if (engine == nullptr) {
         return nullptr;
