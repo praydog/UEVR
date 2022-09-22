@@ -815,8 +815,12 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
 
             // We don't call this before because the cvar will not be set up
             // until it's referenced once. after we set this we need to call the function again.
-            *(int32_t*)(*(uintptr_t*)*enable_stereo_emulation_cvar + 0x0) = 1;
-            *(int32_t*)(*(uintptr_t*)*enable_stereo_emulation_cvar + 0x4) = 1;
+            if (enable_stereo_emulation_cvar && *enable_stereo_emulation_cvar != 0) {
+                *(int32_t*)(*(uintptr_t*)*enable_stereo_emulation_cvar + 0x0) = 1;
+                *(int32_t*)(*(uintptr_t*)*enable_stereo_emulation_cvar + 0x4) = 1;
+            } else {
+                spdlog::error("Failed to locate r.EnableStereoEmulation cvar, next call may fail.");
+            }
 
             spdlog::info("Calling InitializeHMDDevice... AGAIN");
 
