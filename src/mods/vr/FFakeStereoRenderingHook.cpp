@@ -843,6 +843,14 @@ bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("is stereo enabled called!");
 #endif
+    static uint32_t count = 0;
+
+    // Forcefully return true the first few times to let stuff initialize.
+    if (count < 50) {
+        ++count;
+        return true;
+    }
+
     return !VR::get()->get_runtime()->got_first_sync || VR::get()->is_hmd_active();
 }
 
