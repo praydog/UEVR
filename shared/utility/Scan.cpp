@@ -434,10 +434,17 @@ namespace utility {
 
             if (operand.Type == ND_OP_MEM) {
                 const auto& mem = operand.Info.Memory;
-                if (mem.HasDisp) {
+                if (mem.HasDisp && mem.IsRipRel) {
                     return ip + ix->Length + mem.Disp;
                 }
+            } else if (operand.Type == ND_OP_OFFS) {
+                const auto& offs = operand.Info.RelativeOffset;
+                return ip + ix->Length + (intptr_t)offs.Rel;
             }
+        }
+
+        if (ix->HasDisp) {
+            return ip + ix->Length + ix->Displacement;
         }
 
         return std::nullopt;
