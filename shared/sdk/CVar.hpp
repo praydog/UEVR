@@ -13,10 +13,13 @@ namespace sdk {
 // the description is only referenced once, in the cvar registration function
 std::optional<uintptr_t> find_alternate_cvar_ref(std::wstring_view str, uint32_t known_default, HMODULE module);
 
-std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring_view str);
-std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::wstring_view cvar_name, uint32_t known_default, HMODULE module);
+std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring_view str, bool stop_at_first_mov = false);
+std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::wstring_view cvar_name, uint32_t known_default, HMODULE module, bool stop_at_first_mov = false);
 
 namespace vr {
 std::optional<uintptr_t> get_enable_stereo_emulation_cvar();
+std::optional<uintptr_t> get_slate_draw_to_vr_render_target_real_cvar();
+std::optional<uintptr_t> get_slate_draw_to_vr_render_target_cvar();
+std::optional<uintptr_t> get_slate_draw_to_vr_render_target_usage_location();
 }
 }

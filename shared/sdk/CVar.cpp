@@ -1,4 +1,5 @@
 #include <array>
+#include <string_view>
 
 #include <spdlog/spdlog.h>
 #include <utility/Scan.hpp>
@@ -60,7 +61,7 @@ std::optional<uintptr_t> find_alternate_cvar_ref(std::wstring_view str, uint32_t
     return result;
 }
 
-std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring_view str) {
+std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring_view str, bool stop_at_first_mov) {
     const auto cvar_creation_ref = utility::scan_mnemonic(start, 100, "CALL");
 
     if (!cvar_creation_ref) {
@@ -68,7 +69,8 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
         return std::nullopt;
     }
 
-    auto raw_cvar_ref = utility::scan_mnemonic(*cvar_creation_ref + utility::get_insn_size(*cvar_creation_ref), 100, "CALL");
+    auto raw_cvar_ref = !stop_at_first_mov ? 
+                        utility::scan_mnemonic(*cvar_creation_ref + utility::get_insn_size(*cvar_creation_ref), 100, "CALL") : cvar_creation_ref;
 
     if (!raw_cvar_ref) {
         spdlog::error("Failed to find raw cvar reference for {}", utility::narrow(str.data()));
@@ -80,7 +82,7 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
 
     // we need to check that the reference uses a register in its operand
     // otherwise it's the wrong call. find the next call if it is.
-    if (decoded_ref) {
+    if (decoded_ref && !stop_at_first_mov) {
         for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
             spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
         }
@@ -129,7 +131,7 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
     return std::nullopt;
 }
 
-std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::wstring_view cvar_name, uint32_t known_default, HMODULE module) {
+std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::wstring_view cvar_name, uint32_t known_default, HMODULE module, bool stop_at_first_mov) {
     auto str_data = utility::scan_string(module, str.data());
 
     std::optional<uintptr_t> str_ref{};
@@ -156,7 +158,7 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::ws
         spdlog::info("Found string ref for \"{}\" at {:x}", utility::narrow(str.data()), *str_ref);
     }
 
-    return resolve_cvar_from_address(*str_ref + 4, cvar_name);
+    return resolve_cvar_from_address(*str_ref + 4, cvar_name, stop_at_first_mov);
 }
 
 std::optional<uintptr_t> vr::get_enable_stereo_emulation_cvar() {
@@ -187,5 +189,111 @@ std::optional<uintptr_t> vr::get_enable_stereo_emulation_cvar() {
     }();
 
     return enable_stereo_emulation_cvar;
+}
+
+std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_real_cvar() {
+    static auto cvar = []() -> std::optional<uintptr_t> {
+        spdlog::info("Attempting to locate Slate.DrawToVRRenderTarget cvar...");
+
+        const auto module = sdk::get_ue_module(L"SlateRHIRenderer");
+        const auto str = utility::scan_string(module, L"Slate.DrawToVRRenderTarget");
+
+        if (!str) {
+            spdlog::error("Failed to find Slate.DrawToVRRenderTarget string!");
+            return std::nullopt;
+        }
+
+        const auto str_ref = utility::scan_displacement_reference(module, *str);
+
+        if (!str_ref) {
+            spdlog::error("Failed to find Slate.DrawToVRRenderTarget string reference!");
+            return std::nullopt;
+        }
+
+        const auto result = sdk::resolve_cvar_from_address(*str_ref + 4, L"Slate.DrawToVRRenderTarget", true);
+
+        if (result) {
+            spdlog::info("Found Slate.DrawToVRRenderTarget at {:x}", (uintptr_t)*result);
+        }
+
+        return result;
+    }();
+
+    return cvar;
+}
+
+std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_cvar() {
+    const auto cvar = get_slate_draw_to_vr_render_target_real_cvar();
+
+    if (!cvar) {
+        return std::nullopt;
+    }
+
+    return *cvar + sizeof(void*);
+}
+
+std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_usage_location() {
+    static auto result = []() -> std::optional<uintptr_t> {
+        spdlog::info("Scanning for Slate.DrawToVRRenderTarget usage...");
+
+        const auto cvar = get_slate_draw_to_vr_render_target_real_cvar();
+
+        if (!cvar) {
+            return std::nullopt;
+        }
+
+        const auto module = sdk::get_ue_module(L"SlateRHIRenderer");
+        const auto module_size = utility::get_module_size(module).value_or(0);
+        const auto module_end = (uintptr_t)module + module_size;
+
+        for (auto ref = utility::scan_displacement_reference(module, *cvar); 
+            ref; 
+            ref = utility::scan_displacement_reference(*ref + 1, (module_end - (*ref + 1)), *cvar)) 
+        {
+            spdlog::info("Checking if Slate.DrawToVRRenderTarget is used at {:x}", *ref);
+
+            const auto resolved = utility::resolve_instruction(*ref);
+            if (!resolved) {
+                spdlog::error("Failed to resolve instruction at {:x}", *ref);
+                continue;
+            }
+
+            if (resolved->instrux.Operands[0].Type == ND_OP_MEM && resolved->instrux.Operands[1].Type == ND_OP_REG) {
+                spdlog::info("Instruction at {:x} is not a usage of Slate.DrawToVRRenderTarget", *ref);
+                continue; // this is NOT what we want
+            }
+
+            // check if the distance to the nearest ret is far away, which means
+            // it's the slate function we're looking for
+            uint32_t count = 0;
+
+            auto ix = utility::decode_one((uint8_t*)resolved->addr);
+
+            for (auto ip = (uint8_t*)resolved->addr; ix = utility::decode_one(ip); ip += ix->Length) {
+                if (std::string_view{ix->Mnemonic}.starts_with("RET") || std::string_view{ix->Mnemonic}.starts_with("INT3")) {
+                    spdlog::info("Found RET at {:x}", (uintptr_t)ip);
+                    break;
+                }
+
+                if (ix->Instruction == ND_INS_JMPFI || ix->Instruction == ND_INS_JMPFD) {
+                    spdlog::info("Found JMPFI/JMPFD at {:x}", (uintptr_t)ip);
+                    break;
+                }
+
+                ++count;
+
+                if (count >= 50) {
+                    spdlog::info("Located Slate.DrawToVRRenderTarget usage at {:x}", (uintptr_t)resolved->addr);
+                    return resolved->addr;
+                }
+            }
+        }
+
+        spdlog::error("Failed to locate Slate.DrawToVRRenderTarget usage!");
+
+        return std::nullopt;
+    }();
+
+    return result;
 }
 }

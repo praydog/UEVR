@@ -292,10 +292,12 @@ set(sdk_SOURCES "")
 list(APPEND sdk_SOURCES
 	"shared/sdk/CVar.cpp"
 	"shared/sdk/EngineModule.cpp"
+	"shared/sdk/Slate.cpp"
 	"shared/sdk/UEngine.cpp"
 	"shared/sdk/UGameEngine.cpp"
 	"shared/sdk/CVar.hpp"
 	"shared/sdk/EngineModule.hpp"
+	"shared/sdk/Slate.hpp"
 	"shared/sdk/UEngine.hpp"
 	"shared/sdk/UGameEngine.hpp"
 )
