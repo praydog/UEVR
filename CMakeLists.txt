@@ -159,23 +159,52 @@ unset(CMKR_SOURCES)
 set(CMKR_TARGET openvr)
 set(openvr_SOURCES "")
 
+list(APPEND openvr_SOURCES
+	"dependencies/openvr/src/jsoncpp.cpp"
+	"dependencies/openvr/src/openvr_api_public.cpp"
+	"dependencies/openvr/src/vrcommon/dirtools_public.cpp"
+	"dependencies/openvr/src/vrcommon/envvartools_public.cpp"
+	"dependencies/openvr/src/vrcommon/hmderrors_public.cpp"
+	"dependencies/openvr/src/vrcommon/pathtools_public.cpp"
+	"dependencies/openvr/src/vrcommon/sharedlibtools_public.cpp"
+	"dependencies/openvr/src/vrcommon/strtools_public.cpp"
+	"dependencies/openvr/src/vrcommon/vrpathregistry_public.cpp"
+	"dependencies/openvr/src/vrcommon/dirtools_public.cpp"
+	"dependencies/openvr/src/vrcommon/envvartools_public.cpp"
+	"dependencies/openvr/src/vrcommon/hmderrors_public.cpp"
+	"dependencies/openvr/src/vrcommon/pathtools_public.cpp"
+	"dependencies/openvr/src/vrcommon/sharedlibtools_public.cpp"
+	"dependencies/openvr/src/vrcommon/strtools_public.cpp"
+	"dependencies/openvr/src/vrcommon/vrpathregistry_public.cpp"
+)
+
+list(APPEND openvr_SOURCES
+	cmake.toml
+)
+
 set(CMKR_SOURCES ${openvr_SOURCES})
-add_library(openvr INTERFACE)
+add_library(openvr SHARED)
 
 if(openvr_SOURCES)
-	target_sources(openvr INTERFACE ${openvr_SOURCES})
+	target_sources(openvr PRIVATE ${openvr_SOURCES})
 endif()
 
-target_include_directories(openvr INTERFACE
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${openvr_SOURCES})
+
+add_library(openvr_api ALIAS openvr)
+target_compile_definitions(openvr PUBLIC
+	VR_API_PUBLIC
+	WIN64
+)
+
+target_include_directories(openvr PUBLIC
 	"dependencies/openvr/headers"
 )
 
-target_link_libraries(openvr INTERFACE
-	"${CMAKE_SOURCE_DIR}/dependencies/openvr/lib/win64/openvr_api.lib"
+set_target_properties(openvr PROPERTIES
+	OUTPUT_NAME
+		openvr_api
 )
-
-file(COPY dependencies/openvr/lib/win64/openvr_api.lib DESTINATION ${CMAKE_BINARY_DIR}/lib)
-file(COPY dependencies/openvr/bin/win64/openvr_api.dll DESTINATION ${CMAKE_BINARY_DIR}/bin)
 
 unset(CMKR_TARGET)
 unset(CMKR_SOURCES)
@@ -435,7 +464,7 @@ target_link_libraries(ue4poc PUBLIC
 	winhttp
 	glm_static
 	imgui
-	openvr
+	openvr_api
 	openxr_loader
 	nlohmann_json
 )
@@ -458,6 +487,10 @@ set_target_properties(ue4poc PROPERTIES
 	ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO
 		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
 )
+
+add_custom_command(
+    TARGET ue4poc POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openvr> $<TARGET_FILE_DIR:ue4poc>)
 
 unset(CMKR_TARGET)
 unset(CMKR_SOURCES)

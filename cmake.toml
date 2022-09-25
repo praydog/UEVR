@@ -56,15 +56,14 @@ git = "https://github.com/nlohmann/json"
 tag = "bc889afb4c5bf1c0d8ee29ef35eaaf4c8bef8a5d"
 
 [target.openvr]
-type = "interface"
+type = "shared"
+sources = ["dependencies/openvr/src/**.cpp", "dependencies/openvr/src/vrcommon/**.cpp"]
 include-directories = ["dependencies/openvr/headers"]
-link-libraries = [
-    "${CMAKE_SOURCE_DIR}/dependencies/openvr/lib/win64/openvr_api.lib",
-]
-cmake-after = """
-file(COPY dependencies/openvr/lib/win64/openvr_api.lib DESTINATION ${CMAKE_BINARY_DIR}/lib)
-file(COPY dependencies/openvr/bin/win64/openvr_api.dll DESTINATION ${CMAKE_BINARY_DIR}/bin)
-"""
+compile-definitions = ["VR_API_PUBLIC", "WIN64"]
+alias = "openvr_api"
+
+[target.openvr.properties]
+OUTPUT_NAME = "openvr_api"
 
 [target.imgui]
 type = "static"
@@ -124,10 +123,15 @@ link-libraries = [
     "winhttp",
     "glm_static",
     "imgui",
-    "openvr",
+    "openvr_api",
     "openxr_loader",
     "nlohmann_json"
 ]
+cmake-after="""
+add_custom_command(
+    TARGET ue4poc POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openvr> $<TARGET_FILE_DIR:ue4poc>)
+"""
 
 [target.ue4poc.properties]
 OUTPUT_NAME = "dinput8"

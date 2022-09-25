@@ -24,7 +24,7 @@ jobs:
         uses: actions/upload-artifact@v2.3.1
         with:
           name: ${{matrix.target}}
-          path: ${{github.workspace}}/build/bin/${{matrix.target}}/dinput8.dll
+          path: ${{github.workspace}}/build/bin/${{matrix.target}}/*
           if-no-files-found: error
 
       - name: Compress release
