@@ -9,7 +9,7 @@
 #include <array>
 
 #include <spdlog/spdlog.h>
-#include "Math.hpp"
+#include <sdk/Math.hpp>
 
 struct VRRuntime {
     enum class Error : int64_t {

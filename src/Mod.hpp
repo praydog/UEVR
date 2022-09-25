@@ -9,7 +9,7 @@
 #include <imgui.h>
 #include <utility/Config.hpp>
 
-#include "Math.hpp"
+#include <sdk/Math.hpp>
 
 class IModValue {
 public:

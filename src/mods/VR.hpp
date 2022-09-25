@@ -3,7 +3,7 @@
 #include <memory>
 #include <string>
 
-#include "Math.hpp"
+#include <sdk/Math.hpp>
 
 #include "vr/runtimes/OpenVR.hpp"
 #include "vr/runtimes/OpenXR.hpp"

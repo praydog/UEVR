@@ -96,7 +96,8 @@ link-libraries = [
     "spdlog",
     "utility",
     "bddisasm",
-    "bdshemu"
+    "bdshemu",
+    "glm_static"
 ]
 
 [target.ue4poc]

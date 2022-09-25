@@ -322,11 +322,15 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/CVar.cpp"
 	"shared/sdk/EngineModule.cpp"
 	"shared/sdk/Slate.cpp"
+	"shared/sdk/StereoStuff.cpp"
 	"shared/sdk/UEngine.cpp"
 	"shared/sdk/UGameEngine.cpp"
 	"shared/sdk/CVar.hpp"
+	"shared/sdk/DynamicRHI.hpp"
 	"shared/sdk/EngineModule.hpp"
+	"shared/sdk/Math.hpp"
 	"shared/sdk/Slate.hpp"
+	"shared/sdk/StereoStuff.hpp"
 	"shared/sdk/UEngine.hpp"
 	"shared/sdk/UGameEngine.hpp"
 )
@@ -362,6 +366,7 @@ target_link_libraries(sdk PUBLIC
 	utility
 	bddisasm
 	bdshemu
+	glm_static
 )
 
 unset(CMKR_TARGET)
@@ -386,7 +391,6 @@ list(APPEND ue4poc_SOURCES
 	"src/mods/vr/D3D12Component.cpp"
 	"src/mods/vr/FFakeStereoRenderingHook.cpp"
 	"src/mods/vr/OverlayComponent.cpp"
-	"src/mods/vr/StereoStuff.cpp"
 	"src/mods/vr/runtimes/OpenVR.cpp"
 	"src/mods/vr/runtimes/OpenXR.cpp"
 	"src/ue4poc-imgui/imgui_impl_dx11.cpp"
@@ -395,7 +399,6 @@ list(APPEND ue4poc_SOURCES
 	"src/ExceptionHandler.hpp"
 	"src/Framework.hpp"
 	"src/LicenseStrings.hpp"
-	"src/Math.hpp"
 	"src/Mod.hpp"
 	"src/Mods.hpp"
 	"src/hooks/D3D11Hook.hpp"
@@ -407,7 +410,6 @@ list(APPEND ue4poc_SOURCES
 	"src/mods/vr/D3D12Component.hpp"
 	"src/mods/vr/FFakeStereoRenderingHook.hpp"
 	"src/mods/vr/OverlayComponent.hpp"
-	"src/mods/vr/StereoStuff.hpp"
 	"src/mods/vr/runtimes/OpenVR.hpp"
 	"src/mods/vr/runtimes/OpenXR.hpp"
 	"src/mods/vr/runtimes/VRRuntime.hpp"

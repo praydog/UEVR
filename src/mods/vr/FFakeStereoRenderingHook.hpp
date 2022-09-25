@@ -6,7 +6,7 @@
 
 #include <utility/PointerHook.hpp>
 
-#include "StereoStuff.hpp"
+#include <sdk/StereoStuff.hpp>
 
 struct FRHICommandListImmediate;
 struct VRRenderTargetManager_418;
