@@ -320,6 +320,7 @@ set(sdk_SOURCES "")
 
 list(APPEND sdk_SOURCES
 	"shared/sdk/CVar.cpp"
+	"shared/sdk/DynamicRHI.cpp"
 	"shared/sdk/EngineModule.cpp"
 	"shared/sdk/Slate.cpp"
 	"shared/sdk/StereoStuff.cpp"

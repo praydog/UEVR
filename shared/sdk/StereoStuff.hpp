@@ -23,6 +23,9 @@ struct FRHITexture2D : FRHITexture {};
 
 struct FTexture2DRHIRef {
     FRHITexture2D* texture; // we dont care about the reference counting utilities of this, so this is just essentially what this struct is.
+    uint32_t ref_count{}; // I think this is where it is anyways.
+private:
+    void* padding;
 };
 
 struct FIntPoint {

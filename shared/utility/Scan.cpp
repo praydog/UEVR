@@ -443,7 +443,7 @@ namespace utility {
             }
         }
 
-        if (ix->HasDisp) {
+        if (ix->HasDisp && ix->IsRipRelative) {
             return ip + ix->Length + ix->Displacement;
         }
 
