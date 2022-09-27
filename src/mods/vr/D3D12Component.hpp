@@ -27,6 +27,8 @@ public:
     auto is_initialized() const { return m_openvr.left_eye_tex[0].texture != nullptr; }
 
     auto& openxr() { return m_openxr; }
+    auto& get_ui_tex() { return m_ui_tex; }
+    auto& get_blank_tex() { return m_blank_tex; }
 
 private:
     void setup();
@@ -58,13 +60,16 @@ private:
     ComPtr<ID3D12Resource> m_prev_backbuffer{};
     std::array<ResourceCopier, 3> m_generic_copiers{};
 
+    struct TextureContext {
+        ResourceCopier copier{};
+        ComPtr<ID3D12Resource> texture{};
+    };
+
+    TextureContext m_ui_tex{};
+    TextureContext m_blank_tex{};
+
     // Mimicking what OpenXR does.
     struct OpenVR {
-        struct TextureContext {
-            ResourceCopier copier{};
-            ComPtr<ID3D12Resource> texture{};
-        };
-
         TextureContext& get_left() {
             auto& ctx = this->left_eye_tex[this->texture_counter % left_eye_tex.size()];
 

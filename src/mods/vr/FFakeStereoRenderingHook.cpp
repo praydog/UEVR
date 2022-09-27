@@ -1412,24 +1412,23 @@ void FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, v
     }
 
     struct FSlateResource {
-        virtual FRHITexture2D* GetTypedResource() = 0;
+        virtual FRHITexture2D* get_typed_resource() = 0;
         FRHITexture2D* resource{};
     };
 
     struct IViewportRenderTargetProvider {
-        virtual FSlateResource* GetViewportRenderTargetTexture() = 0;
+        virtual FSlateResource* get_viewport_render_target_texture() = 0;
     };
 
     // TODO: Automatically figure out the offset for this.
     const auto viewport_rt_provider = *(IViewportRenderTargetProvider**)((uintptr_t)viewport_info + 0xC0);
 
     if (viewport_rt_provider == nullptr) {
-        spdlog::info("No viewport RT handler, skipping!");
         g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
         return;
     }
 
-    const auto slate_resource = viewport_rt_provider->GetViewportRenderTargetTexture();
+    const auto slate_resource = viewport_rt_provider->get_viewport_render_target_texture();
 
     if (slate_resource == nullptr) {
         spdlog::info("No slate resource, skipping!");
@@ -1437,44 +1436,61 @@ void FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, v
         return;
     }
 
-    
-    auto& d3d11_vr = VR::get()->m_d3d11;
+    auto vr = VR::get();
 
-    if (d3d11_vr.get_test_tex().Get() == nullptr || d3d11_vr.get_blank_tex().Get() == nullptr) {
-        spdlog::info("D3D11 UI texture is not set up!");
+    if (g_framework->is_dx11()) {
+        auto& d3d11_vr = vr->m_d3d11;
+
+        if (d3d11_vr.get_ui_tex().Get() == nullptr || d3d11_vr.get_blank_tex().Get() == nullptr) {
+            g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
+            return;
+        }
+
+        // Replace the texture with one we have control over.
+        // This isolates the UI to render on our own texture separate from the scene.
+        const auto old_texture = slate_resource->resource;
+        slate_resource->resource = ui_target;
+
+        d3d11_vr.clear_tex((ID3D11Resource*)ui_target->get_native_resource());
+        
+        // To be seen if we need to resort to a MidHook on this function if the parameters
+        // are wildly different between UE versions.
         g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
-        return;
+
+        // Restore the old texture.
+        slate_resource->resource = old_texture;
+
+        // Copy the texture into our own texture.
+        d3d11_vr.copy_tex((ID3D11Resource*)ui_target->get_native_resource(), d3d11_vr.get_ui_tex().Get());
+    } else {
+        auto& d3d12_vr = vr->m_d3d12;
+
+        if (d3d12_vr.get_ui_tex().texture.Get() == nullptr || d3d12_vr.get_blank_tex().texture.Get() == nullptr) {
+            spdlog::error("D3D12 UI texture is null!");
+            g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
+            return;
+        }
+
+        // Replace the texture with one we have control over.
+        // This isolates the UI to render on our own texture separate from the scene.
+        const auto old_texture = slate_resource->resource;
+        slate_resource->resource = ui_target;
+
+        //d3d12_vr.get_blank_tex().copier.wait(5);
+        //d3d12_vr.get_blank_tex().copier.copy(d3d12_vr.get_blank_tex().texture.Get(), (ID3D12Resource*)ui_target->get_native_resource());
+        //d3d12_vr.get_blank_tex().copier.execute();
+
+        g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
+
+        // Restore the old texture.
+        slate_resource->resource = old_texture;
+
+        // Copy the texture into our own texture.
+        d3d12_vr.get_ui_tex().copier.wait(5);
+        d3d12_vr.get_ui_tex().copier.copy((ID3D12Resource*)ui_target->get_native_resource(), d3d12_vr.get_ui_tex().texture.Get());
+        d3d12_vr.get_ui_tex().copier.copy(d3d12_vr.get_blank_tex().texture.Get(), (ID3D12Resource*)ui_target->get_native_resource());
+        d3d12_vr.get_ui_tex().copier.execute();
     }
-
-    // Replace the texture with one we have control over.
-    // This isolates the UI to render on our own texture separate from the scene.
-    const auto old_texture = slate_resource->resource;
-    slate_resource->resource = ui_target;
-
-    auto& hook = g_framework->get_d3d11_hook();
-    auto device = hook->get_device();
-    ComPtr<ID3D11DeviceContext> context{};
-
-    device->GetImmediateContext(&context);
-
-    context->CopyResource((ID3D11Resource*)ui_target->get_native_resource(), d3d11_vr.get_blank_tex().Get());
-    
-    // To be seen if we need to resort to a MidHook on this function if the parameters
-    // are wildly different between UE versions.
-    g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
-
-    // Restore the old texture.
-    slate_resource->resource = old_texture;
-
-    context->CopyResource(d3d11_vr.get_test_tex().Get(), (ID3D11Resource*)ui_target->get_native_resource());
-
-    /*ComPtr<ID3D11RenderTargetView> rtv{};
-
-    // Create a render target view for the texture.
-    device->CreateRenderTargetView((ID3D11Resource*)ui_target->get_native_resource(), nullptr, &rtv);
-    const float color[4]{ 0.0f, 0.0f, 0.0f, 0.0f };
-    context->ClearRenderTargetView(rtv.Get(), color);
-    context->OMSetRenderTargets(1, rtv.GetAddressOf(), nullptr);*/
 }
 
 void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const FViewport& vp, class SViewport* vp_widget) {

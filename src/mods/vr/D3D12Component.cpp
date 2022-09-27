@@ -270,6 +270,25 @@ void D3D12Component::setup() {
     m_backbuffer_size[0] = backbuffer_desc.Width;
     m_backbuffer_size[1] = backbuffer_desc.Height;
 
+    // Set up the UI texture.
+    backbuffer_desc.Width = (uint32_t)g_framework->get_d3d12_rt_size().x;
+    backbuffer_desc.Height = (uint32_t)g_framework->get_d3d12_rt_size().y;
+
+    if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &backbuffer_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+            IID_PPV_ARGS(&m_ui_tex.texture)))) {
+        spdlog::error("[VR] Failed to create UI texture.");
+        return;
+    }
+
+    if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &backbuffer_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+            IID_PPV_ARGS(&m_blank_tex.texture)))) {
+        spdlog::error("[VR] Failed to create blank UI texture.");
+        return;
+    }
+
+    m_ui_tex.copier.setup();
+    m_blank_tex.copier.setup();
+
     spdlog::info("[VR] d3d12 textures have been setup");
     m_force_reset = false;
 }

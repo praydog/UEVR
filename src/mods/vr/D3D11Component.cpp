@@ -113,7 +113,6 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         if (runtime->is_openvr()) {
             // Copy the back buffer to the right eye texture.
             context->CopyResource(m_right_eye_tex.Get(), backbuffer.Get());
-            //context->CopyResource(m_right_eye_tex.Get(), m_test_tex.Get());
 
             auto openvr = vr->get_runtime<runtimes::OpenVR>();
             const auto submit_pose = openvr->get_pose_for_submit();
@@ -160,7 +159,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 void D3D11Component::on_reset(VR* vr) {
     m_left_eye_tex.Reset();
     m_right_eye_tex.Reset();
-    m_test_tex.Reset();
+    m_ui_tex.Reset();
     m_blank_tex.Reset();
     m_left_eye_depthstencil.Reset();
     m_right_eye_depthstencil.Reset();
@@ -170,6 +169,26 @@ void D3D11Component::on_reset(VR* vr) {
             m_openxr.create_swapchains();
         }
     }
+}
+
+void D3D11Component::clear_tex(ID3D11Resource* rsrc) {
+    auto& hook = g_framework->get_d3d11_hook();
+    auto device = hook->get_device();
+
+    ComPtr<ID3D11DeviceContext> context{};
+    device->GetImmediateContext(&context);
+
+    context->CopyResource(rsrc, get_blank_tex().Get());
+}
+
+void D3D11Component::copy_tex(ID3D11Resource* src, ID3D11Resource* dst) {
+    auto& hook = g_framework->get_d3d11_hook();
+    auto device = hook->get_device();
+
+    ComPtr<ID3D11DeviceContext> context{};
+    device->GetImmediateContext(&context);
+
+    context->CopyResource(dst, src);
 }
 
 void D3D11Component::setup() {
@@ -211,7 +230,7 @@ void D3D11Component::setup() {
 
     backbuffer_desc.Width = (uint32_t)g_framework->get_d3d11_rt_size().x;
     backbuffer_desc.Height = (uint32_t)g_framework->get_d3d11_rt_size().y;
-    device->CreateTexture2D(&backbuffer_desc, nullptr, &m_test_tex);
+    device->CreateTexture2D(&backbuffer_desc, nullptr, &m_ui_tex);
     device->CreateTexture2D(&backbuffer_desc, nullptr, &m_blank_tex);
 
     // copy backbuffer into right eye

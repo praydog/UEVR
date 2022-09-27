@@ -177,19 +177,25 @@ void OverlayComponent::update_slate() {
     vr::VROverlay()->SetOverlayTransformAbsolute(m_slate_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
 
     if (is_d3d11) {
-        vr::Texture_t imgui_tex{(void*)vr->m_d3d11.get_test_tex().Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
-        vr::VROverlay()->SetOverlayTexture(m_slate_overlay_handle, &imgui_tex);   
-    } else {
-        /*auto& hook = g_framework->get_d3d12_hook();
+        if (vr->m_d3d11.get_ui_tex().Get() == nullptr) {
+            return;
+        }
 
-        vr::D3D12TextureData_t texture_data {
-            g_framework->get_rendertarget_d3d12().Get(),
-            hook->get_command_queue(),
+        vr::Texture_t ui_tex{(void*)vr->m_d3d11.get_ui_tex().Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
+        vr::VROverlay()->SetOverlayTexture(m_slate_overlay_handle, &ui_tex);   
+    } else {
+        if (vr->m_d3d12.get_ui_tex().texture.Get() == nullptr) {
+            return;
+        }
+
+        vr::D3D12TextureData_t overlay_tex {
+            vr->m_d3d12.get_ui_tex().texture.Get(),
+            g_framework->get_d3d12_hook()->get_command_queue(),
             0
         };
-        
-        vr::Texture_t imgui_tex{(void*)&texture_data, vr::TextureType_DirectX12, vr::ColorSpace_Auto};
-        vr::VROverlay()->SetOverlayTexture(m_slate_overlay_handle, &imgui_tex);*/
+
+        vr::Texture_t ui_tex{(void*)&overlay_tex, vr::TextureType_DirectX12, vr::ColorSpace_Auto};
+        vr::VROverlay()->SetOverlayTexture(m_slate_overlay_handle, &ui_tex);   
     }
 }
 

@@ -21,13 +21,16 @@ public:
 
     auto& openxr() { return m_openxr; }
 
-    auto& get_test_tex() { return m_test_tex; }
+    auto& get_ui_tex() { return m_ui_tex; }
     auto& get_blank_tex() { return m_blank_tex; }
+
+    void clear_tex(ID3D11Resource* rsrc);
+    void copy_tex(ID3D11Resource* src, ID3D11Resource* dst);
 
 private:
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
-    ComPtr<ID3D11Texture2D> m_test_tex{};
+    ComPtr<ID3D11Texture2D> m_ui_tex{};
     ComPtr<ID3D11Texture2D> m_blank_tex{};
     ComPtr<ID3D11Texture2D> m_left_eye_tex{};
     ComPtr<ID3D11Texture2D> m_right_eye_tex{};
