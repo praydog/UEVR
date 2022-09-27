@@ -190,7 +190,7 @@ private:
 
     static void post_calculate_stereo_projection_matrix(safetyhook::Context& ctx);
 
-    static void slate_draw_window_render_thread(void* renderer, void* command_list, void* viewport_info, void* elements, void* params);
+    static void* slate_draw_window_render_thread(void* renderer, void* command_list, void* viewport_info, void* elements, void* params, void* unk1, void* unk2);
 
     std::unique_ptr<safetyhook::InlineHook> m_tick_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_adjust_view_rect_hook{};

@@ -1363,10 +1363,15 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
 
             // PostInitProperties for the player always accesses GEngine->StereoRenderingDevice
             // none of the other early vfuncs will do this.
-            if (utility::resolve_displacement((uintptr_t)ip).value_or(0) == (uintptr_t)engine) {
-                spdlog::info("Found PostInitProperties at {} {:x}!", i, (uintptr_t)vfunc);
-                idx = i;
-                break;
+            if (const auto disp = utility::resolve_displacement((uintptr_t)ip); disp) {
+                // the second expression catches UE dynamic/debug builds
+                if (*disp == (uintptr_t)engine || 
+                    (!IsBadReadPtr((void*)*disp, sizeof(void*)) && *(uintptr_t*)*disp == (uintptr_t)*engine)) 
+                {
+                    spdlog::info("Found PostInitProperties at {} {:x}!", i, (uintptr_t)vfunc);
+                    idx = i;
+                    break;
+                }
             }
 
             ip += ix.Length;
@@ -1391,7 +1396,7 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
     g_hook->m_fixed_localplayer_view_count = true;
 }
 
-void FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, void* command_list, void* viewport_info, void* elements, void* params) {
+void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, void* command_list, void* viewport_info, void* elements, void* params, void* unk1, void* unk2) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("SlateRHIRenderer::DrawWindow_RenderThread called!");
 #endif
@@ -1403,12 +1408,15 @@ void FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, v
         spdlog::info("SlateRHIRenderer::DrawWindow_RenderThread called for the first time!");
     }
 
+    if (!VR::get()->is_hmd_active()) {
+        return g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
+    }
+
     const auto ui_target = g_hook->get_render_target_manager()->get_ui_target();
 
     if (ui_target == nullptr) {
         spdlog::info("No UI target, skipping!");
-        g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
-        return;
+        return g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
     }
 
     struct FSlateResource {
@@ -1424,73 +1432,31 @@ void FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, v
     const auto viewport_rt_provider = *(IViewportRenderTargetProvider**)((uintptr_t)viewport_info + 0xC0);
 
     if (viewport_rt_provider == nullptr) {
-        g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
-        return;
+        return g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
     }
 
     const auto slate_resource = viewport_rt_provider->get_viewport_render_target_texture();
 
     if (slate_resource == nullptr) {
         spdlog::info("No slate resource, skipping!");
-        g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
-        return;
+        return g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
     }
 
     auto vr = VR::get();
 
-    if (g_framework->is_dx11()) {
-        auto& d3d11_vr = vr->m_d3d11;
+    // Replace the texture with one we have control over.
+    // This isolates the UI to render on our own texture separate from the scene.
+    const auto old_texture = slate_resource->resource;
+    slate_resource->resource = ui_target;
 
-        if (d3d11_vr.get_ui_tex().Get() == nullptr || d3d11_vr.get_blank_tex().Get() == nullptr) {
-            g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
-            return;
-        }
+    // To be seen if we need to resort to a MidHook on this function if the parameters
+    // are wildly different between UE versions.
+    const auto ret = g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
 
-        // Replace the texture with one we have control over.
-        // This isolates the UI to render on our own texture separate from the scene.
-        const auto old_texture = slate_resource->resource;
-        slate_resource->resource = ui_target;
+    // Restore the old texture.
+    slate_resource->resource = old_texture;
 
-        d3d11_vr.clear_tex((ID3D11Resource*)ui_target->get_native_resource());
-        
-        // To be seen if we need to resort to a MidHook on this function if the parameters
-        // are wildly different between UE versions.
-        g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
-
-        // Restore the old texture.
-        slate_resource->resource = old_texture;
-
-        // Copy the texture into our own texture.
-        d3d11_vr.copy_tex((ID3D11Resource*)ui_target->get_native_resource(), d3d11_vr.get_ui_tex().Get());
-    } else {
-        auto& d3d12_vr = vr->m_d3d12;
-
-        if (d3d12_vr.get_ui_tex().texture.Get() == nullptr || d3d12_vr.get_blank_tex().texture.Get() == nullptr) {
-            spdlog::error("D3D12 UI texture is null!");
-            g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
-            return;
-        }
-
-        // Replace the texture with one we have control over.
-        // This isolates the UI to render on our own texture separate from the scene.
-        const auto old_texture = slate_resource->resource;
-        slate_resource->resource = ui_target;
-
-        //d3d12_vr.get_blank_tex().copier.wait(5);
-        //d3d12_vr.get_blank_tex().copier.copy(d3d12_vr.get_blank_tex().texture.Get(), (ID3D12Resource*)ui_target->get_native_resource());
-        //d3d12_vr.get_blank_tex().copier.execute();
-
-        g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
-
-        // Restore the old texture.
-        slate_resource->resource = old_texture;
-
-        // Copy the texture into our own texture.
-        d3d12_vr.get_ui_tex().copier.wait(5);
-        d3d12_vr.get_ui_tex().copier.copy((ID3D12Resource*)ui_target->get_native_resource(), d3d12_vr.get_ui_tex().texture.Get());
-        d3d12_vr.get_ui_tex().copier.copy(d3d12_vr.get_blank_tex().texture.Get(), (ID3D12Resource*)ui_target->get_native_resource());
-        d3d12_vr.get_ui_tex().copier.execute();
-    }
+    return ret;
 }
 
 void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const FViewport& vp, class SViewport* vp_widget) {
@@ -1560,33 +1526,46 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         spdlog::error("Failed to decode instruction!");
         return;
     }
-
-    // Set up the emulator. We will use it to emulate the function call.
-    // All we need from it is where the function call lands, so we can call it for real.
-    auto emu_ctx = utility::ShemuContext(
-        (uintptr_t)rtm->texture_create_insn_bytes.data(), 
-        rtm->texture_create_insn_bytes.size());
     
-    emu_ctx.ctx->Registers.RegRcx = ctx.rcx;
-    emu_ctx.ctx->Registers.RegRdx = ctx.rdx;
-    emu_ctx.ctx->Registers.RegR8 = ctx.r8;
-    emu_ctx.ctx->Registers.RegR9 = ctx.r9;
-    emu_ctx.ctx->Registers.RegRdi = ctx.rdi;
-    emu_ctx.ctx->Registers.RegRsi = ctx.rsi;
-    emu_ctx.ctx->Registers.RegR10 = ctx.r10;
-    emu_ctx.ctx->Registers.RegR11 = ctx.r11;
-    emu_ctx.ctx->Registers.RegR12 = ctx.r12;
-    emu_ctx.ctx->Registers.RegR13 = ctx.r13;
-    emu_ctx.ctx->Registers.RegR14 = ctx.r14;
-    emu_ctx.ctx->Registers.RegR15 = ctx.r15;
-    emu_ctx.ctx->MemThreshold = 1;
+    // We can't do it to the normal E8 call because the code is not in the same area
+    // so RIP relative calls are not possible through the emulator. will just have to
+    // resolve those manually through disassembly.
+    uintptr_t func_ptr = 0;
 
-    if (emu_ctx.emulate((uintptr_t)rtm->texture_create_insn_bytes.data(), 1) != SHEMU_SUCCESS) {
-        spdlog::error("Failed to emulate instruction!: {} RIP: {:x}", emu_ctx.status, emu_ctx.ctx->Registers.RegRip);
-        return;
+    if (!g_hook->get_render_target_manager()->is_pre_texture_call_e8) {
+        // Set up the emulator. We will use it to emulate the function call.
+        // All we need from it is where the function call lands, so we can call it for real.
+        auto emu_ctx = utility::ShemuContext(
+            (uintptr_t)rtm->texture_create_insn_bytes.data(), 
+            rtm->texture_create_insn_bytes.size());
+
+        emu_ctx.ctx->Registers.RegRcx = ctx.rcx;
+        emu_ctx.ctx->Registers.RegRdx = ctx.rdx;
+        emu_ctx.ctx->Registers.RegR8 = ctx.r8;
+        emu_ctx.ctx->Registers.RegR9 = ctx.r9;
+        emu_ctx.ctx->Registers.RegRdi = ctx.rdi;
+        emu_ctx.ctx->Registers.RegRsi = ctx.rsi;
+        emu_ctx.ctx->Registers.RegR10 = ctx.r10;
+        emu_ctx.ctx->Registers.RegR11 = ctx.r11;
+        emu_ctx.ctx->Registers.RegR12 = ctx.r12;
+        emu_ctx.ctx->Registers.RegR13 = ctx.r13;
+        emu_ctx.ctx->Registers.RegR14 = ctx.r14;
+        emu_ctx.ctx->Registers.RegR15 = ctx.r15;
+        emu_ctx.ctx->MemThreshold = 1;
+
+        if (emu_ctx.emulate((uintptr_t)rtm->texture_create_insn_bytes.data(), 1) != SHEMU_SUCCESS) {
+            spdlog::error("Failed to emulate instruction!: {} RIP: {:x}", emu_ctx.status, emu_ctx.ctx->Registers.RegRip);
+            return;
+        }
+    
+        spdlog::info("Emu landed at {:x}", emu_ctx.ctx->Registers.RegRip);
+        func_ptr = emu_ctx.ctx->Registers.RegRip;
+    } else {
+        const auto target = g_hook->get_render_target_manager()->pre_texture_hook->target();
+        func_ptr = target + 5 + *(int32_t*)&rtm->texture_create_insn_bytes.data()[1];
     }
-    
-    spdlog::info("Emu landed at {:x}", emu_ctx.ctx->Registers.RegRip);
+
+    spdlog::info("Function pointer: {:x}", func_ptr);
 
     /*CodeHolder code{};
     JitRuntime runtime{};
@@ -1731,7 +1710,13 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         a.push(rbx);
 
         a.mov(rcx, ctx.rcx);
-        a.movabs(rdx, (uintptr_t)&out);
+        
+        if (!g_hook->get_render_target_manager()->is_pre_texture_call_e8) {
+            a.movabs(rdx, (uintptr_t)&out);
+        } else {
+            a.mov(rdx, ctx.rdx);
+        }
+
         a.mov(r8, ctx.r8);
 
         const auto size = g_framework->is_dx11() ? g_framework->get_d3d11_rt_size() : g_framework->get_d3d12_rt_size();
@@ -1769,30 +1754,57 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     };
 
     static FTexture2DRHIRef out{};
-    out.texture = nullptr;
-    void (*func)(
-        uintptr_t rhi,
-        FTexture2DRHIRef* out,
-        uintptr_t command_list,
-        uint32_t w,
-        uint32_t h,
-        uint8_t format,
-        uint32_t mips,
-        uint32_t samples,
-        ETextureCreateFlags flags,
-        sdk::FCreateInfo& create_info,
-        uintptr_t additional,
-        uintptr_t additional2) = (decltype(func))emu_ctx.ctx->Registers.RegRip;
+    static FTexture2DRHIRef shader_out{};
 
     const auto size = g_framework->is_dx11() ? g_framework->get_d3d11_rt_size() : g_framework->get_d3d12_rt_size();
     const auto stack_args = (uintptr_t*)(ctx.rsp + 0x20);
 
-    func(ctx.rcx, &out, ctx.rdx, size.x, size.y, 2, 
-        stack_args[2], stack_args[3], (ETextureCreateFlags)stack_args[4], *(sdk::FCreateInfo*)stack_args[5], stack_args[6], stack_args[7]);
+    spdlog::info("About to call the original!");
 
+    if (!g_hook->get_render_target_manager()->is_pre_texture_call_e8) {
+        void (*func)(
+            uintptr_t rhi,
+            FTexture2DRHIRef* out,
+            uintptr_t command_list,
+            uint32_t w,
+            uint32_t h,
+            uint8_t format,
+            uint32_t mips,
+            uint32_t samples,
+            ETextureCreateFlags flags,
+            sdk::FCreateInfo& create_info,
+            uintptr_t additional,
+            uintptr_t additional2) = (decltype(func))func_ptr;
+
+        func(ctx.rcx, &out, ctx.r8, size.x, size.y, 2, 
+            stack_args[2], stack_args[3], (ETextureCreateFlags)stack_args[4], *(sdk::FCreateInfo*)stack_args[5], stack_args[6], stack_args[7]);
+
+        g_hook->get_render_target_manager()->ui_target = out.texture;
+    } else {
+        void (*func)(
+            uint32_t w,
+            uint32_t h,
+            uint8_t format,
+            uint32_t mips,
+            uint32_t samples,
+            ETextureCreateFlags flags,
+            uintptr_t a7,
+            uintptr_t a8,
+            FTexture2DRHIRef* out,
+            FTexture2DRHIRef* shader_out,
+            uintptr_t additional,
+            uintptr_t additional2) = (decltype(func))func_ptr;
+
+        func((uint32_t)size.x, (uint32_t)size.y, 2, ctx.r9,
+            stack_args[0], (ETextureCreateFlags)stack_args[1], 
+            stack_args[2], stack_args[3],
+            &out, &shader_out,
+            stack_args[6], stack_args[7]);
+
+        
+        g_hook->get_render_target_manager()->ui_target = shader_out.texture;
+    }
     //call_with_context((uintptr_t)func, out);
-
-    g_hook->get_render_target_manager()->ui_target = out.texture;
 
     spdlog::info("Called the original function!");
 }

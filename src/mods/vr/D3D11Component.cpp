@@ -50,6 +50,15 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         return vr::VRCompositorError_None;
     }
 
+    const auto& ffsr = VR::get()->m_fake_stereo_hook;
+    const auto ui_target = ffsr->get_render_target_manager()->get_ui_target();
+
+    // Update the UI overlay.
+    if (ui_target != nullptr && get_ui_tex().Get() != nullptr) {
+        copy_tex((ID3D11Resource*)ui_target->get_native_resource(), get_ui_tex().Get());
+        clear_tex((ID3D11Resource*)ui_target->get_native_resource());
+    }
+
     auto runtime = vr->get_runtime();
 
     // If m_frame_count is even, we're rendering the left eye.
