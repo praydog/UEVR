@@ -38,13 +38,13 @@ void* FRHITexture::get_native_resource() const {
 
             const auto potential_resource = func(tex, &filler_data);
 
-            if (potential_resource == nullptr || IsBadReadPtr(potential_resource, 1)) {
+            if (potential_resource == nullptr || IsBadReadPtr(potential_resource, sizeof(void*))) {
                 continue;
             }
 
             const auto potential_vtable = *(void**)potential_resource;
 
-            if (potential_vtable == nullptr || IsBadReadPtr(potential_vtable, 1)) {
+            if (potential_vtable == nullptr || IsBadReadPtr(potential_vtable, sizeof(void*))) {
                 continue;
             }
 

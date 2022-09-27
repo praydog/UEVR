@@ -1,5 +1,7 @@
 #include <winternl.h>
 
+#include <asmjit/asmjit.h>
+
 #include <spdlog/spdlog.h>
 #include <utility/Memory.hpp>
 #include <utility/Module.hpp>
@@ -12,6 +14,10 @@
 #include <sdk/UEngine.hpp>
 #include <sdk/UGameEngine.hpp>
 #include <sdk/CVar.hpp>
+#include <sdk/Slate.hpp>
+#include <sdk/DynamicRHI.hpp>
+
+#include "Framework.hpp"
 
 #include <bdshemu.h>
 #include <bddisasm.h>
@@ -21,6 +27,7 @@
 
 #include "FFakeStereoRenderingHook.hpp"
 
+//#define FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
 
 FFakeStereoRenderingHook* g_hook = nullptr;
 
@@ -80,13 +87,13 @@ void FFakeStereoRenderingHook::attempt_hooking() {
 }
 
 void FFakeStereoRenderingHook::attempt_hook_game_engine_tick() {
-    if (m_hooked_game_engine_tick) {
+    if (m_hooked_game_engine_tick || m_attempted_hook_game_engine_tick) {
         return;
     }
     
     spdlog::info("Attempting to hook UGameEngine::Tick!");
 
-    m_attemped_hook_game_engine_tick = true;
+    m_attempted_hook_game_engine_tick = true;
 
     const auto func = sdk::UGameEngine::get_tick_address();
 
@@ -111,12 +118,42 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick() {
     });
 
     m_hooked_game_engine_tick = true;
+
+    spdlog::info("Hooked UGameEngine::Tick!");
+}
+
+void FFakeStereoRenderingHook::attempt_hook_slate_thread() {
+    if (m_hooked_slate_thread || m_attempted_hook_slate_thread) {
+        return;
+    }
+
+    spdlog::info("Attempting to hook FSlateRHIRenderer::DrawWindow_RenderThread!");
+    m_attempted_hook_slate_thread = true;
+
+    const auto func = sdk::slate::locate_draw_window_renderthread_fn();
+
+    if (!func) {
+        spdlog::error("Cannot hook FSlateRHIRenderer::DrawWindow_RenderThread");
+        return;
+    }
+
+    auto factory = SafetyHookFactory::init();
+    auto builder = factory->acquire();
+
+    m_slate_thread_hook = builder.create_inline((void*)*func, &FFakeStereoRenderingHook::slate_draw_window_render_thread);
+    m_hooked_slate_thread = true;
+
+    spdlog::info("Hooked FSlateRHIRenderer::DrawWindow_RenderThread!");
 }
 
 bool FFakeStereoRenderingHook::hook() {
     spdlog::info("Entering FFakeStereoRenderingHook::hook");
 
     m_tried_hooking = true;
+
+    sdk::FDynamicRHI::get();
+
+    //experimental_patch_fix();
 
     const auto vtable = locate_fake_stereo_rendering_vtable();
 
@@ -439,7 +476,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 spdlog::info("AllocateRenderTargetTexture (embedded)");
             #endif
 
-                return g_hook->get_render_target_manager()->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &out_texture);
+                return g_hook->get_render_target_manager()->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &out_texture, &out_shader_resource);
             }
         );
 
@@ -988,7 +1025,7 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 #endif
 }
 
-Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
+__forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("calculate stereo projection matrix called! {} from {:x}", view_index, (uintptr_t)_ReturnAddress() - (uintptr_t)utility::get_module_within((uintptr_t)_ReturnAddress()).value_or(nullptr));
 #endif
@@ -1054,6 +1091,8 @@ Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeSt
     return out;
 }
 
+template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
+
 void FFakeStereoRenderingHook::render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list,
     FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size) 
 {
@@ -1061,10 +1100,38 @@ void FFakeStereoRenderingHook::render_texture_render_thread(FFakeStereoRendering
     spdlog::info("render texture render thread called!");
 #endif
 
+    /*const auto return_address = (uintptr_t)_ReturnAddress();
+    const auto slate_cvar_usage_location = sdk::vr::get_slate_draw_to_vr_render_target_usage_location();
+
+    if (slate_cvar_usage_location) {
+        const auto distance_from_usage = (intptr_t)(return_address - *slate_cvar_usage_location);
+
+        if (distance_from_usage <= 0x200) {
+            //spdlog::info("Ret: {:x} Distance: {:x}", return_address, distance_from_usage);
+
+            auto& d3d11_vr = VR::get()->m_d3d11;
+            auto& hook = g_framework->get_d3d11_hook();
+            auto device = hook->get_device();
+            ComPtr<ID3D11DeviceContext> context{};
+
+            device->GetImmediateContext(&context);
+            context->CopyResource(d3d11_vr.get_test_tex().Get(), (ID3D11Resource*)src_texture->get_native_resource());
+            context->Flush();
+        }
+    }*/
+
+    //g_hook->m_rtm.set_render_target(src_texture);
+
+    /*if (g_hook->m_rtm.get_scene_target() != src_texture) {
+        g_hook->m_rtm.set_render_target(src_texture);
+    }*/
+
     // spdlog::info("{:x}", (uintptr_t)src_texture->GetNativeResource());
 
     // maybe the window size is actually a pointer we will find out later.
-    // g_hook->m_render_texture_render_thread_hook->call<void*>(stereo, rhi_command_list, backbuffer, src_texture, window_size);
+    /*if (g_hook->m_render_texture_render_thread_hook) {
+        g_hook->m_render_texture_render_thread_hook->call<void*>(stereo, rhi_command_list, backbuffer, src_texture, window_size);
+    }*/
 }
 
 void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneView* view, UCanvas* canvas) {
@@ -1180,6 +1247,10 @@ IStereoLayers* FFakeStereoRenderingHook::get_stereo_layers_hook(FFakeStereoRende
 }
 
 void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhook::Context& ctx) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("post calculate stereo projection matrix called!");
+#endif
+
     if (g_hook->m_fixed_localplayer_view_count) {
         return;
     }
@@ -1320,6 +1391,92 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
     g_hook->m_fixed_localplayer_view_count = true;
 }
 
+void FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, void* command_list, void* viewport_info, void* elements, void* params) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("SlateRHIRenderer::DrawWindow_RenderThread called!");
+#endif
+
+    static bool once = true;
+
+    if (once) {
+        once = false;
+        spdlog::info("SlateRHIRenderer::DrawWindow_RenderThread called for the first time!");
+    }
+
+    const auto ui_target = g_hook->get_render_target_manager()->get_ui_target();
+
+    if (ui_target == nullptr) {
+        spdlog::info("No UI target, skipping!");
+        g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
+        return;
+    }
+
+    struct FSlateResource {
+        virtual FRHITexture2D* GetTypedResource() = 0;
+        FRHITexture2D* resource{};
+    };
+
+    struct IViewportRenderTargetProvider {
+        virtual FSlateResource* GetViewportRenderTargetTexture() = 0;
+    };
+
+    // TODO: Automatically figure out the offset for this.
+    const auto viewport_rt_provider = *(IViewportRenderTargetProvider**)((uintptr_t)viewport_info + 0xC0);
+
+    if (viewport_rt_provider == nullptr) {
+        spdlog::info("No viewport RT handler, skipping!");
+        g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
+        return;
+    }
+
+    const auto slate_resource = viewport_rt_provider->GetViewportRenderTargetTexture();
+
+    if (slate_resource == nullptr) {
+        spdlog::info("No slate resource, skipping!");
+        g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
+        return;
+    }
+
+    
+    auto& d3d11_vr = VR::get()->m_d3d11;
+
+    if (d3d11_vr.get_test_tex().Get() == nullptr || d3d11_vr.get_blank_tex().Get() == nullptr) {
+        spdlog::info("D3D11 UI texture is not set up!");
+        g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
+        return;
+    }
+
+    // Replace the texture with one we have control over.
+    // This isolates the UI to render on our own texture separate from the scene.
+    const auto old_texture = slate_resource->resource;
+    slate_resource->resource = ui_target;
+
+    auto& hook = g_framework->get_d3d11_hook();
+    auto device = hook->get_device();
+    ComPtr<ID3D11DeviceContext> context{};
+
+    device->GetImmediateContext(&context);
+
+    context->CopyResource((ID3D11Resource*)ui_target->get_native_resource(), d3d11_vr.get_blank_tex().Get());
+    
+    // To be seen if we need to resort to a MidHook on this function if the parameters
+    // are wildly different between UE versions.
+    g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params);
+
+    // Restore the old texture.
+    slate_resource->resource = old_texture;
+
+    context->CopyResource(d3d11_vr.get_test_tex().Get(), (ID3D11Resource*)ui_target->get_native_resource());
+
+    /*ComPtr<ID3D11RenderTargetView> rtv{};
+
+    // Create a render target view for the texture.
+    device->CreateRenderTargetView((ID3D11Resource*)ui_target->get_native_resource(), nullptr, &rtv);
+    const float color[4]{ 0.0f, 0.0f, 0.0f, 0.0f };
+    context->ClearRenderTargetView(rtv.Get(), color);
+    context->OMSetRenderTargets(1, rtv.GetAddressOf(), nullptr);*/
+}
+
 void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const FViewport& vp, class SViewport* vp_widget) {
     //spdlog::info("Widget: {:x}", (uintptr_t)ViewportWidget);
 }
@@ -1359,11 +1516,269 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     // refers to the current pixel format, which we can overwrite (which may not be safe)
     // so we could just follow how the global is being written to registers or the stack
     // and then just overwrite the registers/stack with our own values
-    if (g_hook->get_render_target_manager()->is_pre_texture_call_e8) {
-        ctx.r8 = 2; // PF_B8G8R8A8
-    } else {
-        *((uint8_t*)ctx.rsp + 0x28) = 2; // PF_B8G8R8A8
+    if (!g_hook->has_pixel_format_cvar()) {
+        if (g_hook->get_render_target_manager()->is_pre_texture_call_e8) {
+            ctx.r8 = 2; // PF_B8G8R8A8
+        } else {
+            *((uint8_t*)ctx.rsp + 0x28) = 2; // PF_B8G8R8A8
+        }
     }
+
+    // Now we are going to attempt to JIT a function that will call the original function
+    // using the context we have. This will call it twice, but allow us to
+    // have control over one of the textures it generates. We need
+    // the other generated texture as a UI render target to be used in FFakeStereoRenderingHook::slate_draw_window_render_thread.
+    // This will allow the original game UI to be rendered in world space without resorting to WidgetComponent.
+    // One can argue that this may be an overengineered alternative to "just" calling FDynamicRHI::CreateTexture2D
+    // but that function is very hard to pattern scan for, and we already have it here, so why not use it?
+    using namespace asmjit;
+    using namespace asmjit::x86;
+
+    spdlog::info("Attempting to JIT a function to call the original function!");
+
+    auto rtm = g_hook->get_render_target_manager();
+
+    const auto ix = utility::decode_one(rtm->texture_create_insn_bytes.data(), rtm->texture_create_insn_bytes.size());
+
+    if (!ix) {
+        spdlog::error("Failed to decode instruction!");
+        return;
+    }
+
+    // Set up the emulator. We will use it to emulate the function call.
+    // All we need from it is where the function call lands, so we can call it for real.
+    auto emu_ctx = utility::ShemuContext(
+        (uintptr_t)rtm->texture_create_insn_bytes.data(), 
+        rtm->texture_create_insn_bytes.size());
+    
+    emu_ctx.ctx->Registers.RegRcx = ctx.rcx;
+    emu_ctx.ctx->Registers.RegRdx = ctx.rdx;
+    emu_ctx.ctx->Registers.RegR8 = ctx.r8;
+    emu_ctx.ctx->Registers.RegR9 = ctx.r9;
+    emu_ctx.ctx->Registers.RegRdi = ctx.rdi;
+    emu_ctx.ctx->Registers.RegRsi = ctx.rsi;
+    emu_ctx.ctx->Registers.RegR10 = ctx.r10;
+    emu_ctx.ctx->Registers.RegR11 = ctx.r11;
+    emu_ctx.ctx->Registers.RegR12 = ctx.r12;
+    emu_ctx.ctx->Registers.RegR13 = ctx.r13;
+    emu_ctx.ctx->Registers.RegR14 = ctx.r14;
+    emu_ctx.ctx->Registers.RegR15 = ctx.r15;
+    emu_ctx.ctx->MemThreshold = 1;
+
+    if (emu_ctx.emulate((uintptr_t)rtm->texture_create_insn_bytes.data(), 1) != SHEMU_SUCCESS) {
+        spdlog::error("Failed to emulate instruction!: {} RIP: {:x}", emu_ctx.status, emu_ctx.ctx->Registers.RegRip);
+        return;
+    }
+    
+    spdlog::info("Emu landed at {:x}", emu_ctx.ctx->Registers.RegRip);
+
+    /*CodeHolder code{};
+    JitRuntime runtime{};
+    code.init(runtime.environment());
+
+    Assembler a{&code};
+    
+    static auto cloned_stack = std::make_unique<std::array<uint8_t, 0x3000>>();
+    static auto cloned_registers = std::make_unique<std::array<uint8_t, 0x1000>>();
+
+    auto aligned_stack = ((uintptr_t)&(*cloned_stack)[0x2000]);
+    aligned_stack += (-(intptr_t)aligned_stack) & (40 - 1);
+
+    memcpy((void*)aligned_stack, (void*)(ctx.rsp), 0x1000);
+
+    static auto stack_ptr = std::make_unique<uintptr_t>();
+    static auto post_register_storage = std::make_unique<uintptr_t>();
+
+    // Store the original stack pointer.
+    a.movabs(rax, (void*)stack_ptr.get());
+    a.mov(ptr(rax), rsp);
+
+    // Push all of the original registers onto the stack.
+    a.movabs(rsp, (void*)&(*cloned_registers)[0x500]);
+    //a.mov(rsp, rax);
+
+    a.push(rcx);
+    a.push(rdx);
+    a.push(r8);
+    a.push(r9);
+    a.push(r10);
+    a.push(r11);
+    a.push(r12);
+    a.push(r13);
+    a.push(r14);
+    a.push(r15);
+    a.push(rbx);
+    a.push(rbp);
+    a.push(rsi);
+    a.push(rdi);
+    a.pushfq();
+
+    a.mov(rax, (void*)post_register_storage.get());
+    a.mov(ptr(rax), rsp);
+
+    a.movabs(rsp, aligned_stack);
+
+
+    a.mov(rdx, rcx); // func param
+    a.movabs(rcx, ctx.rcx);
+    //a.movabs(rdx, ctx.rdx);
+    a.movabs(r8, ctx.r8);
+    //a.movabs(r9, ctx.r9);
+    const auto size = g_framework->is_dx11() ? g_framework->get_d3d11_rt_size() : g_framework->get_d3d12_rt_size();
+    a.mov(r9, (uint32_t)size.x);
+    // move w into first stack argument
+    a.mov(dword_ptr(rsp, 0x20), (uint32_t)size.y);
+    a.movabs(r10, ctx.r10);
+    a.movabs(r11, ctx.r11);
+    a.movabs(r12, ctx.r12);
+    a.movabs(r13, ctx.r13);
+    a.movabs(r14, ctx.r14);
+    a.movabs(r15, ctx.r15);
+    a.movabs(rax, ctx.rax);
+    a.movabs(rbx, ctx.rbx);
+    a.movabs(rbp, ctx.rbp);
+    a.movabs(rsi, ctx.rsi);
+    a.movabs(rdi, ctx.rdi);
+
+    // Correct the stack pointers inside the stack we cloned
+    // to point to areas within the cloned stack if they were
+    // pointing to the original stack.
+    for (auto stack_var = 0; stack_var < 0x1000; stack_var += sizeof(void*)) {
+        auto stack_var_ptr = (uintptr_t*)(aligned_stack + stack_var);
+
+        if (*stack_var_ptr >= ctx.rsp && *stack_var_ptr < ctx.rsp + 0x1000) {
+            spdlog::info("Correcting stack var at 0x{:x}", stack_var);
+            *stack_var_ptr = aligned_stack + (*stack_var_ptr - ctx.rsp);
+        }
+    }
+
+    auto correct_register = [&](auto& reg) {
+        if (reg >= ctx.rsp && reg < ctx.rsp + 0x1000) {
+            spdlog::info("Correcting Register");
+            reg = aligned_stack + (reg - ctx.rsp);
+        }
+
+    };
+    for (auto insn_byte : g_hook->get_render_target_manager()->texture_create_insn_bytes) {
+        a.db(insn_byte);
+    }
+
+    a.mov(rsp, post_register_storage.get());
+    a.mov(rsp, ptr(rsp));
+    //a.mov(rsp, rcx);
+
+    // Pop all of the original registers off of the stack.
+    a.popfq();
+    a.pop(rdi);
+    a.pop(rsi);
+    a.pop(rbp);
+    a.pop(rbx);
+    a.pop(r15);
+    a.pop(r14);
+    a.pop(r13);
+    a.pop(r12);
+    a.pop(r11);
+    a.pop(r10);
+    a.pop(r9);
+    a.pop(r8);
+    a.pop(rdx);
+    a.pop(rcx);
+
+    //a.pop(rsp); // Restore the original stack pointer.
+    a.movabs(rsp, (void*)stack_ptr.get());
+    a.mov(rsp, ptr(rsp));
+
+    a.ret();
+
+    uintptr_t code_addr{};
+    runtime.add(&code_addr, &code);
+
+    spdlog::info("JITed address: {:x}", code_addr);
+
+    //MessageBox(0, "debug now", "debug", 0);
+
+    void (*func)(void* rdx) = (decltype(func))code_addr;
+
+    static FTexture2DRHIRef out{};
+    out.texture = nullptr;
+    func(&out);*/
+
+    auto call_with_context = [&](uintptr_t func, FTexture2DRHIRef& out) {
+        CodeHolder code{};
+        JitRuntime runtime{};
+        code.init(runtime.environment());
+
+        Assembler a{&code};
+
+        auto post_align_label = a.newLabel();
+
+        a.push(rbx);
+
+        a.mov(rcx, ctx.rcx);
+        a.movabs(rdx, (uintptr_t)&out);
+        a.mov(r8, ctx.r8);
+
+        const auto size = g_framework->is_dx11() ? g_framework->get_d3d11_rt_size() : g_framework->get_d3d12_rt_size();
+        a.mov(r9, (uint32_t)size.x);
+
+        a.sub(rsp, 0x100);
+        a.mov(rbx, 0x100);
+        a.test(rsp, sizeof(void*));
+        a.jz(post_align_label);
+
+        a.sub(rsp, 8);
+        a.mov(rbx, 0x108);
+        a.bind(post_align_label);
+
+        a.mov(ptr(rsp, 0x20), (uint32_t)size.y);
+
+        for (auto i = 0x28; i < 0x90; i += sizeof(void*)) {
+            a.mov(rax, *(uintptr_t*)(ctx.rsp + i));
+            a.mov(ptr(rsp, i), rax);
+        }
+
+        a.mov(rax, (void*)func);
+        a.call(rax);
+
+        a.add(rsp, rbx);
+        a.pop(rbx);
+
+        a.ret();
+
+        uintptr_t code_addr{};
+        runtime.add(&code_addr, &code);
+        void (*jitted_func)() = (decltype(jitted_func))code_addr;
+
+        jitted_func();
+    };
+
+    static FTexture2DRHIRef out{};
+    out.texture = nullptr;
+    void (*func)(
+        uintptr_t rhi,
+        FTexture2DRHIRef* out,
+        uintptr_t command_list,
+        uint32_t w,
+        uint32_t h,
+        uint8_t format,
+        uint32_t mips,
+        uint32_t samples,
+        ETextureCreateFlags flags,
+        sdk::FCreateInfo& create_info,
+        uintptr_t additional,
+        uintptr_t additional2) = (decltype(func))emu_ctx.ctx->Registers.RegRip;
+
+    const auto size = g_framework->is_dx11() ? g_framework->get_d3d11_rt_size() : g_framework->get_d3d12_rt_size();
+    const auto stack_args = (uintptr_t*)(ctx.rsp + 0x20);
+
+    func(ctx.rcx, &out, ctx.rdx, size.x, size.y, 2, 
+        stack_args[2], stack_args[3], (ETextureCreateFlags)stack_args[4], *(sdk::FCreateInfo*)stack_args[5], stack_args[6], stack_args[7]);
+
+    //call_with_context((uintptr_t)func, out);
+
+    g_hook->get_render_target_manager()->ui_target = out.texture;
+
+    spdlog::info("Called the original function!");
 }
 
 void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx) {
@@ -1384,12 +1799,14 @@ void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx)
     spdlog::info("Real resource: {:x}", (uintptr_t)texture->get_native_resource());
 
     rtm->render_target = texture;
+    //rtm->ui_target = texture;
     rtm->texture_hook_ref = nullptr;
     ++rtm->last_texture_index;
 }
 
-bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return_address, FTexture2DRHIRef* tex) {
+bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return_address, FTexture2DRHIRef* tex, FTexture2DRHIRef* shader_resource) {
     this->texture_hook_ref = tex;
+    this->shader_resource_hook_ref = shader_resource;
 
     if (!this->set_up_texture_hook) {
         spdlog::info("AllocateRenderTargetTexture retaddr: {:x}", return_address);
@@ -1427,20 +1844,19 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                 auto factory = SafetyHookFactory::init();
                 auto builder = factory->acquire();
 
-                this->texture_hook = builder.create_mid((void*)post_call, &VRRenderTargetManager::texture_hook_callback);
-
-                if (!g_hook->has_pixel_format_cvar()) {
-                    spdlog::info("No pixel format cvar found, setting up pre texture hook...");
-                    if (*(uint8_t*)ip == 0xE8) {
-                        spdlog::info("E8 call found!");
-                        this->is_pre_texture_call_e8 = true;
-                    } else {
-                        spdlog::info("E8 call not found, assuming register call!");
-                    }
-
-                    this->pre_texture_hook = builder.create_mid((void*)ip, &VRRenderTargetManager::pre_texture_hook_callback);
+                if (*(uint8_t*)ip == 0xE8) {
+                    spdlog::info("E8 call found!");
+                    this->is_pre_texture_call_e8 = true;
+                } else {
+                    spdlog::info("E8 call not found, assuming register call!");
                 }
 
+                // So we can call the original texture create function again.
+                this->texture_create_insn_bytes.resize(ix.Length);
+                memcpy(this->texture_create_insn_bytes.data(), ip, ix.Length);
+
+                this->texture_hook = builder.create_mid((void*)post_call, &VRRenderTargetManager::texture_hook_callback);
+                this->pre_texture_hook = builder.create_mid((void*)ip, &VRRenderTargetManager::pre_texture_hook_callback);
                 this->set_up_texture_hook = true;
 
                 return false;
@@ -1472,19 +1888,61 @@ bool VRRenderTargetManager::AllocateRenderTargetTexture(uint32_t Index, uint32_t
     // to the engine that we are letting the engine itself
     // create the texture, rather than us creating it ourselves.
     // This should allow maximum compatibility across engine versions.
-    return this->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &OutTargetableTexture);
+    /*const auto dynamic_rhi = *(uintptr_t*)((uintptr_t)sdk::get_ue_module(L"Engine") + 0x3309C50);
+    const auto command_list = (uintptr_t)sdk::get_ue_module(L"Engine") + 0x330AE70;
+    struct {
+        void* bulk_data{nullptr};
+        void* rsrc_array{nullptr};
+
+        struct {
+            uint32_t color_binding{1};
+            float color[4]{};
+        } clear_value_binding;
+
+        uint32_t gpu_mask{1};
+        bool without_native_rsrc{false};
+        const TCHAR* debug_name{"BufferedRT"};
+        uint32_t extended_data{};
+    } create_info;
+
+    const void (*RHICreateTexture2D_RenderThread)(
+        uintptr_t rhi,
+        FTexture2DRHIRef* out,
+        uintptr_t command_list,
+        uint32_t w,
+        uint32_t h,
+        uint8_t format,
+        uint32_t mips,
+        uint32_t samples,
+        ETextureCreateFlags flags,
+        void* create_info) = (*(decltype(RHICreateTexture2D_RenderThread)**)dynamic_rhi)[178];
+
+    *(uint64_t*)&TargetableTextureFlags |= (uint64_t)ETextureCreateFlags::ShaderResource | (uint64_t)Flags;
+    RHICreateTexture2D_RenderThread(dynamic_rhi, &OutTargetableTexture, command_list, SizeX, SizeY, 2, NumMips, NumSamples, TargetableTextureFlags, &create_info);
+
+    const auto size = g_framework->is_dx11() ? g_framework->get_d3d11_rt_size() : g_framework->get_d3d12_rt_size();
+    RHICreateTexture2D_RenderThread(dynamic_rhi, &OutShaderResourceTexture, command_list, (uint32_t)size.x, (uint32_t)size.y, 2, NumMips, NumSamples, TargetableTextureFlags, &create_info);
+
+    this->render_target = OutTargetableTexture.texture;
+    this->ui_target = OutShaderResourceTexture.texture;
+
+    OutShaderResourceTexture.texture = OutTargetableTexture.texture;*/
+
+    return this->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &OutTargetableTexture, &OutShaderResourceTexture);
+
+    //return true;
 }
 
 bool VRRenderTargetManager_418::AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips, uint32_t Flags,
         uint32_t TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture, FTexture2DRHIRef& OutShaderResourceTexture,
         uint32_t NumSamples) 
 {
-    return this->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &OutTargetableTexture);
+    return this->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &OutTargetableTexture, &OutShaderResourceTexture);
 }
 
 bool VRRenderTargetManager_Special::AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips,
     ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture,
     FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples) 
 {
-    return this->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &OutTargetableTexture);
+    return this->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &OutTargetableTexture, &OutShaderResourceTexture);
 }

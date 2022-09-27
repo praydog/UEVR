@@ -11,44 +11,57 @@ void OverlayComponent::on_reset() {
 std::optional<std::string> OverlayComponent::on_initialize_openvr() {
     m_overlay_data = {};
 
-    // create vr overlay
-    auto overlay_error = vr::VROverlay()->CreateOverlay("REFramework", "REFramework", &m_overlay_handle);
+    auto create_overlay = [this](const std::string& name, float size, vr::VROverlayHandle_t& out) -> std::optional<std::string> {
+        // create vr overlay
+        auto overlay_error = vr::VROverlay()->CreateOverlay(name.c_str(), name.c_str(), &out);
 
-    if (overlay_error != vr::VROverlayError_None) {
-        return "VROverlay failed to create overlay: " + std::string{vr::VROverlay()->GetOverlayErrorNameFromEnum(overlay_error)};
+        if (overlay_error != vr::VROverlayError_None) {
+            return "VROverlay failed to create overlay: " + std::string{vr::VROverlay()->GetOverlayErrorNameFromEnum(overlay_error)};
+        }
+
+        // set overlay to visible
+        vr::VROverlay()->ShowOverlay(out);
+
+        overlay_error = vr::VROverlay()->SetOverlayWidthInMeters(out, size);
+
+        if (overlay_error != vr::VROverlayError_None) {
+            return "VROverlay failed to set overlay width: " + std::string{vr::VROverlay()->GetOverlayErrorNameFromEnum(overlay_error)};
+        }
+
+        // same thing as above but absolute instead
+        // get absolute tracking pose of hmd with GetDeviceToAbsoluteTrackingPose
+        // then get the matrix from that
+        // then set it as the overlay transform
+        vr::TrackedDevicePose_t pose{};
+        vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, &pose, 1);
+        vr::VROverlay()->SetOverlayTransformAbsolute(out, vr::TrackingUniverseStanding, &pose.mDeviceToAbsoluteTracking);
+
+        // set overlay flag to receive smooth scroll events
+        overlay_error = vr::VROverlay()->SetOverlayFlag(out, vr::VROverlayFlags::VROverlayFlags_SendVRSmoothScrollEvents, true);
+
+        if (overlay_error != vr::VROverlayError_None) {
+            return "VROverlay failed to set overlay flag: " + std::string{vr::VROverlay()->GetOverlayErrorNameFromEnum(overlay_error)};
+        }
+
+        spdlog::info("Made overlay with handle {}", out);
+        return std::nullopt;
+    };
+
+    if (!create_overlay("REFramework", 0.25f, m_overlay_handle)) {
+        auto overlay_error = vr::VROverlay()->SetOverlayInputMethod(m_overlay_handle, vr::VROverlayInputMethod_Mouse);
+
+        if (overlay_error != vr::VROverlayError_None) {
+            return "VROverlay failed to set overlay input method: " + std::string{vr::VROverlay()->GetOverlayErrorNameFromEnum(overlay_error)};
+        }
     }
 
-    // set overlay to visible
-    vr::VROverlay()->ShowOverlay(m_overlay_handle);
+    if (!create_overlay("Slate", 2.0f, m_slate_overlay_handle)) {
+        auto overlay_error = vr::VROverlay()->SetOverlayInputMethod(m_slate_overlay_handle, vr::VROverlayInputMethod_None);
 
-    overlay_error = vr::VROverlay()->SetOverlayWidthInMeters(m_overlay_handle, 0.25f);
-
-    if (overlay_error != vr::VROverlayError_None) {
-        return "VROverlay failed to set overlay width: " + std::string{vr::VROverlay()->GetOverlayErrorNameFromEnum(overlay_error)};
+        if (overlay_error != vr::VROverlayError_None) {
+            return "VROverlay failed to set overlay input method: " + std::string{vr::VROverlay()->GetOverlayErrorNameFromEnum(overlay_error)};
+        }
     }
-
-    overlay_error = vr::VROverlay()->SetOverlayInputMethod(m_overlay_handle, vr::VROverlayInputMethod_Mouse);
-
-    if (overlay_error != vr::VROverlayError_None) {
-        return "VROverlay failed to set overlay input method: " + std::string{vr::VROverlay()->GetOverlayErrorNameFromEnum(overlay_error)};
-    }
-
-    // same thing as above but absolute instead
-    // get absolute tracking pose of hmd with GetDeviceToAbsoluteTrackingPose
-    // then get the matrix from that
-    // then set it as the overlay transform
-    vr::TrackedDevicePose_t pose{};
-    vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, &pose, 1);
-    vr::VROverlay()->SetOverlayTransformAbsolute(m_overlay_handle, vr::TrackingUniverseStanding, &pose.mDeviceToAbsoluteTracking);
-
-    // set overlay flag to receive smooth scroll events
-    overlay_error = vr::VROverlay()->SetOverlayFlag(m_overlay_handle, vr::VROverlayFlags::VROverlayFlags_SendVRSmoothScrollEvents, true);
-
-    if (overlay_error != vr::VROverlayError_None) {
-        return "VROverlay failed to set overlay flag: " + std::string{vr::VROverlay()->GetOverlayErrorNameFromEnum(overlay_error)};
-    }
-
-    spdlog::info("Made overlay with handle {}", m_overlay_handle);
 
     return std::nullopt;
 }
@@ -59,6 +72,7 @@ void OverlayComponent::on_pre_imgui_frame() {
 
 void OverlayComponent::on_post_compositor_submit() {
     this->update_overlay();
+    this->update_slate();
 }
 
 void OverlayComponent::update_input() {
@@ -68,7 +82,7 @@ void OverlayComponent::update_input() {
 
     auto vr = VR::get();
     auto& io = ImGui::GetIO();
-    const auto is_initial_frame = vr->get_frame_count() % 2 == vr->m_left_eye_interval || vr->m_use_afr;
+    const auto is_initial_frame = !vr->m_use_afr || vr->get_frame_count() % 2 == vr->m_left_eye_interval;
 
     // Restore the previous frame's input state
     memcpy(io.KeysDown, m_initial_imgui_input_state.KeysDown, sizeof(io.KeysDown));
@@ -131,6 +145,51 @@ void OverlayComponent::update_input() {
             default:
                 break;
         }
+    }
+}
+
+void OverlayComponent::update_slate() {
+    auto vr = VR::get();
+
+    if (!vr->get_runtime()->is_openvr()) {
+        return;
+    }
+
+    const auto is_d3d11 = g_framework->get_renderer_type() == Framework::RendererType::D3D11;
+
+    vr::VRTextureBounds_t bounds{};
+    bounds.uMin = 0.0f;
+    bounds.uMax = 1.0f;
+    bounds.vMin = 0.0f;
+    bounds.vMax = 1.0f;
+
+    vr::VROverlay()->SetOverlayTextureBounds(m_slate_overlay_handle, &bounds);
+
+    vr::TrackedDevicePose_t pose{};
+    vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, &pose, 1);
+
+    //auto glm_matrix = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
+    auto glm_matrix = Matrix4x4f{VR::get()->get_rotation_offset()};
+    glm_matrix[3] += VR::get()->get_standing_origin();
+    glm_matrix[3] -= glm_matrix[2] * 1.5f;
+    glm_matrix[3].w = 1.0f;
+    const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(glm_matrix)};
+    vr::VROverlay()->SetOverlayTransformAbsolute(m_slate_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
+
+    if (is_d3d11) {
+        vr::Texture_t imgui_tex{(void*)vr->m_d3d11.get_test_tex().Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
+        vr::VROverlay()->SetOverlayTexture(m_slate_overlay_handle, &imgui_tex);   
+    } else {
+        /*auto& hook = g_framework->get_d3d12_hook();
+
+        vr::D3D12TextureData_t texture_data {
+            g_framework->get_rendertarget_d3d12().Get(),
+            hook->get_command_queue(),
+            0
+        };
+        
+        vr::Texture_t imgui_tex{(void*)&texture_data, vr::TextureType_DirectX12, vr::ColorSpace_Auto};
+        vr::VROverlay()->SetOverlayTexture(m_slate_overlay_handle, &imgui_tex);*/
     }
 }
 

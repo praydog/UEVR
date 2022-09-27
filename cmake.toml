@@ -55,6 +55,10 @@ tag = "458984d7f59d1ae6dc1b597d94b02e4f7132eaba"
 git = "https://github.com/nlohmann/json"
 tag = "bc889afb4c5bf1c0d8ee29ef35eaaf4c8bef8a5d"
 
+[fetch-content.asmjit]
+git = "https://github.com/asmjit/asmjit.git"
+tag = "2a706fd2ba355808cada31ac1eed8ce28caa6b37"
+
 [target.openvr]
 type = "shared"
 sources = ["dependencies/openvr/src/**.cpp", "dependencies/openvr/src/vrcommon/**.cpp"]
@@ -97,7 +101,8 @@ link-libraries = [
     "utility",
     "bddisasm",
     "bdshemu",
-    "glm_static"
+    "glm_static",
+    "asmjit"
 ]
 
 [target.ue4poc]

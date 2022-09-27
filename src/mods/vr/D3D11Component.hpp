@@ -21,9 +21,14 @@ public:
 
     auto& openxr() { return m_openxr; }
 
+    auto& get_test_tex() { return m_test_tex; }
+    auto& get_blank_tex() { return m_blank_tex; }
+
 private:
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
+    ComPtr<ID3D11Texture2D> m_test_tex{};
+    ComPtr<ID3D11Texture2D> m_blank_tex{};
     ComPtr<ID3D11Texture2D> m_left_eye_tex{};
     ComPtr<ID3D11Texture2D> m_right_eye_tex{};
     ComPtr<ID3D11Texture2D> m_left_eye_depthstencil{};

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <array>
 
 #include <SafetyHook.hpp>
 
@@ -19,7 +20,7 @@ struct IStereoLayers;
 // so we need a unified way of storing data that can be used for all versions
 struct VRRenderTargetManager_Base {
 public:
-    bool allocate_render_target_texture(uintptr_t return_address, FTexture2DRHIRef* tex);
+    bool allocate_render_target_texture(uintptr_t return_address, FTexture2DRHIRef* tex, FTexture2DRHIRef* shader_resource);
 
     uint32_t get_number_of_buffered_frames() const { return 1; }
 
@@ -31,14 +32,18 @@ public:
     bool need_reallocate_view_target(const FViewport& Viewport);
 
 public:
+    FRHITexture2D* get_ui_target() { return ui_target; }
     FRHITexture2D* get_render_target() { return render_target; }
+    void set_render_target(FRHITexture2D* rt) { render_target = rt; }
 
-private:
+protected:
+    FRHITexture2D* ui_target{};
     FRHITexture2D* render_target{};
     static void pre_texture_hook_callback(safetyhook::Context& ctx); // only used if pixel format cvar is missing
     static void texture_hook_callback(safetyhook::Context& ctx);
 
     FTexture2DRHIRef* texture_hook_ref{nullptr};
+    FTexture2DRHIRef* shader_resource_hook_ref{nullptr};
     std::unique_ptr<safetyhook::MidHook> pre_texture_hook{}; // only used if pixel format cvar is missing
     std::unique_ptr<safetyhook::MidHook> texture_hook{};
     uint32_t last_texture_index{0};
@@ -48,6 +53,8 @@ private:
 
     uint32_t last_width{0};
     uint32_t last_height{0};
+
+    std::vector<uint8_t> texture_create_insn_bytes{};
 };
 
 struct VRRenderTargetManager : IStereoRenderTargetManager, VRRenderTargetManager_Base {
@@ -142,14 +149,16 @@ public:
 
     void attempt_hooking();
     void attempt_hook_game_engine_tick();
+    void attempt_hook_slate_thread();
 
     void on_frame() {
         attempt_hook_game_engine_tick();
+        attempt_hook_slate_thread();
 
         // Ideally we want to do all hooking
         // from game engine tick. if it fails
         // we will fall back to doing it here.
-        if (!m_hooked_game_engine_tick && m_attemped_hook_game_engine_tick) {
+        if (!m_hooked_game_engine_tick && m_attempted_hook_game_engine_tick) {
             attempt_hooking();
         }
     }
@@ -181,11 +190,14 @@ private:
 
     static void post_calculate_stereo_projection_matrix(safetyhook::Context& ctx);
 
+    static void slate_draw_window_render_thread(void* renderer, void* command_list, void* viewport_info, void* elements, void* params);
+
     std::unique_ptr<safetyhook::InlineHook> m_tick_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_adjust_view_rect_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_calculate_stereo_view_offset_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_calculate_stereo_projection_matrix_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_render_texture_render_thread_hook{};
+    std::unique_ptr<safetyhook::InlineHook> m_slate_thread_hook{};
 
     std::unique_ptr<safetyhook::MidHook> m_calculate_stereo_projection_matrix_post_hook{};
 
@@ -202,7 +214,9 @@ private:
     bool m_tried_hooking{false};
     bool m_finished_hooking{false};
     bool m_hooked_game_engine_tick{false};
-    bool m_attemped_hook_game_engine_tick{false};
+    bool m_hooked_slate_thread{false};
+    bool m_attempted_hook_game_engine_tick{false};
+    bool m_attempted_hook_slate_thread{false};
     bool m_uses_old_rendertarget_manager{false};
     bool m_rendertarget_manager_embedded_in_stereo_device{false}; // 4.17 and below...?
     bool m_special_detected{false};
@@ -210,6 +224,13 @@ private:
     bool m_injected_stereo_at_runtime{false};
     bool m_has_double_precision{false}; // for the projection matrix... AND the view offset... IS UE5 DOING THIS NOW???
     bool m_fixed_localplayer_view_count{false};
+
+    /*FFakeStereoRendering m_stereo_recreation {
+        90.0f, 
+        (int32_t)1920, 
+        (int32_t)1080, 
+        (int32_t)2
+    };*/
 
     struct FallbackDevice {
         void* vtable;

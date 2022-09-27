@@ -43,6 +43,7 @@ private:
     // overlay handle
     vr::VROverlayHandle_t m_overlay_handle{};
     vr::VROverlayHandle_t m_thumbnail_handle{};
+    vr::VROverlayHandle_t m_slate_overlay_handle{};
 
     bool m_closed_ui{false};
     bool m_just_closed_ui{false};
@@ -50,4 +51,5 @@ private:
 
     void update_input();
     void update_overlay();
+    void update_slate();
 };}

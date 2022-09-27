@@ -36,7 +36,7 @@ namespace utility {
 
     uintptr_t calculate_absolute(uintptr_t address, uint8_t custom_offset = 4);
 
-    std::optional<INSTRUX> decode_one(uint8_t* ip);
+    std::optional<INSTRUX> decode_one(uint8_t* ip, size_t max_size = 1000);
 
     std::optional<uintptr_t> find_function_start(uintptr_t middle);
     std::optional<uintptr_t> find_function_from_string_ref(HMODULE module, std::wstring_view str);

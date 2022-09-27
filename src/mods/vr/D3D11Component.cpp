@@ -113,6 +113,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         if (runtime->is_openvr()) {
             // Copy the back buffer to the right eye texture.
             context->CopyResource(m_right_eye_tex.Get(), backbuffer.Get());
+            //context->CopyResource(m_right_eye_tex.Get(), m_test_tex.Get());
 
             auto openvr = vr->get_runtime<runtimes::OpenVR>();
             const auto submit_pose = openvr->get_pose_for_submit();
@@ -159,6 +160,8 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 void D3D11Component::on_reset(VR* vr) {
     m_left_eye_tex.Reset();
     m_right_eye_tex.Reset();
+    m_test_tex.Reset();
+    m_blank_tex.Reset();
     m_left_eye_depthstencil.Reset();
     m_right_eye_depthstencil.Reset();
 
@@ -205,6 +208,11 @@ void D3D11Component::setup() {
     // Create eye textures.
     device->CreateTexture2D(&backbuffer_desc, nullptr, &m_left_eye_tex);
     device->CreateTexture2D(&backbuffer_desc, nullptr, &m_right_eye_tex);
+
+    backbuffer_desc.Width = (uint32_t)g_framework->get_d3d11_rt_size().x;
+    backbuffer_desc.Height = (uint32_t)g_framework->get_d3d11_rt_size().y;
+    device->CreateTexture2D(&backbuffer_desc, nullptr, &m_test_tex);
+    device->CreateTexture2D(&backbuffer_desc, nullptr, &m_blank_tex);
 
     // copy backbuffer into right eye
     // Get the context.

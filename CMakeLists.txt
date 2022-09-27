@@ -89,6 +89,15 @@ FetchContent_Declare(json
 )
 FetchContent_MakeAvailable(json)
 
+message(STATUS "Fetching asmjit (2a706fd2ba355808cada31ac1eed8ce28caa6b37)...")
+FetchContent_Declare(asmjit
+	GIT_REPOSITORY
+		"https://github.com/asmjit/asmjit.git"
+	GIT_TAG
+		2a706fd2ba355808cada31ac1eed8ce28caa6b37
+)
+FetchContent_MakeAvailable(asmjit)
+
 # Target spdlog
 set(CMKR_TARGET spdlog)
 set(spdlog_SOURCES "")
@@ -368,6 +377,7 @@ target_link_libraries(sdk PUBLIC
 	bddisasm
 	bdshemu
 	glm_static
+	asmjit
 )
 
 unset(CMKR_TARGET)

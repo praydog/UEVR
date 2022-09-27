@@ -1,7 +1,9 @@
 #pragma once
 
-#include "Math.hpp"
+#include <atomic>
 #include <cstdint>
+
+#include "Math.hpp"
 
 enum ETextureCreateFlags : uint64_t { RenderTargetable = 1ull << 0, ResolveTargetable = 1ull << 1, ShaderResource = 1ull << 3, };
 enum EStereoscopicPass { eSSP_FULL, eSSP_PRIMARY, eSSP_SECONDARY };
@@ -13,6 +15,24 @@ struct Rotator {
 
 struct FRHIResource {
     virtual ~FRHIResource(){};
+
+    void add_ref() {
+        ++ref_count;
+    }
+
+    void release() {
+        --ref_count;
+
+        // how 2 delete?
+    }
+
+    // This is how it is internally
+    // but hopefully different compiler versions
+    // don't change anything here...
+    // there are also various ifdefs that can change the layout here...
+    // maybe we just won't care?
+    std::atomic<int32_t> ref_count{ 0 }; // ifdefs can change it to be stored in 30 bits.
+    std::atomic<bool> marked_for_delete{}; // not the case if ifdefs are not met
 };
 
 struct FRHITexture : FRHIResource {
@@ -22,14 +42,35 @@ struct FRHITexture : FRHIResource {
 struct FRHITexture2D : FRHITexture {};
 
 struct FTexture2DRHIRef {
-    FRHITexture2D* texture; // we dont care about the reference counting utilities of this, so this is just essentially what this struct is.
-    uint32_t ref_count{}; // I think this is where it is anyways.
-private:
-    void* padding;
+    FTexture2DRHIRef() = default;
+    FTexture2DRHIRef(FRHITexture2D* tex) 
+        : texture{tex}
+    {
+        this->texture->add_ref();
+    }
+
+    FTexture2DRHIRef(FRHITexture2D& tex)
+        : texture{&tex}
+    {
+        this->texture->add_ref();
+    }
+
+    ~FTexture2DRHIRef() {
+        if (this->texture != nullptr) {
+            this->texture->release();
+        }
+    }
+
+    FTexture2DRHIRef& operator=(FRHITexture2D* tex) {
+        this->texture = tex;
+        return *this;
+    }
+
+    FRHITexture2D* texture{nullptr};
 };
 
 struct FIntPoint {
-    int x, y;
+    int32_t x, y;
 };
 
 struct FViewport {};

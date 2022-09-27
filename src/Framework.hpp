@@ -100,6 +100,10 @@ public:
         return Vector2f{(float)m_d3d11.rt_width, (float)m_d3d11.rt_height};
     }
 
+    Vector2f get_d3d12_rt_size() const {
+        return Vector2f{(float)m_d3d12.rt_width, (float)m_d3d12.rt_height};
+    }
+
 private:
     void consume_input();
     void update_fonts();

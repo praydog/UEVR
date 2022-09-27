@@ -50,7 +50,11 @@ ShemuContext::ShemuContext(uintptr_t base, size_t buffer_size, size_t stack_size
     ctx->AccessMemory = (ShemuMemAccess)+[](PSHEMU_CONTEXT ctx, uint64_t gla, size_t size, uint8_t* buffer, bool store) {
         if (!store) {
             // On loads, always return 0.
-            memset(buffer, 0, size);
+            //memset(buffer, 0, size);
+
+            if (!IsBadReadPtr((void*)gla, size)) {
+                memcpy(buffer, (void*)gla, size);
+            }
         }
         else {
             // On stores, do nothing.
