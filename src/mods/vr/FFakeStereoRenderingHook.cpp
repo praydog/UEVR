@@ -1780,24 +1780,26 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
             uint32_t w,
             uint32_t h,
             uint8_t format,
-            uint32_t mips,
-            uint32_t samples,
-            ETextureCreateFlags flags,
+            uintptr_t mips,
+            uintptr_t samples,
+            uintptr_t flags,
             uintptr_t a7,
             uintptr_t a8,
+            uintptr_t a9,
             FTexture2DRHIRef* out,
             FTexture2DRHIRef* shader_out,
             uintptr_t additional,
             uintptr_t additional2) = (decltype(func))func_ptr;
 
         func((uint32_t)size.x, (uint32_t)size.y, 2, ctx.r9,
-            stack_args[0], (ETextureCreateFlags)stack_args[1], 
+            stack_args[0], stack_args[1], 
             stack_args[2], stack_args[3],
+            stack_args[4],
             &out, &shader_out,
-            stack_args[6], stack_args[7]);
+            stack_args[7], stack_args[8]);
 
         
-        g_hook->get_render_target_manager()->ui_target = shader_out.texture;
+        g_hook->get_render_target_manager()->ui_target = out.texture;
     }
     //call_with_context((uintptr_t)func, out);
 
