@@ -246,45 +246,49 @@ std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_usage_location()
         const auto module_size = utility::get_module_size(module).value_or(0);
         const auto module_end = (uintptr_t)module + module_size;
 
-        for (auto ref = utility::scan_displacement_reference(module, *cvar); 
-            ref; 
-            ref = utility::scan_displacement_reference(*ref + 1, (module_end - (*ref + 1)), *cvar)) 
-        {
-            spdlog::info("Checking if Slate.DrawToVRRenderTarget is used at {:x}", *ref);
+        for (auto i=0; i < 2; ++i) {
+            const auto cvar_addr = *cvar + (i * sizeof(void*));
 
-            const auto resolved = utility::resolve_instruction(*ref);
-            if (!resolved) {
-                spdlog::error("Failed to resolve instruction at {:x}", *ref);
-                continue;
-            }
+            for (auto ref = utility::scan_displacement_reference(module, cvar_addr); 
+                ref; 
+                ref = utility::scan_displacement_reference(*ref + 1, (module_end - (*ref + 1)), cvar_addr)) 
+            {
+                spdlog::info("Checking if Slate.DrawToVRRenderTarget is used at {:x}", *ref);
 
-            if (resolved->instrux.Operands[0].Type == ND_OP_MEM && resolved->instrux.Operands[1].Type == ND_OP_REG) {
-                spdlog::info("Instruction at {:x} is not a usage of Slate.DrawToVRRenderTarget", *ref);
-                continue; // this is NOT what we want
-            }
-
-            // check if the distance to the nearest ret is far away, which means
-            // it's the slate function we're looking for
-            uint32_t count = 0;
-
-            auto ix = utility::decode_one((uint8_t*)resolved->addr);
-
-            for (auto ip = (uint8_t*)resolved->addr; ix = utility::decode_one(ip); ip += ix->Length) {
-                if (std::string_view{ix->Mnemonic}.starts_with("RET") || std::string_view{ix->Mnemonic}.starts_with("INT3")) {
-                    spdlog::info("Found RET at {:x}", (uintptr_t)ip);
-                    break;
+                const auto resolved = utility::resolve_instruction(*ref);
+                if (!resolved) {
+                    spdlog::error("Failed to resolve instruction at {:x}", *ref);
+                    continue;
                 }
 
-                if (ix->Instruction == ND_INS_JMPFI || ix->Instruction == ND_INS_JMPFD) {
-                    spdlog::info("Found JMPFI/JMPFD at {:x}", (uintptr_t)ip);
-                    break;
+                if (resolved->instrux.Operands[0].Type == ND_OP_MEM && resolved->instrux.Operands[1].Type == ND_OP_REG) {
+                    spdlog::info("Instruction at {:x} is not a usage of Slate.DrawToVRRenderTarget", *ref);
+                    continue; // this is NOT what we want
                 }
 
-                ++count;
+                // check if the distance to the nearest ret is far away, which means
+                // it's the slate function we're looking for
+                uint32_t count = 0;
 
-                if (count >= 50) {
-                    spdlog::info("Located Slate.DrawToVRRenderTarget usage at {:x}", (uintptr_t)resolved->addr);
-                    return resolved->addr;
+                auto ix = utility::decode_one((uint8_t*)resolved->addr);
+
+                for (auto ip = (uint8_t*)resolved->addr; ix = utility::decode_one(ip); ip += ix->Length) {
+                    if (std::string_view{ix->Mnemonic}.starts_with("RET") || std::string_view{ix->Mnemonic}.starts_with("INT3")) {
+                        spdlog::info("Found RET at {:x}", (uintptr_t)ip);
+                        break;
+                    }
+
+                    if (ix->Instruction == ND_INS_JMPFI || ix->Instruction == ND_INS_JMPFD) {
+                        spdlog::info("Found JMPFI/JMPFD at {:x}", (uintptr_t)ip);
+                        break;
+                    }
+
+                    ++count;
+
+                    if (count >= 50) {
+                        spdlog::info("Located Slate.DrawToVRRenderTarget usage at {:x}", (uintptr_t)resolved->addr);
+                        return resolved->addr;
+                    }
                 }
             }
         }
