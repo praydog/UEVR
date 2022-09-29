@@ -16,6 +16,7 @@
 #include <sdk/CVar.hpp>
 #include <sdk/Slate.hpp>
 #include <sdk/DynamicRHI.hpp>
+#include <sdk/FViewportInfo.hpp>
 
 #include "Framework.hpp"
 
@@ -1396,7 +1397,9 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
     g_hook->m_fixed_localplayer_view_count = true;
 }
 
-void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, void* command_list, void* viewport_info, void* elements, void* params, void* unk1, void* unk2) {
+void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, void* command_list, sdk::FViewportInfo* viewport_info, 
+                                                                void* elements, void* params, void* unk1, void* unk2) 
+{
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("SlateRHIRenderer::DrawWindow_RenderThread called!");
 #endif
@@ -1419,17 +1422,7 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
         return g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
     }
 
-    struct FSlateResource {
-        virtual FRHITexture2D* get_typed_resource() = 0;
-        FRHITexture2D* resource{};
-    };
-
-    struct IViewportRenderTargetProvider {
-        virtual FSlateResource* get_viewport_render_target_texture() = 0;
-    };
-
-    // TODO: Automatically figure out the offset for this.
-    const auto viewport_rt_provider = *(IViewportRenderTargetProvider**)((uintptr_t)viewport_info + 0xC0);
+    const auto viewport_rt_provider = viewport_info->get_rt_provider(g_hook->get_render_target_manager()->get_render_target());
 
     if (viewport_rt_provider == nullptr) {
         return g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
@@ -1455,6 +1448,8 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
 
     // Restore the old texture.
     slate_resource->resource = old_texture;
+    
+    // After this we copy over the texture and clear it in the present hook. doing it here just seems to crash sometimes.
 
     return ret;
 }
