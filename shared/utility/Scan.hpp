@@ -19,8 +19,8 @@ namespace utility {
     std::optional<uintptr_t> scan_data_reverse(uintptr_t start, size_t length, const uint8_t* data, size_t size);
     std::optional<uintptr_t> scan_ptr(HMODULE module, uintptr_t ptr);
     std::optional<uintptr_t> scan_ptr(uintptr_t start, size_t length, uintptr_t ptr);
-    std::optional<uintptr_t> scan_string(HMODULE module, const std::string& str);
-    std::optional<uintptr_t> scan_string(HMODULE module, const std::wstring& str);
+    std::optional<uintptr_t> scan_string(HMODULE module, const std::string& str, bool zero_terminated = false);
+    std::optional<uintptr_t> scan_string(HMODULE module, const std::wstring& str, bool zero_terminated = false);
 
     std::optional<uintptr_t> scan_reference(HMODULE module, uintptr_t ptr, bool relative = true);
     std::optional<uintptr_t> scan_reference(uintptr_t start, size_t length, uintptr_t ptr, bool relative = true);
@@ -39,11 +39,11 @@ namespace utility {
     std::optional<INSTRUX> decode_one(uint8_t* ip, size_t max_size = 1000);
 
     std::optional<uintptr_t> find_function_start(uintptr_t middle);
-    std::optional<uintptr_t> find_function_from_string_ref(HMODULE module, std::wstring_view str);
+    std::optional<uintptr_t> find_function_from_string_ref(HMODULE module, std::wstring_view str, bool zero_terminated = false);
 
     // Same as the previous, but it keeps going upwards until utility::scan_ptr returns something
     std::optional<uintptr_t> find_virtual_function_start(uintptr_t middle);
-    std::optional<uintptr_t> find_virtual_function_from_string_ref(HMODULE module, std::wstring_view str);
+    std::optional<uintptr_t> find_virtual_function_from_string_ref(HMODULE module, std::wstring_view str, bool zero_terminated = false);
 
     std::optional<uintptr_t> resolve_displacement(uintptr_t ip);
 

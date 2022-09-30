@@ -11,7 +11,7 @@ std::optional<uintptr_t> UGameEngine::get_tick_address() {
         spdlog::info("UGameEngine::get_tick_address: scanning for address");
 
         const auto module = sdk::get_ue_module(L"Engine");
-        const auto result = utility::find_virtual_function_from_string_ref(module, L"causeevent="); // present for a very long time
+        const auto result = utility::find_virtual_function_from_string_ref(module, L"causeevent=", true); // present for a very long time
 
         if (!result) {
             spdlog::error("Failed to find UGameEngine::Tick!");

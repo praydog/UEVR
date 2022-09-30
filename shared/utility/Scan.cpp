@@ -116,24 +116,24 @@ namespace utility {
         return std::nullopt;
     }
 
-    optional<uintptr_t> scan_string(HMODULE module, const string& str) {
+    optional<uintptr_t> scan_string(HMODULE module, const string& str, bool zero_terminated) {
         if (str.empty()) {
             return {};
         }
 
         const auto data = (uint8_t*)str.c_str();
-        const auto size = str.size();
+        const auto size = str.size() + (zero_terminated ? 1 : 0);
 
         return scan_data(module, data, size);
     }
 
-    optional<uintptr_t> scan_string(HMODULE module, const wstring& str) {
+    optional<uintptr_t> scan_string(HMODULE module, const wstring& str, bool zero_terminated) {
         if (str.empty()) {
             return {};
         }
 
         const auto data = (uint8_t*)str.c_str();
-        const auto size = str.size() * sizeof(wchar_t);
+        const auto size = (str.size() + (zero_terminated ? 1 : 0)) * sizeof(wchar_t);
 
         return scan_data(module, data, size);
     }
@@ -348,10 +348,10 @@ namespace utility {
         return std::nullopt;
     }
 
-    std::optional<uintptr_t> find_function_from_string_ref(HMODULE module, std::wstring_view str) {
+    std::optional<uintptr_t> find_function_from_string_ref(HMODULE module, std::wstring_view str, bool zero_terminated) {
         spdlog::info("Scanning module {} for string reference {}", utility::get_module_path(module).value_or("UNKNOWN"), utility::narrow(str));
 
-        const auto str_data = utility::scan_string(module, str.data());
+        const auto str_data = utility::scan_string(module, str.data(), zero_terminated);
 
         if (!str_data) {
             spdlog::error("Failed to find string for {}", utility::narrow(str.data()));
@@ -401,10 +401,10 @@ namespace utility {
     }
 
     // Same as the previous, but it keeps going upwards until utility::scan_ptr returns something
-    std::optional<uintptr_t> find_virtual_function_from_string_ref(HMODULE module, std::wstring_view str) {
+    std::optional<uintptr_t> find_virtual_function_from_string_ref(HMODULE module, std::wstring_view str, bool zero_terminated) {
         spdlog::info("Scanning module {} for string reference {}", utility::get_module_path(module).value_or("UNKNOWN"), utility::narrow(str));
 
-        const auto str_data = utility::scan_string(module, str.data());
+        const auto str_data = utility::scan_string(module, str.data(), zero_terminated);
 
         if (!str_data) {
             spdlog::error("Failed to find string for {}", utility::narrow(str.data()));
