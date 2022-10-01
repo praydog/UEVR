@@ -69,65 +69,104 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
         return std::nullopt;
     }
 
-    auto raw_cvar_ref = !stop_at_first_mov ? 
-                        utility::scan_mnemonic(*cvar_creation_ref + utility::get_insn_size(*cvar_creation_ref), 100, "CALL") : cvar_creation_ref;
+    // means it's not inlined like we hoped
+    const auto is_e8_call = *(uint8_t*)*cvar_creation_ref == 0xE8;
 
-    if (!raw_cvar_ref) {
-        spdlog::error("Failed to find raw cvar reference for {}", utility::narrow(str.data()));
-        return std::nullopt;
-    }
+    if (!is_e8_call) {
+        auto raw_cvar_ref = !stop_at_first_mov ? 
+                            utility::scan_mnemonic(*cvar_creation_ref + utility::get_insn_size(*cvar_creation_ref), 100, "CALL") : cvar_creation_ref;
 
-    spdlog::info("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
-    const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
-
-    // we need to check that the reference uses a register in its operand
-    // otherwise it's the wrong call. find the next call if it is.
-    if (decoded_ref && !stop_at_first_mov) {
-        for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
-            spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
+        if (!raw_cvar_ref) {
+            spdlog::error("Failed to find raw cvar reference for {}", utility::narrow(str.data()));
+            return std::nullopt;
         }
 
-        if (decoded_ref->OperandsCount == 0 || 
-            decoded_ref->Operands[0].Type != ND_OP_MEM || 
-            decoded_ref->Operands[0].Info.Memory.Base == ND_REG_NOT_PRESENT)
-        {
-            spdlog::info("Scanning again, instruction at {:x} doesn't use a register", *raw_cvar_ref);
-            raw_cvar_ref = utility::scan_mnemonic(*raw_cvar_ref + utility::get_insn_size(*raw_cvar_ref), 100, "CALL");
+        spdlog::info("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
+        const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
 
-            if (raw_cvar_ref) {
-                const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
+        // we need to check that the reference uses a register in its operand
+        // otherwise it's the wrong call. find the next call if it is.
+        if (decoded_ref && !stop_at_first_mov) {
+            for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
+                spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
+            }
 
-                for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
-                    spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
+            if (decoded_ref->OperandsCount == 0 || 
+                decoded_ref->Operands[0].Type != ND_OP_MEM || 
+                decoded_ref->Operands[0].Info.Memory.Base == ND_REG_NOT_PRESENT)
+            {
+                spdlog::info("Scanning again, instruction at {:x} doesn't use a register", *raw_cvar_ref);
+                raw_cvar_ref = utility::scan_mnemonic(*raw_cvar_ref + utility::get_insn_size(*raw_cvar_ref), 100, "CALL");
+
+                if (raw_cvar_ref) {
+                    const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
+
+                    for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
+                        spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
+                    }
+
+                    spdlog::info("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
                 }
-
-                spdlog::info("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
             }
         }
-    }
 
-    // Look for a mov {ptr}, rax
-    auto ip = (uint8_t*)*raw_cvar_ref;
+        // Look for a mov {ptr}, rax
+        auto ip = (uint8_t*)*raw_cvar_ref;
 
-    for (auto i = 0; i < 100; ++i) {
-        INSTRUX ix{};
-        const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
+        for (auto i = 0; i < 100; ++i) {
+            INSTRUX ix{};
+            const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
 
-        if (!ND_SUCCESS(status)) {
+            if (!ND_SUCCESS(status)) {
+                spdlog::error("Failed to decode instruction for {}", utility::narrow(str.data()));
+                return std::nullopt;
+            }
+
+            if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_MEM && ix.Operands[1].Type == ND_OP_REG &&
+                ix.Operands[1].Info.Register.Reg == NDR_RAX) 
+            {
+                return (uintptr_t)(ip + ix.Length + ix.Operands[0].Info.Memory.Disp);
+            }
+
+            ip += ix.Length;
+        }
+
+        spdlog::error("Failed to find cvar for {}", utility::narrow(str.data()));
+    } else {
+        spdlog::info("Cvar creation is not inlined, performing alternative search...");
+
+        auto lea_rcx_ref = utility::scan_mnemonic(start, 100, "LEA");
+
+        if (!lea_rcx_ref || *lea_rcx_ref >= *cvar_creation_ref) {
+            return std::nullopt;
+        }
+
+        auto decoded = utility::decode_one((uint8_t*)*lea_rcx_ref);
+
+        if (!decoded) {
             spdlog::error("Failed to decode instruction for {}", utility::narrow(str.data()));
             return std::nullopt;
         }
 
-        if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_MEM && ix.Operands[1].Type == ND_OP_REG &&
-            ix.Operands[1].Info.Register.Reg == NDR_RAX) 
-        {
-            return (uintptr_t)(ip + ix.Length + ix.Operands[0].Info.Memory.Disp);
+        if (decoded->Operands[0].Type != ND_OP_REG || decoded->Operands[0].Info.Register.Reg != NDR_RCX) {
+            spdlog::error("Failed to find lea rcx for {}", utility::narrow(str.data()));
+            return std::nullopt;
         }
 
-        ip += ix.Length;
+        const auto cvar = utility::resolve_displacement(*lea_rcx_ref);
+
+        if (!cvar) {
+            spdlog::error("Failed to resolve displacement for {}", utility::narrow(str.data()));
+            return std::nullopt;
+        }
+
+        if (stop_at_first_mov) {
+            return *cvar + 8;
+        } else {
+            return *cvar + 0x10;
+        }
     }
 
-    spdlog::error("Failed to find cvar for {}", utility::narrow(str.data()));
     return std::nullopt;
 }
 
