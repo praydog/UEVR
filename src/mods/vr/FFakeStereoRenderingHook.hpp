@@ -150,7 +150,14 @@ public:
 
     void attempt_hooking();
     void attempt_hook_game_engine_tick();
-    void attempt_hook_slate_thread();
+    void attempt_hook_slate_thread(uintptr_t return_address = 0);
+    bool has_attempted_to_hook_slate() const {
+        return m_attempted_hook_slate_thread;
+    }
+
+    bool is_slate_hooked() const {
+        return m_hooked_slate_thread;
+    }
 
     void on_frame() {
         attempt_hook_game_engine_tick();

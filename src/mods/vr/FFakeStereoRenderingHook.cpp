@@ -123,19 +123,34 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick() {
     spdlog::info("Hooked UGameEngine::Tick!");
 }
 
-void FFakeStereoRenderingHook::attempt_hook_slate_thread() {
-    if (m_hooked_slate_thread || m_attempted_hook_slate_thread) {
+void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_address) {
+    if (m_hooked_slate_thread) {
+        return;
+    }
+
+    if (return_address == 0 && m_attempted_hook_slate_thread) {
         return;
     }
 
     spdlog::info("Attempting to hook FSlateRHIRenderer::DrawWindow_RenderThread!");
     m_attempted_hook_slate_thread = true;
 
-    const auto func = sdk::slate::locate_draw_window_renderthread_fn();
+    auto func = sdk::slate::locate_draw_window_renderthread_fn();
 
-    if (!func) {
+    if (!func && return_address == 0) {
         spdlog::error("Cannot hook FSlateRHIRenderer::DrawWindow_RenderThread");
         return;
+    }
+
+    if (return_address != 0) {
+        func = utility::find_function_start_with_call(return_address);
+
+        if (!func) {
+            spdlog::error("Cannot hook FSlateRHIRenderer::DrawWindow_RenderThread with alternative return address method");
+            return;
+        }
+
+        spdlog::info("Found FSlateRHIRenderer::DrawWindow_RenderThread with alternative return address method: {:x}", *func);
     }
 
     auto factory = SafetyHookFactory::init();
@@ -170,6 +185,8 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     spdlog::info("Performing standard fake stereo hook");
 
     const auto game = sdk::get_ue_module(L"Engine");
+    std::array<uint8_t, 0x1000> og_vtable{};
+    memcpy(og_vtable.data(), (void*)vtable, og_vtable.size()); // to perform tests on.
 
     patch_vtable_checks();
 
@@ -270,7 +287,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         return false;
     }
 
-    const auto rendertexture_fn_vtable_index = (*rendertexture_fn_vtable_middle - vtable) / sizeof(uintptr_t);
+    auto rendertexture_fn_vtable_index = (*rendertexture_fn_vtable_middle - vtable) / sizeof(uintptr_t);
     spdlog::info("RenderTexture_RenderThread VTable Middle: {} {:x}", rendertexture_fn_vtable_index, (uintptr_t)*rendertexture_fn_vtable_middle);
 
     auto render_target_manager_vtable_index = rendertexture_fn_vtable_index + 1 + (2 * (size_t)is_4_18_or_lower);
@@ -429,15 +446,12 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     m_calculate_stereo_view_offset_hook = builder.create_inline((void*)stereo_view_offset_func, calculate_stereo_view_offset);
     m_calculate_stereo_projection_matrix_hook = builder.create_inline((void*)calculate_stereo_projection_matrix_func, calculate_stereo_projection_matrix);
 
-    // When this is the case, then the CalculateRenderTargetSize index is the RenderTextureRenderThread index.
-    if (!m_rendertarget_manager_embedded_in_stereo_device) {
-        m_render_texture_render_thread_hook = builder.create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
-    }
-
     // This requires a pointer hook because the virtual just returns false
     // compiler optimization makes that function get re-used in a lot of places
     // so it's not feasible to just detour it, we need to replace the pointer in the vtable.
     if (!m_rendertarget_manager_embedded_in_stereo_device) {
+        m_render_texture_render_thread_hook = builder.create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
+
         // Seems to exist in 4.18+
         m_get_render_target_manager_hook = std::make_unique<PointerHook>((void**)get_render_target_manager_func_ptr, (void*)&get_render_target_manager_hook);
     } else {
@@ -490,6 +504,37 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 return VR::get()->is_hmd_active();
             }
         );
+
+        
+        // Scan forward from the alleged RenderTexture_RenderThread function to find the
+        // real RenderTexture_RenderThread function, because it is different when the
+        // render target manager is embedded in the stereo device.
+        // When it's embedded, it seems like it's the first function right after
+        // a set of functions that return false sequentially.
+        bool prev_function_returned_false = false;
+
+        for (auto i = rendertexture_fn_vtable_index + 1; i < 100; ++i) {
+            const auto func = ((uintptr_t*)og_vtable.data())[i];
+
+            if (func == 0 || IsBadReadPtr((void*)func, 3)) {
+                spdlog::error("Failed to find real RenderTexture_RenderThread");
+                return false;
+            }
+            
+            if (is_vfunc_pattern(func, "32 C0")) {
+                prev_function_returned_false = true;
+            } else {
+                if (prev_function_returned_false) {
+                    render_texture_render_thread_func = func;
+                    rendertexture_fn_vtable_index = i;
+                    m_render_texture_render_thread_hook = builder.create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
+                    spdlog::info("Real RenderTexture_RenderThread: {} {:x}", rendertexture_fn_vtable_index, (uintptr_t)*render_texture_render_thread_func);
+                    break;
+                }
+
+                prev_function_returned_false = false;
+            }
+        }
     }
     
     //m_get_stereo_layers_hook = std::make_unique<PointerHook>((void**)get_stereo_layers_func_ptr, (void*)&get_stereo_layers_hook);
@@ -1094,12 +1139,20 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
 
 template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
-void FFakeStereoRenderingHook::render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list,
+__forceinline void FFakeStereoRenderingHook::render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list,
     FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size) 
 {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("render texture render thread called!");
 #endif
+
+
+    if (!g_hook->is_slate_hooked() && g_hook->has_attempted_to_hook_slate()) {
+        spdlog::info("Attempting to hook SlateRHIRenderer::DrawWindow_RenderThread using RenderTexture_RenderThread return address...");
+        const auto return_address = (uintptr_t)_ReturnAddress();
+        spdlog::info(" Return address: {:x}", return_address);
+        g_hook->attempt_hook_slate_thread(return_address);
+    }
 
     /*const auto return_address = (uintptr_t)_ReturnAddress();
     const auto slate_cvar_usage_location = sdk::vr::get_slate_draw_to_vr_render_target_usage_location();
@@ -1425,6 +1478,7 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
     const auto viewport_rt_provider = viewport_info->get_rt_provider(g_hook->get_render_target_manager()->get_render_target());
 
     if (viewport_rt_provider == nullptr) {
+        spdlog::info("No viewport RT provider, skipping!");
         return g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
     }
 
@@ -1761,20 +1815,27 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
             uintptr_t rhi,
             FTexture2DRHIRef* out,
             uintptr_t command_list,
-            uint32_t w,
-            uint32_t h,
-            uint8_t format,
-            uint32_t mips,
-            uint32_t samples,
-            ETextureCreateFlags flags,
-            sdk::FCreateInfo& create_info,
+            uintptr_t w,
+            uintptr_t h,
+            uintptr_t format,
+            uintptr_t mips,
+            uintptr_t samples,
+            uintptr_t flags,
+            uintptr_t create_info,
             uintptr_t additional,
             uintptr_t additional2) = (decltype(func))func_ptr;
 
         func(ctx.rcx, &out, ctx.r8, size.x, size.y, 2, 
-            stack_args[2], stack_args[3], (ETextureCreateFlags)stack_args[4], *(sdk::FCreateInfo*)stack_args[5], stack_args[6], stack_args[7]);
+            stack_args[2], stack_args[3], stack_args[4], 
+            stack_args[5], stack_args[6], stack_args[7]);
 
         g_hook->get_render_target_manager()->ui_target = out.texture;
+
+        if (out.texture == nullptr) {
+            spdlog::error("Failed to create UI texture!");
+        } else {
+            spdlog::info("Created UI texture at {:x}", (uintptr_t)out.texture);
+        }
     } else {
         void (*func)(
             uint32_t w,

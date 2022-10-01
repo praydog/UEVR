@@ -348,6 +348,37 @@ namespace utility {
         return std::nullopt;
     }
 
+    std::optional<uintptr_t> find_function_start_with_call(uintptr_t middle) {
+        const auto module = utility::get_module_within(middle).value_or(nullptr);
+        
+        if (module == nullptr) {
+            return std::nullopt;
+        }
+
+        for (auto func = find_function_start(middle); func.has_value(); func = find_function_start(*func - 1)) {
+            spdlog::info(" Checking if {:x} is a real function", *func);
+
+            const auto ref = utility::scan_displacement_reference(module, *func);
+
+            if (!ref) {
+                continue;
+            }
+
+            const auto resolved = utility::resolve_instruction(*ref);
+
+            if (!resolved) {
+                spdlog::error(" Could not resolve instruction");
+                continue;
+            }
+
+            if (std::string_view{resolved->instrux.Mnemonic}.starts_with("CALL")) {
+                return *func;
+            }
+        }
+
+        return std::nullopt;
+    }
+
     std::optional<uintptr_t> find_function_from_string_ref(HMODULE module, std::wstring_view str, bool zero_terminated) {
         spdlog::info("Scanning module {} for string reference {}", utility::get_module_path(module).value_or("UNKNOWN"), utility::narrow(str));
 

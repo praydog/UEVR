@@ -39,6 +39,9 @@ namespace utility {
     std::optional<INSTRUX> decode_one(uint8_t* ip, size_t max_size = 1000);
 
     std::optional<uintptr_t> find_function_start(uintptr_t middle);
+    // same as prev, but keeps going backwards until the "function" it lands on
+    // is actually called somewhere within the module
+    std::optional<uintptr_t> find_function_start_with_call(uintptr_t middle);
     std::optional<uintptr_t> find_function_from_string_ref(HMODULE module, std::wstring_view str, bool zero_terminated = false);
 
     // Same as the previous, but it keeps going upwards until utility::scan_ptr returns something
