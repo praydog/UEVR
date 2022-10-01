@@ -296,7 +296,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 const auto distance_from_rendertexture_fn = render_target_manager_vtable_index - rendertexture_fn_vtable_index;
 
                 // means it's 4.17 I think. 12 means 4.11.
-                if (distance_from_rendertexture_fn == 11 || distance_from_rendertexture_fn == 12) {
+                if (distance_from_rendertexture_fn == 10 || distance_from_rendertexture_fn == 11 || distance_from_rendertexture_fn == 12) {
                     is_4_11 = distance_from_rendertexture_fn == 12;
                     m_rendertarget_manager_embedded_in_stereo_device = true;
                     spdlog::info("Render target manager appears to be directly embedded in the stereo device vtable");
