@@ -121,7 +121,14 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
         if (runtime->is_openvr()) {
             // Copy the back buffer to the right eye texture.
-            context->CopyResource(m_right_eye_tex.Get(), backbuffer.Get());
+            D3D11_BOX src_box{};
+            src_box.left = m_backbuffer_size[0] / 2;
+            src_box.right = m_backbuffer_size[0];
+            src_box.top = 0;
+            src_box.bottom = m_backbuffer_size[1];
+            src_box.front = 0;
+            src_box.back = 1;
+            context->CopySubresourceRegion(m_right_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
 
             auto openvr = vr->get_runtime<runtimes::OpenVR>();
             const auto submit_pose = openvr->get_pose_for_submit();
@@ -135,10 +142,15 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
             // in UE4 it's just one texture, so re-use the right eye texture
             if (e == vr::VRCompositorError_None && !vr->m_use_afr->value()) {
+                src_box.left = 0;
+                src_box.right = m_backbuffer_size[0] / 2;
+                context->CopySubresourceRegion(m_left_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
+
                 vr::VRTextureWithPose_t left_eye{
-                    (void*)m_right_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto,
+                    (void*)m_left_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto,
                     submit_pose
                 };
+
                 e = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &vr->m_left_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
             }
 
@@ -227,6 +239,11 @@ void D3D11Component::setup() {
     // Get backbuffer description.
     D3D11_TEXTURE2D_DESC backbuffer_desc{};
     backbuffer->GetDesc(&backbuffer_desc);
+
+    m_backbuffer_size[0] = backbuffer_desc.Width;
+    m_backbuffer_size[1] = backbuffer_desc.Height;
+
+    backbuffer_desc.Width = backbuffer_desc.Width / 2;
 
     spdlog::info("[VR] W: {}, H: {}", backbuffer_desc.Width, backbuffer_desc.Height);
     spdlog::info("[VR] Format: {}", backbuffer_desc.Format);

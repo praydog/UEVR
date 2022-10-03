@@ -40,6 +40,7 @@ private:
     vr::HmdMatrix44_t m_right_eye_proj{};
 
     std::array<ComPtr<ID3D11Texture2D>, 2> m_backbuffer_references{};
+    std::array<uint32_t, 2> m_backbuffer_size{};
 
     struct OpenXR {
         void initialize(XrSessionCreateInfo& session_info);
