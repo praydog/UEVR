@@ -69,7 +69,12 @@ void* FRHITexture::get_native_resource() const {
             if (module_path_lower.ends_with("d3d11.dll") || 
                 module_path_lower.ends_with("d3d12.dll") || 
                 module_path_lower.ends_with("d3d12core.dll") ||
-                module_path_lower.ends_with("dxgi.dll")) 
+                module_path_lower.ends_with("dxgi.dll") ||
+                module_path_lower.ends_with("d3d12sdklayers.dll") ||
+                module_path_lower.ends_with("d3d11_1sdklayers.dll") ||
+                module_path_lower.ends_with("d3d11_2sdklayers.dll") ||
+                module_path_lower.ends_with("d3d11_3sdklayers.dll") ||
+                module_path_lower.ends_with("d3d11on12.dll"))
             {
                 spdlog::info(" Found vtable index {} for FRHITexture::GetNativeResource", i);
                 return i;
