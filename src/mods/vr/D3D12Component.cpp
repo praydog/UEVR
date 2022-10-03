@@ -41,11 +41,12 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     const auto ui_target = ffsr->get_render_target_manager()->get_ui_target();
 
     if (ui_target != nullptr) {
-        m_ui_tex.copier.wait(5);
-        m_ui_tex.copier.copy((ID3D12Resource*)ui_target->get_native_resource(), m_ui_tex.texture.Get());
-        m_ui_tex.copier.copy(m_blank_tex.texture.Get(), (ID3D12Resource*)ui_target->get_native_resource());
+        m_ui_tex.copier.wait(INFINITE);
+        m_ui_tex.copier.copy((ID3D12Resource*)ui_target->get_native_resource(), m_ui_tex.texture.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        m_ui_tex.copier.copy(m_blank_tex.texture.Get(), (ID3D12Resource*)ui_target->get_native_resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         m_ui_tex.copier.execute();
     }
+    
     auto runtime = vr->get_runtime();
     const auto frame_count = vr->m_render_frame_count;
 
