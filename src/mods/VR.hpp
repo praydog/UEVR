@@ -183,8 +183,8 @@ private:
     std::vector<int32_t> m_controllers{};
     std::unordered_set<int32_t> m_controllers_set{};
 
-    vr::VRTextureBounds_t m_right_bounds{ 0.5f, 0.0f, 1.0f, 1.0f };
-    vr::VRTextureBounds_t m_left_bounds{ 0.0f, 0.0f, 0.5f, 1.0f };
+    vr::VRTextureBounds_t m_right_bounds{ 0.0f, 0.0f, 1.0f, 1.0f };
+    vr::VRTextureBounds_t m_left_bounds{ 0.0f, 0.0f, 1.0f, 1.0f };
 
     glm::vec3 m_overlay_rotation{-1.550f, 0.0f, -1.330f};
     glm::vec4 m_overlay_position{0.0f, 0.06f, -0.07f, 1.0f};

@@ -86,7 +86,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         // OpenVR texture
         // Copy the back buffer to the right eye texture.
         if (runtime->is_openvr()) {
-            m_openvr.copy_right(backbuffer.Get());
+            m_openvr.copy_right(backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
             vr::D3D12TextureData_t right {
                 m_openvr.get_right().texture.Get(),
@@ -106,8 +106,16 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
             // in UE4 it's just one texture, so re-use the right eye texture
             if (e == vr::VRCompositorError_None && !vr->m_use_afr->value()) {
+                m_openvr.copy_left(backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+                vr::D3D12TextureData_t left {
+                    m_openvr.get_left().texture.Get(),
+                    command_queue,
+                    0
+                };
+
                 vr::VRTextureWithPose_t left_eye{
-                    (void*)&right, vr::TextureType_DirectX12, vr::ColorSpace_Auto,
+                    (void*)&left, vr::TextureType_DirectX12, vr::ColorSpace_Auto,
                     submit_pose
                 };
 
@@ -207,6 +215,11 @@ void D3D12Component::on_reset(VR* vr) {
         copier.reset();
     }
 
+    m_ui_tex.copier.reset();
+    m_ui_tex.texture.Reset();
+    m_blank_tex.copier.reset();
+    m_blank_tex.texture.Reset();
+
     if (runtime->is_openxr() && runtime->loaded) {
         if (m_openxr.last_resolution[0] != vr->get_hmd_width() || m_openxr.last_resolution[1] != vr->get_hmd_height()) {
             m_openxr.create_swapchains();
@@ -247,6 +260,8 @@ void D3D12Component::setup() {
 
     auto backbuffer_desc = backbuffer->GetDesc();
 
+    backbuffer_desc.Width /= 2; // The texture we get from UE is both eyes combined. we will copy the regions later.
+
     spdlog::info("[VR] D3D12 Backbuffer width: {}, height: {}", backbuffer_desc.Width, backbuffer_desc.Height);
 
     D3D12_HEAP_PROPERTIES heap_props{};
@@ -261,7 +276,8 @@ void D3D12Component::setup() {
             return;
         }
 
-        ctx.copier.setup();
+        ctx.texture->SetName(L"OpenVR Left Eye Texture");
+        ctx.copier.setup(L"OpenVR Left Eye");
     }
 
     for (auto& ctx : m_openvr.right_eye_tex) {
@@ -271,17 +287,18 @@ void D3D12Component::setup() {
             return;
         }
 
-        ctx.copier.setup();
+        ctx.texture->SetName(L"OpenVR Right Eye Texture");
+        ctx.copier.setup(L"OpenVR Right Eye");
     }
 
     for (auto& copier : m_generic_copiers) {
-        copier.setup();
+        copier.setup(L"Generic Copier");
     }
 
-    m_backbuffer_size[0] = backbuffer_desc.Width;
+    m_backbuffer_size[0] = backbuffer_desc.Width * 2;
     m_backbuffer_size[1] = backbuffer_desc.Height;
 
-    // Set up the UI texture.
+    // Set up the UI texture. it's the desktop resolution.
     backbuffer_desc.Width = (uint32_t)g_framework->get_d3d12_rt_size().x;
     backbuffer_desc.Height = (uint32_t)g_framework->get_d3d12_rt_size().y;
 
@@ -291,14 +308,18 @@ void D3D12Component::setup() {
         return;
     }
 
+    m_ui_tex.texture->SetName(L"VR UI Texture");
+
     if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &backbuffer_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
             IID_PPV_ARGS(&m_blank_tex.texture)))) {
         spdlog::error("[VR] Failed to create blank UI texture.");
         return;
     }
 
-    m_ui_tex.copier.setup();
-    m_blank_tex.copier.setup();
+    m_blank_tex.texture->SetName(L"VR Blank Texture");
+
+    m_ui_tex.copier.setup(L"VR UI");
+    m_blank_tex.copier.setup(L"VR Blank");
 
     spdlog::info("[VR] d3d12 textures have been setup");
     m_force_reset = false;
@@ -411,7 +432,7 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
 
             ctx.textures[j] = {XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR};
             ctx.texture_contexts[j] = std::make_unique<D3D12Component::OpenXR::SwapchainContext::TextureContext>();
-            ctx.texture_contexts[j]->copier.setup();
+            ctx.texture_contexts[j]->copier.setup(L"OpenXR Copier");
 
             backbuffer_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
             backbuffer_desc.Flags &= ~D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
@@ -561,7 +582,7 @@ void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resour
     }
 }
 
-void D3D12Component::ResourceCopier::setup() {
+void D3D12Component::ResourceCopier::setup(const wchar_t* name) {
     std::scoped_lock _{this->mtx};
 
     auto& hook = g_framework->get_d3d12_hook();
@@ -572,17 +593,22 @@ void D3D12Component::ResourceCopier::setup() {
         return;
     }
 
+    this->cmd_allocator->SetName(name);
+
     if (FAILED(device->CreateCommandList(
             0, D3D12_COMMAND_LIST_TYPE_DIRECT, this->cmd_allocator.Get(), nullptr, IID_PPV_ARGS(&this->cmd_list)))) {
         spdlog::error("[VR] Failed to create command list.");
         return;
     }
+    
+    this->cmd_list->SetName(name);
 
     if (FAILED(device->CreateFence(this->fence_value, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&this->fence)))) {
         spdlog::error("[VR] Failed to create fence.");
         return;
     }
 
+    this->fence->SetName(name);
     this->fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 }
 
@@ -642,6 +668,60 @@ void D3D12Component::ResourceCopier::copy(ID3D12Resource* src, ID3D12Resource* d
 
     // Copy the resource.
     this->cmd_list->CopyResource(dst, src);
+
+    // Switch back to present.
+    src_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    src_barrier.Transition.StateAfter = src_state;
+    dst_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    dst_barrier.Transition.StateAfter = dst_state;
+
+    {
+        D3D12_RESOURCE_BARRIER barriers[2]{src_barrier, dst_barrier};
+        this->cmd_list->ResourceBarrier(2, barriers);
+    }
+
+    this->has_commands = true;
+}
+
+void D3D12Component::ResourceCopier::copy_region(ID3D12Resource* src, ID3D12Resource* dst, D3D12_BOX* src_box, D3D12_RESOURCE_STATES src_state, D3D12_RESOURCE_STATES dst_state) {
+    std::scoped_lock _{this->mtx};
+
+    // Switch src into copy source.
+    D3D12_RESOURCE_BARRIER src_barrier{};
+
+    src_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    src_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    src_barrier.Transition.pResource = src;
+    src_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    src_barrier.Transition.StateBefore = src_state;
+    src_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+
+    // Switch dst into copy destination.
+    D3D12_RESOURCE_BARRIER dst_barrier{};
+    dst_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    dst_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    dst_barrier.Transition.pResource = dst;
+    dst_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    dst_barrier.Transition.StateBefore = dst_state;
+    dst_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+
+    {
+        D3D12_RESOURCE_BARRIER barriers[2]{src_barrier, dst_barrier};
+        this->cmd_list->ResourceBarrier(2, barriers);
+    }
+
+    // Copy the resource.
+    D3D12_TEXTURE_COPY_LOCATION src_loc{};
+    src_loc.pResource = src;
+    src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    src_loc.SubresourceIndex = 0;
+
+    D3D12_TEXTURE_COPY_LOCATION dst_loc{};
+    dst_loc.pResource = dst;
+    dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    dst_loc.SubresourceIndex = 0;
+
+    this->cmd_list->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, src_box);
 
     // Switch back to present.
     src_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;

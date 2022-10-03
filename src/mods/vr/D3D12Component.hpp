@@ -16,6 +16,12 @@ class VR;
 namespace vrmod {
 class D3D12Component {
 public:
+    D3D12Component() 
+        : m_openvr{this}
+    {
+
+    }
+
     vr::EVRCompositorError on_frame(VR* vr);
 
     void on_reset(VR* vr);
@@ -38,10 +44,14 @@ private:
     struct ResourceCopier {
         virtual ~ResourceCopier() { this->reset(); }
 
-        void setup();
+        void setup(const wchar_t* name = L"ResourceCopier object");
         void reset();
         void wait(uint32_t ms);
-        void copy(ID3D12Resource* src, ID3D12Resource* dst, D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT,
+        void copy(ID3D12Resource* src, ID3D12Resource* dst, 
+            D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT,
+            D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        void copy_region(ID3D12Resource* src, ID3D12Resource* dst, D3D12_BOX* src_box, 
+            D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT,
             D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         void execute();
 
@@ -70,6 +80,8 @@ private:
 
     // Mimicking what OpenXR does.
     struct OpenVR {
+        OpenVR(D3D12Component* p) : parent{p} {}
+        
         TextureContext& get_left() {
             auto& ctx = this->left_eye_tex[this->texture_counter % left_eye_tex.size()];
 
@@ -96,21 +108,42 @@ private:
             return ctx;
         }
 
-        void copy_left(ID3D12Resource* src) {
+        void copy_left(ID3D12Resource* src, D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT) {
             auto& ctx = this->acquire_left();
-            ctx.copier.copy(src, ctx.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            //ctx.copier.copy(src, ctx.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            // Copy the left half of the backbuffer to the left eye texture.
+            D3D12_BOX src_box{};
+            src_box.left = 0;
+            src_box.top = 0;
+            src_box.right = parent->m_backbuffer_size[0] / 2;
+            src_box.bottom = parent->m_backbuffer_size[1];
+            src_box.front = 0;
+            src_box.back = 1;
+            ctx.copier.copy_region(src, ctx.texture.Get(), &src_box, src_state, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             ctx.copier.execute();
         }
 
-        void copy_right(ID3D12Resource* src) {
+        void copy_right(ID3D12Resource* src, D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT) {
             auto& ctx = this->acquire_right();
-            ctx.copier.copy(src, ctx.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            //ctx.copier.copy(src, ctx.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            // Copy the right half of the backbuffer to the right eye texture.
+            D3D12_BOX src_box{};
+            src_box.left = parent->m_backbuffer_size[0] / 2;
+            src_box.top = 0;
+            src_box.right = parent->m_backbuffer_size[0];
+            src_box.bottom = parent->m_backbuffer_size[1];
+            src_box.front = 0;
+            src_box.back = 1;
+            ctx.copier.copy_region(src, ctx.texture.Get(), &src_box, src_state, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             ctx.copier.execute();
         }
 
         std::array<TextureContext, 3> left_eye_tex{};
         std::array<TextureContext, 3> right_eye_tex{};
         uint32_t texture_counter{0};
+        D3D12Component* parent{};
+
+        friend class D3D12Component;
     } m_openvr;
 
     struct OpenXR {
