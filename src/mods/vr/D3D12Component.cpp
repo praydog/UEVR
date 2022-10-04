@@ -80,7 +80,30 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     } else {
         // OpenXR texture
         if (runtime->is_openxr() && vr->m_openxr->ready()) {
-            m_openxr.copy(1, backbuffer.Get());
+            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !vr->m_openxr->frame_began) {
+                vr->m_openxr->begin_frame();
+            }
+
+            if (!vr->m_use_afr->value()) {
+                D3D12_BOX src_box{};
+                src_box.left = 0;
+                src_box.right = m_backbuffer_size[0] / 2;
+                src_box.top = 0;
+                src_box.bottom = m_backbuffer_size[1];
+                src_box.front = 0;
+                src_box.back = 1;
+
+                m_openxr.copy(0, backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, &src_box);
+            }
+
+            D3D12_BOX src_box{};
+            src_box.left = m_backbuffer_size[0] / 2;
+            src_box.right = m_backbuffer_size[0];
+            src_box.top = 0;
+            src_box.bottom = m_backbuffer_size[1];
+            src_box.front = 0;
+            src_box.back = 1;
+            m_openxr.copy(1, backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, &src_box);
         }
 
         // OpenVR texture
@@ -150,7 +173,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         // OpenXR start ////////////////////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////////////////////////
         if (runtime->is_openxr() && vr->m_openxr->ready()) {
-            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !vr->m_openxr->frame_began) {
+            if (!vr->m_openxr->frame_began) {
                 vr->m_openxr->begin_frame();
             }
 
@@ -392,7 +415,7 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
         // Create the swapchain.
         XrSwapchainCreateInfo swapchain_create_info{XR_TYPE_SWAPCHAIN_CREATE_INFO};
         swapchain_create_info.arraySize = 1;
-        swapchain_create_info.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        swapchain_create_info.format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
         swapchain_create_info.width = backbuffer_desc.Width;
         swapchain_create_info.height = backbuffer_desc.Height;
         swapchain_create_info.mipCount = 1;
@@ -440,6 +463,8 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
                 spdlog::error("[VR] Failed to create swapchain texture {} {}", i, j);
                 return "Failed to create swapchain texture.";
             }
+
+            ctx.textures[j].texture->SetName(L"OpenXR Swapchain Texture");
         }
 
         result = xrEnumerateSwapchainImages(swapchain.handle, image_count, &image_count, (XrSwapchainImageBaseHeader*)&ctx.textures[0]);
@@ -487,7 +512,7 @@ void D3D12Component::OpenXR::destroy_swapchains() {
     VR::get()->m_openxr->swapchains.clear();
 }
 
-void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resource) {
+void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resource, D3D12_RESOURCE_STATES src_state, D3D12_BOX* src_box) {
     std::scoped_lock _{this->mtx};
 
     auto vr = VR::get();
@@ -543,11 +568,21 @@ void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resour
         } else {
             auto& texture_ctx = ctx.texture_contexts[texture_index];
             texture_ctx->copier.wait(INFINITE);
-            texture_ctx->copier.copy(
-                resource, 
-                ctx.textures[texture_index].texture, 
-                D3D12_RESOURCE_STATE_PRESENT, 
-                D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+            if (src_box == nullptr) {
+                texture_ctx->copier.copy(
+                    resource, 
+                    ctx.textures[texture_index].texture, 
+                    src_state, 
+                    D3D12_RESOURCE_STATE_RENDER_TARGET);
+            } else {
+                texture_ctx->copier.copy_region(
+                    resource, 
+                    ctx.textures[texture_index].texture, src_box,
+                    src_state, 
+                    D3D12_RESOURCE_STATE_RENDER_TARGET);
+            }
+
             texture_ctx->copier.execute();
 
             XrSwapchainImageReleaseInfo release_info{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
