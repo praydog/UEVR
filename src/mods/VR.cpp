@@ -632,9 +632,11 @@ void VR::on_present() {
 
     auto runtime = get_runtime();
 
-    if (!get_runtime()->loaded) {
+    if (!runtime->loaded) {
         return;
     }
+
+    runtime->consume_events(nullptr);
 
     m_fake_stereo_hook->on_frame();
 

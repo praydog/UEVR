@@ -120,6 +120,36 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         }
 
         if (runtime->is_openvr()) {
+            auto openvr = vr->get_runtime<runtimes::OpenVR>();
+            const auto submit_pose = openvr->get_pose_for_submit();
+
+            vr::EVRCompositorError e = vr::VRCompositorError_None;
+
+            if (!vr->m_use_afr->value()) {
+                D3D11_BOX src_box{};
+                src_box.left = 0;
+                src_box.right = m_backbuffer_size[0] / 2;
+                src_box.top = 0;
+                src_box.bottom = m_backbuffer_size[1];
+                src_box.front = 0;
+                src_box.back = 1;
+
+                context->CopySubresourceRegion(m_left_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
+
+                vr::VRTextureWithPose_t left_eye{
+                    (void*)m_left_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto,
+                    submit_pose
+                };
+
+                e = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &vr->m_left_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
+
+                if (e != vr::VRCompositorError_None) {
+                    spdlog::error("[VR] VRCompositor failed to left eye: {}", (int)e);
+                    vr->m_submitted = false;
+                    return e;
+                }
+            }
+
             // Copy the back buffer to the right eye texture.
             D3D11_BOX src_box{};
             src_box.left = m_backbuffer_size[0] / 2;
@@ -130,29 +160,12 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             src_box.back = 1;
             context->CopySubresourceRegion(m_right_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
 
-            auto openvr = vr->get_runtime<runtimes::OpenVR>();
-            const auto submit_pose = openvr->get_pose_for_submit();
-
             vr::VRTextureWithPose_t right_eye{
                 (void*)m_right_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto,
                 submit_pose
             };
 
-            auto e = vr::VRCompositor()->Submit(vr::Eye_Right, &right_eye, &vr->m_right_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
-
-            // in UE4 it's just one texture, so re-use the right eye texture
-            if (e == vr::VRCompositorError_None && !vr->m_use_afr->value()) {
-                src_box.left = 0;
-                src_box.right = m_backbuffer_size[0] / 2;
-                context->CopySubresourceRegion(m_left_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
-
-                vr::VRTextureWithPose_t left_eye{
-                    (void*)m_left_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto,
-                    submit_pose
-                };
-
-                e = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &vr->m_left_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
-            }
+            e = vr::VRCompositor()->Submit(vr::Eye_Right, &right_eye, &vr->m_right_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
 
             bool submitted = true;
 
@@ -165,13 +178,13 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             vr->m_submitted = true;
         }
 
-        if (runtime->ready() && vr->m_desktop_fix->value()) {
+        /*if (runtime->ready() && vr->m_desktop_fix->value()) {
             if (vr->m_desktop_fix_skip_present->value()) {
                 hook->ignore_next_present();
             } else {
                 context->CopyResource(real_backbuffer.Get(), m_right_eye_tex.Get());
             }
-        }
+        }*/
     }
 
     return vr::VRCompositorError_None;

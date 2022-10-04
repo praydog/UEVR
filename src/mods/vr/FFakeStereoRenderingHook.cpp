@@ -996,7 +996,6 @@ void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
     if (true_index == 0) {
         std::scoped_lock _{ vr->m_openvr_mtx };
-        vr->get_runtime()->consume_events(nullptr);
         vr->update_hmd_state();
     }
 

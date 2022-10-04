@@ -84,28 +84,12 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         }
 
         // OpenVR texture
-        // Copy the back buffer to the right eye texture.
+        // Copy the back buffer to the left and right eye textures.
         if (runtime->is_openvr()) {
-            m_openvr.copy_right(backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-            vr::D3D12TextureData_t right {
-                m_openvr.get_right().texture.Get(),
-                command_queue,
-                0
-            };
-
             auto openvr = vr->get_runtime<runtimes::OpenVR>();
             const auto submit_pose = openvr->get_pose_for_submit();
 
-            vr::VRTextureWithPose_t right_eye{
-                (void*)&right, vr::TextureType_DirectX12, vr::ColorSpace_Auto,
-                submit_pose
-            };
-
-            auto e = vr::VRCompositor()->Submit(vr::Eye_Right, &right_eye, &vr->m_right_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
-
-            // in UE4 it's just one texture, so re-use the right eye texture
-            if (e == vr::VRCompositorError_None && !vr->m_use_afr->value()) {
+            if (!vr->m_use_afr->value()) {
                 m_openvr.copy_left(backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
                 vr::D3D12TextureData_t left {
@@ -119,13 +103,28 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                     submit_pose
                 };
 
-                auto le = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &vr->m_left_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
+                auto e = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &vr->m_left_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
 
-                if (le != vr::VRCompositorError_None) {
-                    spdlog::error("[VR] VRCompositor failed to submit left eye: {}", (int)le);
-                    return le;
+                if (e != vr::VRCompositorError_None) {
+                    spdlog::error("[VR] VRCompositor failed to submit left eye: {}", (int)e);
+                    return e;
                 }
             }
+
+            m_openvr.copy_right(backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+            vr::D3D12TextureData_t right {
+                m_openvr.get_right().texture.Get(),
+                command_queue,
+                0
+            };
+
+            vr::VRTextureWithPose_t right_eye{
+                (void*)&right, vr::TextureType_DirectX12, vr::ColorSpace_Auto,
+                submit_pose
+            };
+
+            auto e = vr::VRCompositor()->Submit(vr::Eye_Right, &right_eye, &vr->m_right_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
 
             if (e != vr::VRCompositorError_None) {
                 spdlog::error("[VR] VRCompositor failed to submit right eye: {}", (int)e);
@@ -184,13 +183,13 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         }
 
         // Allows the desktop window to be recorded.
-        if (vr->m_desktop_fix->value()) {
+        /*if (vr->m_desktop_fix->value()) {
             if (runtime->ready() && m_prev_backbuffer != backbuffer && m_prev_backbuffer != nullptr) {
                 m_generic_copiers[frame_count % 3].wait(INFINITE);
                 m_generic_copiers[frame_count % 3].copy(m_prev_backbuffer.Get(), backbuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PRESENT);
                 m_generic_copiers[frame_count % 3].execute();
             }
-        }
+        }*/
     }
 
     m_prev_backbuffer = backbuffer;
