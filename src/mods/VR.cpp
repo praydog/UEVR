@@ -203,13 +203,15 @@ std::optional<std::string> VR::initialize_openxr() {
 
     spdlog::info("[VR] Initializing OpenXR");
 
-    if (utility::load_module_from_current_directory(L"openxr_loader.dll") == nullptr) {
-        spdlog::info("[VR] Could not load openxr_loader.dll");
+    if (GetModuleHandleW(L"openxr_loader.dll") == nullptr) {
+        if (utility::load_module_from_current_directory(L"openxr_loader.dll") == nullptr) {
+            spdlog::info("[VR] Could not load openxr_loader.dll");
 
-        m_openxr->loaded = false;
-        m_openxr->error = "Could not load openxr_loader.dll";
+            m_openxr->loaded = false;
+            m_openxr->error = "Could not load openxr_loader.dll";
 
-        return std::nullopt;
+            return std::nullopt;
+        }
     }
 
     if (g_framework->is_dx12()) {
@@ -682,6 +684,20 @@ void VR::on_present() {
     const auto renderer = g_framework->get_renderer_type();
     vr::EVRCompositorError e = vr::EVRCompositorError::VRCompositorError_None;
 
+    if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::LATE) {
+        const auto had_sync = runtime->got_first_sync;
+        runtime->synchronize_frame();
+
+        if (!runtime->got_first_poses || !had_sync) {
+            update_hmd_state();
+            if (runtime->is_openvr()) {
+                std::unique_lock _{m_openvr->pose_mtx};
+                m_openvr->pose_queue.clear();
+            }
+        }
+    }
+
+
     if (renderer == Framework::RendererType::D3D11) {
         // if we don't do this then D3D11 OpenXR freezes for some reason.
         if (!runtime->got_first_sync) {
@@ -716,7 +732,7 @@ void VR::on_present() {
 
             if (runtime->is_openvr()) {
                 //vr::VRCompositor()->SetExplicitTimingMode(vr::VRCompositorTimingMode_Explicit_ApplicationPerformsPostPresentHandoff);
-                //vr::VRCompositor()->PostPresentHandoff();
+                vr::VRCompositor()->PostPresentHandoff();
             }
         }
 
@@ -737,7 +753,7 @@ void VR::on_post_present() {
     if (!get_runtime()->loaded) {
         return;
     }
-
+    
     if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
         const auto had_sync = runtime->got_first_sync;
         runtime->synchronize_frame();
@@ -1009,13 +1025,16 @@ Matrix4x4f VR::get_rotation(uint32_t index) const {
 
         // HMD rotation
         if (index == 0 && !m_openxr->stage_views.empty()) {
-            return Matrix4x4f{*(glm::quat*)&m_openxr->view_space_location.pose.orientation};
+            const auto q = runtimes::OpenXR::to_glm(m_openxr->view_space_location.pose.orientation);
+            const auto m = glm::extractMatrixRotation(Matrix4x4f{q});
+
+            return m;
             //return Matrix4x4f{*(glm::quat*)&m_openxr->stage_views[0].pose.orientation};
         } else if (index > 0) {
             if (index == VRRuntime::Hand::LEFT+1) {
-                return Matrix4x4f{*(glm::quat*)&m_openxr->hands[VRRuntime::Hand::LEFT].location.pose.orientation};
+                return Matrix4x4f{runtimes::OpenXR::to_glm(m_openxr->hands[VRRuntime::Hand::LEFT].location.pose.orientation)};
             } else if (index == VRRuntime::Hand::RIGHT+1) {
-                return Matrix4x4f{*(glm::quat*)&m_openxr->hands[VRRuntime::Hand::RIGHT].location.pose.orientation};
+                return Matrix4x4f{runtimes::OpenXR::to_glm(m_openxr->hands[VRRuntime::Hand::RIGHT].location.pose.orientation)};
             }
         }
 
@@ -1041,16 +1060,16 @@ Matrix4x4f VR::get_transform(uint32_t index) const {
 
         // HMD rotation
         if (index == 0 && !m_openxr->stage_views.empty()) {
-            auto mat = Matrix4x4f{*(glm::quat*)&m_openxr->view_space_location.pose.orientation};
+            auto mat = Matrix4x4f{runtimes::OpenXR::to_glm(m_openxr->view_space_location.pose.orientation)};
             mat[3] = Vector4f{*(Vector3f*)&m_openxr->view_space_location.pose.position, 1.0f};
             return mat;
         } else if (index > 0) {
             if (index == VRRuntime::Hand::LEFT+1) {
-                auto mat = Matrix4x4f{*(glm::quat*)&m_openxr->hands[VRRuntime::Hand::LEFT].location.pose.orientation};
+                auto mat = Matrix4x4f{runtimes::OpenXR::to_glm(m_openxr->hands[VRRuntime::Hand::LEFT].location.pose.orientation)};
                 mat[3] = Vector4f{*(Vector3f*)&m_openxr->hands[VRRuntime::Hand::LEFT].location.pose.position, 1.0f};
                 return mat;
             } else if (index == VRRuntime::Hand::RIGHT+1) {
-                auto mat = Matrix4x4f{*(glm::quat*)&m_openxr->hands[VRRuntime::Hand::RIGHT].location.pose.orientation};
+                auto mat = Matrix4x4f{runtimes::OpenXR::to_glm(m_openxr->hands[VRRuntime::Hand::RIGHT].location.pose.orientation)};
                 mat[3] = Vector4f{*(Vector3f*)&m_openxr->hands[VRRuntime::Hand::RIGHT].location.pose.position, 1.0f};
                 return mat;
             }

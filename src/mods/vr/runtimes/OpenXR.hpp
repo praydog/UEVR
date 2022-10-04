@@ -14,12 +14,14 @@
 #include <openxr/openxr_platform.h>
 #include <common/xr_linear.h>
 
+#include <sdk/Math.hpp>
+
 #include "VRRuntime.hpp"
 
 namespace runtimes{
 struct OpenXR final : public VRRuntime {
     OpenXR() {
-        this->custom_stage = SynchronizeStage::EARLY;
+        this->custom_stage = SynchronizeStage::VERY_LATE;
     }
     
     virtual ~OpenXR() {
@@ -56,6 +58,12 @@ struct OpenXR final : public VRRuntime {
     VRRuntime::Error update_input() override;
 
     void destroy() override;
+
+public:
+    // openxr quaternions are xyzw and glm is wxyz
+    static glm::quat to_glm(const XrQuaternionf& q) {
+        return glm::quat{ q.w, q.x, q.y, q.z };
+    }
 
 public: 
     // OpenXR specific methods

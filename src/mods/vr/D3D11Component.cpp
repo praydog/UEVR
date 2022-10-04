@@ -7,7 +7,7 @@
 
 #include "D3D11Component.hpp"
 
-#define VERBOSE_D3D11
+//#define VERBOSE_D3D11
 
 #ifdef VERBOSE_D3D11
 #define LOG_VERBOSE(...) spdlog::info(__VA_ARGS__)
@@ -72,12 +72,15 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
         // Copy the back buffer to the left eye texture
         // always do it because are using this for the desktop recording fix
+        bool already_copied = false;
+
         if (!has_skip_present_fix) {
             context->CopyResource(m_left_eye_tex.Get(), backbuffer.Get());
+            already_copied = true;
         }
 
         if (runtime->is_openvr()) {
-            if (has_skip_present_fix) {
+            if (has_skip_present_fix && !already_copied) {
                 context->CopyResource(m_left_eye_tex.Get(), backbuffer.Get());
             }
 
@@ -96,27 +99,40 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     } else {
         if (runtime->ready()) {
             if (runtime->is_openxr()) {
+                if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !vr->m_openxr->frame_began) {
+                    LOG_VERBOSE("Beginning frame.");
+                    vr->m_openxr->begin_frame();
+                }
+
                 if (!vr->m_use_afr->value()) {
                     LOG_VERBOSE("Copying left eye");
-                    m_openxr.copy(0, backbuffer.Get());
+                    D3D11_BOX src_box{};
+                    src_box.left = 0;
+                    src_box.right = m_backbuffer_size[0] / 2;
+                    src_box.top = 0;
+                    src_box.bottom = m_backbuffer_size[1];
+                    src_box.front = 0;
+                    src_box.back = 1;
+                    m_openxr.copy(0, backbuffer.Get(), &src_box);
                 }
 
                 LOG_VERBOSE("Copying right eye");
-                m_openxr.copy(1, backbuffer.Get());
+
+                D3D11_BOX src_box{};
+                src_box.left = m_backbuffer_size[0] / 2;
+                src_box.right = m_backbuffer_size[0];
+                src_box.top = 0;
+                src_box.bottom = m_backbuffer_size[1];
+                src_box.front = 0;
+                src_box.back = 1;
+                m_openxr.copy(1, backbuffer.Get(), &src_box);
+
+                LOG_VERBOSE("Ending frame");
+                auto result = vr->m_openxr->end_frame();
+
+                vr->m_openxr->needs_pose_update = true;
+                vr->m_submitted = result == XR_SUCCESS;
             }
-        }
-
-        if (runtime->is_openxr() && vr->m_openxr->ready()) {
-            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !vr->m_openxr->frame_began) {
-                LOG_VERBOSE("Beginning frame.");
-                vr->m_openxr->begin_frame();
-            }
-
-            LOG_VERBOSE("Ending frame");
-            auto result = vr->m_openxr->end_frame();
-
-            vr->m_openxr->needs_pose_update = true;
-            vr->m_submitted = result == XR_SUCCESS;
         }
 
         if (runtime->is_openvr()) {
@@ -392,7 +408,7 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
 
         XrSwapchainCreateInfo swapchain_create_info{XR_TYPE_SWAPCHAIN_CREATE_INFO};
         swapchain_create_info.arraySize = 1;
-        swapchain_create_info.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        swapchain_create_info.format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
         swapchain_create_info.width = backbuffer_desc.Width;
         swapchain_create_info.height = backbuffer_desc.Height;
         swapchain_create_info.mipCount = 1;
@@ -486,7 +502,7 @@ void D3D11Component::OpenXR::destroy_swapchains() {
     VR::get()->m_openxr->swapchains.clear();
 }
 
-void D3D11Component::OpenXR::copy(uint32_t swapchain_idx, ID3D11Texture2D* resource) {
+void D3D11Component::OpenXR::copy(uint32_t swapchain_idx, ID3D11Texture2D* resource, D3D11_BOX* src_box) {
     std::scoped_lock _{this->mtx};
 
     auto vr = VR::get();
@@ -535,7 +551,12 @@ void D3D11Component::OpenXR::copy(uint32_t swapchain_idx, ID3D11Texture2D* resou
             spdlog::error("[VR] xrWaitSwapchainImage failed: {}", vr->m_openxr->get_result_string(result));
         } else {
             LOG_VERBOSE("Copying swapchain image {} for {}", texture_index, swapchain_idx);
-            context->CopyResource(ctx.textures[texture_index].texture, resource);
+
+            if (src_box == nullptr) {
+                context->CopyResource(ctx.textures[texture_index].texture, resource);
+            } else {
+                context->CopySubresourceRegion(ctx.textures[texture_index].texture, 0, 0, 0, 0, resource, 0, src_box);
+            }
 
             XrSwapchainImageReleaseInfo release_info{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
 

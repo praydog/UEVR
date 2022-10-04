@@ -232,10 +232,31 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         const auto& fov = this->views[i].fov;
 
         // Update projection matrix
-        XrMatrix4x4f_CreateProjection((XrMatrix4x4f*)&this->projections[i], GRAPHICS_D3D, tan(fov.angleLeft), tan(fov.angleRight), tan(fov.angleUp), tan(fov.angleDown), nearz, farz);
+        //XrMatrix4x4f_CreateProjection((XrMatrix4x4f*)&this->projections[i], GRAPHICS_D3D, tan(fov.angleLeft), tan(fov.angleRight), tan(fov.angleUp), tan(fov.angleDown), nearz, farz);
+
+        auto get_mat = [&](int eye) {
+            const auto top = tan(fov.angleUp);
+            const auto bottom = tan(fov.angleDown);
+            const auto left = tan(fov.angleLeft);
+            const auto right = tan(fov.angleRight);
+
+            float sum_rl = (right + left);
+            float sum_tb = (top + bottom);
+            float inv_rl = (1.0f / (right - left));
+            float inv_tb = (1.0f / (top - bottom));
+
+            return Matrix4x4f {
+                (2.0f * inv_rl), 0.0f, 0.0f, 0.0f,
+                0.0f, (2.0f * inv_tb), 0.0f, 0.0f,
+                (sum_rl * -inv_rl), (sum_tb * -inv_tb), 0.0f, 1.0f,
+                0.0f, 0.0f, nearz, 0.0f
+            };
+        };
+
+        this->projections[i] = get_mat(i);
 
         // Update view matrix
-        this->eyes[i] = Matrix4x4f{*(glm::quat*)&pose.orientation};
+        this->eyes[i] = Matrix4x4f{OpenXR::to_glm(pose.orientation)};
         this->eyes[i][3] = Vector4f{*(Vector3f*)&pose.position, 1.0f};
     }
 

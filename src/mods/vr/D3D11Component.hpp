@@ -16,6 +16,12 @@ class VR;
 namespace vrmod {
 class D3D11Component {
 public:
+    D3D11Component() 
+        : m_openxr{this}
+    {
+
+    }
+
     vr::EVRCompositorError on_frame(VR* vr);
     void on_reset(VR* vr);
 
@@ -43,10 +49,12 @@ private:
     std::array<uint32_t, 2> m_backbuffer_size{};
 
     struct OpenXR {
+        OpenXR(D3D11Component* p) : parent(p) {}
+
         void initialize(XrSessionCreateInfo& session_info);
         std::optional<std::string> create_swapchains();
         void destroy_swapchains();
-        void copy(uint32_t swapchain_idx, ID3D11Texture2D* resource);
+        void copy(uint32_t swapchain_idx, ID3D11Texture2D* resource, D3D11_BOX* src_box = nullptr);
 
         XrGraphicsBindingD3D11KHR binding{XR_TYPE_GRAPHICS_BINDING_D3D11_KHR};
 
@@ -58,6 +66,9 @@ private:
         std::vector<SwapchainContext> contexts{};
         std::recursive_mutex mtx{};
         std::array<uint32_t, 2> last_resolution{};
+
+        D3D11Component* parent{};
+        friend class D3D11Component;
     } m_openxr;
 
     void setup();

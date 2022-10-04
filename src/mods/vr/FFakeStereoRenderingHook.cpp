@@ -964,7 +964,7 @@ void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, in
     *x += *w * true_index;
 }
 
-void FFakeStereoRenderingHook::calculate_stereo_view_offset(
+__forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     FFakeStereoRendering* stereo, const int32_t view_index, Rotator<float>* view_rotation, 
     const float world_to_meters, Vector3f* view_location)
 {
