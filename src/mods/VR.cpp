@@ -767,6 +767,12 @@ void VR::on_post_present() {
         }
     }
 
+    if (runtime->is_openxr() && runtime->ready() && !m_use_afr->value()) {
+        if (!m_openxr->frame_began) {
+            m_openxr->begin_frame();
+        }
+    }
+
     std::scoped_lock _{m_openvr_mtx};
 
     if (runtime->wants_reinitialize) {
