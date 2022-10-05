@@ -1284,7 +1284,7 @@ XrResult OpenXR::begin_frame() {
     return result;
 }
 
-XrResult OpenXR::end_frame() {
+XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layers) {
     std::scoped_lock _{sync_mtx};
 
     if (!this->ready() || !this->got_first_poses || !this->frame_synced) {
@@ -1295,6 +1295,8 @@ XrResult OpenXR::end_frame() {
         spdlog::info("[VR] end_frame called while frame not begun");
         return XR_ERROR_CALL_ORDER_INVALID;
     }
+
+    this->projection_layer_cache.clear();
 
     std::vector<XrCompositionLayerBaseHeader*> layers{};
     std::vector<XrCompositionLayerProjectionView> projection_layer_views{};
@@ -1315,10 +1317,18 @@ XrResult OpenXR::end_frame() {
             projection_layer_views[i].subImage.imageRect.extent = {swapchain.width, swapchain.height};
         }
 
-        XrCompositionLayerProjection layer{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
+        auto& layer = this->projection_layer_cache.emplace_back();
+        layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
         layer.space = this->stage_space;
         layer.viewCount = (uint32_t)projection_layer_views.size();
         layer.views = projection_layer_views.data();
+    }
+
+    for (auto& layer : this->projection_layer_cache) {
+        layers.push_back((XrCompositionLayerBaseHeader*)&layer);
+    }
+
+    for (auto& layer : quad_layers) {
         layers.push_back((XrCompositionLayerBaseHeader*)&layer);
     }
 

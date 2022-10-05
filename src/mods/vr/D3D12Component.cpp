@@ -177,7 +177,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 vr->m_openxr->begin_frame();
             }
 
-            auto result = vr->m_openxr->end_frame();
+            auto result = vr->m_openxr->end_frame({});
 
             if (result == XR_ERROR_LAYER_INVALID) {
                 spdlog::info("[VR] Attempting to correct invalid layer");
@@ -185,7 +185,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 m_openxr.wait_for_all_copies();
 
                 spdlog::info("[VR] Calling xrEndFrame again");
-                result = vr->m_openxr->end_frame();
+                result = vr->m_openxr->end_frame({});
             }
 
             vr->m_openxr->needs_pose_update = true;

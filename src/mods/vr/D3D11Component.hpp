@@ -27,7 +27,7 @@ public:
 
     auto& openxr() { return m_openxr; }
 
-    auto& get_ui_tex() { return m_ui_tex; }
+    auto& get_ui_tex(bool openxr = false) { return m_ui_tex; }
     auto& get_blank_tex() { return m_blank_tex; }
 
     void clear_tex(ID3D11Resource* rsrc);
@@ -55,6 +55,12 @@ private:
         std::optional<std::string> create_swapchains();
         void destroy_swapchains();
         void copy(uint32_t swapchain_idx, ID3D11Texture2D* resource, D3D11_BOX* src_box = nullptr);
+
+        enum class SwapchainIndex {
+            LEFT_EYE = 0,
+            RIGHT_EYE = 1,
+            UI = 2,
+        };
 
         XrGraphicsBindingD3D11KHR binding{XR_TYPE_GRAPHICS_BINDING_D3D11_KHR};
 

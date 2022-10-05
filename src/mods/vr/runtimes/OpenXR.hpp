@@ -65,6 +65,14 @@ public:
         return glm::quat{ q.w, q.x, q.y, q.z };
     }
 
+    static XrQuaternionf to_openxr(const glm::quat& q) {
+        return XrQuaternionf{ q.x, q.y, q.z, q.w };
+    }
+
+    static XrVector3f to_openxr(const glm::vec3& v) {
+        return XrVector3f{ v.x, v.y, v.z };
+    }
+
 public: 
     // OpenXR specific methods
     std::string get_result_string(XrResult result) const;
@@ -77,7 +85,7 @@ public:
     std::optional<std::string> initialize_actions(const std::string& json_string);
 
     XrResult begin_frame();
-    XrResult end_frame();
+    XrResult end_frame(const std::vector<XrCompositionLayerQuad>& quad_layers);
 
     void begin_profile() {
         if (!this->profile_calls) {
@@ -138,6 +146,8 @@ public:
     XrSessionState session_state{XR_SESSION_STATE_UNKNOWN};
 
     XrSpaceLocation view_space_location{XR_TYPE_SPACE_LOCATION};
+
+    std::vector<XrCompositionLayerProjection> projection_layer_cache{};
 
     std::vector<XrViewConfigurationView> view_configs{};
     std::vector<Swapchain> swapchains{};
