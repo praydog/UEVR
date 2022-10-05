@@ -1,3 +1,4 @@
+#include <windows.h>
 #include <winternl.h>
 
 #include <asmjit/asmjit.h>
@@ -1442,8 +1443,36 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
     if (idx) {
         spdlog::info("Calling PostInitProperties on local player!");
 
+        // Get PEB and set debugger present
+        auto peb = (PEB*)__readgsqword(0x60);
+
+        const auto old = peb->BeingDebugged;
+        peb->BeingDebugged = true;
+
+        // set up a handler to skip int3 assertions
+        // we do this because debug builds assert when the views are already setup.
+        const auto seh_handler = [](PEXCEPTION_POINTERS info) -> LONG {
+            if (info->ExceptionRecord->ExceptionCode == EXCEPTION_BREAKPOINT) {
+                spdlog::info("Skipping int3 breakpoint at {:x}!", info->ContextRecord->Rip);
+                info->ContextRecord->Rip += 1;
+                return EXCEPTION_CONTINUE_EXECUTION;
+            } else {
+                spdlog::info("Encountered exception {:x} at {:x}!", info->ExceptionRecord->ExceptionCode, info->ContextRecord->Rip);
+            }
+
+            return EXCEPTION_CONTINUE_SEARCH;
+        };
+
+        const auto exception_handler = AddVectoredExceptionHandler(1, seh_handler);
+
         const void (*post_init_properties)(uintptr_t) = (*(decltype(post_init_properties)**)localplayer)[*idx];
         post_init_properties(localplayer);
+
+        spdlog::info("PostInitProperties called!");
+
+        // remove the handler
+        RemoveVectoredExceptionHandler(exception_handler);
+        peb->BeingDebugged = old;
     }
 
     g_hook->m_fixed_localplayer_view_count = true;
@@ -1492,15 +1521,15 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
 
     // Replace the texture with one we have control over.
     // This isolates the UI to render on our own texture separate from the scene.
-    const auto old_texture = slate_resource->resource;
-    slate_resource->resource = ui_target;
+    const auto old_texture = slate_resource->get_mutable_resource();
+    slate_resource->get_mutable_resource() = ui_target;
 
     // To be seen if we need to resort to a MidHook on this function if the parameters
     // are wildly different between UE versions.
     const auto ret = g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
 
     // Restore the old texture.
-    slate_resource->resource = old_texture;
+    slate_resource->get_mutable_resource() = old_texture;
     
     // After this we copy over the texture and clear it in the present hook. doing it here just seems to crash sometimes.
 

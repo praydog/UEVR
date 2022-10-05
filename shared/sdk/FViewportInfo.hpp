@@ -5,7 +5,9 @@
 namespace sdk {
 struct FSlateResource {
     virtual FRHITexture2D* get_typed_resource() = 0;
-    FRHITexture2D* resource{};
+
+    FRHITexture2D*& get_mutable_resource();
+    static inline uint32_t resource_offset = sizeof(void*);
 };
 
 struct IViewportRenderTargetProvider {

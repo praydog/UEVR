@@ -20,7 +20,7 @@ IViewportRenderTargetProvider* FViewportInfo::get_rt_provider(FRHITexture2D* kno
 
         spdlog::info("Searching for FViewportInfo::GetRenderTargetProvider offset...");
 
-        for (auto i = 0; i < 0x100; i += sizeof(void*)) {
+        for (auto i = 0; i < 0x500; i += sizeof(void*)) {
             spdlog::info(" Examining offset 0x{:x}", i);
 
             const auto ptr = *(uintptr_t*)((uintptr_t)this + i);
@@ -85,11 +85,13 @@ IViewportRenderTargetProvider* FViewportInfo::get_rt_provider(FRHITexture2D* kno
 
             const auto rax = emu.ctx->Registers.RegRax;
 
-            if (rax != 0 && !IsBadReadPtr((void*)rax, sizeof(void*) * 2)) {
+            if (rax != 0 && !IsBadReadPtr((void*)rax, sizeof(void*) + 0x20)) {
                 const auto resource = (sdk::FSlateResource*)rax;
 
-                if (resource->resource == known_tex) {
+                if (auto result = utility::scan_ptr((uintptr_t)resource + sizeof(void*), 0x20, (uintptr_t)known_tex)) {
+                    FSlateResource::resource_offset = *result - (uintptr_t)resource;
                     spdlog::info("  Found FViewportInfo::GetRenderTargetProvider offset: 0x{:x}", i);
+                    spdlog::info("  Found FSlateResource::Resource offset: 0x{:x}", FSlateResource::resource_offset);
                     return i;
                 }
             } else {
@@ -115,5 +117,9 @@ IViewportRenderTargetProvider* FViewportInfo::get_rt_provider(FRHITexture2D* kno
     }
 
     return *(IViewportRenderTargetProvider**)((uintptr_t)this + offset);
+}
+
+FRHITexture2D*& FSlateResource::get_mutable_resource() {
+    return *(FRHITexture2D**)((uintptr_t)this + resource_offset);
 }
 }
