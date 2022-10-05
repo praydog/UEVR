@@ -89,6 +89,8 @@ VRRuntime::Error OpenXR::update_poses() {
         return (VRRuntime::Error)result;
     }
 
+    this->stage_view_queue.push_back(this->stage_views);
+
     result = xrLocateSpace(this->view_space, this->stage_space, display_time, &this->view_space_location);
 
     if (result != XR_SUCCESS) {
@@ -356,6 +358,22 @@ void OpenXR::destroy() {
     this->system = XR_NULL_SYSTEM_ID;
     this->frame_synced = false;
     this->frame_began = false;
+}
+
+std::vector<XrView> OpenXR::get_stage_view_for_submit() {
+    std::scoped_lock _{ this->sync_mtx };
+    std::unique_lock __{ this->pose_mtx };
+
+    if (this->stage_view_queue.size() > 3) {
+        this->stage_view_queue.clear();
+    }
+
+    const auto last_view = this->stage_view_queue.empty() ? this->stage_views : this->stage_view_queue.front();
+    if (!this->stage_view_queue.empty()) {
+        this->stage_view_queue.pop_front();
+    }
+
+    return last_view;
 }
 
 std::string OpenXR::get_result_string(XrResult result) const {
@@ -1304,14 +1322,15 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
     // we CANT push the layers every time, it cause some layer error
     // in xrEndFrame, so we must only do it when shouldRender is true
     if (this->frame_state.shouldRender == XR_TRUE) {
-        projection_layer_views.resize(this->stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
+        const auto stage_views = get_stage_view_for_submit();
+        projection_layer_views.resize(stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
 
         for (auto i = 0; i < projection_layer_views.size(); ++i) {
             const auto& swapchain = this->swapchains[i];
 
             projection_layer_views[i].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-            projection_layer_views[i].pose = this->stage_views[i].pose;
-            projection_layer_views[i].fov = this->stage_views[i].fov;
+            projection_layer_views[i].pose = stage_views[i].pose;
+            projection_layer_views[i].fov = stage_views[i].fov;
             projection_layer_views[i].subImage.swapchain = swapchain.handle;
             projection_layer_views[i].subImage.imageRect.offset = {0, 0};
             projection_layer_views[i].subImage.imageRect.extent = {swapchain.width, swapchain.height};

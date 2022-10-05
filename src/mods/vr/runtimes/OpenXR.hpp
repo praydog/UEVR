@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_set>
+#include <deque>
 
 #include <d3d11.h>
 #include <d3d12.h>
@@ -58,6 +59,8 @@ struct OpenXR final : public VRRuntime {
     VRRuntime::Error update_input() override;
 
     void destroy() override;
+
+    std::vector<XrView> get_stage_view_for_submit();
 
 public:
     // openxr quaternions are xyzw and glm is wxyz
@@ -153,6 +156,8 @@ public:
     std::vector<Swapchain> swapchains{};
     std::vector<XrView> views{};
     std::vector<XrView> stage_views{};
+
+    std::deque<std::vector<XrView>> stage_view_queue{};
 
     float resolution_scale{1.0f};
 
