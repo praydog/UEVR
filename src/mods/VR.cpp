@@ -83,6 +83,14 @@ std::optional<std::string> VR::initialize_openvr() {
     m_openvr->loaded = false;
 
     if (GetModuleHandleW(L"openvr_api.dll") == nullptr) {
+        // pre-injected
+        if (GetModuleHandleW(L"openxr_loader.dll") != nullptr) {
+            m_openvr->dll_missing = true;
+            m_openvr->error = "OpenXR already loaded";
+            return Mod::on_initialize();
+        }
+
+
         if (utility::load_module_from_current_directory(L"openvr_api.dll") == nullptr) {
             spdlog::info("[VR] Could not load openvr_api.dll");
 

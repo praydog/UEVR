@@ -66,7 +66,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     if (ui_target != nullptr) {
         if (runtime->is_openvr() && get_ui_tex().Get() != nullptr) {
             copy_tex((ID3D11Resource*)ui_target->get_native_resource(), get_ui_tex().Get());
-        } else if (runtime->is_openxr()) {
+        } else if (runtime->is_openxr() && vr->m_openxr->frame_began) {
             m_openxr.copy((uint32_t)OpenXR::SwapchainIndex::UI, (ID3D11Texture2D*)ui_target->get_native_resource());
         }
 
