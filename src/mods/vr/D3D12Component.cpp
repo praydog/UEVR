@@ -37,24 +37,39 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     }
 
     // Update the UI overlay.
+    auto runtime = vr->get_runtime();
+
+    if (runtime->is_openxr() && runtime->ready() && !vr->m_use_afr->value()) {
+        if (!vr->m_openxr->frame_began) {
+            vr->m_openxr->begin_frame();
+        }
+    }
+
     const auto& ffsr = VR::get()->m_fake_stereo_hook;
     const auto ui_target = ffsr->get_render_target_manager()->get_ui_target();
 
     if (ui_target != nullptr) {
-        m_ui_tex.copier.wait(INFINITE);
-        m_ui_tex.copier.copy((ID3D12Resource*)ui_target->get_native_resource(), m_ui_tex.texture.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        m_ui_tex.copier.copy(m_blank_tex.texture.Get(), (ID3D12Resource*)ui_target->get_native_resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        m_ui_tex.copier.execute();
+        if (runtime->is_openvr() && m_ui_tex.texture.Get() != nullptr) {
+            m_ui_tex.copier.wait(INFINITE);
+            m_ui_tex.copier.copy((ID3D12Resource*)ui_target->get_native_resource(), m_ui_tex.texture.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_ui_tex.copier.copy(m_blank_tex.texture.Get(), (ID3D12Resource*)ui_target->get_native_resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_ui_tex.copier.execute();
+        } else if (runtime->is_openxr() && runtime->ready() && vr->m_openxr->frame_began) {
+            auto clear_rt = [&](ResourceCopier& copier) {
+                copier.copy(m_blank_tex.texture.Get(), (ID3D12Resource*)ui_target->get_native_resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            };
+
+            m_openxr.copy((uint32_t)OpenXR::SwapchainIndex::UI, (ID3D12Resource*)ui_target->get_native_resource(), clear_rt, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        }
     }
     
-    auto runtime = vr->get_runtime();
     const auto frame_count = vr->m_render_frame_count;
 
     // If m_frame_count is even, we're rendering the left eye.
     if (vr->m_render_frame_count % 2 == vr->m_left_eye_interval && vr->m_use_afr->value()) {
         // OpenXR texture
         if (runtime->is_openxr() && vr->m_openxr->ready()) {
-            m_openxr.copy(0, backbuffer.Get());
+            m_openxr.copy((uint32_t)OpenXR::SwapchainIndex::LEFT_EYE, backbuffer.Get());
         }
 
         // OpenVR texture
@@ -80,10 +95,6 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     } else {
         // OpenXR texture
         if (runtime->is_openxr() && vr->m_openxr->ready()) {
-            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !vr->m_openxr->frame_began) {
-                vr->m_openxr->begin_frame();
-            }
-
             if (!vr->m_use_afr->value()) {
                 D3D12_BOX src_box{};
                 src_box.left = 0;
@@ -93,7 +104,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 src_box.front = 0;
                 src_box.back = 1;
 
-                m_openxr.copy(0, backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, &src_box);
+                m_openxr.copy((uint32_t)OpenXR::SwapchainIndex::LEFT_EYE, backbuffer.Get(), {}, D3D12_RESOURCE_STATE_RENDER_TARGET, &src_box);
             }
 
             D3D12_BOX src_box{};
@@ -103,7 +114,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             src_box.bottom = m_backbuffer_size[1];
             src_box.front = 0;
             src_box.back = 1;
-            m_openxr.copy(1, backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, &src_box);
+            m_openxr.copy((uint32_t)OpenXR::SwapchainIndex::RIGHT_EYE, backbuffer.Get(), {}, D3D12_RESOURCE_STATE_RENDER_TARGET, &src_box);
         }
 
         // OpenVR texture
@@ -177,7 +188,34 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 vr->m_openxr->begin_frame();
             }
 
-            auto result = vr->m_openxr->end_frame({});
+            std::vector<XrCompositionLayerQuad> quad_layers{};
+
+            auto& layer = quad_layers.emplace_back();
+            layer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
+            const auto& ui_swapchain = vr->m_openxr->swapchains[(uint32_t)OpenXR::SwapchainIndex::UI];
+            layer.subImage.swapchain = ui_swapchain.handle;
+            layer.subImage.imageRect.offset.x = 0;
+            layer.subImage.imageRect.offset.y = 0;
+            layer.subImage.imageRect.extent.width = ui_swapchain.width;
+            layer.subImage.imageRect.extent.height = ui_swapchain.height;
+            layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+            layer.eyeVisibility = XrEyeVisibility::XR_EYE_VISIBILITY_BOTH;
+            layer.space = vr->m_openxr->stage_space;
+            
+            const auto size_meters = 2.0f;
+            const auto meters_w = (float)ui_swapchain.width / (float)ui_swapchain.height * size_meters;
+            const auto meters_h = size_meters;
+            layer.size = {meters_w, meters_h};
+
+            auto glm_matrix = Matrix4x4f{vr->get_rotation_offset()};
+            glm_matrix[3] += vr->get_standing_origin();
+            glm_matrix[3] -= glm_matrix[2] * 1.5f;
+            glm_matrix[3].w = 1.0f;
+
+            layer.pose.orientation = runtimes::OpenXR::to_openxr(glm::quat_cast(glm_matrix));
+            layer.pose.position = runtimes::OpenXR::to_openxr(glm_matrix[3]);
+
+            auto result = vr->m_openxr->end_frame(quad_layers);
 
             if (result == XR_ERROR_LAYER_INVALID) {
                 spdlog::info("[VR] Attempting to correct invalid layer");
@@ -185,7 +223,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 m_openxr.wait_for_all_copies();
 
                 spdlog::info("[VR] Calling xrEndFrame again");
-                result = vr->m_openxr->end_frame({});
+                result = vr->m_openxr->end_frame(quad_layers);
             }
 
             vr->m_openxr->needs_pose_update = true;
@@ -402,15 +440,14 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
     auto& openxr = vr->m_openxr;
 
     this->contexts.clear();
-    this->contexts.resize(openxr->views.size());
-    
-    for (auto i = 0; i < openxr->views.size(); ++i) {
-        spdlog::info("[VR] Creating swapchain for eye {}", i);
-        spdlog::info("[VR] Width: {}", vr->get_hmd_width());
-        spdlog::info("[VR] Height: {}", vr->get_hmd_height());
+    this->contexts.resize(openxr->views.size() + 1); // +1 for the UI texture
 
-        backbuffer_desc.Width = vr->get_hmd_width();
-        backbuffer_desc.Height = vr->get_hmd_height();
+    auto create_swapchain = [&](uint32_t i, uint32_t w, uint32_t h) -> std::optional<std::string> {
+        const auto old_w = backbuffer_desc.Width;
+        const auto old_h = backbuffer_desc.Height;
+
+        backbuffer_desc.Width = w;
+        backbuffer_desc.Height = h;
 
         // Create the swapchain.
         XrSwapchainCreateInfo swapchain_create_info{XR_TYPE_SWAPCHAIN_CREATE_INFO};
@@ -473,6 +510,26 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
             spdlog::error("[VR] Failed to enumerate swapchain images after texture creation.");
             return "Failed to enumerate swapchain images after texture creation.";
         }
+
+        backbuffer_desc.Width = old_w;
+        backbuffer_desc.Height = old_h;
+
+        return std::nullopt;
+    };
+    
+    for (auto i = 0; i < openxr->views.size(); ++i) {
+        spdlog::info("[VR] Creating swapchain for eye {}", i);
+        spdlog::info("[VR] Width: {}", vr->get_hmd_width());
+        spdlog::info("[VR] Height: {}", vr->get_hmd_height());
+
+        if (auto err = create_swapchain(i, vr->get_hmd_width(), vr->get_hmd_height())) {
+            return err;
+        }
+    }
+
+    // The UI texture
+    if (auto err = create_swapchain((uint32_t)OpenXR::SwapchainIndex::UI, backbuffer_desc.Width, backbuffer_desc.Height)) {
+        return err;
     }
 
     this->last_resolution = {vr->get_hmd_width(), vr->get_hmd_height()};
@@ -512,7 +569,7 @@ void D3D12Component::OpenXR::destroy_swapchains() {
     VR::get()->m_openxr->swapchains.clear();
 }
 
-void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resource, D3D12_RESOURCE_STATES src_state, D3D12_BOX* src_box) {
+void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resource, std::optional<std::function<void(ResourceCopier&)>> additional_commands, D3D12_RESOURCE_STATES src_state, D3D12_BOX* src_box) {
     std::scoped_lock _{this->mtx};
 
     auto vr = VR::get();
@@ -581,6 +638,10 @@ void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resour
                     ctx.textures[texture_index].texture, src_box,
                     src_state, 
                     D3D12_RESOURCE_STATE_RENDER_TARGET);
+            }
+
+            if (additional_commands) {
+                (*additional_commands)(texture_ctx->copier);
             }
 
             texture_ctx->copier.execute();

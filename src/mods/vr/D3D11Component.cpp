@@ -144,8 +144,6 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             layer.subImage.imageRect.offset.y = 0;
             layer.subImage.imageRect.extent.width = ui_swapchain.width;
             layer.subImage.imageRect.extent.height = ui_swapchain.height;
-            layer.pose.orientation = runtimes::OpenXR::to_openxr(glm::identity<glm::quat>());
-            layer.pose.position.z = -5.0f;
             layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
             layer.eyeVisibility = XrEyeVisibility::XR_EYE_VISIBILITY_BOTH;
             layer.space = vr->m_openxr->stage_space;
@@ -441,7 +439,7 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
     auto& openxr = *vr->m_openxr;
 
     this->contexts.clear();
-    this->contexts.resize(openxr.views.size() + 1); // +1 for the overlay texture
+    this->contexts.resize(openxr.views.size() + 1); // +1 for the UI texture
 
     auto create_swapchain = [&](uint32_t i, uint32_t w, uint32_t h) -> std::optional<std::string> {
         const auto old_w = backbuffer_desc.Width;
@@ -515,8 +513,6 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
 
     // Create eye textures.
     for (auto i = 0; i < openxr.views.size(); ++i) {
-        const auto& vp = openxr.view_configs[i];
-
         spdlog::info("[VR] Creating swapchain for eye {}", i);
         spdlog::info("[VR] Width: {}", vr->get_hmd_width());
         spdlog::info("[VR] Height: {}", vr->get_hmd_height());
@@ -526,8 +522,8 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
         }
     }
 
-    // The overlay texture
-    if (auto err = create_swapchain(openxr.views.size(), backbuffer_desc.Width, backbuffer_desc.Height)) {
+    // The UI texture
+    if (auto err = create_swapchain((uint32_t)OpenXR::SwapchainIndex::UI, backbuffer_desc.Width, backbuffer_desc.Height)) {
         return err;
     }
 
