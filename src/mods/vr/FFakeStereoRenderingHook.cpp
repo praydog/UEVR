@@ -1554,14 +1554,14 @@ void VRRenderTargetManager_Base::calculate_render_target_size(const FViewport& v
 }
 
 bool VRRenderTargetManager_Base::need_reallocate_view_target(const FViewport& Viewport) {
-    /*const auto w = VR::get()->get_hmd_width();
+    const auto w = VR::get()->get_hmd_width();
     const auto h = VR::get()->get_hmd_height();
 
     if (w != this->last_width || h != this->last_height) {
         this->last_width = w;
         this->last_height = h;
         return true;
-    }*/
+    }
 
     return false;
 }
