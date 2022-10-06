@@ -176,6 +176,12 @@ void OverlayComponent::update_slate() {
     const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(glm_matrix)};
     vr::VROverlay()->SetOverlayTransformAbsolute(m_slate_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
 
+    const auto is_d3d12 = g_framework->get_renderer_type() == Framework::RendererType::D3D12;
+    const auto size = is_d3d12 ? g_framework->get_d3d12_rt_size() : g_framework->get_d3d11_rt_size();
+    const auto aspect = size.x / size.y;
+    const auto width_meters = 2.0f * aspect;
+    vr::VROverlay()->SetOverlayWidthInMeters(m_slate_overlay_handle, width_meters);
+
     if (is_d3d11) {
         if (vr->m_d3d11.get_ui_tex().Get() == nullptr) {
             return;
