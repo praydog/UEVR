@@ -32,6 +32,13 @@ public:
     void on_post_present() override;
 
     void update_hmd_state();
+    void reinitialize_renderer() {
+        if (m_is_d3d12) {
+            m_d3d12.force_reset();
+        } else {
+            m_d3d11.force_reset();
+        }
+    }
 
 
     Vector4f get_position(uint32_t index)  const;

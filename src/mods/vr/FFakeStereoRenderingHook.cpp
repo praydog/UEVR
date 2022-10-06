@@ -1839,6 +1839,8 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     spdlog::info("About to call the original!");
 
     if (!g_hook->get_render_target_manager()->is_pre_texture_call_e8) {
+        spdlog::info("Calling register version of texture create");
+
         void (*func)(
             uintptr_t rhi,
             FTexture2DRHIRef* out,
@@ -1858,13 +1860,9 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
             stack_args[5], stack_args[6], stack_args[7]);
 
         g_hook->get_render_target_manager()->ui_target = out.texture;
-
-        if (out.texture == nullptr) {
-            spdlog::error("Failed to create UI texture!");
-        } else {
-            spdlog::info("Created UI texture at {:x}", (uintptr_t)out.texture);
-        }
     } else {
+        spdlog::info("Calling E8 version of texture create");
+
         void (*func)(
             uint32_t w,
             uint32_t h,
@@ -1890,9 +1888,19 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         
         g_hook->get_render_target_manager()->ui_target = out.texture;
     }
+
+    if (out.texture == nullptr) {
+        spdlog::error("Failed to create UI texture!");
+    } else {
+        spdlog::info("Created UI texture at {:x}", (uintptr_t)out.texture);
+    }
+
     //call_with_context((uintptr_t)func, out);
 
     spdlog::info("Called the original function!");
+
+    // Cause stuff like the VR ui texture to get recreated.
+    VR::get()->reinitialize_renderer();
 }
 
 void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx) {

@@ -207,7 +207,7 @@ bool Framework::hook_d3d11() {
         m_d3d11_hook = std::make_unique<D3D11Hook>();
         m_d3d11_hook->on_present([this](D3D11Hook& hook) { on_frame_d3d11(); });
         m_d3d11_hook->on_post_present([this](D3D11Hook& hook) { on_post_present_d3d11(); });
-        m_d3d11_hook->on_resize_buffers([this](D3D11Hook& hook) { on_reset(); });
+        m_d3d11_hook->on_resize_buffers([this](D3D11Hook& hook, uint32_t w, uint32_t h) { on_reset(w, h); });
     //}
 
     // Making sure D3D12 is not hooked
@@ -248,8 +248,8 @@ bool Framework::hook_d3d12() {
         m_d3d12_hook = std::make_unique<D3D12Hook>();
         m_d3d12_hook->on_present([this](D3D12Hook& hook) { on_frame_d3d12(); });
         m_d3d12_hook->on_post_present([this](D3D12Hook& hook) { on_post_present_d3d12(); });
-        m_d3d12_hook->on_resize_buffers([this](D3D12Hook& hook) { on_reset(); });
-        m_d3d12_hook->on_resize_target([this](D3D12Hook& hook) { on_reset(); });
+        m_d3d12_hook->on_resize_buffers([this](D3D12Hook& hook, uint32_t w, uint32_t h) { on_reset(w, h); });
+        m_d3d12_hook->on_resize_target([this](D3D12Hook& hook, uint32_t w, uint32_t h) { on_reset(w, h); });
     //}
     //m_d3d12_hook->on_create_swap_chain([this](D3D12Hook& hook) { m_d3d12.command_queue = m_d3d12_hook->get_command_queue(); });
 
@@ -489,7 +489,7 @@ void Framework::on_frame_d3d12() {
 
             ImGui_ImplDX12_NewFrame();
             // hooks don't run until after initialization, so we just render the imgui window while initalizing.
-            run_imgui_frame(true);
+            run_imgui_frame(false);
     /*    } else {   
             return;
         }
@@ -502,7 +502,11 @@ void Framework::on_frame_d3d12() {
         m_mods->on_present();
     }
 
-    m_d3d12.cmd_allocator->Reset();
+    if (FAILED(m_d3d12.cmd_allocator->Reset())) {
+        spdlog::error("[D3D12] Failed to reset command allocator");
+        return;
+    }
+
     m_d3d12.cmd_list->Reset(m_d3d12.cmd_allocator.Get(), nullptr);
 
     // Draw to our render target.
@@ -567,10 +571,10 @@ void Framework::on_post_present_d3d12() {
     }
 }
 
-void Framework::on_reset() {
+void Framework::on_reset(uint32_t w, uint32_t h) {
     std::scoped_lock _{ m_imgui_mtx };
 
-    spdlog::info("Reset!");
+    spdlog::info("Reset! {} {}", w, h);
 
     if (m_initialized) {
         // fixes text boxes not being able to receive input
@@ -580,10 +584,14 @@ void Framework::on_reset() {
     // Crashes if we don't release it at this point.
     if (m_is_d3d11) {
         deinit_d3d11();
+        m_d3d11.rt_width = w;
+        m_d3d11.rt_height = h;
     }
 
     if (m_is_d3d12) {
         deinit_d3d12();
+        m_d3d12.rt_width = w;
+        m_d3d12.rt_height = h;
     }
 
     if (m_game_data_initialized) {
@@ -1333,6 +1341,8 @@ bool Framework::init_d3d12() {
         return false;
     }
 
+    m_d3d12.cmd_allocator->SetName(L"Framework::m_d3d12.cmd_allocator");
+
     spdlog::info("[D3D12] Creating command list...");
 
     if (FAILED(device->CreateCommandList(
@@ -1340,6 +1350,8 @@ bool Framework::init_d3d12() {
         spdlog::error("[D3D12] Failed to create command list.");
         return false;
     }
+
+    m_d3d12.cmd_list->SetName(L"Framework::m_d3d12.cmd_list");
 
     if (FAILED(m_d3d12.cmd_list->Close())) {
         spdlog::error("[D3D12] Failed to close command list after creation.");
@@ -1349,7 +1361,6 @@ bool Framework::init_d3d12() {
     spdlog::info("[D3D12] Creating RTV descriptor heap...");
 
     {
-
         D3D12_DESCRIPTOR_HEAP_DESC desc{};
 
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
@@ -1361,6 +1372,8 @@ bool Framework::init_d3d12() {
             spdlog::error("[D3D12] Failed to create RTV descriptor heap.");
             return false;
         }
+
+        m_d3d12.rtv_desc_heap->SetName(L"Framework::m_d3d12.rtv_desc_heap");
     }
 
     spdlog::info("[D3D12] Creating SRV descriptor heap...");
@@ -1376,6 +1389,8 @@ bool Framework::init_d3d12() {
             spdlog::error("[D3D12] Failed to create SRV descriptor heap.");
             return false;
         }
+
+        m_d3d12.srv_desc_heap->SetName(L"Framework::m_d3d12.srv_desc_heap");
     }
 
     spdlog::info("[D3D12] Creating render targets...");
@@ -1387,6 +1402,8 @@ bool Framework::init_d3d12() {
         for (auto i = 0; i <= (int)D3D12::RTV::BACKBUFFER_3; ++i) {
             if (SUCCEEDED(swapchain->GetBuffer(i, IID_PPV_ARGS(&m_d3d12.rts[i])))) {
                 device->CreateRenderTargetView(m_d3d12.rts[i].Get(), nullptr, m_d3d12.get_cpu_rtv(device, (D3D12::RTV)i));
+            } else {
+                spdlog::error("[D3D12] Failed to get back buffer for rtv.");
             }
         }
 
@@ -1410,11 +1427,15 @@ bool Framework::init_d3d12() {
             return false;
         }
 
+        m_d3d12.get_rt(D3D12::RTV::IMGUI)->SetName(L"Framework::m_d3d12.rts[IMGUI]");
+
         if (FAILED(device->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &clear_value,
                 IID_PPV_ARGS(&m_d3d12.get_rt(D3D12::RTV::BLANK))))) {
             spdlog::error("[D3D12] Failed to create the blank render target.");
             return false;
         }
+
+        m_d3d12.get_rt(D3D12::RTV::BLANK)->SetName(L"Framework::m_d3d12.rts[BLANK]");
 
         // Create imgui and blank rtvs and srvs.
         device->CreateRenderTargetView(m_d3d12.get_rt(D3D12::RTV::IMGUI).Get(), nullptr, m_d3d12.get_cpu_rtv(device, D3D12::RTV::IMGUI));

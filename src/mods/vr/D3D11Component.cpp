@@ -17,8 +17,12 @@
 
 namespace vrmod {
 vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
-    if (m_left_eye_tex == nullptr) {
-        setup();
+    if (m_left_eye_tex == nullptr || m_force_reset) {
+        if (!setup()) {
+            spdlog::error("Failed to setup D3D11Component, trying again next frame");
+            m_force_reset = true;
+            return vr::VRCompositorError_None;
+        }
     }
 
     auto& hook = g_framework->get_d3d11_hook();
@@ -247,7 +251,11 @@ void D3D11Component::on_reset(VR* vr) {
     m_right_eye_depthstencil.Reset();
 
     if (vr->get_runtime()->is_openxr() && vr->get_runtime()->loaded) {
-        if (m_openxr.last_resolution[0] != vr->get_hmd_width() || m_openxr.last_resolution[1] != vr->get_hmd_height()) {
+        if (m_openxr.last_resolution[0] != vr->get_hmd_width() || m_openxr.last_resolution[1] != vr->get_hmd_height() ||
+            vr->m_openxr->swapchains.empty() ||
+            g_framework->get_d3d11_rt_size()[0] != vr->m_openxr->swapchains[(uint32_t)OpenXR::SwapchainIndex::UI].width ||
+            g_framework->get_d3d11_rt_size()[1] != vr->m_openxr->swapchains[(uint32_t)OpenXR::SwapchainIndex::UI].height) 
+        {
             m_openxr.create_swapchains();
         }
     }
@@ -273,8 +281,10 @@ void D3D11Component::copy_tex(ID3D11Resource* src, ID3D11Resource* dst) {
     context->CopyResource(dst, src);
 }
 
-void D3D11Component::setup() {
+bool D3D11Component::setup() {
     spdlog::info("[VR] Setting up D3D11 textures...");
+
+    on_reset(VR::get().get());
 
     // Get device and swapchain.
     auto& hook = g_framework->get_d3d11_hook();
@@ -294,7 +304,7 @@ void D3D11Component::setup() {
 
     if (backbuffer == nullptr) {
         spdlog::error("[VR] Failed to get back buffer (D3D11).");
-        return;
+        return false;
     }
 
     // Get backbuffer description.
@@ -344,6 +354,9 @@ void D3D11Component::setup() {
     }
 
     spdlog::info("[VR] d3d11 textures have been setup");
+    m_force_reset = false;
+
+    return true;
 }
 
 void D3D11Component::OpenXR::initialize(XrSessionCreateInfo& session_info) {
@@ -523,7 +536,7 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
     }
 
     // The UI texture
-    if (auto err = create_swapchain((uint32_t)OpenXR::SwapchainIndex::UI, backbuffer_desc.Width, backbuffer_desc.Height)) {
+    if (auto err = create_swapchain((uint32_t)OpenXR::SwapchainIndex::UI, g_framework->get_d3d11_rt_size().x, g_framework->get_d3d11_rt_size().y)) {
         return err;
     }
 

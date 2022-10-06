@@ -37,14 +37,14 @@ public:
     auto& get_blank_tex() { return m_blank_tex; }
 
 private:
-    void setup();
+    bool setup();
 
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
     struct ResourceCopier {
         virtual ~ResourceCopier() { this->reset(); }
 
-        void setup(const wchar_t* name = L"ResourceCopier object");
+        bool setup(const wchar_t* name = L"ResourceCopier object");
         void reset();
         void wait(uint32_t ms);
         void copy(ID3D12Resource* src, ID3D12Resource* dst, 
@@ -52,6 +52,8 @@ private:
             D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         void copy_region(ID3D12Resource* src, ID3D12Resource* dst, D3D12_BOX* src_box, 
             D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT,
+            D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        void clear_rtv(ID3D12Resource* dst, D3D12_CPU_DESCRIPTOR_HANDLE rtv, const float* color, 
             D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         void execute();
 
@@ -73,10 +75,39 @@ private:
     struct TextureContext {
         ResourceCopier copier{};
         ComPtr<ID3D12Resource> texture{};
+        ComPtr<ID3D12DescriptorHeap> rtv_heap{};
+        bool create_rtv(ID3D12Device* device, DXGI_FORMAT format) {
+            rtv_heap.Reset();
+
+            // create descriptor heap
+            D3D12_DESCRIPTOR_HEAP_DESC rtv_heap_desc{};
+            rtv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+            rtv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+            rtv_heap_desc.NumDescriptors = 1;
+            rtv_heap_desc.NodeMask = 1;
+            device->CreateDescriptorHeap(&rtv_heap_desc, IID_PPV_ARGS(&rtv_heap));
+
+            if (!FAILED(device->CreateDescriptorHeap(&rtv_heap_desc, IID_PPV_ARGS(&rtv_heap))) && rtv_heap.Get() != nullptr) {
+                D3D12_RENDER_TARGET_VIEW_DESC rtv_desc{};
+                rtv_desc.Format = (DXGI_FORMAT)format;
+                rtv_desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+                rtv_desc.Texture2D.MipSlice = 0;
+                rtv_desc.Texture2D.PlaneSlice = 0;
+                device->CreateRenderTargetView(texture.Get(), &rtv_desc, get_rtv());
+                return true;
+            }
+
+            return false;
+        }
+
+        D3D12_CPU_DESCRIPTOR_HANDLE get_rtv() {
+            return D3D12_CPU_DESCRIPTOR_HANDLE{rtv_heap->GetCPUDescriptorHandleForHeapStart().ptr};
+        }
     };
 
     TextureContext m_ui_tex{};
     TextureContext m_blank_tex{};
+    TextureContext m_game_ui_tex{};
 
     // Mimicking what OpenXR does.
     struct OpenVR {

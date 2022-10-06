@@ -452,7 +452,7 @@ HRESULT WINAPI D3D12Hook::resize_buffers(IDXGISwapChain3* swap_chain, UINT buffe
     }
 
     if (d3d12->m_on_resize_buffers) {
-        d3d12->m_on_resize_buffers(*d3d12);
+        d3d12->m_on_resize_buffers(*d3d12, width, height);
     }
 
     g_inside_resize_buffers = true;
@@ -496,7 +496,7 @@ HRESULT WINAPI D3D12Hook::resize_target(IDXGISwapChain3* swap_chain, const DXGI_
     }
 
     if (d3d12->m_on_resize_target) {
-        d3d12->m_on_resize_target(*d3d12);
+        d3d12->m_on_resize_target(*d3d12, new_target_parameters->Width, new_target_parameters->Height);
     }
 
     g_inside_resize_target = true;

@@ -33,6 +33,8 @@ public:
     void clear_tex(ID3D11Resource* rsrc);
     void copy_tex(ID3D11Resource* src, ID3D11Resource* dst);
 
+    void force_reset() { m_force_reset = true; }
+
 private:
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
@@ -47,6 +49,8 @@ private:
 
     std::array<ComPtr<ID3D11Texture2D>, 2> m_backbuffer_references{};
     std::array<uint32_t, 2> m_backbuffer_size{};
+
+    bool m_force_reset{false};
 
     struct OpenXR {
         OpenXR(D3D11Component* p) : parent(p) {}
@@ -77,6 +81,6 @@ private:
         friend class D3D11Component;
     } m_openxr;
 
-    void setup();
+    bool setup();
 };
 } // namespace vrmod

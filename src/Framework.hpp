@@ -48,7 +48,7 @@ public:
     void on_post_present_d3d11();
     void on_frame_d3d12();
     void on_post_present_d3d12();
-    void on_reset();
+    void on_reset(uint32_t w, uint32_t h);
     bool on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param);
     void on_direct_input_keys(const std::array<uint8_t, 256>& keys);
 

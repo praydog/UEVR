@@ -15,8 +15,8 @@ class D3D12Hook
 {
 public:
 	typedef std::function<void(D3D12Hook&)> OnPresentFn;
-	typedef std::function<void(D3D12Hook&)> OnResizeBuffersFn;
-    typedef std::function<void(D3D12Hook&)> OnResizeTargetFn;
+	typedef std::function<void(D3D12Hook&, uint32_t w, uint32_t h)> OnResizeBuffersFn;
+    typedef std::function<void(D3D12Hook&, uint32_t w, uint32_t h)> OnResizeTargetFn;
     typedef std::function<void(D3D12Hook&)> OnCreateSwapChainFn;
 
 	D3D12Hook() = default;
