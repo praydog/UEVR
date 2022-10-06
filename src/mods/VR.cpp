@@ -617,12 +617,16 @@ void VR::on_config_load(const utility::Config& cfg) {
     if (get_runtime()->loaded) {
         m_fake_stereo_hook = std::make_unique<FFakeStereoRenderingHook>();
     }
+
+    m_overlay_component.on_config_load(cfg);
 }
 
 void VR::on_config_save(utility::Config& cfg) {
     for (IModValue& option : m_options) {
         option.config_save(cfg);
     }
+
+    m_overlay_component.on_config_save(cfg);
 }
 
 void VR::on_pre_imgui_frame() {
@@ -861,6 +865,9 @@ void VR::on_draw_ui() {
     ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
     ImGui::DragFloat4("Right Bounds", (float*)&m_right_bounds, 0.005f, -2.0f, 2.0f);
     ImGui::DragFloat4("Left Bounds", (float*)&m_left_bounds, 0.005f, -2.0f, 2.0f);
+
+    m_overlay_component.on_draw_ui();
+
     ImGui::Separator();
 
     if (ImGui::Button("Set Standing Height")) {

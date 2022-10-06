@@ -75,6 +75,28 @@ void OverlayComponent::on_post_compositor_submit() {
     this->update_slate();
 }
 
+
+void OverlayComponent::on_config_save(utility::Config& cfg) {
+    for (IModValue& option : m_options) {
+        option.config_save(cfg);
+    }
+}
+
+void OverlayComponent::on_config_load(const utility::Config& cfg) {
+    for (IModValue& option : m_options) {
+        option.config_load(cfg);
+    }
+}
+
+void OverlayComponent::on_draw_ui() {
+    ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+    if (ImGui::TreeNode("Overlay Options")) {
+        m_slate_distance->draw("UI Distance");
+        m_slate_size->draw("UI Size");
+        ImGui::TreePop();
+    }
+}
+
 void OverlayComponent::update_input() {
     if (!VR::get()->get_runtime()->is_openvr()) {
         return;
@@ -171,7 +193,7 @@ void OverlayComponent::update_slate() {
     //auto glm_matrix = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
     auto glm_matrix = Matrix4x4f{VR::get()->get_rotation_offset()};
     glm_matrix[3] += VR::get()->get_standing_origin();
-    glm_matrix[3] -= glm_matrix[2] * 1.5f;
+    glm_matrix[3] -= glm_matrix[2] * m_slate_distance->value();
     glm_matrix[3].w = 1.0f;
     const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(glm_matrix)};
     vr::VROverlay()->SetOverlayTransformAbsolute(m_slate_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
@@ -179,7 +201,7 @@ void OverlayComponent::update_slate() {
     const auto is_d3d12 = g_framework->get_renderer_type() == Framework::RendererType::D3D12;
     const auto size = is_d3d12 ? g_framework->get_d3d12_rt_size() : g_framework->get_d3d11_rt_size();
     const auto aspect = size.x / size.y;
-    const auto width_meters = 2.0f * aspect;
+    const auto width_meters = m_slate_size->value() * aspect;
     vr::VROverlay()->SetOverlayWidthInMeters(m_slate_overlay_handle, width_meters);
 
     if (is_d3d11) {
@@ -451,7 +473,7 @@ void OverlayComponent::update_overlay() {
 
 XrCompositionLayerQuad& OverlayComponent::OpenXR::generate_slate_quad() {
     auto vr = VR::get();
-    auto& layer = this->slate_layer;
+    auto& layer = this->m_slate_layer;
 
     layer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
     const auto& ui_swapchain = vr->m_openxr->swapchains[(uint32_t)runtimes::OpenXR::SwapchainIndex::UI];
@@ -464,14 +486,14 @@ XrCompositionLayerQuad& OverlayComponent::OpenXR::generate_slate_quad() {
     layer.eyeVisibility = XrEyeVisibility::XR_EYE_VISIBILITY_BOTH;
     layer.space = vr->m_openxr->stage_space;
 
-    const auto size_meters = 2.0f;
+    const auto size_meters = m_parent->m_slate_size->value();
     const auto meters_w = (float)ui_swapchain.width / (float)ui_swapchain.height * size_meters;
     const auto meters_h = size_meters;
     layer.size = {meters_w, meters_h};
 
     auto glm_matrix = Matrix4x4f{vr->get_rotation_offset()};
     glm_matrix[3] += vr->get_standing_origin();
-    glm_matrix[3] -= glm_matrix[2] * 1.5f;
+    glm_matrix[3] -= glm_matrix[2] * m_parent->m_slate_distance->value();
     glm_matrix[3].w = 1.0f;
 
     layer.pose.orientation = runtimes::OpenXR::to_openxr(glm::quat_cast(glm_matrix));

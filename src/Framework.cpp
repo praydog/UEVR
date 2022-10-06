@@ -617,7 +617,7 @@ bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_para
         //return false; // do not allow this message to be handled by the game so we can alt tab without pausing
     case WM_KEYDOWN:
         if (w_param == VK_INSERT) {
-            m_draw_ui = !m_draw_ui;
+            set_draw_ui(!m_draw_ui, true);
 
             if (m_draw_ui) {
                 ShowCursor(TRUE);
@@ -901,7 +901,8 @@ void Framework::draw_ui() {
 
     // save the menu state in config
     if (m_draw_ui != m_last_draw_ui) {
-        set_draw_ui(m_draw_ui, true);
+        m_draw_ui = m_last_draw_ui;
+        set_draw_ui(!m_draw_ui, true);
     }
 
     // if we pressed the X button to close the menu.

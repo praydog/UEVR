@@ -4,6 +4,8 @@
 #include <optional>
 #include <cstdint>
 
+#include "Mod.hpp"
+
 #include "imgui.h"
 
 namespace vrmod{
@@ -12,11 +14,21 @@ class D3D12Component;
 
 class OverlayComponent {
 public:
+    OverlayComponent() 
+        : m_openxr{this}
+    {
+
+    }
+
     void on_reset();
     std::optional<std::string> on_initialize_openvr();
 
     void on_pre_imgui_frame();
     void on_post_compositor_submit();
+
+    void on_config_save(utility::Config& cfg);
+    void on_config_load(const utility::Config& cfg);
+    void on_draw_ui();
 
     auto& get_openxr() {
         return m_openxr;
@@ -56,15 +68,32 @@ private:
     bool m_just_closed_ui{false};
     bool m_just_opened_ui{false};
 
+    const ModSlider::Ptr m_slate_distance{ ModSlider::create("UI_Slate_Distance", 0.5f, 10.0f, 2.0f) };
+    const ModSlider::Ptr m_slate_size{ ModSlider::create("UI_Slate_Size", 0.5f, 10.0f, 2.0f) };
+
+    Mod::ValueList m_options{
+        *m_slate_distance,
+        *m_slate_size
+    };
+
     // OpenXR
 private:
     class OpenXR {
     public:
+        OpenXR(OverlayComponent* parent)
+            : m_parent{parent}
+        {
+
+        }
+
         XrCompositionLayerQuad& generate_slate_quad();
         
     private:
-        XrCompositionLayerQuad slate_layer{};
-    } m_openxr{};
+        XrCompositionLayerQuad m_slate_layer{};
+        OverlayComponent* m_parent{ nullptr };
+        
+        friend class OverlayComponent;
+    } m_openxr;
 
 private:
     void update_input();

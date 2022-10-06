@@ -233,10 +233,9 @@ protected:
 };
 
 class Mod {
-protected:
+public:
     using ValueList = std::vector<std::reference_wrapper<IModValue>>;
 
-public:
     virtual ~Mod() {};
     virtual std::string_view get_name() const { return "UnknownMod"; };
 

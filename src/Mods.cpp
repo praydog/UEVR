@@ -19,7 +19,7 @@ std::optional<std::string> Mods::on_initialize() const {
         }
     }
 
-    utility::Config cfg{ "framework_config.txt" };
+    utility::Config cfg{ "fw_config.txt" };
 
     for (auto& mod : m_mods) {
         spdlog::info("{:s}::on_config_load()", mod->get_name().data());
