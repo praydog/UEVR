@@ -448,4 +448,35 @@ void OverlayComponent::update_overlay() {
         }
     }
 }
+
+XrCompositionLayerQuad& OverlayComponent::OpenXR::generate_slate_quad() {
+    auto vr = VR::get();
+    auto& layer = this->slate_layer;
+
+    layer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
+    const auto& ui_swapchain = vr->m_openxr->swapchains[(uint32_t)runtimes::OpenXR::SwapchainIndex::UI];
+    layer.subImage.swapchain = ui_swapchain.handle;
+    layer.subImage.imageRect.offset.x = 0;
+    layer.subImage.imageRect.offset.y = 0;
+    layer.subImage.imageRect.extent.width = ui_swapchain.width;
+    layer.subImage.imageRect.extent.height = ui_swapchain.height;
+    layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+    layer.eyeVisibility = XrEyeVisibility::XR_EYE_VISIBILITY_BOTH;
+    layer.space = vr->m_openxr->stage_space;
+
+    const auto size_meters = 2.0f;
+    const auto meters_w = (float)ui_swapchain.width / (float)ui_swapchain.height * size_meters;
+    const auto meters_h = size_meters;
+    layer.size = {meters_w, meters_h};
+
+    auto glm_matrix = Matrix4x4f{vr->get_rotation_offset()};
+    glm_matrix[3] += vr->get_standing_origin();
+    glm_matrix[3] -= glm_matrix[2] * 1.5f;
+    glm_matrix[3].w = 1.0f;
+
+    layer.pose.orientation = runtimes::OpenXR::to_openxr(glm::quat_cast(glm_matrix));
+    layer.pose.position = runtimes::OpenXR::to_openxr(glm_matrix[3]);
+
+    return layer;
+}
 }

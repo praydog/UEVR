@@ -161,6 +161,12 @@ public:
 
     float resolution_scale{1.0f};
 
+    enum class SwapchainIndex {
+        LEFT_EYE = 0,
+        RIGHT_EYE = 1,
+        UI = 2,
+    };
+
     struct Action {
         std::vector<XrAction> action_collection{};
     };

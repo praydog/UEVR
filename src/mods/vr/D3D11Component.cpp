@@ -71,7 +71,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         if (runtime->is_openvr() && get_ui_tex().Get() != nullptr) {
             copy_tex((ID3D11Resource*)ui_target->get_native_resource(), get_ui_tex().Get());
         } else if (runtime->is_openxr() && vr->m_openxr->frame_began) {
-            m_openxr.copy((uint32_t)OpenXR::SwapchainIndex::UI, (ID3D11Texture2D*)ui_target->get_native_resource());
+            m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, (ID3D11Texture2D*)ui_target->get_native_resource());
         }
 
         clear_tex((ID3D11Resource*)ui_target->get_native_resource());
@@ -123,7 +123,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 src_box.bottom = m_backbuffer_size[1];
                 src_box.front = 0;
                 src_box.back = 1;
-                m_openxr.copy((uint32_t)OpenXR::SwapchainIndex::LEFT_EYE, backbuffer.Get(), &src_box);
+                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::LEFT_EYE, backbuffer.Get(), &src_box);
             }
 
             LOG_VERBOSE("Copying right eye");
@@ -135,36 +135,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             src_box.bottom = m_backbuffer_size[1];
             src_box.front = 0;
             src_box.back = 1;
-            m_openxr.copy((uint32_t)OpenXR::SwapchainIndex::RIGHT_EYE, backbuffer.Get(), &src_box);
+            m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::RIGHT_EYE, backbuffer.Get(), &src_box);
 
             LOG_VERBOSE("Ending frame");
-            std::vector<XrCompositionLayerQuad> quad_layers{};
-
-            auto& layer = quad_layers.emplace_back();
-            layer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
-            const auto& ui_swapchain = vr->m_openxr->swapchains[(uint32_t)OpenXR::SwapchainIndex::UI];
-            layer.subImage.swapchain = ui_swapchain.handle;
-            layer.subImage.imageRect.offset.x = 0;
-            layer.subImage.imageRect.offset.y = 0;
-            layer.subImage.imageRect.extent.width = ui_swapchain.width;
-            layer.subImage.imageRect.extent.height = ui_swapchain.height;
-            layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            layer.eyeVisibility = XrEyeVisibility::XR_EYE_VISIBILITY_BOTH;
-            layer.space = vr->m_openxr->stage_space;
-            
-            const auto size_meters = 2.0f;
-            const auto meters_w = (float)ui_swapchain.width / (float)ui_swapchain.height * size_meters;
-            const auto meters_h = size_meters;
-            layer.size = {meters_w, meters_h};
-
-            auto glm_matrix = Matrix4x4f{vr->get_rotation_offset()};
-            glm_matrix[3] += vr->get_standing_origin();
-            glm_matrix[3] -= glm_matrix[2] * 1.5f;
-            glm_matrix[3].w = 1.0f;
-
-            layer.pose.orientation = runtimes::OpenXR::to_openxr(glm::quat_cast(glm_matrix));
-            layer.pose.position = runtimes::OpenXR::to_openxr(glm_matrix[3]);
-
+            std::vector<XrCompositionLayerQuad> quad_layers{ vr->get_overlay_component().get_openxr().generate_slate_quad() };
             auto result = vr->m_openxr->end_frame(quad_layers);
 
             vr->m_openxr->needs_pose_update = true;
@@ -253,8 +227,8 @@ void D3D11Component::on_reset(VR* vr) {
     if (vr->get_runtime()->is_openxr() && vr->get_runtime()->loaded) {
         if (m_openxr.last_resolution[0] != vr->get_hmd_width() || m_openxr.last_resolution[1] != vr->get_hmd_height() ||
             vr->m_openxr->swapchains.empty() ||
-            g_framework->get_d3d11_rt_size()[0] != vr->m_openxr->swapchains[(uint32_t)OpenXR::SwapchainIndex::UI].width ||
-            g_framework->get_d3d11_rt_size()[1] != vr->m_openxr->swapchains[(uint32_t)OpenXR::SwapchainIndex::UI].height) 
+            g_framework->get_d3d11_rt_size()[0] != vr->m_openxr->swapchains[(uint32_t)runtimes::OpenXR::SwapchainIndex::UI].width ||
+            g_framework->get_d3d11_rt_size()[1] != vr->m_openxr->swapchains[(uint32_t)runtimes::OpenXR::SwapchainIndex::UI].height) 
         {
             m_openxr.create_swapchains();
         }
@@ -536,7 +510,7 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
     }
 
     // The UI texture
-    if (auto err = create_swapchain((uint32_t)OpenXR::SwapchainIndex::UI, g_framework->get_d3d11_rt_size().x, g_framework->get_d3d11_rt_size().y)) {
+    if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, g_framework->get_d3d11_rt_size().x, g_framework->get_d3d11_rt_size().y)) {
         return err;
     }
 

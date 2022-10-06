@@ -7,6 +7,9 @@
 #include "imgui.h"
 
 namespace vrmod{
+class D3D11Component;
+class D3D12Component;
+
 class OverlayComponent {
 public:
     void on_reset();
@@ -14,6 +17,10 @@ public:
 
     void on_pre_imgui_frame();
     void on_post_compositor_submit();
+
+    auto& get_openxr() {
+        return m_openxr;
+    }
 
 private:
     // Cached data for imgui VR overlay so we know when we need to update it
@@ -49,6 +56,17 @@ private:
     bool m_just_closed_ui{false};
     bool m_just_opened_ui{false};
 
+    // OpenXR
+private:
+    class OpenXR {
+    public:
+        XrCompositionLayerQuad& generate_slate_quad();
+        
+    private:
+        XrCompositionLayerQuad slate_layer{};
+    } m_openxr{};
+
+private:
     void update_input();
     void update_overlay();
     void update_slate();

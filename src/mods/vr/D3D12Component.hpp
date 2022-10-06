@@ -194,12 +194,6 @@ private:
             }
         }
 
-        enum class SwapchainIndex {
-            LEFT_EYE = 0,
-            RIGHT_EYE = 1,
-            UI = 2,
-        };
-
         XrGraphicsBindingD3D12KHR binding{XR_TYPE_GRAPHICS_BINDING_D3D12_KHR};
 
         struct SwapchainContext {

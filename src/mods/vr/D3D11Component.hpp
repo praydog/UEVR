@@ -60,12 +60,6 @@ private:
         void destroy_swapchains();
         void copy(uint32_t swapchain_idx, ID3D11Texture2D* resource, D3D11_BOX* src_box = nullptr);
 
-        enum class SwapchainIndex {
-            LEFT_EYE = 0,
-            RIGHT_EYE = 1,
-            UI = 2,
-        };
-
         XrGraphicsBindingD3D11KHR binding{XR_TYPE_GRAPHICS_BINDING_D3D11_KHR};
 
         struct SwapchainContext {

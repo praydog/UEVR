@@ -89,6 +89,10 @@ public:
         return m_openvr->render_poses;
     }
 
+    auto& get_overlay_component() {
+        return m_overlay_component;
+    }
+
     auto get_hmd_width() const {
         return get_runtime()->get_width();
     }
