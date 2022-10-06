@@ -17,6 +17,8 @@
 
 #include <sdk/Math.hpp>
 
+#include "Mod.hpp"
+
 #include "VRRuntime.hpp"
 
 namespace runtimes{
@@ -46,6 +48,10 @@ struct OpenXR final : public VRRuntime {
     bool ready() const override {
         return VRRuntime::ready() && this->session_ready;
     }
+
+    void on_config_load(const utility::Config& cfg) override;
+    void on_config_save(utility::Config& cfg) override;
+    void on_draw_ui() override;
 
     VRRuntime::Error synchronize_frame() override;
     VRRuntime::Error update_poses() override;
@@ -158,8 +164,12 @@ public:
     std::vector<XrView> stage_views{};
 
     std::deque<std::vector<XrView>> stage_view_queue{};
+    
+    const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 5.0f, 1.0f) };
 
-    float resolution_scale{1.0f};
+    Mod::ValueList options{
+        *resolution_scale,
+    };
 
     enum class SwapchainIndex {
         LEFT_EYE = 0,

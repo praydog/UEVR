@@ -606,11 +606,13 @@ void VR::on_config_load(const utility::Config& cfg) {
         option.config_load(cfg);
     }
 
+    if (get_runtime()->loaded) {
+        get_runtime()->on_config_load(cfg);
+    }
+
     // Run the rest of OpenXR initialization code here that depends on config values
     if (get_runtime()->is_openxr() && get_runtime()->loaded) {
         spdlog::info("[VR] Finishing up OpenXR initialization");
-
-        m_openxr->resolution_scale = 1.0f;
         initialize_openxr_swapchains();
     }
 
@@ -624,6 +626,10 @@ void VR::on_config_load(const utility::Config& cfg) {
 void VR::on_config_save(utility::Config& cfg) {
     for (IModValue& option : m_options) {
         option.config_save(cfg);
+    }
+
+    if (get_runtime()->loaded) {
+        get_runtime()->on_config_save(cfg);
     }
 
     m_overlay_component.on_config_save(cfg);
@@ -855,12 +861,9 @@ void VR::on_draw_ui() {
 
     if (get_runtime()->is_openvr()) {
         ImGui::TextWrapped("Resolution can be changed in SteamVR");
-    } else if (get_runtime()->is_openxr()) {
-        if (ImGui::TreeNode("Bindings")) {
-            m_openxr->display_bindings_editor();
-            ImGui::TreePop();
-        }
     }
+
+    get_runtime()->on_draw_ui();
     
     ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
     ImGui::DragFloat4("Right Bounds", (float*)&m_right_bounds, 0.005f, -2.0f, 2.0f);

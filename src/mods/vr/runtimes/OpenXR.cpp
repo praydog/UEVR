@@ -11,6 +11,32 @@
 using namespace nlohmann;
 
 namespace runtimes {
+void OpenXR::on_draw_ui() {
+    ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+    if (ImGui::TreeNode("OpenXR Options")) {
+        this->resolution_scale->draw("Resolution Scale");
+
+        if (ImGui::TreeNode("Bindings")) {
+            display_bindings_editor();
+            ImGui::TreePop();
+        }
+        
+        ImGui::TreePop();
+    }
+}
+
+void OpenXR::on_config_load(const utility::Config& cfg) {
+    for (IModValue& option : this->options) {
+        option.config_load(cfg);
+    }
+}
+
+void OpenXR::on_config_save(utility::Config& cfg) {
+    for (IModValue& option : this->options) {
+        option.config_load(cfg);
+    }
+}
+
 VRRuntime::Error OpenXR::synchronize_frame() {
     std::scoped_lock _{sync_mtx};
 
@@ -140,7 +166,7 @@ uint32_t OpenXR::get_width() const {
         return 0;
     }
 
-    return (uint32_t)((float)this->view_configs[0].recommendedImageRectWidth * this->resolution_scale);
+    return (uint32_t)((float)this->view_configs[0].recommendedImageRectWidth * this->resolution_scale->value());
 }
 
 uint32_t OpenXR::get_height() const {
@@ -148,7 +174,7 @@ uint32_t OpenXR::get_height() const {
         return 0;
     }
 
-    return (uint32_t)((float)this->view_configs[0].recommendedImageRectHeight * this->resolution_scale);
+    return (uint32_t)((float)this->view_configs[0].recommendedImageRectHeight * this->resolution_scale->value());
 }
 
 VRRuntime::Error OpenXR::consume_events(std::function<void(void*)> callback) {

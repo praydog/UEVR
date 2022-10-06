@@ -10,6 +10,7 @@
 
 #include <spdlog/spdlog.h>
 #include <sdk/Math.hpp>
+#include <utility/Config.hpp>
 
 struct VRRuntime {
     enum class Error : int64_t {
@@ -93,6 +94,11 @@ struct VRRuntime {
     virtual Error update_input() {
         return Error::SUCCESS;
     }
+
+
+    virtual void on_config_load(const utility::Config& cfg) {}
+    virtual void on_config_save(utility::Config& cfg) {}
+    virtual void on_draw_ui() {}
 
     bool is_openxr() const {
         return this->type() == Type::OPENXR;
