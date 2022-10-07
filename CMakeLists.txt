@@ -396,7 +396,6 @@ list(APPEND example_plugin_SOURCES
 	"examples/example_plugin/imgui/imgui_impl_win32.cpp"
 	"examples/example_plugin/rendering/d3d11.cpp"
 	"examples/example_plugin/rendering/d3d12.cpp"
-	"examples/example_plugin/Plugin.hpp"
 	"examples/example_plugin/imgui/font_robotomedium.hpp"
 	"examples/example_plugin/imgui/re2_imconfig.hpp"
 	"examples/example_plugin/rendering/d3d11.hpp"
