@@ -2,11 +2,14 @@
 
 #include "mods/FrameworkConfig.hpp"
 #include "mods/VR.hpp"
+#include "mods/PluginLoader.hpp"
 #include "Mods.hpp"
 
 Mods::Mods() {
     m_mods.emplace_back(new FrameworkConfig());
     m_mods.emplace_back(VR::get());
+
+    m_mods.emplace_back(PluginLoader::get());
 }
 
 std::optional<std::string> Mods::on_initialize() const {

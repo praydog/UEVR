@@ -19,6 +19,7 @@
 #include "utility/Input.hpp"
 
 #include "Mods.hpp"
+#include "mods/PluginLoader.hpp"
 
 #include "ExceptionHandler.hpp"
 #include "LicenseStrings.hpp"
@@ -190,6 +191,8 @@ Framework::Framework(HMODULE framework_module)
     }*/
 
     std::scoped_lock _{m_hook_monitor_mutex};
+
+    PluginLoader::get()->early_init();
 
     m_last_present_time = std::chrono::steady_clock::now();
     m_last_message_time = std::chrono::steady_clock::now();

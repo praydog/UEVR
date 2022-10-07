@@ -105,6 +105,19 @@ link-libraries = [
     "asmjit"
 ]
 
+[template.plugin]
+type = "shared"
+include-directories = ["include/"]
+compile-features = ["cxx_std_20"]
+
+[target.example_plugin]
+type = "plugin"
+sources = ["examples/example_plugin/**.cpp", "examples/example_plugin/**.c"]
+headers = ["examples/example_plugin/**.hpp", "examples/example_plugin/**.h"]
+link-libraries = [
+    "imgui"
+]
+
 [target.ue4poc]
 type = "shared"
 sources = ["src/**.cpp", "src/**.c"]

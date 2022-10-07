@@ -20,6 +20,7 @@
 #include <sdk/FViewportInfo.hpp>
 
 #include "Framework.hpp"
+#include "Mods.hpp"
 
 #include <bdshemu.h>
 #include <bddisasm.h>
@@ -115,7 +116,13 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick() {
             once = false;
         }
 
-        g_hook->attempt_hooking();        
+        g_hook->attempt_hooking();
+
+        const auto& mods = g_framework->get_mods()->get_mods();
+        for (auto& mod : mods) {
+            mod->on_engine_tick(engine, delta);
+        }
+
         g_hook->m_tick_hook->call<void*>(engine, delta, idle);
     });
 
@@ -1490,6 +1497,12 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
     if (once) {
         once = false;
         spdlog::info("SlateRHIRenderer::DrawWindow_RenderThread called for the first time!");
+    }
+
+    const auto& mods = g_framework->get_mods()->get_mods();
+
+    for (auto& mod : mods) {
+        mod->on_slate_draw_window(renderer, command_list, viewport_info);
     }
 
     if (!VR::get()->is_hmd_active()) {

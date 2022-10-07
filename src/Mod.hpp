@@ -10,6 +10,8 @@
 #include <utility/Config.hpp>
 
 #include <sdk/Math.hpp>
+#include <sdk/UGameEngine.hpp>
+#include <sdk/FViewportInfo.hpp>
 
 class IModValue {
 public:
@@ -260,5 +262,7 @@ public:
     virtual void on_config_save(utility::Config& cfg) {};
 
     // game specific
-    virtual void on_think() {};
+    virtual void on_engine_tick(sdk::UGameEngine* engine, float delta) {};
+    virtual void on_slate_draw_window(void* renderer, void* command_list, sdk::FViewportInfo* viewport_info) {};
+    
 };
