@@ -385,6 +385,56 @@ target_link_libraries(sdk PUBLIC
 unset(CMKR_TARGET)
 unset(CMKR_SOURCES)
 
+# Target example_plugin
+set(CMKR_TARGET example_plugin)
+set(example_plugin_SOURCES "")
+
+list(APPEND example_plugin_SOURCES
+	"examples/example_plugin/Plugin.cpp"
+	"examples/example_plugin/imgui/imgui_impl_dx11.cpp"
+	"examples/example_plugin/imgui/imgui_impl_dx12.cpp"
+	"examples/example_plugin/imgui/imgui_impl_win32.cpp"
+	"examples/example_plugin/rendering/d3d11.cpp"
+	"examples/example_plugin/rendering/d3d12.cpp"
+	"examples/example_plugin/Plugin.hpp"
+	"examples/example_plugin/imgui/font_robotomedium.hpp"
+	"examples/example_plugin/imgui/re2_imconfig.hpp"
+	"examples/example_plugin/rendering/d3d11.hpp"
+	"examples/example_plugin/rendering/d3d12.hpp"
+	"examples/example_plugin/rendering/shared.hpp"
+	"examples/example_plugin/imgui/imgui_impl_dx11.h"
+	"examples/example_plugin/imgui/imgui_impl_dx12.h"
+	"examples/example_plugin/imgui/imgui_impl_win32.h"
+)
+
+list(APPEND example_plugin_SOURCES
+	cmake.toml
+)
+
+set(CMKR_SOURCES ${example_plugin_SOURCES})
+add_library(example_plugin SHARED)
+
+if(example_plugin_SOURCES)
+	target_sources(example_plugin PRIVATE ${example_plugin_SOURCES})
+endif()
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${example_plugin_SOURCES})
+
+target_compile_features(example_plugin PUBLIC
+	cxx_std_20
+)
+
+target_include_directories(example_plugin PUBLIC
+	"include/"
+)
+
+target_link_libraries(example_plugin PUBLIC
+	imgui
+)
+
+unset(CMKR_TARGET)
+unset(CMKR_SOURCES)
+
 # Target ue4poc
 set(CMKR_TARGET ue4poc)
 set(ue4poc_SOURCES "")
@@ -398,6 +448,7 @@ list(APPEND ue4poc_SOURCES
 	"src/hooks/D3D12Hook.cpp"
 	"src/hooks/WindowsMessageHook.cpp"
 	"src/mods/FrameworkConfig.cpp"
+	"src/mods/PluginLoader.cpp"
 	"src/mods/VR.cpp"
 	"src/mods/vr/Bindings.cpp"
 	"src/mods/vr/D3D11Component.cpp"
@@ -418,6 +469,7 @@ list(APPEND ue4poc_SOURCES
 	"src/hooks/D3D12Hook.hpp"
 	"src/hooks/WindowsMessageHook.hpp"
 	"src/mods/FrameworkConfig.hpp"
+	"src/mods/PluginLoader.hpp"
 	"src/mods/VR.hpp"
 	"src/mods/vr/D3D11Component.hpp"
 	"src/mods/vr/D3D12Component.hpp"
