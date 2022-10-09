@@ -17,6 +17,13 @@
 
 using namespace uevr;
 
+#define PLUGIN_LOG_ONCE(...) \
+    static bool _logged_ = false; \
+    if (!_logged_) { \
+        _logged_ = true; \
+        API::get()->log_info(__VA_ARGS__); \
+    }
+
 class ExamplePlugin : public uevr::Plugin {
 public:
     ExamplePlugin() = default;
@@ -34,10 +41,10 @@ public:
     void on_present() override {
         if (!m_initialized) {
             if (!initialize_imgui()) {
-                OutputDebugString("Failed to initialize imgui");
+                API::get()->log_info("Failed to initialize imgui");
                 return;
             } else {
-                OutputDebugString("Initialized imgui");
+                API::get()->log_info("Initialized imgui");
             }
         }
 
@@ -75,7 +82,7 @@ public:
     }
 
     void on_device_reset() override {
-        OutputDebugString("Example Device Reset");
+        PLUGIN_LOG_ONCE("Example Device Reset");
 
         const auto renderer_data = API::get()->param()->renderer;
 
@@ -98,10 +105,32 @@ public:
         return !ImGui::GetIO().WantCaptureMouse && !ImGui::GetIO().WantCaptureKeyboard;
     }
 
-    void on_engine_tick(UEVR_UGameEngineHandle engine, float delta) override {
+    void on_pre_engine_tick(UEVR_UGameEngineHandle engine, float delta) override {
+        PLUGIN_LOG_ONCE("Pre Engine Tick: %f", delta);
     }
 
-    void on_slate_draw_window(UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info) override {
+    void on_post_engine_tick(UEVR_UGameEngineHandle engine, float delta) override {
+        PLUGIN_LOG_ONCE("Post Engine Tick: %f", delta);
+    }
+
+    void on_pre_slate_draw_window(UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info) override {
+        PLUGIN_LOG_ONCE("Pre Slate Draw Window");
+    }
+
+    void on_post_slate_draw_window(UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info) override {
+        PLUGIN_LOG_ONCE("Post Slate Draw Window");
+    }
+
+    void on_pre_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle, int view_index, float world_to_meters, 
+                                             UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double) override
+    {
+        PLUGIN_LOG_ONCE("Pre Calculate Stereo View Offset");
+    }
+
+    void on_post_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle, int view_index, float world_to_meters, 
+                                              UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double)
+    {
+        PLUGIN_LOG_ONCE("Post Calculate Stereo View Offset");
     }
 
 private:
@@ -161,4 +190,6 @@ private:
     bool m_initialized{false};
 };
 
+// Actually creates the plugin. Very important that this global is created.
+// The fact that it's using std::unique_ptr is not important, as long as the constructor is called in some way.
 std::unique_ptr<ExamplePlugin> g_plugin{new ExamplePlugin()};

@@ -120,10 +120,14 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick() {
 
         const auto& mods = g_framework->get_mods()->get_mods();
         for (auto& mod : mods) {
-            mod->on_engine_tick(engine, delta);
+            mod->on_pre_engine_tick(engine, delta);
         }
 
         g_hook->m_tick_hook->call<void*>(engine, delta, idle);
+
+        for (auto& mod : mods) {
+            mod->on_post_engine_tick(engine, delta);
+        }
     });
 
     m_hooked_game_engine_tick = true;
@@ -980,6 +984,12 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     spdlog::info("calculate stereo view offset called! {}", view_index);
 #endif
 
+    const auto& mods = g_framework->get_mods()->get_mods();
+
+    for (auto& mod : mods) {
+        mod->on_pre_calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location, g_hook->m_has_double_precision);
+    }
+
     static bool index_starts_from_one = true;
 
     if (view_index == 2) {
@@ -1071,6 +1081,10 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         rot_d->pitch = euler.x;
         rot_d->yaw = euler.y;
         rot_d->roll = euler.z;
+    }
+
+    for (auto& mod : mods) {
+        mod->on_post_calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location, g_hook->m_has_double_precision);
     }
 
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
@@ -1502,32 +1516,42 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
     const auto& mods = g_framework->get_mods()->get_mods();
 
     for (auto& mod : mods) {
-        mod->on_slate_draw_window(renderer, command_list, viewport_info);
+        mod->on_pre_slate_draw_window(renderer, command_list, viewport_info);
     }
 
+    auto call_orig = [&]() {
+        auto ret = g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
+
+        for (auto& mod : mods) {
+            mod->on_post_slate_draw_window(renderer, command_list, viewport_info);
+        }
+
+        return ret;
+    };
+
     if (!VR::get()->is_hmd_active()) {
-        return g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
+        return call_orig();
     }
 
     const auto ui_target = g_hook->get_render_target_manager()->get_ui_target();
 
     if (ui_target == nullptr) {
         spdlog::info("No UI target, skipping!");
-        return g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
+        return call_orig();
     }
 
     const auto viewport_rt_provider = viewport_info->get_rt_provider(g_hook->get_render_target_manager()->get_render_target());
 
     if (viewport_rt_provider == nullptr) {
         spdlog::info("No viewport RT provider, skipping!");
-        return g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
+        return call_orig();
     }
 
     const auto slate_resource = viewport_rt_provider->get_viewport_render_target_texture();
 
     if (slate_resource == nullptr) {
         spdlog::info("No slate resource, skipping!");
-        return g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
+        return call_orig();
     }
 
     auto vr = VR::get();
@@ -1543,6 +1567,10 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
 
     // Restore the old texture.
     slate_resource->get_mutable_resource() = old_texture;
+
+    for (auto& mod : mods) {
+        mod->on_post_slate_draw_window(renderer, command_list, viewport_info);
+    }
     
     // After this we copy over the texture and clear it in the present hook. doing it here just seems to crash sometimes.
 

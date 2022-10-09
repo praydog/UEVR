@@ -41,10 +41,6 @@ DECLARE_UEVR_HANDLE(UEVR_XrSpace);
 #define UEVR_LEFT_EYE 0
 #define UEVR_RIGHT_EYE 1
 
-#define UEVR_HMD_INDEX = 0
-#define UEVR_LEFT_CONTROLLER_INDEX = 1
-#define UEVR_RIGHT_CONTROLLER_INDEX = 2
-
 #define UEVR_OPENXR_SWAPCHAIN_LEFT_EYE 0
 #define UEVR_OPENXR_SWAPCHAIN_RIGHT_EYE 1
 #define UEVR_OPENXR_SWAPCHAIN_UI 2
@@ -58,6 +54,12 @@ typedef struct {
     float y;
     float z;
 } UEVR_Vector3f;
+
+typedef struct {
+    double x;
+    double y;
+    double z;
+} UEVR_Vector3d;
 
 typedef struct {
     float x;
@@ -74,8 +76,25 @@ typedef struct {
 } UEVR_Quaternionf;
 
 typedef struct {
+    float pitch;
+    float yaw;
+    float roll;
+} UEVR_Rotatorf;
+
+typedef struct {
+    double pitch;
+    double yaw;
+    double roll;
+} UEVR_Rotatord;
+
+typedef struct {
     float m[4][4];
 } UEVR_Matrix4x4f;
+
+typedef struct {
+    double m[4][4];
+} UEVR_Matrix4x4d;
+
 
 typedef void (*UEVR_OnPresentCb)();
 typedef void (*UEVR_OnDeviceResetCb)();
@@ -83,11 +102,16 @@ typedef bool (*UEVR_OnMessageCb)(void*, unsigned int, unsigned long long, long l
 typedef void (*UEVR_Engine_TickCb)(UEVR_UGameEngineHandle engine, float delta_seconds);
 typedef void (*UEVR_Slate_DrawWindow_RenderThreadCb)(UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info);
 
+DECLARE_UEVR_HANDLE(UEVR_StereoRenderingDeviceHandle);
+/* the position and rotation must be converted to double format based on the is_double parameter. */
+typedef void (*UEVR_Stereo_CalculateStereoViewOffsetCb)(UEVR_StereoRenderingDeviceHandle, int view_index, float world_to_meters, UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double);
+
 typedef bool (*UEVR_OnPresentFn)(UEVR_OnPresentCb);
 typedef bool (*UEVR_OnDeviceResetFn)(UEVR_OnDeviceResetCb);
 typedef bool (*UEVR_OnMessageFn)(UEVR_OnMessageCb);
 typedef bool (*UEVR_Engine_TickFn)(UEVR_Engine_TickCb);
 typedef bool (*UEVR_Slate_DrawWindow_RenderThreadFn)(UEVR_Slate_DrawWindow_RenderThreadCb);
+typedef bool (*UEVR_Stereo_CalculateStereoViewOffsetFn)(UEVR_Stereo_CalculateStereoViewOffsetCb);
 
 typedef void (*UEVR_PluginRequiredVersionFn)(UEVR_PluginVersion*);
 
@@ -105,8 +129,12 @@ typedef struct {
 } UEVR_PluginFunctions;
 
 typedef struct {
-    UEVR_Engine_TickFn on_engine_tick;
-    UEVR_Slate_DrawWindow_RenderThreadFn on_slate_draw_window_render_thread;
+    UEVR_Engine_TickFn on_pre_engine_tick;
+    UEVR_Engine_TickFn on_post_engine_tick;
+    UEVR_Slate_DrawWindow_RenderThreadFn on_pre_slate_draw_window_render_thread;
+    UEVR_Slate_DrawWindow_RenderThreadFn on_post_slate_draw_window_render_thread;
+    UEVR_Stereo_CalculateStereoViewOffsetFn on_pre_calculate_stereo_view_offset;
+    UEVR_Stereo_CalculateStereoViewOffsetFn on_post_calculate_stereo_view_offset;
 } UEVR_SDKCallbacks;
 
 typedef struct {
@@ -188,6 +216,10 @@ typedef struct {
     void (*get_rotation_offset)(UEVR_Quaternionf* out_rotation);
     void (*set_standing_origin)(const UEVR_Vector3f* origin);
     void (*set_rotation_offset)(const UEVR_Quaternionf* rotation);
+
+    UEVR_TrackedDeviceIndex (*get_hmd_index)();
+    UEVR_TrackedDeviceIndex (*get_left_controller_index)();
+    UEVR_TrackedDeviceIndex (*get_right_controller_index)();
 
     /* OpenVR/OpenXR space. */
     void (*get_pose)(UEVR_TrackedDeviceIndex index, UEVR_Vector3f* out_position, UEVR_Quaternionf* out_rotation);

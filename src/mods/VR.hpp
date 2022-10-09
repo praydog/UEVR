@@ -125,6 +125,30 @@ public:
         return !m_controllers.empty() && (std::chrono::steady_clock::now() - m_last_controller_update) <= std::chrono::seconds((int32_t)m_motion_controls_inactivity_timer->value());
     }
 
+    int get_hmd_index() const {
+        return 0;
+    }
+
+    int get_left_controller_index() const {
+        if (m_runtime->is_openxr()) {
+            return 1;
+        } else if (m_runtime->is_openvr()) {
+            return !m_controllers.empty() ? m_controllers[0] : -1;
+        }
+
+        return -1;
+    }
+
+    int get_right_controller_index() const {
+        if (m_runtime->is_openxr()) {
+            return 2;
+        } else if (m_runtime->is_openvr()) {
+            return !m_controllers.empty() ? m_controllers[1] : -1;
+        }
+
+        return -1;
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;

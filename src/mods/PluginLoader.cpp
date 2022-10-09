@@ -79,24 +79,6 @@ bool on_message(UEVR_OnMessageCb cb) {
 }
 }
 
-namespace uevr {
-bool on_engine_tick(UEVR_Engine_TickCb cb) {
-    if (cb == nullptr) {
-        return false;
-    }
-
-    return PluginLoader::get()->add_on_engine_tick(cb);
-}
-
-bool on_slate_draw_window_render_thread(UEVR_Slate_DrawWindow_RenderThreadCb cb) {
-    if (cb == nullptr) {
-        return false;
-    }
-
-    return PluginLoader::get()->add_on_slate_draw_window_render_thread(cb);
-}
-}
-
 UEVR_PluginCallbacks g_plugin_callbacks {
     uevr::on_present,
     uevr::on_device_reset,
@@ -116,9 +98,63 @@ UEVR_SDKFunctions g_sdk_functions {
     }
 };
 
+namespace uevr {
+bool on_pre_engine_tick(UEVR_Engine_TickCb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_pre_engine_tick(cb);
+}
+
+bool on_post_engine_tick(UEVR_Engine_TickCb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_post_engine_tick(cb);
+}
+
+bool on_pre_slate_draw_window_render_thread(UEVR_Slate_DrawWindow_RenderThreadCb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_pre_slate_draw_window_render_thread(cb);
+}
+
+bool on_post_slate_draw_window_render_thread(UEVR_Slate_DrawWindow_RenderThreadCb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_post_slate_draw_window_render_thread(cb);
+}
+
+bool on_pre_calculate_stereo_view_offset(UEVR_Stereo_CalculateStereoViewOffsetCb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_pre_calculate_stereo_view_offset(cb);
+}
+
+bool on_post_calculate_stereo_view_offset(UEVR_Stereo_CalculateStereoViewOffsetCb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_post_calculate_stereo_view_offset(cb);
+}
+}
+
 UEVR_SDKCallbacks g_sdk_callbacks {
-    uevr::on_engine_tick,
-    uevr::on_slate_draw_window_render_thread
+    uevr::on_pre_engine_tick,
+    uevr::on_post_engine_tick,
+    uevr::on_pre_slate_draw_window_render_thread,
+    uevr::on_post_slate_draw_window_render_thread,
+    uevr::on_pre_calculate_stereo_view_offset,
+    uevr::on_post_calculate_stereo_view_offset
 };
 
 UEVR_SDKData g_sdk_data {
@@ -167,6 +203,18 @@ void set_rotation_offset(const UEVR_Quaternionf* rotation) {
     ::VR::get()->set_rotation_offset({rotation->w, rotation->x, rotation->y, rotation->z});
 }
 
+UEVR_TrackedDeviceIndex get_hmd_index() {
+    return VR::get()->get_hmd_index();
+}
+
+UEVR_TrackedDeviceIndex get_left_controller_index() {
+    return VR::get()->get_left_controller_index();
+}
+
+UEVR_TrackedDeviceIndex get_right_controller_index() {
+    return VR::get()->get_right_controller_index();
+}
+
 void get_pose(UEVR_TrackedDeviceIndex index, UEVR_Vector3f* out_position, UEVR_Quaternionf* out_rotation) {
     static_assert(sizeof(UEVR_Vector3f) == sizeof(glm::vec3));
     static_assert(sizeof(UEVR_Quaternionf) == sizeof(glm::quat));
@@ -207,6 +255,9 @@ UEVR_VRData g_vr_data {
     uevr::vr::get_rotation_offset,
     uevr::vr::set_standing_origin,
     uevr::vr::set_rotation_offset,
+    uevr::vr::get_hmd_index,
+    uevr::vr::get_left_controller_index,
+    uevr::vr::get_right_controller_index,
     uevr::vr::get_pose,
     uevr::vr::get_transform,
     uevr::vr::get_ue_projection_matrix
@@ -638,30 +689,83 @@ bool PluginLoader::on_message(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
     return true;
 }
 
-void PluginLoader::on_engine_tick(sdk::UGameEngine* engine, float delta) {
+void PluginLoader::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     std::shared_lock _{m_api_cb_mtx};
 
-    for (auto&& cb : m_on_engine_tick_cbs) {
+    for (auto&& cb : m_on_pre_engine_tick_cbs) {
         try {
             cb((UEVR_UGameEngineHandle)engine, delta);
         } catch(...) {
-            spdlog::error("[APIProxy] Exception occurred in on_engine_tick callback; one of the plugins has an error.");
+            spdlog::error("[APIProxy] Exception occurred in on_pre_engine_tick callback; one of the plugins has an error.");
         }
     }
 }
 
-void PluginLoader::on_slate_draw_window(void* renderer, void* command_list, sdk::FViewportInfo* viewport_info) {
+void PluginLoader::on_post_engine_tick(sdk::UGameEngine* engine, float delta) {
     std::shared_lock _{m_api_cb_mtx};
 
-    for (auto&& cb : m_on_slate_draw_window_render_thread_cbs) {
+    for (auto&& cb : m_on_post_engine_tick_cbs) {
+        try {
+            cb((UEVR_UGameEngineHandle)engine, delta);
+        } catch(...) {
+            spdlog::error("[APIProxy] Exception occurred in on_post_engine_tick callback; one of the plugins has an error.");
+        }
+    }
+}
+
+void PluginLoader::on_pre_slate_draw_window(void* renderer, void* command_list, sdk::FViewportInfo* viewport_info) {
+    std::shared_lock _{m_api_cb_mtx};
+
+    for (auto&& cb : m_on_pre_slate_draw_window_render_thread_cbs) {
         try {
             cb((UEVR_FSlateRHIRendererHandle)renderer, (UEVR_FViewportInfoHandle)viewport_info);
         } catch(...) {
-            spdlog::error("[APIProxy] Exception occurred in on_slate_draw_window callback; one of the plugins has an error.");
+            spdlog::error("[APIProxy] Exception occurred in on_pre_slate_draw_window callback; one of the plugins has an error.");
         }
     }
 }
 
+void PluginLoader::on_post_slate_draw_window(void* renderer, void* command_list, sdk::FViewportInfo* viewport_info) {
+    std::shared_lock _{m_api_cb_mtx};
+
+    for (auto&& cb : m_on_post_slate_draw_window_render_thread_cbs) {
+        try {
+            cb((UEVR_FSlateRHIRendererHandle)renderer, (UEVR_FViewportInfoHandle)viewport_info);
+        } catch(...) {
+            spdlog::error("[APIProxy] Exception occurred in on_post_slate_draw_window callback; one of the plugins has an error.");
+        }
+    }
+}
+
+void PluginLoader::on_pre_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
+                                                       const float world_to_meters, Vector3f* view_location, bool is_double)
+{
+    std::shared_lock _{m_api_cb_mtx};
+
+    for (auto&& cb : m_on_pre_calculate_stereo_view_offset_cbs) {
+        try {
+            cb( (UEVR_StereoRenderingDeviceHandle)stereo_device, view_index, world_to_meters, 
+                (UEVR_Vector3f*)view_location, (UEVR_Rotatorf*)view_rotation, is_double);
+        } catch(...) {
+            spdlog::error("[APIProxy] Exception occurred in on_pre_calculate_stereo_view_offset callback; one of the plugins has an error.");
+        }
+    }
+}
+
+void PluginLoader::on_post_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
+                                                        const float world_to_meters, Vector3f* view_location, bool is_double)
+{
+    std::shared_lock _{m_api_cb_mtx};
+
+    for (auto&& cb : m_on_post_calculate_stereo_view_offset_cbs) {
+        try {
+            cb( (UEVR_StereoRenderingDeviceHandle)stereo_device, view_index, world_to_meters, 
+                (UEVR_Vector3f*)view_location, (UEVR_Rotatorf*)view_rotation, is_double);
+        } catch(...) {
+            spdlog::error("[APIProxy] Exception occurred in on_post_calculate_stereo_view_offset callback; one of the plugins has an error.");
+        }
+    }
+}
 
 bool PluginLoader::add_on_present(UEVR_OnPresentCb cb) {
     std::unique_lock _{m_api_cb_mtx};
@@ -684,17 +788,45 @@ bool PluginLoader::add_on_message(UEVR_OnMessageCb cb) {
     return true;
 }
 
-bool PluginLoader::add_on_engine_tick(UEVR_Engine_TickCb cb) {
+bool PluginLoader::add_on_pre_engine_tick(UEVR_Engine_TickCb cb) {
     std::unique_lock _{m_api_cb_mtx};
 
-    m_on_engine_tick_cbs.push_back(cb);
+    m_on_pre_engine_tick_cbs.push_back(cb);
     return true;
 }
 
-bool PluginLoader::add_on_slate_draw_window_render_thread(UEVR_Slate_DrawWindow_RenderThreadCb cb) {
+bool PluginLoader::add_on_post_engine_tick(UEVR_Engine_TickCb cb) {
     std::unique_lock _{m_api_cb_mtx};
 
-    m_on_slate_draw_window_render_thread_cbs.push_back(cb);
+    m_on_post_engine_tick_cbs.push_back(cb);
+    return true;
+}
+
+bool PluginLoader::add_on_pre_slate_draw_window_render_thread(UEVR_Slate_DrawWindow_RenderThreadCb cb) {
+    std::unique_lock _{m_api_cb_mtx};
+
+    m_on_pre_slate_draw_window_render_thread_cbs.push_back(cb);
+    return true;
+}
+
+bool PluginLoader::add_on_post_slate_draw_window_render_thread(UEVR_Slate_DrawWindow_RenderThreadCb cb) {
+    std::unique_lock _{m_api_cb_mtx};
+
+    m_on_post_slate_draw_window_render_thread_cbs.push_back(cb);
+    return true;
+}
+
+bool PluginLoader::add_on_pre_calculate_stereo_view_offset(UEVR_Stereo_CalculateStereoViewOffsetCb cb) {
+    std::unique_lock _{m_api_cb_mtx};
+
+    m_on_pre_calculate_stereo_view_offset_cbs.push_back(cb);
+    return true;
+}
+
+bool PluginLoader::add_on_post_calculate_stereo_view_offset(UEVR_Stereo_CalculateStereoViewOffsetCb cb) {
+    std::unique_lock _{m_api_cb_mtx};
+
+    m_on_post_calculate_stereo_view_offset_cbs.push_back(cb);
     return true;
 }
 
