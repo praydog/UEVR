@@ -3,6 +3,8 @@
 #include <imgui.h>
 #include <spdlog/spdlog.h>
 
+#include <openvr.h>
+
 #include "Framework.hpp"
 #include "uevr/API.h"
 
@@ -196,18 +198,6 @@ void get_ue_projection_matrix(UEVR_Eye eye, UEVR_Matrix4x4f* out_projection) {
 }
 }
 
-namespace uevr {
-namespace openvr{
-
-}
-}
-
-namespace uevr {
-namespace openxr {
-
-}
-}
-
 UEVR_VRData g_vr_data {
     uevr::vr::is_runtime_ready,
     uevr::vr::is_openvr,
@@ -222,10 +212,162 @@ UEVR_VRData g_vr_data {
     uevr::vr::get_ue_projection_matrix
 };
 
+
+/*
+DECLARE_UEVR_HANDLE(UEVR_IVRSystem);
+DECLARE_UEVR_HANDLE(UEVR_IVRChaperone);
+DECLARE_UEVR_HANDLE(UEVR_IVRChaperoneSetup);
+DECLARE_UEVR_HANDLE(UEVR_IVRCompositor);
+DECLARE_UEVR_HANDLE(UEVR_IVROverlay);
+DECLARE_UEVR_HANDLE(UEVR_IVROverlayView);
+DECLARE_UEVR_HANDLE(UEVR_IVRHeadsetView);
+DECLARE_UEVR_HANDLE(UEVR_IVRScreenshots);
+DECLARE_UEVR_HANDLE(UEVR_IVRRenderModels);
+DECLARE_UEVR_HANDLE(UEVR_IVRApplications);
+DECLARE_UEVR_HANDLE(UEVR_IVRSettings);
+DECLARE_UEVR_HANDLE(UEVR_IVRResources);
+DECLARE_UEVR_HANDLE(UEVR_IVRExtendedDisplay);
+DECLARE_UEVR_HANDLE(UEVR_IVRTrackedCamera);
+DECLARE_UEVR_HANDLE(UEVR_IVRDriverManager);
+DECLARE_UEVR_HANDLE(UEVR_IVRInput);
+DECLARE_UEVR_HANDLE(UEVR_IVRIOBuffer);
+DECLARE_UEVR_HANDLE(UEVR_IVRSpatialAnchors);
+DECLARE_UEVR_HANDLE(UEVR_IVRNotifications);
+DECLARE_UEVR_HANDLE(UEVR_IVRDebug);
+*/
+
+namespace uevr {
+namespace openvr{
+UEVR_IVRSystem get_vr_system() {
+    return (UEVR_IVRSystem)VR::get()->get_openvr_runtime()->hmd;
+}
+
+UEVR_IVRChaperone get_vr_chaperone() {
+    return (UEVR_IVRChaperone)::vr::VRChaperone();
+}
+
+UEVR_IVRChaperoneSetup get_vr_chaperone_setup() {
+    return (UEVR_IVRChaperoneSetup)::vr::VRChaperoneSetup();
+}
+
+UEVR_IVRCompositor get_vr_compositor() {
+    return (UEVR_IVRCompositor)::vr::VRCompositor();
+}
+
+UEVR_IVROverlay get_vr_overlay() {
+    return (UEVR_IVROverlay)::vr::VROverlay();
+}
+
+UEVR_IVROverlayView get_vr_overlay_view() {
+    return (UEVR_IVROverlayView)::vr::VROverlayView();
+}
+
+UEVR_IVRHeadsetView get_vr_headset_view() {
+    return (UEVR_IVRHeadsetView)::vr::VRHeadsetView();
+}
+
+UEVR_IVRScreenshots get_vr_screenshots() {
+    return (UEVR_IVRScreenshots)::vr::VRScreenshots();
+}
+
+UEVR_IVRRenderModels get_vr_render_models() {
+    return (UEVR_IVRRenderModels)::vr::VRRenderModels();
+}
+
+UEVR_IVRApplications get_vr_applications() {
+    return (UEVR_IVRApplications)::vr::VRApplications();
+}
+
+UEVR_IVRSettings get_vr_settings() {
+    return (UEVR_IVRSettings)::vr::VRSettings();
+}
+
+UEVR_IVRResources get_vr_resources() {
+    return (UEVR_IVRResources)::vr::VRResources();
+}
+
+UEVR_IVRExtendedDisplay get_vr_extended_display() {
+    return (UEVR_IVRExtendedDisplay)::vr::VRExtendedDisplay();
+}
+
+UEVR_IVRTrackedCamera get_vr_tracked_camera() {
+    return (UEVR_IVRTrackedCamera)::vr::VRTrackedCamera();
+}
+
+UEVR_IVRDriverManager get_vr_driver_manager() {
+    return (UEVR_IVRDriverManager)::vr::VRDriverManager();
+}
+
+UEVR_IVRInput get_vr_input() {
+    return (UEVR_IVRInput)::vr::VRInput();
+}
+
+UEVR_IVRIOBuffer get_vr_io_buffer() {
+    return (UEVR_IVRIOBuffer)::vr::VRIOBuffer();
+}
+
+UEVR_IVRSpatialAnchors get_vr_spatial_anchors() {
+    return (UEVR_IVRSpatialAnchors)::vr::VRSpatialAnchors();
+}
+
+UEVR_IVRNotifications get_vr_notifications() {
+    return (UEVR_IVRNotifications)::vr::VRNotifications();
+}
+
+UEVR_IVRDebug get_vr_debug() {
+    return (UEVR_IVRDebug)::vr::VRDebug();
+}
+}
+}
+
 UEVR_OpenVRData g_openvr_data {
+    uevr::openvr::get_vr_system,
+    uevr::openvr::get_vr_chaperone,
+    uevr::openvr::get_vr_chaperone_setup,
+    uevr::openvr::get_vr_compositor,
+    uevr::openvr::get_vr_overlay,
+    uevr::openvr::get_vr_overlay_view,
+    uevr::openvr::get_vr_headset_view,
+    uevr::openvr::get_vr_screenshots,
+    uevr::openvr::get_vr_render_models,
+    uevr::openvr::get_vr_applications,
+    uevr::openvr::get_vr_settings,
+    uevr::openvr::get_vr_resources,
+    uevr::openvr::get_vr_extended_display,
+    uevr::openvr::get_vr_tracked_camera,
+    uevr::openvr::get_vr_driver_manager,
+    uevr::openvr::get_vr_input,
+    uevr::openvr::get_vr_io_buffer,
+    uevr::openvr::get_vr_spatial_anchors,
+    uevr::openvr::get_vr_notifications,
+    uevr::openvr::get_vr_debug
 };
 
+namespace uevr {
+namespace openxr {
+UEVR_XrInstance get_xr_instance() {
+    return (UEVR_XrInstance)VR::get()->get_openxr_runtime()->instance;
+}
+
+UEVR_XrSession get_xr_session() {
+    return (UEVR_XrSession)VR::get()->get_openxr_runtime()->session;
+}
+
+UEVR_XrSpace get_stage_space() {
+    return (UEVR_XrSpace)VR::get()->get_openxr_runtime()->stage_space;
+}
+
+UEVR_XrSpace get_view_space() {
+    return (UEVR_XrSpace)VR::get()->get_openxr_runtime()->view_space;
+}
+}
+}
+
 UEVR_OpenXRData g_openxr_data {
+    uevr::openxr::get_xr_instance,
+    uevr::openxr::get_xr_session,
+    uevr::openxr::get_stage_space,
+    uevr::openxr::get_view_space
 };
 
 UEVR_PluginInitializeParam g_plugin_initialize_param{

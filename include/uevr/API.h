@@ -125,8 +125,48 @@ typedef struct {
     const UEVR_SDKCallbacks* callbacks;
 } UEVR_SDKData;
 
+DECLARE_UEVR_HANDLE(UEVR_IVRSystem);
+DECLARE_UEVR_HANDLE(UEVR_IVRChaperone);
+DECLARE_UEVR_HANDLE(UEVR_IVRChaperoneSetup);
+DECLARE_UEVR_HANDLE(UEVR_IVRCompositor);
+DECLARE_UEVR_HANDLE(UEVR_IVROverlay);
+DECLARE_UEVR_HANDLE(UEVR_IVROverlayView);
+DECLARE_UEVR_HANDLE(UEVR_IVRHeadsetView);
+DECLARE_UEVR_HANDLE(UEVR_IVRScreenshots);
+DECLARE_UEVR_HANDLE(UEVR_IVRRenderModels);
+DECLARE_UEVR_HANDLE(UEVR_IVRApplications);
+DECLARE_UEVR_HANDLE(UEVR_IVRSettings);
+DECLARE_UEVR_HANDLE(UEVR_IVRResources);
+DECLARE_UEVR_HANDLE(UEVR_IVRExtendedDisplay);
+DECLARE_UEVR_HANDLE(UEVR_IVRTrackedCamera);
+DECLARE_UEVR_HANDLE(UEVR_IVRDriverManager);
+DECLARE_UEVR_HANDLE(UEVR_IVRInput);
+DECLARE_UEVR_HANDLE(UEVR_IVRIOBuffer);
+DECLARE_UEVR_HANDLE(UEVR_IVRSpatialAnchors);
+DECLARE_UEVR_HANDLE(UEVR_IVRNotifications);
+DECLARE_UEVR_HANDLE(UEVR_IVRDebug);
+
 typedef struct {
-    void* (*get_vr_system)(); /* vr::IVRSystem* */
+    UEVR_IVRSystem (*get_vr_system)();
+    UEVR_IVRChaperone (*get_vr_chaperone)();
+    UEVR_IVRChaperoneSetup (*get_vr_chaperone_setup)();
+    UEVR_IVRCompositor (*get_vr_compositor)();
+    UEVR_IVROverlay (*get_vr_overlay)();
+    UEVR_IVROverlayView (*get_vr_overlay_view)();
+    UEVR_IVRHeadsetView (*get_vr_headset_view)();
+    UEVR_IVRScreenshots (*get_vr_screenshots)();
+    UEVR_IVRRenderModels (*get_vr_render_models)();
+    UEVR_IVRApplications (*get_vr_applications)();
+    UEVR_IVRSettings (*get_vr_settings)();
+    UEVR_IVRResources (*get_vr_resources)();
+    UEVR_IVRExtendedDisplay (*get_vr_extended_display)();
+    UEVR_IVRTrackedCamera (*get_vr_tracked_camera)();
+    UEVR_IVRDriverManager (*get_vr_driver_manager)();
+    UEVR_IVRInput (*get_vr_input)();
+    UEVR_IVRIOBuffer (*get_vr_io_buffer)();
+    UEVR_IVRSpatialAnchors (*get_vr_spatial_anchors)();
+    UEVR_IVRNotifications (*get_vr_notifications)();
+    UEVR_IVRDebug (*get_vr_debug)();
 } UEVR_OpenVRData;
 
 typedef struct {

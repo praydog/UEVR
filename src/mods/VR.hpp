@@ -77,6 +77,14 @@ public:
         return (T*)m_runtime.get();
     }
 
+    runtimes::OpenXR* get_openxr_runtime() const {
+        return m_openxr.get();
+    }
+
+    runtimes::OpenVR* get_openvr_runtime() const {
+        return m_openvr.get();
+    }
+
     bool is_hmd_active() const {
         return get_runtime()->ready();
     }
