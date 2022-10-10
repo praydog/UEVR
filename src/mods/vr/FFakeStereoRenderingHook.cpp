@@ -108,12 +108,16 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick() {
     auto factory = SafetyHookFactory::init();
     auto builder = factory->acquire();
 
-    m_tick_hook = builder.create_inline((void*)*func, +[](sdk::UGameEngine* engine, float delta, bool idle) {
+    m_tick_hook = builder.create_inline((void*)*func, +[](sdk::UGameEngine* engine, float delta, bool idle) -> void* {
         static bool once = true;
 
         if (once) {
             spdlog::info("First time calling UGameEngine::Tick!");
             once = false;
+        }
+
+        if (!g_framework->is_ready()) {
+            return g_hook->m_tick_hook->call<void*>(engine, delta, idle);
         }
 
         g_hook->attempt_hooking();
@@ -123,11 +127,13 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick() {
             mod->on_pre_engine_tick(engine, delta);
         }
 
-        g_hook->m_tick_hook->call<void*>(engine, delta, idle);
+        const auto result = g_hook->m_tick_hook->call<void*>(engine, delta, idle);
 
         for (auto& mod : mods) {
             mod->on_post_engine_tick(engine, delta);
         }
+
+        return result;
     });
 
     m_hooked_game_engine_tick = true;
@@ -942,6 +948,12 @@ bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("is stereo enabled called!");
 #endif
+
+    // wait!!!
+    if (!g_framework->is_ready()) {
+        return false;
+    }
+
     static uint32_t count = 0;
 
     // Forcefully return true the first few times to let stuff initialize.
@@ -958,6 +970,10 @@ void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, in
     spdlog::info("adjust view rect called! {}", index);
     spdlog::info(" x: {}, y: {}, w: {}, h: {}", *x, *y, *w, *h);
 #endif
+
+    if (!g_framework->is_ready()) {
+        return;
+    }
 
     static bool index_starts_from_one = true;
 
@@ -983,6 +999,10 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("calculate stereo view offset called! {}", view_index);
 #endif
+
+    if (!g_framework->is_ready()) {
+        return;
+    }
 
     const auto& mods = g_framework->get_mods()->get_mods();
 
@@ -1112,6 +1132,14 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
         g_hook->m_calculate_stereo_projection_matrix_post_hook.reset();
     }
 
+    if (!g_framework->is_ready()) {
+        if (g_hook->m_calculate_stereo_projection_matrix_hook) {
+            return g_hook->m_calculate_stereo_projection_matrix_hook->call<Matrix4x4f*>(stereo, out, view_index);
+        }
+
+        return out;
+    }
+
     static bool index_starts_from_one = true;
 
     if (view_index == 2) {
@@ -1163,6 +1191,10 @@ template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 __forceinline void FFakeStereoRenderingHook::render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list,
     FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size) 
 {
+    if (!g_framework->is_ready()) {
+        return;
+    }
+
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("render texture render thread called!");
 #endif
@@ -1213,6 +1245,10 @@ void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneV
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("init canvas called!");
 #endif
+
+    if (!g_framework->is_ready()) {
+        return;
+    }
 
     // Since the FSceneView and UCanvas structures will probably vary wildly
     // in terms of field offsets and size, we will need to dynamically scan
@@ -1287,6 +1323,10 @@ IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_
     spdlog::info("get render target manager hook called!");
 #endif
 
+    if (!g_framework->is_ready()) {
+        return nullptr;
+    }
+
     if (!VR::get()->get_runtime()->got_first_poses || VR::get()->is_hmd_active()) {
         if (g_hook->m_uses_old_rendertarget_manager) {
             return (IStereoRenderTargetManager*)&g_hook->m_rtm_418;
@@ -1306,6 +1346,10 @@ IStereoLayers* FFakeStereoRenderingHook::get_stereo_layers_hook(FFakeStereoRende
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("get stereo layers hook called!");
 #endif
+
+    if (!g_framework->is_ready()) {
+        return nullptr;
+    }
 
     if (!VR::get()->get_runtime()->got_first_poses || VR::get()->is_hmd_active()) {
         /*static uint8_t fake_data[0x100]{};
@@ -1513,6 +1557,10 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
         spdlog::info("SlateRHIRenderer::DrawWindow_RenderThread called for the first time!");
     }
 
+    if (!g_framework->is_ready()) {
+        return g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
+    }
+
     const auto& mods = g_framework->get_mods()->get_mods();
 
     for (auto& mod : mods) {
@@ -1528,6 +1576,7 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
 
         return ret;
     };
+
 
     if (!VR::get()->is_hmd_active()) {
         return call_orig();
@@ -1578,6 +1627,10 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
 }
 
 void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const FViewport& vp, class SViewport* vp_widget) {
+    if (!g_framework->is_ready()) {
+        return;
+    }
+
     //spdlog::info("Widget: {:x}", (uintptr_t)ViewportWidget);
 }
 
@@ -1585,6 +1638,10 @@ void VRRenderTargetManager_Base::calculate_render_target_size(const FViewport& v
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     spdlog::info("calculate render target size called!");
 #endif
+
+    if (!g_framework->is_ready()) {
+        return;
+    }
 
     spdlog::info("RenderTargetSize Before: {}x{}", x, y);
 
@@ -1595,6 +1652,10 @@ void VRRenderTargetManager_Base::calculate_render_target_size(const FViewport& v
 }
 
 bool VRRenderTargetManager_Base::need_reallocate_view_target(const FViewport& Viewport) {
+    if (!g_framework->is_ready()) {
+        return false;
+    }
+
     const auto w = VR::get()->get_hmd_width();
     const auto h = VR::get()->get_hmd_height();
 
