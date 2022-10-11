@@ -105,18 +105,29 @@ link-libraries = [
     "asmjit"
 ]
 
+[target.plugin_renderlib]
+type = "static"
+sources = ["examples/renderlib/**.cpp", "examples/renderlib/**.c"]
+headers = ["examples/renderlib/**.hpp", "examples/renderlib/**.h"]
+include-directories = ["examples/renderlib", "include/"]
+compile-options = ["/EHa", "/MP"]
+compile-features = ["cxx_std_20"]
+link-libraries = [
+    "imgui"
+]
+
 [template.plugin]
 type = "shared"
-include-directories = ["include/"]
+include-directories = ["include/", "examples/renderlib"]
 compile-features = ["cxx_std_20"]
+link-libraries = [
+    "plugin_renderlib",
+]
 
 [target.example_plugin]
 type = "plugin"
 sources = ["examples/example_plugin/**.cpp", "examples/example_plugin/**.c"]
 headers = ["examples/example_plugin/**.hpp", "examples/example_plugin/**.h"]
-link-libraries = [
-    "imgui"
-]
 
 [target.ue4poc]
 type = "shared"
@@ -126,12 +137,11 @@ include-directories = [
     "shared/", 
     "src/", 
     "include/", 
-    "dependencies/enetpp/include", 
     "${OPENXR_SOURCE_DIR}/src"
 ]
 compile-options = ["/GS-", "/bigobj", "/EHa", "/MP"]
 compile-features = ["cxx_std_20"]
-compile-definitions = ["_WINSOCKAPI_"]
+compile-definitions = []
 link-libraries = [
     "utility",
     "sdk",
@@ -139,7 +149,6 @@ link-libraries = [
     "d3d11",
     "d3d12",
     "safetyhook",
-    "winhttp",
     "glm_static",
     "imgui",
     "openvr_api",

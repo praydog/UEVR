@@ -244,7 +244,7 @@ endif()
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${imgui_SOURCES})
 
 target_compile_definitions(imgui PUBLIC
-	"IMGUI_USER_CONFIG=\"${CMAKE_SOURCE_DIR}/src/ue4poc-imgui/ue4poc_imconfig.hpp\""
+	"IMGUI_USER_CONFIG=\"${CMAKE_CURRENT_SOURCE_DIR}/src/ue4poc-imgui/ue4poc_imconfig.hpp\""
 )
 
 target_include_directories(imgui PUBLIC
@@ -385,25 +385,66 @@ target_link_libraries(sdk PUBLIC
 unset(CMKR_TARGET)
 unset(CMKR_SOURCES)
 
+# Target plugin_renderlib
+set(CMKR_TARGET plugin_renderlib)
+set(plugin_renderlib_SOURCES "")
+
+list(APPEND plugin_renderlib_SOURCES
+	"examples/renderlib/imgui/imgui_impl_dx11.cpp"
+	"examples/renderlib/imgui/imgui_impl_dx12.cpp"
+	"examples/renderlib/imgui/imgui_impl_win32.cpp"
+	"examples/renderlib/rendering/d3d11.cpp"
+	"examples/renderlib/rendering/d3d12.cpp"
+	"examples/renderlib/imgui/font_robotomedium.hpp"
+	"examples/renderlib/imgui/re2_imconfig.hpp"
+	"examples/renderlib/rendering/d3d11.hpp"
+	"examples/renderlib/rendering/d3d12.hpp"
+	"examples/renderlib/rendering/shared.hpp"
+	"examples/renderlib/imgui/imgui_impl_dx11.h"
+	"examples/renderlib/imgui/imgui_impl_dx12.h"
+	"examples/renderlib/imgui/imgui_impl_win32.h"
+)
+
+list(APPEND plugin_renderlib_SOURCES
+	cmake.toml
+)
+
+set(CMKR_SOURCES ${plugin_renderlib_SOURCES})
+add_library(plugin_renderlib STATIC)
+
+if(plugin_renderlib_SOURCES)
+	target_sources(plugin_renderlib PRIVATE ${plugin_renderlib_SOURCES})
+endif()
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${plugin_renderlib_SOURCES})
+
+target_compile_features(plugin_renderlib PUBLIC
+	cxx_std_20
+)
+
+target_compile_options(plugin_renderlib PUBLIC
+	"/EHa"
+	"/MP"
+)
+
+target_include_directories(plugin_renderlib PUBLIC
+	"examples/renderlib"
+	"include/"
+)
+
+target_link_libraries(plugin_renderlib PUBLIC
+	imgui
+)
+
+unset(CMKR_TARGET)
+unset(CMKR_SOURCES)
+
 # Target example_plugin
 set(CMKR_TARGET example_plugin)
 set(example_plugin_SOURCES "")
 
 list(APPEND example_plugin_SOURCES
 	"examples/example_plugin/Plugin.cpp"
-	"examples/example_plugin/imgui/imgui_impl_dx11.cpp"
-	"examples/example_plugin/imgui/imgui_impl_dx12.cpp"
-	"examples/example_plugin/imgui/imgui_impl_win32.cpp"
-	"examples/example_plugin/rendering/d3d11.cpp"
-	"examples/example_plugin/rendering/d3d12.cpp"
-	"examples/example_plugin/imgui/font_robotomedium.hpp"
-	"examples/example_plugin/imgui/re2_imconfig.hpp"
-	"examples/example_plugin/rendering/d3d11.hpp"
-	"examples/example_plugin/rendering/d3d12.hpp"
-	"examples/example_plugin/rendering/shared.hpp"
-	"examples/example_plugin/imgui/imgui_impl_dx11.h"
-	"examples/example_plugin/imgui/imgui_impl_dx12.h"
-	"examples/example_plugin/imgui/imgui_impl_win32.h"
 )
 
 list(APPEND example_plugin_SOURCES
@@ -425,10 +466,11 @@ target_compile_features(example_plugin PUBLIC
 
 target_include_directories(example_plugin PUBLIC
 	"include/"
+	"examples/renderlib"
 )
 
 target_link_libraries(example_plugin PUBLIC
-	imgui
+	plugin_renderlib
 )
 
 unset(CMKR_TARGET)
@@ -497,9 +539,6 @@ endif()
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${ue4poc_SOURCES})
 
-target_compile_definitions(ue4poc PUBLIC
-	_WINSOCKAPI_
-)
 
 target_compile_features(ue4poc PUBLIC
 	cxx_std_20
@@ -516,7 +555,6 @@ target_include_directories(ue4poc PUBLIC
 	"shared/"
 	"src/"
 	"include/"
-	"dependencies/enetpp/include"
 	"${OPENXR_SOURCE_DIR}/src"
 )
 
@@ -527,7 +565,6 @@ target_link_libraries(ue4poc PUBLIC
 	d3d11
 	d3d12
 	safetyhook
-	winhttp
 	glm_static
 	imgui
 	openvr_api
