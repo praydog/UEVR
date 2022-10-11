@@ -191,8 +191,8 @@ void OverlayComponent::update_slate() {
     vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, &pose, 1);
 
     //auto glm_matrix = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
-    auto glm_matrix = Matrix4x4f{VR::get()->get_rotation_offset()};
-    glm_matrix[3] += VR::get()->get_standing_origin();
+    auto glm_matrix = Matrix4x4f{glm::inverse(vr->get_rotation_offset())};
+    glm_matrix[3] += vr->get_standing_origin();
     glm_matrix[3] -= glm_matrix[2] * m_slate_distance->value();
     glm_matrix[3].w = 1.0f;
     const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(glm_matrix)};
@@ -491,7 +491,7 @@ XrCompositionLayerQuad& OverlayComponent::OpenXR::generate_slate_quad() {
     const auto meters_h = size_meters;
     layer.size = {meters_w, meters_h};
 
-    auto glm_matrix = Matrix4x4f{vr->get_rotation_offset()};
+    auto glm_matrix = Matrix4x4f{glm::inverse(vr->get_rotation_offset())};
     glm_matrix[3] += vr->get_standing_origin();
     glm_matrix[3] -= glm_matrix[2] * m_parent->m_slate_distance->value();
     glm_matrix[3].w = 1.0f;

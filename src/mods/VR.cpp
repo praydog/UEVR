@@ -548,6 +548,15 @@ bool VR::is_any_action_down() {
     return false;
 }
 
+void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
+    if (!get_runtime()->loaded || !is_hmd_active()) {
+        return;
+    }
+
+    //update_hmd_state();
+    update_action_states();
+}
+
 void VR::update_hmd_state() {
     std::scoped_lock _{m_openvr_mtx};
     auto runtime = get_runtime();
@@ -599,6 +608,47 @@ void VR::update_hmd_state() {
     }
 
     runtime->got_first_poses = true;
+}
+
+void VR::update_action_states() {
+    auto runtime = get_runtime();
+
+    if (runtime->wants_reinitialize) {
+        return;
+    }
+
+    if (runtime->is_openvr()) {
+        const auto start_time = std::chrono::high_resolution_clock::now();
+
+        auto error = vr::VRInput()->UpdateActionState(&m_active_action_set, sizeof(m_active_action_set), 1);
+
+        if (error != vr::VRInputError_None) {
+            spdlog::error("VRInput failed to update action state: {}", (uint32_t)error);
+        }
+
+        const auto end_time = std::chrono::high_resolution_clock::now();
+        const auto time_delta = end_time - start_time;
+
+        m_last_input_delay = time_delta;
+        m_avg_input_delay = (m_avg_input_delay + time_delta) / 2;
+
+        if ((end_time - start_time) >= std::chrono::milliseconds(30)) {
+            spdlog::warn("VRInput update action state took too long: {}ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count());
+
+            //reinitialize_openvr();
+            runtime->wants_reinitialize = true;
+        }   
+    } else {
+        get_runtime()->update_input();
+    }
+
+    /*if (m_recenter_view_key->is_key_down_once()) {
+        recenter_view();
+    }
+
+    if (m_set_standing_key->is_key_down_once()) {
+        set_standing_origin(get_position(0));
+    }*/
 }
 
 void VR::on_config_load(const utility::Config& cfg) {
@@ -771,6 +821,8 @@ void VR::on_post_present() {
     if (!get_runtime()->loaded) {
         return;
     }
+
+    detect_controllers();
     
     if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
         const auto had_sync = runtime->got_first_sync;

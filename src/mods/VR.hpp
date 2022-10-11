@@ -31,7 +31,12 @@ public:
     void on_present() override;
     void on_post_present() override;
 
+
+    void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
+
     void update_hmd_state();
+    void update_action_states();
+
     void reinitialize_renderer() {
         if (m_is_d3d12) {
             m_d3d12.force_reset();
@@ -285,6 +290,9 @@ private:
 
     std::chrono::steady_clock::time_point m_last_controller_update{};
     std::chrono::steady_clock::time_point m_last_interaction_display{};
+
+    std::chrono::nanoseconds m_last_input_delay{};
+    std::chrono::nanoseconds m_avg_input_delay{};
 
     const ModToggle::Ptr m_use_afr{ ModToggle::create(generate_name("AlternateFrameRendering"), false) };
     const ModToggle::Ptr m_desktop_fix{ ModToggle::create(generate_name("DesktopRecordingFix"), true) };
