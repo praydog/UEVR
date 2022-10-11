@@ -82,46 +82,6 @@ std::string VR::actions_json = R"(
       "type": "boolean"
     },
     {
-      "name": "/actions/default/in/WeaponDial_Start",
-      "type": "boolean"
-    },
-    {
-      "name": "/actions/default/in/RE3_Dodge",
-      "type": "boolean"
-    },
-    {
-      "name": "/actions/default/in/RE2_Quickturn",
-      "type": "boolean"
-    },
-    {
-      "name": "/actions/default/in/RE2_FirstPerson_Toggle",
-      "type": "boolean"
-    },
-    {
-      "name": "/actions/default/in/RE2_Reset_View",
-      "type": "boolean" 
-    },
-    {
-      "name": "/actions/default/in/RE2_Change_Ammo",
-      "type": "boolean" 
-    },
-    {
-      "name": "/actions/default/in/RE2_Toggle_Flashlight",
-      "type": "boolean" 
-    },
-    {
-      "name": "/actions/default/in/MiniMap",
-      "type": "boolean" 
-    },
-    {
-      "name": "/actions/default/in/Block",
-      "type": "boolean"
-    },
-    {
-      "name": "/actions/default/in/Heal",
-      "type": "boolean"
-    },
-    {
       "name": "/actions/default/out/Haptic",
       "type": "vibration"
     }
@@ -254,15 +214,6 @@ std::string VR::bindings_oculus_touch_json = R"(
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/default/in/weapondial_start"
-                  }
-               },
-               "mode" : "button",
-               "path" : "/user/hand/left/input/trigger"
-            },
-            {
-               "inputs" : {
-                  "click" : {
                      "output" : "/actions/default/in/trigger"
                   }
                },
@@ -327,15 +278,6 @@ std::string VR::bindings_oculus_touch_json = R"(
                "inputs" : {
                   "click" : {
                      "output" : "/actions/default/in/abutton"
-                  }
-               },
-               "mode" : "button",
-               "path" : "/user/hand/right/input/a"
-            },
-            {
-               "inputs" : {
-                  "click" : {
-                     "output" : "/actions/default/in/re3_dodge"
                   }
                },
                "mode" : "button",
@@ -633,15 +575,6 @@ std::string VR::bindings_knuckles = R"(
             },
             {
                "inputs" : {
-                  "click" : {
-                     "output" : "/actions/default/in/weapondial_start"
-                  }
-               },
-               "mode" : "button",
-               "path" : "/user/hand/left/input/trigger"
-            },
-            {
-               "inputs" : {
                   "position" : {
                      "output" : "/actions/default/in/touchpad"
                   }
@@ -707,15 +640,6 @@ std::string VR::bindings_knuckles = R"(
                "inputs" : {
                   "click" : {
                      "output" : "/actions/default/in/abutton"
-                  }
-               },
-               "mode" : "button",
-               "path" : "/user/hand/right/input/a"
-            },
-            {
-               "inputs" : {
-                  "click" : {
-                     "output" : "/actions/default/in/re3_dodge"
                   }
                },
                "mode" : "button",
