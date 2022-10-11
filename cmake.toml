@@ -74,7 +74,7 @@ type = "static"
 sources = ["dependencies/submodules/imgui/*.cpp"]
 include-directories = ["dependencies/submodules/imgui", "src/ue4poc-imgui"]
 compile-definitions = [
-    "IMGUI_USER_CONFIG=\"${CMAKE_SOURCE_DIR}/src/ue4poc-imgui/ue4poc_imconfig.hpp\"",
+    "IMGUI_USER_CONFIG=\"${CMAKE_CURRENT_SOURCE_DIR}/src/ue4poc-imgui/ue4poc_imconfig.hpp\"",
 ]
 
 [target.utility]
