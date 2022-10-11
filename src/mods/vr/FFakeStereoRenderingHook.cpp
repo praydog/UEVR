@@ -116,7 +116,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick() {
             once = false;
         }
 
-        if (!g_framework->is_ready()) {
+        if (!g_framework->is_game_data_intialized()) {
             return g_hook->m_tick_hook->call<void*>(engine, delta, idle);
         }
 
@@ -950,7 +950,7 @@ bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
 #endif
 
     // wait!!!
-    if (!g_framework->is_ready()) {
+    if (!g_framework->is_game_data_intialized()) {
         return false;
     }
 
@@ -971,7 +971,7 @@ void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, in
     spdlog::info(" x: {}, y: {}, w: {}, h: {}", *x, *y, *w, *h);
 #endif
 
-    if (!g_framework->is_ready()) {
+    if (!g_framework->is_game_data_intialized()) {
         return;
     }
 
@@ -1000,7 +1000,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     spdlog::info("calculate stereo view offset called! {}", view_index);
 #endif
 
-    if (!g_framework->is_ready()) {
+    if (!g_framework->is_game_data_intialized()) {
         return;
     }
 
@@ -1132,7 +1132,7 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
         g_hook->m_calculate_stereo_projection_matrix_post_hook.reset();
     }
 
-    if (!g_framework->is_ready()) {
+    if (!g_framework->is_game_data_intialized()) {
         if (g_hook->m_calculate_stereo_projection_matrix_hook) {
             return g_hook->m_calculate_stereo_projection_matrix_hook->call<Matrix4x4f*>(stereo, out, view_index);
         }
@@ -1191,7 +1191,7 @@ template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 __forceinline void FFakeStereoRenderingHook::render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list,
     FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size) 
 {
-    if (!g_framework->is_ready()) {
+    if (!g_framework->is_game_data_intialized()) {
         return;
     }
 
@@ -1246,7 +1246,7 @@ void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneV
     spdlog::info("init canvas called!");
 #endif
 
-    if (!g_framework->is_ready()) {
+    if (!g_framework->is_game_data_intialized()) {
         return;
     }
 
@@ -1323,7 +1323,7 @@ IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_
     spdlog::info("get render target manager hook called!");
 #endif
 
-    if (!g_framework->is_ready()) {
+    if (!g_framework->is_game_data_intialized()) {
         return nullptr;
     }
 
@@ -1347,7 +1347,7 @@ IStereoLayers* FFakeStereoRenderingHook::get_stereo_layers_hook(FFakeStereoRende
     spdlog::info("get stereo layers hook called!");
 #endif
 
-    if (!g_framework->is_ready()) {
+    if (!g_framework->is_game_data_intialized()) {
         return nullptr;
     }
 
@@ -1557,7 +1557,7 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
         spdlog::info("SlateRHIRenderer::DrawWindow_RenderThread called for the first time!");
     }
 
-    if (!g_framework->is_ready()) {
+    if (!g_framework->is_game_data_intialized()) {
         return g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
     }
 
@@ -1627,7 +1627,7 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
 }
 
 void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const FViewport& vp, class SViewport* vp_widget) {
-    if (!g_framework->is_ready()) {
+    if (!g_framework->is_game_data_intialized()) {
         return;
     }
 
@@ -1639,7 +1639,7 @@ void VRRenderTargetManager_Base::calculate_render_target_size(const FViewport& v
     spdlog::info("calculate render target size called!");
 #endif
 
-    if (!g_framework->is_ready()) {
+    if (!g_framework->is_game_data_intialized()) {
         return;
     }
 
@@ -1652,7 +1652,7 @@ void VRRenderTargetManager_Base::calculate_render_target_size(const FViewport& v
 }
 
 bool VRRenderTargetManager_Base::need_reallocate_view_target(const FViewport& Viewport) {
-    if (!g_framework->is_ready()) {
+    if (!g_framework->is_game_data_intialized()) {
         return false;
     }
 
@@ -1722,6 +1722,8 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         emu_ctx.ctx->Registers.RegRdx = ctx.rdx;
         emu_ctx.ctx->Registers.RegR8 = ctx.r8;
         emu_ctx.ctx->Registers.RegR9 = ctx.r9;
+        emu_ctx.ctx->Registers.RegRbx = ctx.rbx;
+        emu_ctx.ctx->Registers.RegRax = ctx.rax;
         emu_ctx.ctx->Registers.RegRdi = ctx.rdi;
         emu_ctx.ctx->Registers.RegRsi = ctx.rsi;
         emu_ctx.ctx->Registers.RegR10 = ctx.r10;
