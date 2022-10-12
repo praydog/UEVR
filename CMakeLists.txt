@@ -62,6 +62,15 @@ FetchContent_Declare(bddisasm
 )
 FetchContent_MakeAvailable(bddisasm)
 
+message(STATUS "Fetching kananlib (main)...")
+FetchContent_Declare(kananlib
+	GIT_REPOSITORY
+		"https://github.com/cursey/kananlib"
+	GIT_TAG
+		main
+)
+FetchContent_MakeAvailable(kananlib)
+
 message(STATUS "Fetching safetyhook (e175896c67abf49360acafe8879205a138fe6b2b)...")
 FetchContent_Declare(safetyhook
 	GIT_REPOSITORY
@@ -125,6 +134,7 @@ endif()
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${spdlog_SOURCES})
 
+add_library(spdlog::spdlog ALIAS spdlog)
 target_compile_definitions(spdlog PUBLIC
 	SPDLOG_COMPILED_LIB
 )
@@ -255,74 +265,6 @@ target_include_directories(imgui PUBLIC
 unset(CMKR_TARGET)
 unset(CMKR_SOURCES)
 
-# Target utility
-set(CMKR_TARGET utility)
-set(utility_SOURCES "")
-
-list(APPEND utility_SOURCES
-	"shared/utility/Address.cpp"
-	"shared/utility/Config.cpp"
-	"shared/utility/Emulation.cpp"
-	"shared/utility/Input.cpp"
-	"shared/utility/Memory.cpp"
-	"shared/utility/Module.cpp"
-	"shared/utility/Patch.cpp"
-	"shared/utility/Pattern.cpp"
-	"shared/utility/PointerHook.cpp"
-	"shared/utility/RTTI.cpp"
-	"shared/utility/Registry.cpp"
-	"shared/utility/Scan.cpp"
-	"shared/utility/String.cpp"
-	"shared/utility/Thread.cpp"
-	"shared/utility/VtableHook.cpp"
-	"shared/utility/Address.hpp"
-	"shared/utility/Config.hpp"
-	"shared/utility/Emulation.hpp"
-	"shared/utility/Input.hpp"
-	"shared/utility/Memory.hpp"
-	"shared/utility/Module.hpp"
-	"shared/utility/Patch.hpp"
-	"shared/utility/Pattern.hpp"
-	"shared/utility/PointerHook.hpp"
-	"shared/utility/RTTI.hpp"
-	"shared/utility/Registry.hpp"
-	"shared/utility/Scan.hpp"
-	"shared/utility/String.hpp"
-	"shared/utility/Thread.hpp"
-	"shared/utility/VtableHook.hpp"
-)
-
-list(APPEND utility_SOURCES
-	cmake.toml
-)
-
-set(CMKR_SOURCES ${utility_SOURCES})
-add_library(utility STATIC)
-
-if(utility_SOURCES)
-	target_sources(utility PRIVATE ${utility_SOURCES})
-endif()
-
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${utility_SOURCES})
-
-target_compile_features(utility PUBLIC
-	cxx_std_20
-)
-
-target_compile_options(utility PUBLIC
-	"/EHa"
-	"/MP"
-)
-
-target_link_libraries(utility PUBLIC
-	spdlog
-	bddisasm
-	bdshemu
-)
-
-unset(CMKR_TARGET)
-unset(CMKR_SOURCES)
-
 # Target sdk
 set(CMKR_TARGET sdk)
 set(sdk_SOURCES "")
@@ -375,7 +317,7 @@ target_include_directories(sdk PUBLIC
 
 target_link_libraries(sdk PUBLIC
 	spdlog
-	utility
+	kananlib
 	bddisasm
 	bdshemu
 	glm_static
@@ -559,7 +501,7 @@ target_include_directories(ue4poc PUBLIC
 )
 
 target_link_libraries(ue4poc PUBLIC
-	utility
+	kananlib
 	sdk
 	shlwapi
 	d3d11

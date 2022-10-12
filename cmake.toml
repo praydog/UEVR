@@ -33,6 +33,7 @@ type = "static"
 sources = ["dependencies/submodules/spdlog/src/*.cpp"]
 include-directories = ["dependencies/submodules/spdlog/include"]
 compile-definitions = ["SPDLOG_COMPILED_LIB"]
+alias="spdlog::spdlog"
 
 [target.glm_static]
 type = "static"
@@ -42,6 +43,10 @@ include-directories = ["dependencies/submodules/glm"]
 [fetch-content.bddisasm]
 git = "https://github.com/bitdefender/bddisasm"
 tag = "v1.34.10"
+
+[fetch-content.kananlib]
+git = "https://github.com/cursey/kananlib"
+tag = "main"
 
 [fetch-content.safetyhook]
 git = "https://github.com/cursey/safetyhook"
@@ -77,18 +82,6 @@ compile-definitions = [
     "IMGUI_USER_CONFIG=\"${CMAKE_CURRENT_SOURCE_DIR}/src/ue4poc-imgui/ue4poc_imconfig.hpp\"",
 ]
 
-[target.utility]
-type = "static"
-sources = ["shared/utility/**.cpp", "shared/utility/**.c"]
-headers = ["shared/utility/**.hpp", "shared/utility/**.h"]
-compile-options = ["/EHa", "/MP"]
-compile-features = ["cxx_std_20"]
-link-libraries = [
-    "spdlog",
-    "bddisasm",
-    "bdshemu",
-]
-
 [target.sdk]
 type = "static"
 sources = ["shared/sdk/**.cpp", "shared/sdk/**.c"]
@@ -98,7 +91,7 @@ compile-options = ["/EHa", "/MP"]
 compile-features = ["cxx_std_20"]
 link-libraries = [
     "spdlog",
-    "utility",
+    "kananlib",
     "bddisasm",
     "bdshemu",
     "glm_static",
@@ -143,7 +136,7 @@ compile-options = ["/GS-", "/bigobj", "/EHa", "/MP"]
 compile-features = ["cxx_std_20"]
 compile-definitions = []
 link-libraries = [
-    "utility",
+    "kananlib",
     "sdk",
     "shlwapi",
     "d3d11",
