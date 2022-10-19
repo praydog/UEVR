@@ -239,6 +239,14 @@ void get_transform(UEVR_TrackedDeviceIndex index, UEVR_Matrix4x4f* out_transform
     memcpy(out_transform, &transform, sizeof(UEVR_Matrix4x4f));
 }
 
+void get_eye_offset(UEVR_Eye eye, UEVR_Vector3f* out_offset) {
+    const auto out = ::VR::get()->get_eye_offset((VRRuntime::Eye)eye);
+
+    out_offset->x = out.x;
+    out_offset->y = out.y;
+    out_offset->z = out.z;
+}
+
 void get_ue_projection_matrix(UEVR_Eye eye, UEVR_Matrix4x4f* out_projection) {
     const auto& projection = ::VR::get()->get_runtime()->projections[eye];
     memcpy(out_projection, &projection, sizeof(UEVR_Matrix4x4f));
@@ -260,6 +268,7 @@ UEVR_VRData g_vr_data {
     uevr::vr::get_right_controller_index,
     uevr::vr::get_pose,
     uevr::vr::get_transform,
+    uevr::vr::get_eye_offset,
     uevr::vr::get_ue_projection_matrix
 };
 

@@ -225,6 +225,8 @@ typedef struct {
     void (*get_pose)(UEVR_TrackedDeviceIndex index, UEVR_Vector3f* out_position, UEVR_Quaternionf* out_rotation);
     void (*get_transform)(UEVR_TrackedDeviceIndex index, UEVR_Matrix4x4f* out_transform);
 
+    void (*get_eye_offset)(UEVR_Eye eye, UEVR_Vector3f* out_position);
+
     /* Converted to UE projection matrix */
     void (*get_ue_projection_matrix)(UEVR_Eye eye, UEVR_Matrix4x4f* put_projection);
 } UEVR_VRData;
