@@ -39,6 +39,9 @@ public:
                                               const float world_to_meters, Vector3f* view_location, bool is_double) override;
     
 public:
+    void attempt_unload_plugins();
+    void reload_plugins();
+
     using UEVR_OnPresentCb = std::function<std::remove_pointer<::UEVR_OnPresentCb>::type>;
     using UEVR_OnDeviceResetCb = std::function<std::remove_pointer<::UEVR_OnDeviceResetCb>::type>;
     using UEVR_OnMessageCb = std::function<std::remove_pointer<::UEVR_OnMessageCb>::type>;
@@ -72,8 +75,20 @@ private:
     std::vector<PluginLoader::UEVR_Stereo_CalculateStereoViewOffsetCb> m_on_pre_calculate_stereo_view_offset_cbs{};
     std::vector<PluginLoader::UEVR_Stereo_CalculateStereoViewOffsetCb> m_on_post_calculate_stereo_view_offset_cbs{};
 
+    std::vector<std::vector<void*>*> m_plugin_callback_lists{
+        (std::vector<void*>*)&m_on_present_cbs,
+        (std::vector<void*>*)&m_on_device_reset_cbs,
+        (std::vector<void*>*)&m_on_message_cbs,
+        (std::vector<void*>*)&m_on_pre_engine_tick_cbs,
+        (std::vector<void*>*)&m_on_post_engine_tick_cbs,
+        (std::vector<void*>*)&m_on_pre_slate_draw_window_render_thread_cbs,
+        (std::vector<void*>*)&m_on_post_slate_draw_window_render_thread_cbs,
+        (std::vector<void*>*)&m_on_pre_calculate_stereo_view_offset_cbs,
+        (std::vector<void*>*)&m_on_post_calculate_stereo_view_offset_cbs
+    };
+
 private:
-    std::mutex m_mux{};
+    std::recursive_mutex m_mux{};
     std::map<std::string, HMODULE> m_plugins{};
     std::map<std::string, std::string> m_plugin_load_errors{};
     std::map<std::string, std::string> m_plugin_load_warnings{};

@@ -608,11 +608,39 @@ std::optional<std::string> PluginLoader::on_initialize() {
     return std::nullopt;
 }
 
+void PluginLoader::attempt_unload_plugins() {
+    std::unique_lock _{m_api_cb_mtx};
+
+    for (auto& callbacks : m_plugin_callback_lists) {
+        callbacks->clear();
+    }
+
+    for (auto& pair : m_plugins) {
+        FreeLibrary(pair.second);
+    }
+
+    m_plugins.clear();
+}
+
+void PluginLoader::reload_plugins() {
+    early_init();
+    on_initialize();
+}
+
 void PluginLoader::on_draw_ui() {
     ImGui::SetNextItemOpen(false, ImGuiCond_Once);
 
     if (ImGui::CollapsingHeader(get_name().data())) {
         std::scoped_lock _{m_mux};
+
+        if (ImGui::Button("Attempt Unload Plugins")) {
+            attempt_unload_plugins();
+        }
+
+        if (ImGui::Button("Reload Plugins")) {
+            attempt_unload_plugins();
+            reload_plugins();
+        }
 
         if (!m_plugins.empty()) {
             ImGui::Text("Loaded plugins:");
