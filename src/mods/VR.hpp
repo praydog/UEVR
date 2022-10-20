@@ -63,6 +63,14 @@ public:
     bool is_action_active(vr::VRActionHandle_t action, vr::VRInputValueHandle_t source = vr::k_ulInvalidInputValueHandle) const;
     Vector2f get_joystick_axis(vr::VRInputValueHandle_t handle) const;
 
+    vr::VRActionHandle_t get_action_handle(std::string_view action_path) {
+        if (auto it = m_action_handles.find(action_path.data()); it != m_action_handles.end()) {
+            return it->second;
+        }
+
+        return vr::k_ulInvalidActionHandle;
+    }
+
     Vector2f get_left_stick_axis() const;
     Vector2f get_right_stick_axis() const;
 
@@ -152,6 +160,14 @@ public:
         }
 
         return -1;
+    }
+
+    auto get_left_joystick() const {
+        return m_left_joystick;
+    }
+
+    auto get_right_joystick() const {
+        return m_right_joystick;
     }
 
 private:

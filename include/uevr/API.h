@@ -52,6 +52,11 @@ typedef int UEVR_OpenXRSwapchainIndex;
 typedef struct {
     float x;
     float y;
+} UEVR_Vector2f;
+
+typedef struct {
+    float x;
+    float y;
     float z;
 } UEVR_Vector3f;
 
@@ -205,6 +210,9 @@ typedef struct {
     UEVR_XrSpace (*get_view_space)(); /* XrSpace */
 } UEVR_OpenXRData;
 
+DECLARE_UEVR_HANDLE(UEVR_ActionHandle);
+DECLARE_UEVR_HANDLE(UEVR_InputSourceHandle);
+
 typedef struct {
     bool (*is_runtime_ready)();
     bool (*is_openvr)();
@@ -229,6 +237,15 @@ typedef struct {
 
     /* Converted to UE projection matrix */
     void (*get_ue_projection_matrix)(UEVR_Eye eye, UEVR_Matrix4x4f* put_projection);
+
+    UEVR_InputSourceHandle (*get_left_joystick_source)();
+    UEVR_InputSourceHandle (*get_right_joystick_source)();
+    
+    UEVR_ActionHandle (*get_action_handle)(const char* action_path);
+
+    bool (*is_action_active)(UEVR_ActionHandle action, UEVR_InputSourceHandle source);
+    void (*get_joystick_axis)(UEVR_InputSourceHandle source, UEVR_Vector2f* out_axis);
+    void (*trigger_haptic_vibration)(float seconds_from_now, float duration, float frequency, float amplitude, UEVR_InputSourceHandle source);
 } UEVR_VRData;
 
 typedef struct {

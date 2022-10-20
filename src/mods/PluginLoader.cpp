@@ -251,6 +251,33 @@ void get_ue_projection_matrix(UEVR_Eye eye, UEVR_Matrix4x4f* out_projection) {
     const auto& projection = ::VR::get()->get_runtime()->projections[eye];
     memcpy(out_projection, &projection, sizeof(UEVR_Matrix4x4f));
 }
+
+UEVR_InputSourceHandle get_left_joystick_source() {
+    return (UEVR_InputSourceHandle)::VR::get()->get_left_joystick();
+}
+
+UEVR_InputSourceHandle get_right_joystick_source() {
+    return (UEVR_InputSourceHandle)::VR::get()->get_right_joystick();
+}
+
+UEVR_ActionHandle get_action_handle(const char* action_path) {
+    return (UEVR_ActionHandle)::VR::get()->get_action_handle(action_path);
+}
+
+bool is_action_active(UEVR_ActionHandle action_handle, UEVR_InputSourceHandle source) {
+    return ::VR::get()->is_action_active((::vr::VRActionHandle_t)action_handle, (::vr::VRInputValueHandle_t)source);
+}
+
+void get_joystick_axis(UEVR_InputSourceHandle source, UEVR_Vector2f* out_axis) {
+    const auto axis = ::VR::get()->get_joystick_axis((::vr::VRInputValueHandle_t)source);
+
+    out_axis->x = axis.x;
+    out_axis->y = axis.y;
+}
+
+void trigger_haptic_vibration(float seconds_from_now, float duration, float frequency, float amplitude, UEVR_InputSourceHandle source) {
+    ::VR::get()->trigger_haptic_vibration(seconds_from_now, duration, frequency, amplitude, (::vr::VRInputValueHandle_t)source);
+}
 }
 }
 
@@ -269,7 +296,13 @@ UEVR_VRData g_vr_data {
     uevr::vr::get_pose,
     uevr::vr::get_transform,
     uevr::vr::get_eye_offset,
-    uevr::vr::get_ue_projection_matrix
+    uevr::vr::get_ue_projection_matrix,
+    uevr::vr::get_left_joystick_source,
+    uevr::vr::get_right_joystick_source,
+    uevr::vr::get_action_handle,
+    uevr::vr::is_action_active,
+    uevr::vr::get_joystick_axis,
+    uevr::vr::trigger_haptic_vibration,
 };
 
 
