@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <windows.h>
+#include <Xinput.h>
 #include <algorithm>
 #include <unordered_map>
 #include <memory>
@@ -257,6 +258,8 @@ public:
     virtual void on_draw_ui() {};
     virtual void on_device_reset() {};
     virtual bool on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) { return true; };
+    virtual void on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {};
+    virtual void on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) {};
 
     virtual void on_config_load(const utility::Config& cfg) {};
     virtual void on_config_save(utility::Config& cfg) {};

@@ -77,12 +77,30 @@ bool on_message(UEVR_OnMessageCb cb) {
 
     return PluginLoader::get()->add_on_message(cb);
 }
+
+bool on_xinput_get_state(UEVR_OnXInputGetStateCb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_xinput_get_state(cb);
+}
+
+bool on_xinput_set_state(UEVR_OnXInputSetStateCb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_xinput_set_state(cb);
+}
 }
 
 UEVR_PluginCallbacks g_plugin_callbacks {
     uevr::on_present,
     uevr::on_device_reset,
-    uevr::on_message
+    uevr::on_message,
+    uevr::on_xinput_get_state,
+    uevr::on_xinput_set_state
 };
 
 UEVR_PluginFunctions g_plugin_functions {
@@ -759,6 +777,33 @@ bool PluginLoader::on_message(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
     return true;
 }
 
+void PluginLoader::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {
+    std::shared_lock _{m_api_cb_mtx};
+
+    for (auto&& cb : m_on_xinput_get_state_cbs) {
+        try {
+            cb(retval, user_index, (void*)state);
+        } catch(...) {
+            spdlog::error("[APIProxy] Exception occurred in on_xinput_get_state callback; one of the plugins has an error.");
+            continue;
+        }
+    }
+}
+
+void PluginLoader::on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) {
+    std::shared_lock _{m_api_cb_mtx};
+
+    for (auto&& cb : m_on_xinput_set_state_cbs) {
+        try {
+            cb(retval, user_index, (void*)vibration);
+        } catch(...) {
+            spdlog::error("[APIProxy] Exception occurred in on_xinput_set_state callback; one of the plugins has an error.");
+            continue;
+        }
+    }
+}
+
+
 void PluginLoader::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     std::shared_lock _{m_api_cb_mtx};
 
@@ -855,6 +900,20 @@ bool PluginLoader::add_on_message(UEVR_OnMessageCb cb) {
     std::unique_lock _{m_api_cb_mtx};
 
     m_on_message_cbs.push_back(cb);
+    return true;
+}
+
+bool PluginLoader::add_on_xinput_get_state(UEVR_OnXInputGetStateCb cb) {
+    std::unique_lock _{m_api_cb_mtx};
+
+    m_on_xinput_get_state_cbs.push_back(cb);
+    return true;
+}
+
+bool PluginLoader::add_on_xinput_set_state(UEVR_OnXInputSetStateCb cb) {
+    std::unique_lock _{m_api_cb_mtx};
+
+    m_on_xinput_set_state_cbs.push_back(cb);
     return true;
 }
 

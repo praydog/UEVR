@@ -5,6 +5,7 @@
 #pragma once
 
 #include <windows.h>
+#include <Xinput.h>
 
 #include "API.hpp"
 
@@ -27,6 +28,8 @@ public:
     virtual void on_present() {}
     virtual void on_device_reset() {}
     virtual bool on_message(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) { return true; }
+    virtual void on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {}
+    virtual void on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) {}
 
     // Game/Engine callbacks
     virtual void on_pre_engine_tick(UEVR_UGameEngineHandle engine, float delta) {}
@@ -65,6 +68,14 @@ extern "C" __declspec(dllexport) bool uevr_plugin_initialize(const UEVR_PluginIn
 
     callbacks->on_message([](void* hwnd, unsigned int msg, unsigned long long wparam, long long lparam) {
         return uevr::detail::g_plugin->on_message((HWND)hwnd, msg, wparam, lparam);
+    });
+
+    callbacks->on_xinput_get_state([](unsigned int* retval, unsigned int user_index, void* state) {
+        uevr::detail::g_plugin->on_xinput_get_state(retval, user_index, (XINPUT_STATE*)state);
+    });
+
+    callbacks->on_xinput_set_state([](unsigned int* retval, unsigned int user_index, void* vibration) {
+        uevr::detail::g_plugin->on_xinput_set_state(retval, user_index, (XINPUT_VIBRATION*)vibration);
     });
 
     sdk_callbacks->on_pre_engine_tick([](UEVR_UGameEngineHandle engine, float delta) {

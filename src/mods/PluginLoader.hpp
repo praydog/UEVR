@@ -28,6 +28,8 @@ public:
     void on_present();
     void on_device_reset() override;
     bool on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) override;
+    void on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) override;
+    void on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) override;
     
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
     void on_post_engine_tick(sdk::UGameEngine* engine, float delta) override;
@@ -45,6 +47,8 @@ public:
     using UEVR_OnPresentCb = std::function<std::remove_pointer<::UEVR_OnPresentCb>::type>;
     using UEVR_OnDeviceResetCb = std::function<std::remove_pointer<::UEVR_OnDeviceResetCb>::type>;
     using UEVR_OnMessageCb = std::function<std::remove_pointer<::UEVR_OnMessageCb>::type>;
+    using UEVR_OnXInputGetStateCb = std::function<std::remove_pointer<::UEVR_OnXInputGetStateCb>::type>;
+    using UEVR_OnXInputSetStateCb = std::function<std::remove_pointer<::UEVR_OnXInputSetStateCb>::type>;
 
     /* Engine specific callbacks */
     using UEVR_Engine_TickCb = std::function<std::remove_pointer<::UEVR_Engine_TickCb>::type>;
@@ -54,6 +58,8 @@ public:
     bool add_on_present(UEVR_OnPresentCb cb);
     bool add_on_device_reset(UEVR_OnDeviceResetCb cb);
     bool add_on_message(UEVR_OnMessageCb cb);
+    bool add_on_xinput_get_state(UEVR_OnXInputGetStateCb cb);
+    bool add_on_xinput_set_state(UEVR_OnXInputSetStateCb cb);
 
     bool add_on_pre_engine_tick(UEVR_Engine_TickCb cb);
     bool add_on_post_engine_tick(UEVR_Engine_TickCb cb);
@@ -67,6 +73,8 @@ private:
     std::vector<PluginLoader::UEVR_OnPresentCb> m_on_present_cbs{};
     std::vector<PluginLoader::UEVR_OnDeviceResetCb> m_on_device_reset_cbs{};
     std::vector<PluginLoader::UEVR_OnMessageCb> m_on_message_cbs{};
+    std::vector<PluginLoader::UEVR_OnXInputGetStateCb> m_on_xinput_get_state_cbs{};
+    std::vector<PluginLoader::UEVR_OnXInputSetStateCb> m_on_xinput_set_state_cbs{};
 
     std::vector<PluginLoader::UEVR_Engine_TickCb> m_on_pre_engine_tick_cbs{};
     std::vector<PluginLoader::UEVR_Engine_TickCb> m_on_post_engine_tick_cbs{};
@@ -76,9 +84,14 @@ private:
     std::vector<PluginLoader::UEVR_Stereo_CalculateStereoViewOffsetCb> m_on_post_calculate_stereo_view_offset_cbs{};
 
     std::vector<std::vector<void*>*> m_plugin_callback_lists{
+        // Plugin
         (std::vector<void*>*)&m_on_present_cbs,
         (std::vector<void*>*)&m_on_device_reset_cbs,
         (std::vector<void*>*)&m_on_message_cbs,
+        (std::vector<void*>*)&m_on_xinput_get_state_cbs,
+        (std::vector<void*>*)&m_on_xinput_set_state_cbs,
+
+        // SDK
         (std::vector<void*>*)&m_on_pre_engine_tick_cbs,
         (std::vector<void*>*)&m_on_post_engine_tick_cbs,
         (std::vector<void*>*)&m_on_pre_slate_draw_window_render_thread_cbs,

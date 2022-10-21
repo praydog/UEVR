@@ -104,6 +104,8 @@ typedef struct {
 typedef void (*UEVR_OnPresentCb)();
 typedef void (*UEVR_OnDeviceResetCb)();
 typedef bool (*UEVR_OnMessageCb)(void*, unsigned int, unsigned long long, long long);
+typedef void (*UEVR_OnXInputGetStateCb)(unsigned int*, unsigned int, void*); /* retval, dwUserIndex, pState, read MSDN for details */
+typedef void (*UEVR_OnXInputSetStateCb)(unsigned int*, unsigned int, void*); /* retval, dwUserIndex, pVibration, read MSDN for details */
 typedef void (*UEVR_Engine_TickCb)(UEVR_UGameEngineHandle engine, float delta_seconds);
 typedef void (*UEVR_Slate_DrawWindow_RenderThreadCb)(UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info);
 
@@ -114,6 +116,8 @@ typedef void (*UEVR_Stereo_CalculateStereoViewOffsetCb)(UEVR_StereoRenderingDevi
 typedef bool (*UEVR_OnPresentFn)(UEVR_OnPresentCb);
 typedef bool (*UEVR_OnDeviceResetFn)(UEVR_OnDeviceResetCb);
 typedef bool (*UEVR_OnMessageFn)(UEVR_OnMessageCb);
+typedef bool (*UEVR_OnXInputGetStateFn)(UEVR_OnXInputGetStateCb);
+typedef bool (*UEVR_OnXInputSetStateFn)(UEVR_OnXInputSetStateCb);
 typedef bool (*UEVR_Engine_TickFn)(UEVR_Engine_TickCb);
 typedef bool (*UEVR_Slate_DrawWindow_RenderThreadFn)(UEVR_Slate_DrawWindow_RenderThreadCb);
 typedef bool (*UEVR_Stereo_CalculateStereoViewOffsetFn)(UEVR_Stereo_CalculateStereoViewOffsetCb);
@@ -124,6 +128,8 @@ typedef struct {
     UEVR_OnPresentFn on_present;
     UEVR_OnDeviceResetFn on_device_reset;
     UEVR_OnMessageFn on_message;
+    UEVR_OnXInputGetStateFn on_xinput_get_state;
+    UEVR_OnXInputSetStateFn on_xinput_set_state;
 } UEVR_PluginCallbacks;
 
 typedef struct {

@@ -15,6 +15,7 @@ class Mods;
 #include "hooks/D3D11Hook.hpp"
 #include "hooks/D3D12Hook.hpp"
 #include "hooks/WindowsMessageHook.hpp"
+#include "hooks/XInputHook.hpp"
 
 // Global facilitator
 class Framework {
@@ -118,6 +119,7 @@ private:
 
     bool initialize();
     bool initialize_windows_message_hook();
+    bool initialize_xinput_hook();
 
     void call_on_frame();
 
@@ -168,7 +170,8 @@ private:
     std::array<uint8_t, 256> m_last_keys{0};
     std::unique_ptr<D3D11Hook> m_d3d11_hook{};
     std::unique_ptr<D3D12Hook> m_d3d12_hook{};
-    std::unique_ptr<WindowsMessageHook> m_windows_message_hook;
+    std::unique_ptr<WindowsMessageHook> m_windows_message_hook{};
+    std::unique_ptr<XInputHook> m_xinput_hook{};
     std::shared_ptr<spdlog::logger> m_logger;
 
     std::string m_error{""};
