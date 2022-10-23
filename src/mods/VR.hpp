@@ -311,10 +311,18 @@ private:
     std::chrono::nanoseconds m_avg_input_delay{};
 
     const ModToggle::Ptr m_use_afr{ ModToggle::create(generate_name("AlternateFrameRendering"), false) };
-    const ModToggle::Ptr m_desktop_fix{ ModToggle::create(generate_name("DesktopRecordingFix"), true) };
+    const ModToggle::Ptr m_desktop_fix{ ModToggle::create(generate_name("DesktopRecordingFix"), false) };
     const ModToggle::Ptr m_desktop_fix_skip_present{ ModToggle::create(generate_name("DesktopRecordingFixSkipPresent"), false) };
     const ModSlider::Ptr m_motion_controls_inactivity_timer{ ModSlider::create(generate_name("MotionControlsInactivityTimer"), 30.0f, 100.0f, 30.0f) };
     const ModSlider::Ptr m_joystick_deadzone{ ModSlider::create(generate_name("JoystickDeadzone"), 0.01f, 0.9f, 0.15f) };
+
+    ValueList m_options{
+        *m_use_afr,
+        *m_desktop_fix,
+        *m_desktop_fix_skip_present,
+        *m_motion_controls_inactivity_timer,
+        *m_joystick_deadzone,
+    };
 
     int m_frame_count{};
     int m_render_frame_count{};
@@ -336,14 +344,6 @@ private:
     bool m_disable_projection_matrix_override{ false };
     bool m_disable_view_matrix_override{false};
     bool m_disable_backbuffer_size_override{false};
-
-    ValueList m_options{
-        *m_use_afr,
-        *m_desktop_fix,
-        *m_desktop_fix_skip_present,
-        *m_motion_controls_inactivity_timer,
-        *m_joystick_deadzone,
-    };
 
     static std::string actions_json;
     static std::string binding_rift_json;

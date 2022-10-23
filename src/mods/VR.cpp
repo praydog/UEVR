@@ -642,6 +642,14 @@ void VR::update_action_states() {
         get_runtime()->update_input();
     }
 
+    const auto deadzone = m_joystick_deadzone->value();
+    const auto left_axis_len = glm::length(get_left_stick_axis());
+    const auto right_axis_len = glm::length(get_right_stick_axis());
+
+    if (left_axis_len > deadzone || right_axis_len > deadzone || is_any_action_down()) {
+        m_last_controller_update = std::chrono::steady_clock::now();
+    }
+
     /*if (m_recenter_view_key->is_key_down_once()) {
         recenter_view();
     }
