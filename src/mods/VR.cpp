@@ -1,5 +1,8 @@
 #include <fstream>
 
+#include <windows.h>
+#include <dbt.h>
+
 #include <imgui.h>
 #include <utility/Module.hpp>
 #include <utility/Registry.hpp>
@@ -548,6 +551,114 @@ bool VR::is_any_action_down() {
     return false;
 }
 
+bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
+    if (message != DBT_DEVICEARRIVAL && !m_spoofed_gamepad_connection) {
+        SendMessage(wnd, DBT_DEVICEARRIVAL, 0, 0);
+    }
+
+    return true;
+}
+
+void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {
+    if (user_index != 0) {
+        return;
+    }
+
+    if (!m_spoofed_gamepad_connection) {
+        spdlog::info("[VR] Successfully spoofed gamepad connection");
+    }
+
+    m_last_xinput_update = std::chrono::steady_clock::now();
+    m_spoofed_gamepad_connection = true;
+
+    if (!is_using_controllers()) {
+        return;
+    }
+
+    *retval = ERROR_SUCCESS;
+
+    const auto a_button_action = get_action_handle("/actions/default/in/AButton");
+    const auto is_right_a_button_down = is_action_active(a_button_action, m_right_joystick);
+    const auto is_left_a_button_down = is_action_active(a_button_action, m_left_joystick);
+
+    if (is_right_a_button_down) {
+        state->Gamepad.wButtons |= XINPUT_GAMEPAD_A;
+    }
+
+    if (is_left_a_button_down) {
+        state->Gamepad.wButtons |= XINPUT_GAMEPAD_B;
+    }
+
+    const auto b_button_action = get_action_handle("/actions/default/in/BButton");
+    const auto is_right_b_button_down = is_action_active(b_button_action, m_right_joystick);
+    const auto is_left_b_button_down = is_action_active(b_button_action, m_left_joystick);
+
+    if (is_right_b_button_down) {
+        state->Gamepad.wButtons |= XINPUT_GAMEPAD_X;
+    }
+
+    if (is_left_b_button_down) {
+        state->Gamepad.wButtons |= XINPUT_GAMEPAD_Y;
+    }
+
+    const auto joystick_click_action = get_action_handle("/actions/default/in/JoystickClick");
+    const auto is_left_joystick_click_down = is_action_active(joystick_click_action, m_left_joystick);
+    const auto is_right_joystick_click_down = is_action_active(joystick_click_action, m_right_joystick);
+
+    if (is_left_joystick_click_down) {
+        state->Gamepad.wButtons |= XINPUT_GAMEPAD_LEFT_THUMB;
+    }
+
+    if (is_right_joystick_click_down) {
+        state->Gamepad.wButtons |= XINPUT_GAMEPAD_RIGHT_THUMB;
+    }
+
+    const auto trigger_action = get_action_handle("/actions/default/in/Trigger");
+    const auto is_left_trigger_down = is_action_active(trigger_action, m_left_joystick);
+    const auto is_right_trigger_down = is_action_active(trigger_action, m_right_joystick);
+
+    if (is_left_trigger_down) {
+        state->Gamepad.bLeftTrigger = 255;
+    }
+
+    if (is_right_trigger_down) {
+        state->Gamepad.bRightTrigger = 255;
+    }
+
+    const auto grip_action = get_action_handle("/actions/default/in/Grip");
+    const auto is_right_grip_down = is_action_active(grip_action, m_right_joystick);
+    const auto is_left_grip_down = is_action_active(grip_action, m_left_joystick);
+
+    if (is_right_grip_down) {
+        state->Gamepad.wButtons |= XINPUT_GAMEPAD_RIGHT_SHOULDER;
+    }
+
+    if (is_left_grip_down) {
+        state->Gamepad.wButtons |= XINPUT_GAMEPAD_LEFT_SHOULDER;
+    }
+
+    const auto left_joystick_axis = get_joystick_axis(m_left_joystick);
+    const auto right_joystick_axis = get_joystick_axis(m_right_joystick);
+
+    state->Gamepad.sThumbLX = (int16_t)(left_joystick_axis.x * 32767.0f);
+    state->Gamepad.sThumbLY = (int16_t)(left_joystick_axis.y * 32767.0f);
+
+    state->Gamepad.sThumbRX = (int16_t)(right_joystick_axis.x * 32767.0f);
+    state->Gamepad.sThumbRY = (int16_t)(right_joystick_axis.y * 32767.0f);
+}
+
+void VR::on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) {
+    if (m_left_joystick == 0 || m_right_joystick == 0) {
+        return;
+    }
+
+    const auto left_amplitude = ((float)vibration->wLeftMotorSpeed / 65535.0f) * 5.0f;
+    const auto right_amplitude = ((float)vibration->wRightMotorSpeed / 65535.0f) * 5.0f;
+
+    trigger_haptic_vibration(0.0f, 0.1f, 1.0f, left_amplitude, m_left_joystick);
+    trigger_haptic_vibration(0.0f, 0.1f, 1.0f, right_amplitude, m_right_joystick);
+}
+
 void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     if (!get_runtime()->loaded || !is_hmd_active()) {
         return;
@@ -615,6 +726,10 @@ void VR::update_action_states() {
 
     if (runtime->wants_reinitialize) {
         return;
+    }
+
+    if (m_spoofed_gamepad_connection && std::chrono::steady_clock::now() - m_last_xinput_update >= std::chrono::seconds(2)) {
+        m_spoofed_gamepad_connection = false;
     }
 
     if (runtime->is_openvr()) {

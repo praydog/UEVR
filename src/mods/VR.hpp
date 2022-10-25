@@ -32,6 +32,11 @@ public:
     void on_post_present() override;
 
 
+    bool on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) override;
+    void on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) override;
+    void on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) override;
+
+
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
 
     void update_hmd_state();
@@ -305,6 +310,7 @@ private:
     vr::VRInputValueHandle_t m_right_joystick{};
 
     std::chrono::steady_clock::time_point m_last_controller_update{};
+    std::chrono::steady_clock::time_point m_last_xinput_update{};
     std::chrono::steady_clock::time_point m_last_interaction_display{};
 
     std::chrono::nanoseconds m_last_input_delay{};
@@ -340,6 +346,7 @@ private:
     bool m_backbuffer_inconsistency{false};
     bool m_init_finished{false};
     bool m_has_hw_scheduling{false}; // hardware accelerated GPU scheduling
+    bool m_spoofed_gamepad_connection{true}; // true initially to allow some leeway if a real gamepad is connected
 
     bool m_disable_projection_matrix_override{ false };
     bool m_disable_view_matrix_override{false};
