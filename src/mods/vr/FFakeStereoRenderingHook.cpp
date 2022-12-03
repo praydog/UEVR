@@ -1533,7 +1533,7 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
 
         spdlog::info("Scanning vfunc at index {} ({:x})...", i, vfunc);
 
-        utility::exhaustive_decode((uint8_t*)vfunc, 20, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
+        utility::exhaustive_decode((uint8_t*)vfunc, 25, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
             if (ix.Instruction == ND_INS_CALLNR || ix.Instruction == ND_INS_CALLFI) {
                 return utility::ExhaustionResult::STEP_OVER;
             }
