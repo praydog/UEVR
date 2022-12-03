@@ -182,6 +182,7 @@ private:
 
     bool patch_vtable_checks();
     bool attempt_runtime_inject_stereo();
+    void post_init_properties(uintptr_t localplayer);
 
     // Hooks
     static bool is_stereo_enabled(FFakeStereoRendering* stereo);
@@ -197,6 +198,7 @@ private:
     static IStereoLayers* get_stereo_layers_hook(FFakeStereoRendering* stereo);
 
     static void post_calculate_stereo_projection_matrix(safetyhook::Context& ctx);
+    static void pre_get_projection_data(safetyhook::Context& ctx);
 
     static void* slate_draw_window_render_thread(void* renderer, void* command_list, sdk::FViewportInfo* viewport_info, 
                                                  void* elements, void* params, void* unk1, void* unk2);
@@ -208,7 +210,11 @@ private:
     std::unique_ptr<safetyhook::InlineHook> m_render_texture_render_thread_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_slate_thread_hook{};
 
+    // both of these are used to figure out where the localplayer is, they aren't actively
+    // used for anything else, the second one is an alternative hook if the first one
+    // deems fruitless.
     std::unique_ptr<safetyhook::MidHook> m_calculate_stereo_projection_matrix_post_hook{};
+    std::unique_ptr<safetyhook::MidHook> m_get_projection_data_pre_hook{};
 
     std::unique_ptr<PointerHook> m_is_stereo_enabled_hook{};
     std::unique_ptr<PointerHook> m_get_render_target_manager_hook{};
@@ -218,6 +224,9 @@ private:
     VRRenderTargetManager m_rtm{};
     VRRenderTargetManager_418 m_rtm_418{};
     VRRenderTargetManager_Special m_rtm_special{};
+
+    std::vector<uintptr_t> m_projection_matrix_stack{};
+    bool m_hooked_alternative_localplayer_scan{false};
 
     bool m_hooked{false};
     bool m_tried_hooking{false};

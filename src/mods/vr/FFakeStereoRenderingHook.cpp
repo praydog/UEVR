@@ -1119,17 +1119,28 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
 
     if (!g_hook->m_fixed_localplayer_view_count) {
         if (g_hook->m_calculate_stereo_projection_matrix_post_hook == nullptr) {
-            spdlog::info("Inserting midhook after CalculateStereoProjectionMatrix...");
+            const auto return_address = (uintptr_t)_ReturnAddress();
+            spdlog::info("Inserting midhook after CalculateStereoProjectionMatrix... @ {:x}", return_address);
+
+            constexpr auto max_stack_depth = 100;
+            uintptr_t stack[max_stack_depth]{};
+
+            const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
+
+            for (int i = 0; i < depth; i++) {
+                g_hook->m_projection_matrix_stack.push_back(stack[i]);
+                spdlog::info(" {:x}", (uintptr_t)stack[i]);
+            }
 
             auto factory = SafetyHookFactory::init();
             auto builder = factory->acquire();
 
-            const auto return_address = (uintptr_t)_ReturnAddress();
             g_hook->m_calculate_stereo_projection_matrix_post_hook = builder.create_mid((void*)return_address, &FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix);
         }
     } else if (g_hook->m_calculate_stereo_projection_matrix_post_hook != nullptr) {
         spdlog::info("Removing midhook after CalculateStereoProjectionMatrix, job is done...");
         g_hook->m_calculate_stereo_projection_matrix_post_hook.reset();
+        g_hook->m_get_projection_data_pre_hook.reset();
     }
 
     if (!g_framework->is_game_data_intialized()) {
@@ -1370,11 +1381,40 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
     spdlog::info("post calculate stereo projection matrix called!");
 #endif
 
-    if (g_hook->m_fixed_localplayer_view_count) {
+    if (g_hook->m_fixed_localplayer_view_count || g_hook->m_hooked_alternative_localplayer_scan) {
         return;
     }
 
     auto vfunc = utility::find_virtual_function_start(g_hook->m_calculate_stereo_projection_matrix_post_hook->target());
+
+    if (!vfunc) {
+        // attempt to hook GetProjectionData instead to get the localplayer
+        spdlog::info("Failed to find virtual function start for CalculateStereoProjectionMatrix, attempting to hook GetProjectionData instead...");
+
+        if (!g_hook->m_projection_matrix_stack.empty() && g_hook->m_projection_matrix_stack.size() >= 3) {
+            const auto post_get_projection_data = g_hook->m_projection_matrix_stack[2];
+            const auto get_projection_data = utility::find_function_start(post_get_projection_data);
+
+            if (get_projection_data) {
+                spdlog::info("Successfully found GetProjectionData at {:x}", *get_projection_data);
+
+                g_hook->m_hooked_alternative_localplayer_scan = true;
+
+                auto factory = SafetyHookFactory::init();
+                auto builder = factory->acquire();
+
+                g_hook->m_get_projection_data_pre_hook = builder.create_mid((void*)*get_projection_data, &FFakeStereoRenderingHook::pre_get_projection_data);
+                g_hook->m_projection_matrix_stack.clear();
+
+                if (g_hook->m_get_projection_data_pre_hook != nullptr) {
+                    spdlog::info("Successfully hooked GetProjectionData");
+                    return;
+                } else {
+                    spdlog::error("Failed to hook GetProjectionData");
+                }
+            }
+        }
+    }
 
     if (!vfunc) {
         spdlog::info("Could not find function via normal means, scanning for int3s...");
@@ -1447,10 +1487,37 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
         return;
     }
 
+    g_hook->post_init_properties(localplayer);
+}
+
+void FFakeStereoRenderingHook::pre_get_projection_data(safetyhook::Context& ctx) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("pre get projection data called!");
+#endif
+
+    if (g_hook->m_fixed_localplayer_view_count) {
+        return;
+    }
+
+    const auto localplayer = ctx.rcx;
+    spdlog::info("Local player: {:x}", localplayer);
+
+    if (localplayer == 0) {
+        g_hook->m_fixed_localplayer_view_count = true;
+        spdlog::error("Failed to find local player, cannot call PostInitProperties!");
+        return;
+    }
+
+    g_hook->post_init_properties(localplayer);
+}
+
+void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
     spdlog::info("Searching for PostInitProperties virtual function...");
 
     std::optional<uint32_t> idx{};
     const auto engine = sdk::UEngine::get_lvalue();
+
+    INSTRUX ix{};
 
     for (auto i = 1; i < 25; ++i) {
         if (idx) {
@@ -1466,35 +1533,28 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
 
         spdlog::info("Scanning vfunc at index {} ({:x})...", i, vfunc);
 
-        ip = (uint8_t*)vfunc;
-
-        for (auto j = 0; j < 25; ++j) {
-            const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
-
-            if (!ND_SUCCESS(status)) {
-                spdlog::info("Decoding failed with error {:x}!", (uint32_t)status);
-                break;
+        utility::exhaustive_decode((uint8_t*)vfunc, 20, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
+            if (ix.Instruction == ND_INS_CALLNR || ix.Instruction == ND_INS_CALLFI) {
+                return utility::ExhaustionResult::STEP_OVER;
             }
 
-            if (ix.Instruction == ND_INS_RETN || ix.Instruction == ND_INS_INT3 || ix.Instruction == ND_INS_JMPFD || ix.Instruction == ND_INS_JMPFI) {
-                break;
+            if (idx) {
+                return utility::ExhaustionResult::BREAK;
             }
 
-            // PostInitProperties for the player always accesses GEngine->StereoRenderingDevice
-            // none of the other early vfuncs will do this.
-            if (const auto disp = utility::resolve_displacement((uintptr_t)ip); disp) {
+            if (const auto disp = utility::resolve_displacement(ip); disp) {
                 // the second expression catches UE dynamic/debug builds
                 if (*disp == (uintptr_t)engine || 
                     (!IsBadReadPtr((void*)*disp, sizeof(void*)) && *(uintptr_t*)*disp == (uintptr_t)*engine)) 
                 {
                     spdlog::info("Found PostInitProperties at {} {:x}!", i, (uintptr_t)vfunc);
                     idx = i;
-                    break;
+                    return utility::ExhaustionResult::BREAK;
                 }
             }
 
-            ip += ix.Length;
-        }
+            return utility::ExhaustionResult::CONTINUE;
+        });
     }
 
     if (!idx) {
