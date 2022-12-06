@@ -202,6 +202,8 @@ Framework::Framework(HMODULE framework_module)
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
     });
+
+    m_uevr_shared_memory = std::make_unique<UEVRSharedMemory>();
 }
 
 bool Framework::hook_d3d11() {

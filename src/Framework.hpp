@@ -17,6 +17,16 @@ class Mods;
 #include "hooks/WindowsMessageHook.hpp"
 #include "hooks/XInputHook.hpp"
 
+class UEVRSharedMemory {
+public:
+    virtual ~UEVRSharedMemory() {
+        CloseHandle(m_memory);
+    }
+
+private:
+    HANDLE m_memory{CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 1024, "UnrealVRMod")};
+};
+
 // Global facilitator
 class Framework {
 private:
@@ -172,7 +182,8 @@ private:
     std::unique_ptr<D3D12Hook> m_d3d12_hook{};
     std::unique_ptr<WindowsMessageHook> m_windows_message_hook{};
     std::unique_ptr<XInputHook> m_xinput_hook{};
-    std::shared_ptr<spdlog::logger> m_logger;
+    std::shared_ptr<spdlog::logger> m_logger{};
+    std::unique_ptr<UEVRSharedMemory> m_uevr_shared_memory{};
 
     std::string m_error{""};
 
