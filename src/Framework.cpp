@@ -29,8 +29,23 @@
 namespace fs = std::filesystem;
 using namespace std::literals;
 
-
 std::unique_ptr<Framework> g_framework{};
+
+UEVRSharedMemory::UEVRSharedMemory() {
+    spdlog::info("Shared memory constructor!");
+
+    m_memory = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(Data), "UnrealVRMod");
+    m_data = (Data*)MapViewOfFile(m_memory, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Data));
+
+    if (m_data != nullptr) {
+        auto p = *utility::get_module_path(utility::get_executable());
+        strcpy_s(m_data->path, p.c_str());
+        m_data->pid = GetCurrentProcessId();
+        spdlog::info("Mapped memory!");
+    } else {
+        spdlog::error("Failed to map memory!");
+    }
+}
 
 void Framework::hook_monitor() {
     std::scoped_lock _{ m_hook_monitor_mutex };

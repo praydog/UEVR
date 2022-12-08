@@ -19,12 +19,23 @@ class Mods;
 
 class UEVRSharedMemory {
 public:
+    UEVRSharedMemory();
+
     virtual ~UEVRSharedMemory() {
+        UnmapViewOfFile(m_data);
         CloseHandle(m_memory);
     }
 
+    #pragma pack(push, 1)
+    struct Data {
+        char path[MAX_PATH]{}; // Path to the game exe
+        uint32_t pid{}; // Process ID of the game
+    };
+    #pragma pack(pop)
+
 private:
-    HANDLE m_memory{CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 1024, "UnrealVRMod")};
+    HANDLE m_memory{};
+    Data* m_data{};
 };
 
 // Global facilitator
