@@ -175,6 +175,10 @@ public:
         return m_right_joystick;
     }
 
+    bool is_gui_enabled() const {
+        return m_enable_gui->value();
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;
@@ -319,6 +323,7 @@ private:
     const ModToggle::Ptr m_use_afr{ ModToggle::create(generate_name("AlternateFrameRendering"), false) };
     const ModToggle::Ptr m_desktop_fix{ ModToggle::create(generate_name("DesktopRecordingFix"), false) };
     const ModToggle::Ptr m_desktop_fix_skip_present{ ModToggle::create(generate_name("DesktopRecordingFixSkipPresent"), false) };
+    const ModToggle::Ptr m_enable_gui{ ModToggle::create(generate_name("EnableGUI"), true) };
     const ModSlider::Ptr m_motion_controls_inactivity_timer{ ModSlider::create(generate_name("MotionControlsInactivityTimer"), 30.0f, 100.0f, 30.0f) };
     const ModSlider::Ptr m_joystick_deadzone{ ModSlider::create(generate_name("JoystickDeadzone"), 0.01f, 0.9f, 0.15f) };
 
@@ -326,6 +331,7 @@ private:
         *m_use_afr,
         *m_desktop_fix,
         *m_desktop_fix_skip_present,
+        *m_enable_gui,
         *m_motion_controls_inactivity_timer,
         *m_joystick_deadzone,
     };

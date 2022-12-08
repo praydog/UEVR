@@ -1067,6 +1067,7 @@ void VR::on_draw_ui() {
     ImGui::Separator();
 
     m_use_afr->draw("Use AFR");
+    m_enable_gui->draw("Enable GUI");
 
     ImGui::Separator();
     ImGui::Text("Graphical Options");

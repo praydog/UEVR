@@ -207,7 +207,13 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 vr->m_openxr->begin_frame();
             }
 
-            std::vector<XrCompositionLayerQuad> quad_layers{ vr->get_overlay_component().get_openxr().generate_slate_quad() };
+            std::vector<XrCompositionLayerQuad> quad_layers{};
+
+            const auto slate_quad = vr->get_overlay_component().get_openxr().generate_slate_quad();
+            if (slate_quad) {
+                quad_layers.push_back(*slate_quad);
+            }
+            
             auto result = vr->m_openxr->end_frame(quad_layers);
 
             if (result == XR_ERROR_LAYER_INVALID) {

@@ -86,7 +86,7 @@ private:
 
         }
 
-        XrCompositionLayerQuad& generate_slate_quad();
+        std::optional<std::reference_wrapper<XrCompositionLayerQuad>> generate_slate_quad();
         
     private:
         XrCompositionLayerQuad m_slate_layer{};
@@ -96,7 +96,7 @@ private:
     } m_openxr;
 
 private:
-    void update_input();
-    void update_overlay();
-    void update_slate();
+    void update_input_openvr();
+    void update_overlay_openvr();
+    void update_slate_openvr();
 };}

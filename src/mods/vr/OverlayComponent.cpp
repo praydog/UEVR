@@ -67,12 +67,12 @@ std::optional<std::string> OverlayComponent::on_initialize_openvr() {
 }
 
 void OverlayComponent::on_pre_imgui_frame() {
-    this->update_input();
+    this->update_input_openvr();
 }
 
 void OverlayComponent::on_post_compositor_submit() {
-    this->update_overlay();
-    this->update_slate();
+    this->update_overlay_openvr();
+    this->update_slate_openvr();
 }
 
 
@@ -97,7 +97,7 @@ void OverlayComponent::on_draw_ui() {
     }
 }
 
-void OverlayComponent::update_input() {
+void OverlayComponent::update_input_openvr() {
     if (!VR::get()->get_runtime()->is_openvr()) {
         return;
     }
@@ -170,10 +170,14 @@ void OverlayComponent::update_input() {
     }
 }
 
-void OverlayComponent::update_slate() {
+void OverlayComponent::update_slate_openvr() {
     auto vr = VR::get();
 
     if (!vr->get_runtime()->is_openvr()) {
+        return;
+    }
+
+    if (!vr->is_gui_enabled()) {
         return;
     }
 
@@ -227,7 +231,7 @@ void OverlayComponent::update_slate() {
     }
 }
 
-void OverlayComponent::update_overlay() {
+void OverlayComponent::update_overlay_openvr() {
     if (!VR::get()->get_runtime()->is_openvr()) {
         return;
     }
@@ -471,8 +475,13 @@ void OverlayComponent::update_overlay() {
     }
 }
 
-XrCompositionLayerQuad& OverlayComponent::OpenXR::generate_slate_quad() {
-    auto vr = VR::get();
+std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::OpenXR::generate_slate_quad() {
+    auto& vr = VR::get();
+
+    if (!vr->is_gui_enabled()) {
+        return std::nullopt;
+    }
+
     auto& layer = this->m_slate_layer;
 
     layer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;

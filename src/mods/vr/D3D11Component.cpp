@@ -138,7 +138,13 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::RIGHT_EYE, backbuffer.Get(), &src_box);
 
             LOG_VERBOSE("Ending frame");
-            std::vector<XrCompositionLayerQuad> quad_layers{ vr->get_overlay_component().get_openxr().generate_slate_quad() };
+            std::vector<XrCompositionLayerQuad> quad_layers{};
+
+            const auto slate_quad = vr->get_overlay_component().get_openxr().generate_slate_quad();
+            if (slate_quad) {
+                quad_layers.push_back(*slate_quad);
+            }
+            
             auto result = vr->m_openxr->end_frame(quad_layers);
 
             vr->m_openxr->needs_pose_update = true;
