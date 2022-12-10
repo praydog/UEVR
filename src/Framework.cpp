@@ -2,6 +2,7 @@
 #include <filesystem>
 
 #include <windows.h>
+#include <ShlObj.h>
 
 #include <spdlog/sinks/basic_file_sink.h>
 
@@ -140,11 +141,28 @@ void Framework::hook_monitor() {
 
 Framework::Framework(HMODULE framework_module)
     : m_framework_module{framework_module}
-    , m_game_module{GetModuleHandle(0)}
-    , m_logger{spdlog::basic_logger_mt("Framework", "Framework_log.txt", true)} {
-    spdlog::set_default_logger(m_logger);
-    spdlog::flush_on(spdlog::level::info);
-    spdlog::info("Framework entry");
+    , m_game_module{GetModuleHandle(0)} {
+
+    try {
+        m_logger = spdlog::basic_logger_mt("Framework", "re2_framework_log.txt", true);
+
+        spdlog::set_default_logger(m_logger);
+        spdlog::flush_on(spdlog::level::info);
+        spdlog::info("Framework entry");
+    } catch(...) {
+        // Set the logger directory to %APPDATA%/REFramework and try again
+        char app_data_path[MAX_PATH]{};
+        SHGetSpecialFolderPathA(0, app_data_path, CSIDL_APPDATA, false);
+        
+        const auto log_path = std::filesystem::path(app_data_path) / "UnrealVRMod" / "log.txt";
+
+        m_logger = spdlog::basic_logger_mt("UnrealVRMod", log_path.string(), true);
+        spdlog::set_default_logger(m_logger);
+        spdlog::flush_on(spdlog::level::info);
+
+        spdlog::info("Had to fallback to %APPDATA% for log file");
+        spdlog::info("Framework entry");
+    }
 
     const auto module_size = *utility::get_module_size(m_game_module);
 
