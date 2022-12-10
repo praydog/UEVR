@@ -141,28 +141,12 @@ void Framework::hook_monitor() {
 
 Framework::Framework(HMODULE framework_module)
     : m_framework_module{framework_module}
-    , m_game_module{GetModuleHandle(0)} {
+    , m_game_module{GetModuleHandle(0)},
+    m_logger{spdlog::basic_logger_mt("Framework", (get_persistent_dir() / "log.txt").string(), true)} {
 
-    try {
-        m_logger = spdlog::basic_logger_mt("Framework", "re2_framework_log.txt", true);
-
-        spdlog::set_default_logger(m_logger);
-        spdlog::flush_on(spdlog::level::info);
-        spdlog::info("Framework entry");
-    } catch(...) {
-        // Set the logger directory to %APPDATA%/REFramework and try again
-        char app_data_path[MAX_PATH]{};
-        SHGetSpecialFolderPathA(0, app_data_path, CSIDL_APPDATA, false);
-        
-        const auto log_path = std::filesystem::path(app_data_path) / "UnrealVRMod" / "log.txt";
-
-        m_logger = spdlog::basic_logger_mt("UnrealVRMod", log_path.string(), true);
-        spdlog::set_default_logger(m_logger);
-        spdlog::flush_on(spdlog::level::info);
-
-        spdlog::info("Had to fallback to %APPDATA% for log file");
-        spdlog::info("Framework entry");
-    }
+    spdlog::set_default_logger(m_logger);
+    spdlog::flush_on(spdlog::level::info);
+    spdlog::info("Framework entry");
 
     const auto module_size = *utility::get_module_size(m_game_module);
 
@@ -411,7 +395,7 @@ void Framework::on_frame_d3d11() {
     if (is_init_ok) {
         // Write default config once if it doesn't exist.
         if (!std::exchange(m_created_default_cfg, true)) {
-            if (!fs::exists({utility::widen("fw_config.txt")})) {
+            if (!fs::exists(utility::widen(get_persistent_dir("config.txt").string()))) {
                 save_config();
             }
         }
@@ -516,7 +500,7 @@ void Framework::on_frame_d3d12() {
     if (is_init_ok) {
         // Write default config once if it doesn't exist.
         if (!std::exchange(m_created_default_cfg, true)) {
-            if (!fs::exists({utility::widen("fw_config.txt")})) {
+            if (!fs::exists(utility::widen(get_persistent_dir("config.txt").string()))) {
                 save_config();
             }
         }
@@ -757,10 +741,31 @@ void Framework::on_direct_input_keys(const std::array<uint8_t, 256>& keys) {
     m_last_keys = keys;*/
 }
 
+std::filesystem::path Framework::get_persistent_dir() {
+    auto return_appdata_dir = []() -> std::filesystem::path {
+        char app_data_path[MAX_PATH]{};
+        SHGetSpecialFolderPathA(0, app_data_path, CSIDL_APPDATA, false);
+
+        const auto exe_name = [&]() {
+            const auto result = std::filesystem::path(*utility::get_module_path(utility::get_executable())).stem().string();
+            const auto dir = std::filesystem::path(app_data_path) / "UnrealVRMod" / result;
+            std::filesystem::create_directories(dir);
+
+            return result;
+        }();
+
+        return std::filesystem::path(app_data_path) / "UnrealVRMod" / exe_name;
+    };
+
+    static const auto result = return_appdata_dir();
+
+    return result;
+}
+
 void Framework::save_config() {
     std::scoped_lock _{m_config_mtx};
 
-    spdlog::info("Saving config fw_config.txt");
+    spdlog::info("Saving config config.txt");
 
     utility::Config cfg{};
 
@@ -768,7 +773,7 @@ void Framework::save_config() {
         mod->on_config_save(cfg);
     }
 
-    if (!cfg.save("fw_config.txt")) {
+    if (!cfg.save(get_persistent_dir("config.txt").string())) {
         spdlog::info("Failed to save config");
         return;
     }
@@ -1124,7 +1129,8 @@ bool Framework::initialize() {
 
         set_imgui_style();
 
-        ImGui::GetIO().IniFilename = "ref_ui.ini";
+        static const auto imgui_ini = (get_persistent_dir() / "imgui.ini").string();
+        ImGui::GetIO().IniFilename = imgui_ini.c_str();
 
         spdlog::info("Initializing ImGui Win32");
 
@@ -1184,7 +1190,8 @@ bool Framework::initialize() {
 
         set_imgui_style();
 
-        ImGui::GetIO().IniFilename = "ref_ui.ini";
+        static const auto imgui_ini = (get_persistent_dir() / "imgui.ini").string();
+        ImGui::GetIO().IniFilename = imgui_ini.c_str();
         
         if (!ImGui_ImplWin32_Init(m_wnd)) {
             spdlog::error("Failed to initialize ImGui ImplWin32.");

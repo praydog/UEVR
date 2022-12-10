@@ -6,6 +6,8 @@
 #include <utility/String.hpp>
 #include <imgui.h>
 
+#include "Framework.hpp"
+
 #include "OpenXR.hpp"
 
 using namespace nlohmann;
@@ -708,6 +710,8 @@ std::optional<std::string> OpenXR::initialize_actions(const std::string& json_st
 
         // replace the slashes with underscores
         std::replace(filename.begin(), filename.end(), '/', '_');
+
+        filename = (Framework::get_persistent_dir() / filename).string();
 
         // check if the file exists
         if (std::filesystem::exists(filename)) {

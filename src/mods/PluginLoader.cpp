@@ -524,10 +524,10 @@ void PluginLoader::early_init() try {
     module_path.resize(GetModuleFileName(nullptr, module_path.data(), module_path.size()));
     spdlog::info("[PluginLoader] Module path {}", module_path);
 
-    auto plugin_path = fs::path{module_path}.parent_path() / "UEVR" / "plugins";
+    const auto plugin_path = Framework::get_persistent_dir() / "plugins";
 
     spdlog::info("[PluginLoader] Creating directories {}", plugin_path.string());
-    
+
     if (!fs::create_directories(plugin_path) && !fs::exists(plugin_path)) {
         spdlog::error("[PluginLoader] Failed to create directory for plugins: {}", plugin_path.string());
     } else {

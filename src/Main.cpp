@@ -4,14 +4,11 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 
+#include <utility/Thread.hpp>
+
 #include "Framework.hpp"
 
 void startup_thread(HMODULE poc_module) {
-    // create spdlog sink
-    spdlog::set_default_logger(spdlog::basic_logger_mt("poc", "poc.log"));
-    spdlog::flush_on(spdlog::level::info);
-    spdlog::info("POC Entry");
-
     g_framework = std::make_unique<Framework>(poc_module);
 }
 

@@ -75,6 +75,10 @@ public:
     bool on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param);
     void on_direct_input_keys(const std::array<uint8_t, 256>& keys);
 
+    static std::filesystem::path get_persistent_dir();
+    static std::filesystem::path get_persistent_dir(const std::string& dir) {
+        return get_persistent_dir() / dir;
+    }
     void save_config();
 
     enum class RendererType : uint8_t {

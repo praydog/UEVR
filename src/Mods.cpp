@@ -1,5 +1,7 @@
 #include <spdlog/spdlog.h>
 
+#include "Framework.hpp"
+
 #include "mods/FrameworkConfig.hpp"
 #include "mods/VR.hpp"
 #include "mods/PluginLoader.hpp"
@@ -22,7 +24,7 @@ std::optional<std::string> Mods::on_initialize() const {
         }
     }
 
-    utility::Config cfg{ "fw_config.txt" };
+    utility::Config cfg{ Framework::get_persistent_dir("config.txt").string() };
 
     for (auto& mod : m_mods) {
         spdlog::info("{:s}::on_config_load()", mod->get_name().data());
