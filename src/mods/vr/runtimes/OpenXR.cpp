@@ -35,7 +35,7 @@ void OpenXR::on_config_load(const utility::Config& cfg) {
 
 void OpenXR::on_config_save(utility::Config& cfg) {
     for (IModValue& option : this->options) {
-        option.config_load(cfg);
+        option.config_save(cfg);
     }
 }
 
