@@ -185,7 +185,7 @@ bool FFakeStereoRenderingHook::hook() {
 
     m_tried_hooking = true;
 
-    sdk::FDynamicRHI::get();
+    //sdk::FDynamicRHI::get();
 
     //experimental_patch_fix();
 
@@ -861,11 +861,6 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
     }
 
     static auto enable_stereo_emulation_cvar = sdk::vr::get_enable_stereo_emulation_cvar();
-
-    if (!enable_stereo_emulation_cvar) {
-        spdlog::error("Failed to locate r.EnableStereoEmulation cvar, cannot inject stereo rendering device at runtime.");
-        return false;
-    }
 
     auto is_stereo_rendering_device_setup = []() {
         auto engine = (uintptr_t)sdk::UEngine::get();

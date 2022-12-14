@@ -68,18 +68,49 @@ void UEngine::initialize_hmd_device() {
     static const auto addr = []() -> std::optional<uintptr_t> {
         spdlog::info("Searching for InitializeHMDDevice function...");
 
+        // For older UE versions.
+        auto fallback_scan = []() -> std::optional<uintptr_t> {
+            spdlog::info("Performing fallback scan for InitializeHMDDevice function...");
+
+            const auto mod = sdk::get_ue_module(L"Engine");
+            const auto size = utility::get_module_size(mod);
+            const auto end = (uintptr_t)mod + *size;
+
+            // String pooling is disabled so we need to do this.
+            bool found = false;
+            for (auto str = utility::scan_string(mod, L"emulatestereo"); str; str = utility::scan_string(*str + 1, (end - (*str + 1)) - 0x1000, L"emulatestereo")) {
+                spdlog::info("On string at {:x}", (uintptr_t)*str);
+
+                for (auto ref = utility::scan_displacement_reference(mod, *str); ref; ref = utility::scan_displacement_reference(*ref + 1, (end - (*ref + 1)) - 0x1000, *str)) {
+                    spdlog::info("On reference at {:x}", (uintptr_t)*ref);
+
+                    // InitializeHMDDevice has always been guaranteed to be a virtual function
+                    // so we can just use find_virtual_function_start.
+                    // The other function that "emulatestereo" is in is not a virtual function.
+                    const auto func = utility::find_virtual_function_start(*ref);
+
+                    if (func) {
+                        spdlog::info("Found InitializeHMDDevice at {:x}", (uintptr_t)*func);
+                        return func;
+                    }
+                }
+            }
+            
+            return std::nullopt;
+        };
+
         const auto enable_stereo_emulation_cvar = vr::get_enable_stereo_emulation_cvar();
 
         if (!enable_stereo_emulation_cvar) {
             spdlog::error("Failed to locate r.EnableStereoEmulation cvar, cannot inject stereo rendering device at runtime.");
-            return std::nullopt;
+            return fallback_scan();
         }
 
         const auto module_within = utility::get_module_within(*enable_stereo_emulation_cvar);
 
         if (!module_within) {
             spdlog::error("Failed to find module containing r.EnableStereoEmulation cvar!");
-            return std::nullopt;
+            return fallback_scan();
         }
 
         spdlog::info("Module containing r.EnableStereoEmulation cvar: {:x}", (uintptr_t)*module_within);
@@ -96,7 +127,7 @@ void UEngine::initialize_hmd_device() {
 
         if (!enable_stereo_emulation_cvar_ref) {
             spdlog::error("Failed to find r.EnableStereoEmulation cvar reference!");
-            return std::nullopt;
+            return fallback_scan();
         }
 
         spdlog::info("Found r.EnableStereoEmulation cvar reference at {:x}", (uintptr_t)*enable_stereo_emulation_cvar_ref);
