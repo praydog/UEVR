@@ -95,26 +95,37 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
             emu.ctx->Registers.RegRax = RAX_MAGIC_NUMBER;
             emu.ctx->Registers.RegRip = post_call;
 
+            bool has_two_calls = false;
+
             while(true) {
+                if (emu.ctx->InstructionsCount > 100) {
+                    break;
+                }
+
                 const auto ip = emu.ctx->Registers.RegRip;
                 const auto decoded = utility::decode_one((uint8_t*)ip);
 
                 // make sure we are not emulating any instructions that write to memory
                 // so we can just set the IP to the next instruction
                 if (decoded) {
-                    if (decoded->MemoryAccess & ND_ACCESS_ANY_WRITE) {
+                    const auto is_call = std::string_view{decoded->Mnemonic}.starts_with("CALL");
+
+                    if (decoded->MemoryAccess & ND_ACCESS_ANY_WRITE || is_call) {
                         spdlog::info("Skipping write to memory instruction at {:x}", ip);
                         emu.ctx->Registers.RegRip += decoded->Length;
                         emu.ctx->Instruction = *decoded; // pseudo-emulate the instruction
                         ++emu.ctx->InstructionsCount;
+
+                        if (is_call) {
+                            // reset the rax register to the magic number
+                            emu.ctx->Registers.RegRax = RAX_MAGIC_NUMBER;
+                            has_two_calls = true;
+                        }
                     } else if (emu.emulate() != SHEMU_SUCCESS) { // only emulate the non-memory write instructions
-                        break;
+                        emu.ctx->Registers.RegRip += decoded->Length;
+                        continue;
                     }
                 } else {
-                    break;
-                }
-
-                if (emu.ctx->InstructionsCount > 100) {
                     break;
                 }
 
@@ -130,10 +141,14 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
                         // so we can just return the address of the global
                         // which is the displacement of the mov instruction
                         // plus the address of the instruction
-                        const auto result = (uintptr_t)(ip + ix.Length + ix.Operands[0].Info.Memory.Disp);
+                        auto result = (uintptr_t)(ip + ix.Length + ix.Operands[0].Info.Memory.Disp);
+
+                        if (!has_two_calls) {
+                            result += sizeof(void*);
+                        }
 
                         spdlog::info("Found cvar for \"{}\" at {:x} (referenced at {:x})", utility::narrow(str.data()), result, emu.ctx->Registers.RegRip);
-                        return result + sizeof(void*);
+                        return result;
                     }
                 }
             }
