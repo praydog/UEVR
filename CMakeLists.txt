@@ -518,7 +518,7 @@ target_link_libraries(ue4poc PUBLIC
 
 set_target_properties(ue4poc PROPERTIES
 	OUTPUT_NAME
-		dinput8
+		UnrealVRBackend
 	LINK_FLAGS
 		"/DELAYLOAD:openvr_api.dll /DELAYLOAD:openxr_loader.dll"
 	RUNTIME_OUTPUT_DIRECTORY_RELEASE
