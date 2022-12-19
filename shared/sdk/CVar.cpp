@@ -5,6 +5,9 @@
 #include <utility/Scan.hpp>
 #include <utility/Module.hpp>
 #include <utility/String.hpp>
+#include <utility/Emulation.hpp>
+
+#include <bdshemu.h>
 
 #include "EngineModule.hpp"
 
@@ -71,67 +74,118 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
 
     // means it's not inlined like we hoped
     const auto is_e8_call = *(uint8_t*)*cvar_creation_ref == 0xE8;
+    const auto is_ff_call = *(uint8_t*)*cvar_creation_ref == 0xFF;
 
     if (!is_e8_call) {
-        auto raw_cvar_ref = !stop_at_first_mov ? 
-                            utility::scan_mnemonic(*cvar_creation_ref + utility::get_insn_size(*cvar_creation_ref), 100, "CALL") : cvar_creation_ref;
+        spdlog::info("Not E8 call");
 
-        if (!raw_cvar_ref) {
-            spdlog::error("Failed to find raw cvar reference for {}", utility::narrow(str.data()));
-            return std::nullopt;
-        }
+        if (is_ff_call) {
+            spdlog::info("FF call");
 
-        spdlog::info("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
-        const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
+            // This is the call to the cvar interface so it should be easier
+            // we can emulate forward from the call and track the rax register
+            // and which global it finally gets assigned to
+            const auto post_call = *cvar_creation_ref + utility::get_insn_size(*cvar_creation_ref);
+            
+            utility::ShemuContext emu{*utility::get_module_within(post_call)};
 
-        // we need to check that the reference uses a register in its operand
-        // otherwise it's the wrong call. find the next call if it is.
-        if (decoded_ref && !stop_at_first_mov) {
-            for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
-                spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
-            }
+            constexpr uint64_t RAX_MAGIC_NUMBER = 0x1337BEEF;
 
-            if (decoded_ref->OperandsCount == 0 || 
-                decoded_ref->Operands[0].Type != ND_OP_MEM || 
-                decoded_ref->Operands[0].Info.Memory.Base == ND_REG_NOT_PRESENT)
-            {
-                spdlog::info("Scanning again, instruction at {:x} doesn't use a register", *raw_cvar_ref);
-                raw_cvar_ref = utility::scan_mnemonic(*raw_cvar_ref + utility::get_insn_size(*raw_cvar_ref), 100, "CALL");
+            emu.ctx->MemThreshold = 1;
+            emu.ctx->Registers.RegRax = RAX_MAGIC_NUMBER;
+            emu.ctx->Registers.RegRip = post_call;
 
-                if (raw_cvar_ref) {
-                    const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
+            while(true) {
+                const auto ip = emu.ctx->Registers.RegRip;
 
-                    for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
-                        spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
+                if (emu.emulate() != SHEMU_SUCCESS || emu.ctx->InstructionsCount > 100) {
+                    break;
+                }
+
+                const auto& ix = emu.ctx->Instruction;
+
+                if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_MEM && ix.Operands[1].Type == ND_OP_REG) {
+                    // We can treat the registers struct in the context as an array
+                    // and then use the enum value as an index
+                    const auto reg_value = ((uint64_t*)&emu.ctx->Registers.RegRax)[ix.Operands[1].Info.Register.Reg];
+
+                    if (reg_value == RAX_MAGIC_NUMBER) {
+                        // We found the assignment to the global
+                        // so we can just return the address of the global
+                        // which is the displacement of the mov instruction
+                        // plus the address of the instruction
+                        const auto result = (uintptr_t)(ip + ix.Length + ix.Operands[0].Info.Memory.Disp);
+
+                        spdlog::info("Found cvar for \"{}\" at {:x} (referenced at {:x})", utility::narrow(str.data()), result, emu.ctx->Registers.RegRip);
+                        return result + sizeof(void*);
                     }
-
-                    spdlog::info("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
                 }
             }
-        }
 
-        // Look for a mov {ptr}, rax
-        auto ip = (uint8_t*)*raw_cvar_ref;
+            spdlog::error("Failed to find cvar reference for {}", utility::narrow(str.data()));
+        } else {
+            auto raw_cvar_ref = !stop_at_first_mov ? 
+                                utility::scan_mnemonic(*cvar_creation_ref + utility::get_insn_size(*cvar_creation_ref), 100, "CALL") : cvar_creation_ref;
 
-        for (auto i = 0; i < 100; ++i) {
-            INSTRUX ix{};
-            const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
-
-            if (!ND_SUCCESS(status)) {
-                spdlog::error("Failed to decode instruction for {}", utility::narrow(str.data()));
+            if (!raw_cvar_ref) {
+                spdlog::error("Failed to find raw cvar reference for {}", utility::narrow(str.data()));
                 return std::nullopt;
             }
 
-            if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_MEM && ix.Operands[1].Type == ND_OP_REG &&
-                ix.Operands[1].Info.Register.Reg == NDR_RAX) 
-            {
-                return (uintptr_t)(ip + ix.Length + ix.Operands[0].Info.Memory.Disp);
+            spdlog::info("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
+            const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
+
+            // we need to check that the reference uses a register in its operand
+            // otherwise it's the wrong call. find the next call if it is.
+            if (decoded_ref && !stop_at_first_mov) {
+                for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
+                    spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
+                }
+
+                if (decoded_ref->OperandsCount == 0 || 
+                    decoded_ref->Operands[0].Type != ND_OP_MEM || 
+                    decoded_ref->Operands[0].Info.Memory.Base == ND_REG_NOT_PRESENT)
+                {
+                    spdlog::info("Scanning again, instruction at {:x} doesn't use a register", *raw_cvar_ref);
+                    raw_cvar_ref = utility::scan_mnemonic(*raw_cvar_ref + utility::get_insn_size(*raw_cvar_ref), 100, "CALL");
+
+                    if (raw_cvar_ref) {
+                        const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
+
+                        for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
+                            spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
+                        }
+
+                        spdlog::info("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
+                    }
+                }
             }
 
-            ip += ix.Length;
-        }
+            // Look for a mov {ptr}, rax
+            auto ip = (uint8_t*)*raw_cvar_ref;
 
-        spdlog::error("Failed to find cvar for {}", utility::narrow(str.data()));
+            const auto ip_after_call = ip + utility::get_insn_size(*raw_cvar_ref);
+
+            for (auto i = 0; i < 100; ++i) {
+                INSTRUX ix{};
+                const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
+
+                if (!ND_SUCCESS(status)) {
+                    spdlog::error("Failed to decode instruction for {}", utility::narrow(str.data()));
+                    return std::nullopt;
+                }
+
+                if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_MEM && ix.Operands[1].Type == ND_OP_REG &&
+                    ix.Operands[1].Info.Register.Reg == NDR_RAX) 
+                {
+                    return (uintptr_t)(ip + ix.Length + ix.Operands[0].Info.Memory.Disp);
+                }
+
+                ip += ix.Length;
+            }
+
+            spdlog::error("Failed to find cvar for {}", utility::narrow(str.data()));
+        }
     } else {
         spdlog::info("Cvar creation is not inlined, performing alternative search...");
 
