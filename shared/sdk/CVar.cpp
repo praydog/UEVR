@@ -91,14 +91,30 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
 
             constexpr uint64_t RAX_MAGIC_NUMBER = 0x1337BEEF;
 
-            emu.ctx->MemThreshold = 1;
+            emu.ctx->MemThreshold = 0;
             emu.ctx->Registers.RegRax = RAX_MAGIC_NUMBER;
             emu.ctx->Registers.RegRip = post_call;
 
             while(true) {
                 const auto ip = emu.ctx->Registers.RegRip;
+                const auto decoded = utility::decode_one((uint8_t*)ip);
 
-                if (emu.emulate() != SHEMU_SUCCESS || emu.ctx->InstructionsCount > 100) {
+                // make sure we are not emulating any instructions that write to memory
+                // so we can just set the IP to the next instruction
+                if (decoded) {
+                    if (decoded->MemoryAccess & ND_ACCESS_ANY_WRITE) {
+                        spdlog::info("Skipping write to memory instruction at {:x}", ip);
+                        emu.ctx->Registers.RegRip += decoded->Length;
+                        emu.ctx->Instruction = *decoded; // pseudo-emulate the instruction
+                        ++emu.ctx->InstructionsCount;
+                    } else if (emu.emulate() != SHEMU_SUCCESS) { // only emulate the non-memory write instructions
+                        break;
+                    }
+                } else {
+                    break;
+                }
+
+                if (emu.ctx->InstructionsCount > 100) {
                     break;
                 }
 
@@ -339,7 +355,7 @@ std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_usage_location()
         const auto module_size = utility::get_module_size(module).value_or(0);
         const auto module_end = (uintptr_t)module + module_size;
 
-        for (auto i=0; i < 2; ++i) {
+        for (int32_t i=-1; i < 2; ++i) {
             const auto cvar_addr = *cvar + (i * sizeof(void*));
 
             for (auto ref = utility::scan_displacement_reference(module, cvar_addr); 
