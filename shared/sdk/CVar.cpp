@@ -424,4 +424,36 @@ std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_usage_location()
 
     return result;
 }
+
+namespace rendering {
+std::optional<uintptr_t> get_one_frame_thread_lag_cvar() {
+    static auto cvar = []() -> std::optional<uintptr_t> {
+        spdlog::info("Attempting to locate r.OneFrameThreadLag cvar...");
+
+        const auto module = sdk::get_ue_module(L"Engine");
+        const auto str = utility::scan_string(module, L"r.OneFrameThreadLag");
+
+        if (!str) {
+            spdlog::error("Failed to find r.OneFrameThreadLag string!");
+            return std::nullopt;
+        }
+
+        const auto str_ref = utility::scan_displacement_reference(module, *str);
+
+        if (!str_ref) {
+            spdlog::error("Failed to find r.OneFrameThreadLag string reference!");
+            return std::nullopt;
+        }
+
+        const auto result = sdk::resolve_cvar_from_address(*str_ref + 4, L"r.OneFrameThreadLag", false);
+        if (result) {
+            spdlog::info("Found r.OneFrameThreadLag at {:x}", (uintptr_t)*result);
+        }
+
+        return result;
+    }();
+
+    return cvar;
+}
+}
 }

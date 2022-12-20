@@ -7,6 +7,8 @@
 #include <utility/Module.hpp>
 #include <utility/Registry.hpp>
 
+#include <sdk/CVar.hpp>
+
 #include "Framework.hpp"
 
 #include "VR.hpp"
@@ -1030,6 +1032,23 @@ void VR::on_draw_ui() {
     }
 
     ImGui::Separator();
+
+    if (ImGui::TreeNode("CVars")) {
+        auto one_frame_thread_lag = sdk::rendering::get_one_frame_thread_lag_cvar();
+
+        if (one_frame_thread_lag && *one_frame_thread_lag != 0) try {
+            auto& value = *(int*)(*(uintptr_t*)*one_frame_thread_lag + 0);
+
+            if (ImGui::Checkbox("One frame thread lag", (bool*)&value)) {
+                *(int*)(*(uintptr_t*)*one_frame_thread_lag + 0) = value;
+                *(int*)(*(uintptr_t*)*one_frame_thread_lag + 4) = value;
+            }
+        } catch(...) {
+            ImGui::TextWrapped("Failed to read frame thread lag cvar");
+        }
+
+        ImGui::TreePop();
+    }
 
     ImGui::TextWrapped("VR Runtime: %s", get_runtime()->name().data());
     ImGui::TextWrapped("Render Resolution: %d x %d", get_runtime()->get_width(), get_runtime()->get_height());
