@@ -285,31 +285,35 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::ws
     return resolve_cvar_from_address(*str_ref + 4, cvar_name, stop_at_first_mov);
 }
 
+std::optional<uintptr_t> find_cvar(std::wstring_view module_name, std::wstring_view name, bool stop_at_first_mov) {
+    spdlog::info("Attempting to locate {} {} cvar", utility::narrow(module_name.data()), utility::narrow(name.data()));
+
+    const auto module = sdk::get_ue_module(module_name.data());
+    const auto str = utility::scan_string(module, name.data());
+
+    if (!str) {
+        spdlog::error("Failed to find {} string!", utility::narrow(name.data()));
+        return std::nullopt;
+    }
+
+    const auto str_ref = utility::scan_displacement_reference(module, *str);
+
+    if (!str_ref) {
+        spdlog::error("Failed to find {} string reference!");
+        return std::nullopt;
+    }
+
+    const auto result = sdk::resolve_cvar_from_address(*str_ref + 4, name.data(), stop_at_first_mov);
+    if (result) {
+        spdlog::info("Found {} at {:x}", utility::narrow(name.data()), (uintptr_t)*result);
+    }
+
+    return result;
+}
+
 std::optional<uintptr_t> vr::get_enable_stereo_emulation_cvar() {
     static auto enable_stereo_emulation_cvar = []() -> std::optional<uintptr_t> {
-        spdlog::info("Attempting to locate r.EnableStereoEmulation cvar...");
-
-        const auto module = sdk::get_ue_module(L"Engine");
-        const auto str = utility::scan_string(module, L"r.EnableStereoEmulation");
-
-        if (!str) {
-            spdlog::error("Failed to find r.EnableStereoEmulation string!");
-            return std::nullopt;
-        }
-
-        const auto str_ref = utility::scan_displacement_reference(module, *str);
-
-        if (!str_ref) {
-            spdlog::error("Failed to find r.EnableStereoEmulation string reference!");
-            return std::nullopt;
-        }
-
-        const auto result = sdk::resolve_cvar_from_address(*str_ref + 4, L"r.EnableStereoEmulation");
-        if (result) {
-            spdlog::info("Found r.EnableStereoEmulation at {:x}", (uintptr_t)*result);
-        }
-
-        return result;
+        return find_cvar(L"Engine", L"r.EnableStereoEmulation");
     }();
 
     return enable_stereo_emulation_cvar;
@@ -317,30 +321,7 @@ std::optional<uintptr_t> vr::get_enable_stereo_emulation_cvar() {
 
 std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_real_cvar() {
     static auto cvar = []() -> std::optional<uintptr_t> {
-        spdlog::info("Attempting to locate Slate.DrawToVRRenderTarget cvar...");
-
-        const auto module = sdk::get_ue_module(L"SlateRHIRenderer");
-        const auto str = utility::scan_string(module, L"Slate.DrawToVRRenderTarget");
-
-        if (!str) {
-            spdlog::error("Failed to find Slate.DrawToVRRenderTarget string!");
-            return std::nullopt;
-        }
-
-        const auto str_ref = utility::scan_displacement_reference(module, *str);
-
-        if (!str_ref) {
-            spdlog::error("Failed to find Slate.DrawToVRRenderTarget string reference!");
-            return std::nullopt;
-        }
-
-        const auto result = sdk::resolve_cvar_from_address(*str_ref + 4, L"Slate.DrawToVRRenderTarget", true);
-
-        if (result) {
-            spdlog::info("Found Slate.DrawToVRRenderTarget at {:x}", (uintptr_t)*result);
-        }
-
-        return result;
+        return find_cvar(L"SlateRHIRenderer", L"Slate.DrawToVRRenderTarget", true);
     }();
 
     return cvar;
@@ -428,29 +409,7 @@ std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_usage_location()
 namespace rendering {
 std::optional<uintptr_t> get_one_frame_thread_lag_cvar() {
     static auto cvar = []() -> std::optional<uintptr_t> {
-        spdlog::info("Attempting to locate r.OneFrameThreadLag cvar...");
-
-        const auto module = sdk::get_ue_module(L"Engine");
-        const auto str = utility::scan_string(module, L"r.OneFrameThreadLag");
-
-        if (!str) {
-            spdlog::error("Failed to find r.OneFrameThreadLag string!");
-            return std::nullopt;
-        }
-
-        const auto str_ref = utility::scan_displacement_reference(module, *str);
-
-        if (!str_ref) {
-            spdlog::error("Failed to find r.OneFrameThreadLag string reference!");
-            return std::nullopt;
-        }
-
-        const auto result = sdk::resolve_cvar_from_address(*str_ref + 4, L"r.OneFrameThreadLag", false);
-        if (result) {
-            spdlog::info("Found r.OneFrameThreadLag at {:x}", (uintptr_t)*result);
-        }
-
-        return result;
+        return find_cvar(L"Engine", L"r.OneFrameThreadLag");
     }();
 
     return cvar;

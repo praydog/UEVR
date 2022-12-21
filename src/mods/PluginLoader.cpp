@@ -12,6 +12,7 @@
 #include <utility/Module.hpp>
 
 #include <sdk/UEngine.hpp>
+#include <sdk/CVar.hpp>
 
 #include "VR.hpp"
 
@@ -113,6 +114,27 @@ UEVR_PluginFunctions g_plugin_functions {
 UEVR_SDKFunctions g_sdk_functions {
     []() -> UEVR_UEngineHandle {
         return (UEVR_UEngineHandle)sdk::UEngine::get();
+    },
+    [](const char* module_name, const char* name, int value) -> void {
+        static std::unordered_map<std::string, int**> cvars{};
+
+        auto set_cvar = [](int** cvar, int value) {
+            if (cvar != nullptr && *cvar != nullptr) {
+                (*cvar)[0] = value;
+                (*cvar)[1] = value;
+            }
+        };
+
+        if (!cvars.contains(name)) {
+            const auto cvar = sdk::find_cvar(utility::widen(module_name), utility::widen(name));
+
+            if (cvar) {
+                cvars[name] = (int**)*cvar;
+                set_cvar((int**)*cvar, value);
+            }
+        } else {
+            set_cvar(cvars[name], value);
+        }
     }
 };
 

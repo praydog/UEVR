@@ -157,6 +157,7 @@ typedef struct {
 
 typedef struct {
     UEVR_UEngineHandle (*get_uengine)();
+    void (*set_cvar_int)(const char* module_name, const char* name, int value);
 } UEVR_SDKFunctions;
 
 typedef struct {
