@@ -277,7 +277,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     m_uses_old_rendertarget_manager = stereo_view_offset_index <= 11 && !render_texture_render_thread_func;
 
     if (!render_texture_render_thread_func) {
-        // Fallback scan to checking for the first non-default virtual function (4.18)
+        // Fallback scan to checking for the first non-default virtual function (<= 4.18)
         spdlog::info("Failed to find RenderTexture_RenderThread, falling back to first non-default virtual function");
 
         for (auto i = 2; i < 10; ++i) {
@@ -479,16 +479,52 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         // Only seen in 4.17 and below.
         spdlog::info("Performing hooks on embedded RenderTargetManager");
 
+        // Scan forward from the alleged RenderTexture_RenderThread function to find the
+        // real RenderTexture_RenderThread function, because it is different when the
+        // render target manager is embedded in the stereo device.
+        // When it's embedded, it seems like it's the first function right after
+        // a set of functions that return false sequentially.
+        bool prev_function_returned_false = false;
+
+        for (auto i = rendertexture_fn_vtable_index + 1; i < 100; ++i) {
+            const auto func = ((uintptr_t*)og_vtable.data())[i];
+
+            if (func == 0 || IsBadReadPtr((void*)func, 3)) {
+                spdlog::error("Failed to find real RenderTexture_RenderThread");
+                return false;
+            }
+            
+            if (is_vfunc_pattern(func, "32 C0")) {
+                prev_function_returned_false = true;
+            } else {
+                if (prev_function_returned_false) {
+                    render_texture_render_thread_func = func;
+                    rendertexture_fn_vtable_index = i;
+                    m_render_texture_render_thread_hook = builder.create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
+                    spdlog::info("Real RenderTexture_RenderThread: {} {:x}", rendertexture_fn_vtable_index, (uintptr_t)*render_texture_render_thread_func);
+                    break;
+                }
+
+                prev_function_returned_false = false;
+            }
+        }
+
         // To be seen if any of these need further automated analysis.
-        const auto calculate_render_target_size_index = rendertexture_fn_vtable_index + 2;
+        const auto calculate_render_target_size_index = rendertexture_fn_vtable_index - 3;
         const auto calculate_render_target_size_func_ptr = &((uintptr_t*)vtable)[calculate_render_target_size_index];
 
-        const auto should_use_separate_render_target_index = calculate_render_target_size_index + 2;
+        spdlog::info("CalculateRenderTargetSize index: {}", calculate_render_target_size_index);
+
+        const auto should_use_separate_render_target_index = rendertexture_fn_vtable_index - 1;
         const auto should_use_separate_render_target_func_ptr = &((uintptr_t*)vtable)[should_use_separate_render_target_index];
+
+        spdlog::info("ShouldUseSeparateRenderTarget index: {}", should_use_separate_render_target_index);
 
         // This was calculated earlier when we were searching for the GetRenderTargetManager index.
         const auto allocate_render_target_index = render_target_manager_vtable_index + 3;
         const auto allocate_render_target_func_ptr = &((uintptr_t*)vtable)[allocate_render_target_index];
+
+        spdlog::info("AllocateRenderTarget index: {}", allocate_render_target_index);
 
         m_embedded_rtm.calculate_render_target_size_hook = 
             std::make_unique<PointerHook>((void**)calculate_render_target_size_func_ptr, +[](void* self, const FViewport& viewport, uint32_t& x, uint32_t& y) {
@@ -522,37 +558,6 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 return VR::get()->is_hmd_active();
             }
         );
-
-        
-        // Scan forward from the alleged RenderTexture_RenderThread function to find the
-        // real RenderTexture_RenderThread function, because it is different when the
-        // render target manager is embedded in the stereo device.
-        // When it's embedded, it seems like it's the first function right after
-        // a set of functions that return false sequentially.
-        bool prev_function_returned_false = false;
-
-        for (auto i = rendertexture_fn_vtable_index + 1; i < 100; ++i) {
-            const auto func = ((uintptr_t*)og_vtable.data())[i];
-
-            if (func == 0 || IsBadReadPtr((void*)func, 3)) {
-                spdlog::error("Failed to find real RenderTexture_RenderThread");
-                return false;
-            }
-            
-            if (is_vfunc_pattern(func, "32 C0")) {
-                prev_function_returned_false = true;
-            } else {
-                if (prev_function_returned_false) {
-                    render_texture_render_thread_func = func;
-                    rendertexture_fn_vtable_index = i;
-                    m_render_texture_render_thread_hook = builder.create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
-                    spdlog::info("Real RenderTexture_RenderThread: {} {:x}", rendertexture_fn_vtable_index, (uintptr_t)*render_texture_render_thread_func);
-                    break;
-                }
-
-                prev_function_returned_false = false;
-            }
-        }
     }
     
     //m_get_stereo_layers_hook = std::make_unique<PointerHook>((void**)get_stereo_layers_func_ptr, (void*)&get_stereo_layers_hook);
