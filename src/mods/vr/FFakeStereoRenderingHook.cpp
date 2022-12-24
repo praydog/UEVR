@@ -519,9 +519,24 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         const auto should_use_separate_render_target_func_ptr = &((uintptr_t*)vtable)[should_use_separate_render_target_index];
 
         spdlog::info("ShouldUseSeparateRenderTarget index: {}", should_use_separate_render_target_index);
+        int32_t allocate_render_target_index = 0;
 
-        // This was calculated earlier when we were searching for the GetRenderTargetManager index.
-        const auto allocate_render_target_index = render_target_manager_vtable_index + 3;
+        for (auto i = rendertexture_fn_vtable_index + 1; i < 100; ++i) {
+            const auto func = ((uintptr_t*)og_vtable.data())[i];
+
+            if (func == 0 || IsBadReadPtr((void*)func, 3)) {
+                spdlog::error("Failed to find allocate render target index, falling back to hardcoded index");
+                allocate_render_target_index = render_target_manager_vtable_index + 3;
+                break;
+            }
+
+            if (is_vfunc_pattern(func, "32 C0")) {
+                spdlog::info("Dynamically found AllocateRenderTarget index: {}", i);
+                allocate_render_target_index = i;
+                break;
+            }
+        }
+
         const auto allocate_render_target_func_ptr = &((uintptr_t*)vtable)[allocate_render_target_index];
 
         spdlog::info("AllocateRenderTarget index: {}", allocate_render_target_index);
