@@ -554,8 +554,9 @@ bool VR::is_any_action_down() {
 }
 
 bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
-    if (message != DBT_DEVICEARRIVAL && !m_spoofed_gamepad_connection) {
-        SendMessage(wnd, DBT_DEVICEARRIVAL, 0, 0);
+    if (message != DBT_DEVICEARRIVAL && message != WM_DEVICECHANGE && !m_spoofed_gamepad_connection) {
+        SendMessage(wnd, WM_DEVICECHANGE, 0, 0); // this seems to actually be the one that works
+        SendMessage(wnd, DBT_DEVICEARRIVAL, 0, 0); // didn't seem to do anything? leaving it here just in case
     }
 
     return true;
