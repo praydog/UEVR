@@ -19,7 +19,13 @@ void* FRHITexture::get_native_resource() const {
             return 0;
         }
 
-        spdlog::info(" Vtable: {:x}", (uintptr_t)vtable);
+        const auto vtable_module = utility::get_module_within(vtable);
+
+        if (vtable_module) {
+            spdlog::info(" Vtable: {:x} (rel {:x})", (uintptr_t)vtable, (uintptr_t)vtable - (uintptr_t)*vtable_module);
+        } else {
+            spdlog::info(" Vtable: {:x} (could not detect module)", (uintptr_t)vtable);
+        }
 
         // Start at 1 to skip over the destructor.
         for (auto i = 1; i < 15; ++i) {
@@ -65,6 +71,7 @@ void* FRHITexture::get_native_resource() const {
             std::transform(module_path_lower.begin(), module_path_lower.end(), module_path_lower.begin(), ::tolower);
 
             spdlog::info(" Function at {} returned a pointer with a vtable in {}", i, *module_path);
+            spdlog::info(" vtable: {:x} (rel {:x})", (uintptr_t)potential_vtable, (uintptr_t)potential_vtable - (uintptr_t)*module_within);
 
             if (module_path_lower.ends_with("d3d11.dll") || 
                 module_path_lower.ends_with("d3d12.dll") || 
