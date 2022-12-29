@@ -1048,6 +1048,19 @@ void VR::on_draw_ui() {
             ImGui::TextWrapped("Failed to read frame thread lag cvar");
         }
 
+        static auto r_ambient_occlusion_levels_cvar = sdk::find_cvar(L"Engine", L"r.AmbientOcclusionLevels");
+
+        if (r_ambient_occlusion_levels_cvar && *r_ambient_occlusion_levels_cvar != 0) try {
+            auto& value = *(int*)(*(uintptr_t*)*r_ambient_occlusion_levels_cvar + 0);
+
+            if (ImGui::SliderInt("Ambient occlusion levels", &value, 0, 4)) {
+                *(int*)(*(uintptr_t*)*r_ambient_occlusion_levels_cvar + 0) = value;
+                *(int*)(*(uintptr_t*)*r_ambient_occlusion_levels_cvar + 4) = value;
+            }
+        } catch(...) {
+            ImGui::TextWrapped("Failed to read ambient occlusion levels cvar");
+        }
+
         ImGui::TreePop();
     }
 
