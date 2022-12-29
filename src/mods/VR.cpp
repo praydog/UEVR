@@ -1035,14 +1035,13 @@ void VR::on_draw_ui() {
     ImGui::Separator();
 
     if (ImGui::TreeNode("CVars")) {
-        auto one_frame_thread_lag = sdk::rendering::get_one_frame_thread_lag_cvar();
+        auto one_frame_thread_lag = sdk::rendering::get_one_frame_thread_lag_cvar()->get<int>();
 
-        if (one_frame_thread_lag && *one_frame_thread_lag != 0) try {
-            auto& value = *(int*)(*(uintptr_t*)*one_frame_thread_lag + 0);
+        if (one_frame_thread_lag != nullptr) try {
+            auto value = one_frame_thread_lag->get();
 
             if (ImGui::Checkbox("One frame thread lag", (bool*)&value)) {
-                *(int*)(*(uintptr_t*)*one_frame_thread_lag + 0) = value;
-                *(int*)(*(uintptr_t*)*one_frame_thread_lag + 4) = value;
+                one_frame_thread_lag->set(value);
             }
         } catch(...) {
             ImGui::TextWrapped("Failed to read frame thread lag cvar");
@@ -1050,12 +1049,15 @@ void VR::on_draw_ui() {
 
         static auto r_ambient_occlusion_levels_cvar = sdk::find_cvar(L"Engine", L"r.AmbientOcclusionLevels");
 
-        if (r_ambient_occlusion_levels_cvar && *r_ambient_occlusion_levels_cvar != 0) try {
-            auto& value = *(int*)(*(uintptr_t*)*r_ambient_occlusion_levels_cvar + 0);
+        if (r_ambient_occlusion_levels_cvar) try {
+            auto r_ambient_occlusion_levels = r_ambient_occlusion_levels_cvar->get<int>();
 
-            if (ImGui::SliderInt("Ambient occlusion levels", &value, 0, 4)) {
-                *(int*)(*(uintptr_t*)*r_ambient_occlusion_levels_cvar + 0) = value;
-                *(int*)(*(uintptr_t*)*r_ambient_occlusion_levels_cvar + 4) = value;
+            if (r_ambient_occlusion_levels != nullptr) {
+                auto value = r_ambient_occlusion_levels->get();
+
+                if (ImGui::SliderInt("Ambient occlusion levels", &value, 0, 4)) {
+                    r_ambient_occlusion_levels->set(value);
+                }
             }
         } catch(...) {
             ImGui::TextWrapped("Failed to read ambient occlusion levels cvar");

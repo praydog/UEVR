@@ -931,10 +931,9 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
 
             // We don't call this before because the cvar will not be set up
             // until it's referenced once. after we set this we need to call the function again.
-            if (enable_stereo_emulation_cvar && *enable_stereo_emulation_cvar != 0) {
+            if (enable_stereo_emulation_cvar) {
                 try {
-                    *(int32_t*)(*(uintptr_t*)*enable_stereo_emulation_cvar + 0x0) = 1;
-                    *(int32_t*)(*(uintptr_t*)*enable_stereo_emulation_cvar + 0x4) = 1;
+                    enable_stereo_emulation_cvar->set<int>(1);
                 } catch(...) {
                     spdlog::error("Access violation occurred when writing to r.EnableStereoEmulation, the address may be incorrect!");
                 }

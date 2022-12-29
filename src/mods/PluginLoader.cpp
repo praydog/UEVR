@@ -116,12 +116,11 @@ UEVR_SDKFunctions g_sdk_functions {
         return (UEVR_UEngineHandle)sdk::UEngine::get();
     },
     [](const char* module_name, const char* name, int value) -> void {
-        static std::unordered_map<std::string, int**> cvars{};
+        static std::unordered_map<std::string, sdk::TConsoleVariableData<int>**> cvars{};
 
-        auto set_cvar = [](int** cvar, int value) {
+        auto set_cvar = [](sdk::TConsoleVariableData<int>** cvar, int value) {
             if (cvar != nullptr && *cvar != nullptr) {
-                (*cvar)[0] = value;
-                (*cvar)[1] = value;
+                (*cvar)->set(value);
             }
         };
 
@@ -129,8 +128,8 @@ UEVR_SDKFunctions g_sdk_functions {
             const auto cvar = sdk::find_cvar(utility::widen(module_name), utility::widen(name));
 
             if (cvar) {
-                cvars[name] = (int**)*cvar;
-                set_cvar((int**)*cvar, value);
+                cvars[name] = (sdk::TConsoleVariableData<int>**)cvar->address();
+                set_cvar((sdk::TConsoleVariableData<int>**)cvar->address(), value);
             }
         } else {
             set_cvar(cvars[name], value);

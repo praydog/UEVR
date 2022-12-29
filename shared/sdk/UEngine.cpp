@@ -106,7 +106,7 @@ void UEngine::initialize_hmd_device() {
             return fallback_scan();
         }
 
-        const auto module_within = utility::get_module_within(*enable_stereo_emulation_cvar);
+        const auto module_within = utility::get_module_within((uintptr_t)enable_stereo_emulation_cvar->address());
 
         if (!module_within) {
             spdlog::error("Failed to find module containing r.EnableStereoEmulation cvar!");
@@ -118,7 +118,7 @@ void UEngine::initialize_hmd_device() {
         std::optional<uintptr_t> enable_stereo_emulation_cvar_ref{};
 
         for (auto i = 0; i < 3; ++i) {
-            enable_stereo_emulation_cvar_ref = utility::scan_displacement_reference(*module_within, *enable_stereo_emulation_cvar - (i * sizeof(void*)));
+            enable_stereo_emulation_cvar_ref = utility::scan_displacement_reference(*module_within, enable_stereo_emulation_cvar->address() - (i * sizeof(void*)));
 
             if (enable_stereo_emulation_cvar_ref) {
                 break;

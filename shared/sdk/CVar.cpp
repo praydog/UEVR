@@ -285,7 +285,7 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::ws
     return resolve_cvar_from_address(*str_ref + 4, cvar_name, stop_at_first_mov);
 }
 
-std::optional<uintptr_t> find_cvar(std::wstring_view module_name, std::wstring_view name, bool stop_at_first_mov) {
+std::optional<ConsoleVariableDataWrapper> find_cvar(std::wstring_view module_name, std::wstring_view name, bool stop_at_first_mov) {
     spdlog::info("Attempting to locate {} {} cvar", utility::narrow(module_name.data()), utility::narrow(name.data()));
 
     const auto module = sdk::get_ue_module(module_name.data());
@@ -304,6 +304,7 @@ std::optional<uintptr_t> find_cvar(std::wstring_view module_name, std::wstring_v
     }
 
     const auto result = sdk::resolve_cvar_from_address(*str_ref + 4, name.data(), stop_at_first_mov);
+
     if (result) {
         spdlog::info("Found {} at {:x}", utility::narrow(name.data()), (uintptr_t)*result);
     }
@@ -311,30 +312,20 @@ std::optional<uintptr_t> find_cvar(std::wstring_view module_name, std::wstring_v
     return result;
 }
 
-std::optional<uintptr_t> vr::get_enable_stereo_emulation_cvar() {
-    static auto enable_stereo_emulation_cvar = []() -> std::optional<uintptr_t> {
+std::optional<ConsoleVariableDataWrapper> vr::get_enable_stereo_emulation_cvar() {
+    static auto enable_stereo_emulation_cvar = []() -> std::optional<ConsoleVariableDataWrapper> {
         return find_cvar(L"Engine", L"r.EnableStereoEmulation");
     }();
 
     return enable_stereo_emulation_cvar;
 }
 
-std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_real_cvar() {
-    static auto cvar = []() -> std::optional<uintptr_t> {
+std::optional<ConsoleVariableDataWrapper> vr::get_slate_draw_to_vr_render_target_real_cvar() {
+    static auto cvar = []() -> std::optional<ConsoleVariableDataWrapper> {
         return find_cvar(L"SlateRHIRenderer", L"Slate.DrawToVRRenderTarget", true);
     }();
 
     return cvar;
-}
-
-std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_cvar() {
-    const auto cvar = get_slate_draw_to_vr_render_target_real_cvar();
-
-    if (!cvar) {
-        return std::nullopt;
-    }
-
-    return *cvar + sizeof(void*);
 }
 
 std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_usage_location() {
@@ -352,7 +343,7 @@ std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_usage_location()
         const auto module_end = (uintptr_t)module + module_size;
 
         for (int32_t i=-1; i < 2; ++i) {
-            const auto cvar_addr = *cvar + (i * sizeof(void*));
+            const auto cvar_addr = (uintptr_t)cvar->address() + (i * sizeof(void*));
 
             for (auto ref = utility::scan_displacement_reference(module, cvar_addr); 
                 ref; 
@@ -407,8 +398,8 @@ std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_usage_location()
 }
 
 namespace rendering {
-std::optional<uintptr_t> get_one_frame_thread_lag_cvar() {
-    static auto cvar = []() -> std::optional<uintptr_t> {
+std::optional<ConsoleVariableDataWrapper> get_one_frame_thread_lag_cvar() {
+    static auto cvar = []() -> std::optional<ConsoleVariableDataWrapper> {
         return find_cvar(L"Engine", L"r.OneFrameThreadLag");
     }();
 
