@@ -507,16 +507,35 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
             }
         }
 
-        // To be seen if any of these need further automated analysis.
-        const auto calculate_render_target_size_index = rendertexture_fn_vtable_index - 3;
-        const auto calculate_render_target_size_func_ptr = &((uintptr_t*)vtable)[calculate_render_target_size_index];
+        // Scan backwards from RenderTexture_RenderThread for the first virtual that just returns
+        int32_t calculate_render_target_size_index = 0;
 
+        for (auto i = rendertexture_fn_vtable_index - 1; i > 0; --i) {
+            const auto func = ((uintptr_t*)og_vtable.data())[i];
+
+            if (func == 0 || IsBadReadPtr((void*)func, 3)) {
+                spdlog::error("Failed to find calculate render target size index, falling back to hardcoded index");
+                calculate_render_target_size_index = rendertexture_fn_vtable_index - 3;
+                break;
+            }
+
+            if (is_vfunc_pattern(func, "C3") || is_vfunc_pattern(func, "C2 00 00")) {
+                spdlog::info("Dynamically found CalculateRenderTargetSize index: {}", i);
+                calculate_render_target_size_index = i;
+                break;
+            }
+        }
+
+        const auto calculate_render_target_size_func_ptr = &((uintptr_t*)vtable)[calculate_render_target_size_index];
         spdlog::info("CalculateRenderTargetSize index: {}", calculate_render_target_size_index);
 
+        // To be seen if this one needs automated analysis
         const auto should_use_separate_render_target_index = rendertexture_fn_vtable_index - 1;
         const auto should_use_separate_render_target_func_ptr = &((uintptr_t*)vtable)[should_use_separate_render_target_index];
 
         spdlog::info("ShouldUseSeparateRenderTarget index: {}", should_use_separate_render_target_index);
+
+        // Scan forward from RenderTexture_RenderThread for the first virtual that returns false
         int32_t allocate_render_target_index = 0;
 
         for (auto i = rendertexture_fn_vtable_index + 1; i < 100; ++i) {
@@ -536,7 +555,6 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         }
 
         const auto allocate_render_target_func_ptr = &((uintptr_t*)vtable)[allocate_render_target_index];
-
         spdlog::info("AllocateRenderTarget index: {}", allocate_render_target_index);
 
         m_embedded_rtm.calculate_render_target_size_hook = 
