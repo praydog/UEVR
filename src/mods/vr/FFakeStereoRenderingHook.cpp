@@ -1818,6 +1818,36 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
     return ret;
 }
 
+// INTERNAL USE ONLY!!!!
+__declspec(noinline) void VRRenderTargetManager::CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) {
+    m_last_calculate_render_size_return_address = (uintptr_t)_ReturnAddress();
+
+    VRRenderTargetManager_Base::calculate_render_target_size(Viewport, InOutSizeX, InOutSizeY);
+}
+
+__declspec(noinline) bool VRRenderTargetManager::NeedReAllocateShadingRateTexture(const void* ShadingRateTarget) {
+    const auto return_address = (uintptr_t)_ReturnAddress();
+    const auto diff = return_address - m_last_calculate_render_size_return_address;
+
+    if (diff <= 0x50) {
+        // We need to switch the FFakeStereoRenderingHook's render target manager
+        // to the old one NOW or we will crash. Reason being what was actually called
+        // is the GetNumberOfBufferedFrames function, not NeedReAllocateShadingRateTexture.
+        spdlog::info("Switching to old render target manager! Incorrect function called!");
+        //g_hook->switch_to_old_rendertarget_manager();
+
+        // Do a switcharoo on the vtable of this object to the old one because we will crash if we don't.
+        // I've decided against actually switching the entire object over in favor of just vtable
+        // swapping for now even though it's kind of a hack.
+        const auto fake_object = std::make_unique<VRRenderTargetManager_418>();
+        *(void**)this = *(void**)fake_object.get();
+
+        return true; // The return value should actually be 1, so just return true.
+    }
+
+    return false;
+}
+
 void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const FViewport& vp, class SViewport* vp_widget) {
     if (!g_framework->is_game_data_intialized()) {
         return;

@@ -69,10 +69,8 @@ public:
         VRRenderTargetManager_Base::update_viewport(bUseSeparateRenderTarget, Viewport, ViewportWidget);
     }
 
-    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override 
-    {
-        VRRenderTargetManager_Base::calculate_render_target_size(Viewport, InOutSizeX, InOutSizeY);
-    }
+    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override;
+    virtual bool NeedReAllocateShadingRateTexture(const void* ShadingRateTarget) override; // Not actually used, we are just checking the return address
 
     virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
         return VRRenderTargetManager_Base::need_reallocate_view_target(Viewport);
@@ -82,6 +80,9 @@ public:
     bool AllocateRenderTargetTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips,
         ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture,
         FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples = 1) override;
+
+public:
+    uintptr_t m_last_calculate_render_size_return_address{0};
 };
 
 struct VRRenderTargetManager_418 : IStereoRenderTargetManager_418, VRRenderTargetManager_Base {
@@ -143,6 +144,10 @@ public:
 
         return static_cast<VRRenderTargetManager_Base*>(&m_rtm);
     }
+
+    /*void switch_to_old_rendertarget_manager() {
+        m_uses_old_rendertarget_manager = true;
+    }*/
     
     bool has_pixel_format_cvar() const {
         return m_pixel_format_cvar_found;
