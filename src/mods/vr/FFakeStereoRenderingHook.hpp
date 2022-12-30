@@ -178,6 +178,9 @@ private:
     
     static std::optional<uintptr_t> locate_fake_stereo_rendering_constructor();
     static std::optional<uintptr_t> locate_fake_stereo_rendering_vtable();
+    static std::optional<uintptr_t> locate_active_stereo_rendering_device();
+    static inline uintptr_t s_stereo_rendering_device_offset{0}; // GEngine
+
     std::optional<uint32_t> get_stereo_view_offset_index(uintptr_t vtable);
 
     bool patch_vtable_checks();

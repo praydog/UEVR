@@ -206,8 +206,6 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     std::array<uint8_t, 0x1000> og_vtable{};
     memcpy(og_vtable.data(), (void*)vtable, og_vtable.size()); // to perform tests on.
 
-    patch_vtable_checks();
-
     const auto module_vtable_within = utility::get_module_within(vtable);
 
     auto is_vfunc_pattern = [](uintptr_t addr, std::string_view pattern) {
@@ -595,6 +593,30 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     }
 
     m_finished_hooking = true;
+
+    // make a shadow copy of FFakeStereoRendering's vtable to get past weird compiler optimizations
+    // that cause the hook to not work, reason being that the compiler will optimize
+    // if the vtable pointer is equal to the original vtable pointer, and it will
+    // not call the hook function, so we make a shadow copy of the vtable
+    auto active_stereo_device = locate_active_stereo_rendering_device();
+
+    if (active_stereo_device) {
+        spdlog::info("Found active stereo device: {:x}", (uintptr_t)*active_stereo_device);
+        spdlog::info("Overwriting vtable...");
+
+        static std::vector<uintptr_t> shadow_vtable{};
+        auto& vtable = *(uintptr_t**)*active_stereo_device;
+
+        for (auto i = 0; i < 100; i++) {
+            shadow_vtable.push_back(vtable[i]);
+        }
+
+        vtable = shadow_vtable.data();
+    } else {
+        spdlog::info("Current stereo device is null, cannot overwrite vtable");
+        patch_vtable_checks(); // fallback to patching vtable checks
+    }
+
     spdlog::info("Finished hooking FFakeStereoRendering!");
 
     return true;
@@ -780,6 +802,52 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_
     return vtable;
 }
 
+std::optional<uintptr_t> FFakeStereoRenderingHook::locate_active_stereo_rendering_device() {
+    auto engine = (uintptr_t)sdk::UEngine::get();
+
+    if (engine == 0) {
+        spdlog::error("GEngine does not appear to be instantiated, cannot verify stereo rendering device is setup.");
+        return std::nullopt;
+    }
+
+    spdlog::info("Checking engine pointers for StereoRenderingDevice...");
+    auto fake_stereo_device_vtable = locate_fake_stereo_rendering_vtable();
+
+    if (!fake_stereo_device_vtable) {
+        spdlog::error("Failed to locate fake stereo rendering device vtable, cannot verify stereo rendering device is setup.");
+        return std::nullopt;
+    }
+
+    if (s_stereo_rendering_device_offset != 0) {
+        const auto result = *(uintptr_t*)(engine + s_stereo_rendering_device_offset);
+
+        if (result == 0) {
+            return std::nullopt;
+        }
+
+        return result;
+    }
+
+    for (auto i = 0; i < 0x2000; i += sizeof(void*)) {
+        const auto ptr = *(uintptr_t*)(engine + i);
+
+        if (ptr == 0 || IsBadReadPtr((void*)ptr, sizeof(void*))) {
+            continue;
+        }
+
+        auto potential_vtable = *(uintptr_t*)ptr;
+
+        if (potential_vtable == *fake_stereo_device_vtable) {
+            spdlog::info("Found fake stereo rendering device at offset {:x} -> {:x}", i, ptr);
+            s_stereo_rendering_device_offset = i;
+            return ptr;
+        }
+    }
+
+    spdlog::error("Failed to find stereo rendering device");
+    return std::nullopt;
+}
+
 std::optional<uint32_t> FFakeStereoRenderingHook::get_stereo_view_offset_index(uintptr_t vtable) {
     for (auto i = 0; i < 30; ++i) {
         const auto func = ((uintptr_t*)vtable)[i];
@@ -882,42 +950,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
 
     static auto enable_stereo_emulation_cvar = sdk::vr::get_enable_stereo_emulation_cvar();
 
-    auto is_stereo_rendering_device_setup = []() {
-        auto engine = (uintptr_t)sdk::UEngine::get();
-
-        if (engine == 0) {
-            spdlog::error("GEngine does not appear to be instantiated, cannot verify stereo rendering device is setup.");
-            return false;
-        }
-
-        spdlog::info("Checking engine pointers for StereoRenderingDevice...");
-        auto fake_stereo_device_vtable = locate_fake_stereo_rendering_vtable();
-
-        if (!fake_stereo_device_vtable) {
-            spdlog::error("Failed to locate fake stereo rendering device vtable, cannot verify stereo rendering device is setup.");
-            return false;
-        }
-
-        for (auto i = 0; i < 0x2000; i += sizeof(void*)) {
-            const auto ptr = *(uintptr_t*)(engine + i);
-
-            if (ptr == 0 || IsBadReadPtr((void*)ptr, sizeof(void*))) {
-                continue;
-            }
-
-            auto potential_vtable = *(uintptr_t*)ptr;
-
-            if (potential_vtable == *fake_stereo_device_vtable) {
-                spdlog::info("Found fake stereo rendering device at {:x}", ptr);
-                return true;
-            }
-        }
-
-        spdlog::info("Fake stereo rendering device not found.");
-        return false;
-    };
-
-    if (!is_stereo_rendering_device_setup()) {
+    if (!locate_active_stereo_rendering_device()) {
         spdlog::info("Calling InitializeHMDDevice...");
 
         //utility::ThreadSuspender _{};
@@ -926,7 +959,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
 
         spdlog::info("Called InitializeHMDDevice.");
 
-        if (!is_stereo_rendering_device_setup()) {
+        if (!locate_active_stereo_rendering_device()) {
             spdlog::info("Previous call to InitializeHMDDevice did not setup the stereo rendering device, attempting to call again...");
 
             // We don't call this before because the cvar will not be set up
@@ -948,7 +981,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
             spdlog::info("Called InitializeHMDDevice again.");
         }
 
-        if (is_stereo_rendering_device_setup()) {
+        if (locate_active_stereo_rendering_device()) {
             spdlog::info("Stereo rendering device setup successfully.");
         } else {
             spdlog::error("Failed to setup stereo rendering device.");
