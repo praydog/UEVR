@@ -334,7 +334,45 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                     m_rendertarget_manager_embedded_in_stereo_device = true;
                     spdlog::info("Render target manager appears to be directly embedded in the stereo device vtable");
                 } else {
+                    // Now this may potentially be the correct index, but we're not quite done yet.
+                    // On 4.19 (and possibly others), the index is 1 higher than it should be.
+                    // We can tell by checking how many functions in front of this index return null.
+                    // if there are two functions in front of this index that return null, we need to add 1 to the index.
                     spdlog::info("Found potential GetRenderTargetManager function at index {}", render_target_manager_vtable_index);
+                    spdlog::info("Double checking GetRenderTargetManager index...");
+
+                    int32_t count = 0;
+                    for (auto i = render_target_manager_vtable_index + 1; i < render_target_manager_vtable_index + 5; ++i) {
+                        const auto addr_of_func = (uintptr_t)&((uintptr_t*)vtable)[i];
+                        const auto func = ((uintptr_t*)vtable)[i];
+
+                        if (func == 0 || IsBadReadPtr((void*)func, 1)) {
+                            break;
+                        }
+
+                        // Make sure we didn't cross over into another vtable's boundaries.
+                        const auto module_within = utility::get_module_within(addr_of_func);
+
+                        if (module_within && utility::scan_displacement_reference(*module_within, addr_of_func)) {
+                            spdlog::info("Crossed over into another vtable's boundaries, aborting double check");
+                            spdlog::info("Reached end of double check at index {}, {} appears to be the correct index.", i, render_target_manager_vtable_index);
+                            break;
+                        }
+
+                        if (!is_vfunc_pattern(func, "33 C0")) {
+                            spdlog::info("Reached end of double check at index {}, {} appears to be the correct index.", i, render_target_manager_vtable_index);
+                            break;
+                        }
+
+                        if (++count >= 2) {
+                            ++render_target_manager_vtable_index;
+                            get_render_target_manager_func_ptr = &((uintptr_t*)vtable)[render_target_manager_vtable_index];
+
+                            spdlog::info("Adjusted GetRenderTargetManager index to {}", render_target_manager_vtable_index);
+                            break;
+                        }
+                    }
+
                     spdlog::info("Distance: {}", distance_from_rendertexture_fn);
                 }
 
