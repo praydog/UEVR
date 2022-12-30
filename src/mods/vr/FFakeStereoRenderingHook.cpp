@@ -797,7 +797,36 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_
     const auto fake_stereo_rendering_constructor = locate_fake_stereo_rendering_constructor();
 
     if (!fake_stereo_rendering_constructor) {
-        return std::nullopt;
+        // If this happened, then that's bad news, the UE version is probably extremely old
+        // so we have to use this fallback method.
+        spdlog::info("Failed to locate FFakeStereoRendering constructor, using fallback method");
+        const auto initialize_hmd_device = sdk::UEngine::get_initialize_hmd_device_address();
+
+        if (!initialize_hmd_device) {
+            spdlog::error("Failed to find FFakeStereoRendering VTable via fallback method");
+            return std::nullopt;
+        }
+
+        // To be seen if this needs to be adjusted. At first glance it doesn't look very reliable.
+        // maybe perform emulation or something in the future?
+        const auto instruction = utility::scan_disasm(*initialize_hmd_device, 100, "48 8D 05 ? ? ? ?");
+
+        if (!instruction) {
+            spdlog::error("Failed to find FFakeStereoRendering VTable via fallback method (2)");
+            return std::nullopt;
+        }
+
+        const auto result = utility::calculate_absolute(*instruction + 3);
+
+        if (!result) {
+            spdlog::error("Failed to find FFakeStereoRendering VTable via fallback method (3)");
+            return std::nullopt;
+        }
+
+        spdlog::info("FFakeStereoRendering VTable: {:x}", (uintptr_t)result);
+        cached_result = result;
+
+        return result;
     }
 
     const auto vtable_ref = utility::scan(*fake_stereo_rendering_constructor, 100, "48 8D 05 ? ? ? ?");

@@ -64,7 +64,7 @@ UEngine* UEngine::get() {
     return *engine;
 }
 
-void UEngine::initialize_hmd_device() {
+std::optional<uintptr_t> UEngine::get_initialize_hmd_device_address() {
     static const auto addr = []() -> std::optional<uintptr_t> {
         spdlog::info("Searching for InitializeHMDDevice function...");
 
@@ -143,6 +143,16 @@ void UEngine::initialize_hmd_device() {
 
     if (!addr) {
         spdlog::error("Failed to locate InitializeHMDDevice function, cannot inject stereo rendering device at runtime.");
+        return std::nullopt;
+    }
+
+    return addr;
+}
+
+void UEngine::initialize_hmd_device() {
+    const auto addr = get_initialize_hmd_device_address();
+
+    if (!addr) {
         return;
     }
 
