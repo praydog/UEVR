@@ -39,37 +39,29 @@ FFakeStereoRenderingHook* g_hook = nullptr;
 bool is_using_double_precision(uintptr_t addr) {
     spdlog::info("Scanning function at {:x} for double precision usage", addr);
 
-    INSTRUX ix{};
+    bool result = false;
 
-    auto ip = (uint8_t*)addr;
-
-    // Stop on RETN.
-    while (true) {
-        const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
-
-        if (!ND_SUCCESS(status)) {
-            spdlog::error("Failed to decode instruction at {:x}", (uintptr_t)ip);
-            return false;
-        }
-
-        if (ix.Instruction == ND_INS_RETN || ix.Instruction == ND_INS_INT3 || ix.Instruction == ND_INS_JMPFD || ix.Instruction == ND_INS_JMPFI) {
-            break;
+    utility::exhaustive_decode((uint8_t*)addr, 30, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
+        if (std::string_view{ix.Mnemonic}.starts_with("CALL")) {
+            return utility::ExhaustionResult::STEP_OVER;
         }
 
         if (ix.Instruction == ND_INS_MOVSD && ix.Operands[0].Type == ND_OP_MEM && ix.Operands[1].Type == ND_OP_REG) {
             spdlog::info("[UE5 Detected] Detected Double precision MOVSD at {:x}", (uintptr_t)ip);
-            return true;
+            result = true;
+            return utility::ExhaustionResult::BREAK;
         }
 
         if (ix.Instruction == ND_INS_ADDSD) {
             spdlog::info("[UE5 Detected] Detected Double precision ADDSD at {:x}", (uintptr_t)ip);
-            return true;
+            result = true;
+            return utility::ExhaustionResult::BREAK;
         }
 
-        ip += ix.Length;
-    }
+        return utility::ExhaustionResult::CONTINUE;
+    });
 
-    return false;
+    return result;
 }
 
 FFakeStereoRenderingHook::FFakeStereoRenderingHook() {
