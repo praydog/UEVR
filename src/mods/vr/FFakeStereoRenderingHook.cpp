@@ -165,6 +165,7 @@ void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_addres
 
         if (!func) {
             spdlog::error("Cannot hook FSlateRHIRenderer::DrawWindow_RenderThread with alternative return address method");
+            m_hooked_slate_thread = true; // not actually true but just to stop spamming the scans
             return;
         }
 
