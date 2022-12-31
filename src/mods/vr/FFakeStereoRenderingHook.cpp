@@ -942,7 +942,7 @@ std::optional<uint32_t> FFakeStereoRenderingHook::get_stereo_view_offset_index(u
         }
 
         // Resolve jmps if needed.
-        if (*(uint8_t*)func == 0xE9) {
+        while (*(uint8_t*)func == 0xE9) {
             spdlog::info("VFunc at index {} contains a jmp, resolving...", i);
             func = utility::calculate_absolute(func + 1);
         }
