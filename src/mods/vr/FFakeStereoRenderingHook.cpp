@@ -935,10 +935,16 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_active_stereo_renderin
 
 std::optional<uint32_t> FFakeStereoRenderingHook::get_stereo_view_offset_index(uintptr_t vtable) {
     for (auto i = 0; i < 30; ++i) {
-        const auto func = ((uintptr_t*)vtable)[i];
+        auto func = ((uintptr_t*)vtable)[i];
 
-        if (func == 0) {
+        if (func == 0 || IsBadReadPtr((void*)func, sizeof(void*))) {
             continue;
+        }
+
+        // Resolve jmps if needed.
+        if (*(uint8_t*)func == 0xE9) {
+            spdlog::info("VFunc at index {} contains a jmp, resolving...", i);
+            func = utility::calculate_absolute(func + 1);
         }
 
         auto ip = (uint8_t*)func;
