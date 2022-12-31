@@ -2306,63 +2306,87 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
 
     if (!this->set_up_texture_hook) {
         spdlog::info("AllocateRenderTargetTexture retaddr: {:x}", return_address);
-
         spdlog::info("Scanning for call instr...");
-        auto ip = (uint8_t*)return_address;
 
         bool next_call_is_not_the_right_one = false;
 
-        for (auto i = 0; i < 100; ++i) {
-            INSTRUX ix{};
-            const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
+        // Now, we need to emulate from where AllocateRenderTargetTexture returns from
+        // we will set RAX to false, to get the control flow correct
+        // and then keep emulating until we hit the call we want
+        // Previously, we were using just straight linear disassembly to do this, and it mostly worked
+        // but in one game, there was an unconditional branch after the call instead of flowing
+        // directly into the next instruction.
+        auto emu = utility::ShemuContext{*utility::get_module_within(return_address)};
 
-            if (!ND_SUCCESS(status)) {
-                spdlog::error("Decoding failed with error {:x}!", (uint32_t)status);
-                return false;
+        emu.ctx->Registers.RegRax = 0;
+        emu.ctx->Registers.RegRip = (ND_UINT64)return_address;
+        emu.ctx->MemThreshold = 100;
+
+        while(true) {
+            if (emu.ctx->InstructionsCount > 100) {
+                break;
             }
+
+            const auto ip = emu.ctx->Registers.RegRip;
+            const auto bytes = (uint8_t*)ip;
+            const auto decoded = utility::decode_one((uint8_t*)ip);
 
             // mov dl, 32h
             // seen in UE5 or debug builds?
-            if (ip[0] == 0xB2 && ip[1] == 0x32) {
+            if (bytes[0] == 0xB2 && bytes[1] == 0x32) {
                 next_call_is_not_the_right_one = true;
             }
 
-            // We are looking for the call instruction
-            // This instruction calls RHICreateTargetableShaderResource2D(TexSizeX, TexSizeY, SceneTargetFormat, 1, TexCreate_None,
-            // TexCreate_RenderTargetable, false, CreateInfo, BufferedRTRHI, BufferedSRVRHI); Which sets up the BufferedRTRHI and
-            // BufferedSRVRHI variables.
-            const auto is_call = std::string_view{ix.Mnemonic}.starts_with("CALL");
+            // make sure we are not emulating any instructions that write to memory
+            // so we can just set the IP to the next instruction
+            if (decoded) {
+                const auto is_call = std::string_view{decoded->Mnemonic}.starts_with("CALL");
 
-            if (is_call && !next_call_is_not_the_right_one) {
-                const auto post_call = (uintptr_t)ip + ix.Length;
-                spdlog::info("AllocateRenderTargetTexture post_call: {:x}", post_call - (uintptr_t)*utility::get_module_within((void*)post_call));
+                if (decoded->MemoryAccess & ND_ACCESS_ANY_WRITE || is_call) {
+                    // We are looking for the call instruction
+                    // This instruction calls RHICreateTargetableShaderResource2D(TexSizeX, TexSizeY, SceneTargetFormat, 1, TexCreate_None,
+                    // TexCreate_RenderTargetable, false, CreateInfo, BufferedRTRHI, BufferedSRVRHI); Which sets up the BufferedRTRHI and
+                    // BufferedSRVRHI variables.
+                    if (is_call && !next_call_is_not_the_right_one) {
+                        const auto post_call = (uintptr_t)ip + decoded->Length;
+                        spdlog::info("AllocateRenderTargetTexture post_call: {:x}", post_call - (uintptr_t)*utility::get_module_within((void*)post_call));
 
-                auto factory = SafetyHookFactory::init();
-                auto builder = factory->acquire();
+                        auto factory = SafetyHookFactory::init();
+                        auto builder = factory->acquire();
 
-                if (*(uint8_t*)ip == 0xE8) {
-                    spdlog::info("E8 call found!");
-                    this->is_pre_texture_call_e8 = true;
-                } else {
-                    spdlog::info("E8 call not found, assuming register call!");
+                        if (*(uint8_t*)ip == 0xE8) {
+                            spdlog::info("E8 call found!");
+                            this->is_pre_texture_call_e8 = true;
+                        } else {
+                            spdlog::info("E8 call not found, assuming register call!");
+                        }
+
+                        // So we can call the original texture create function again.
+                        this->texture_create_insn_bytes.resize(decoded->Length);
+                        memcpy(this->texture_create_insn_bytes.data(), (void*)ip, decoded->Length);
+
+                        this->texture_hook = builder.create_mid((void*)post_call, &VRRenderTargetManager::texture_hook_callback);
+                        this->pre_texture_hook = builder.create_mid((void*)ip, &VRRenderTargetManager::pre_texture_hook_callback);
+                        this->set_up_texture_hook = true;
+
+                        return false;
+                    }
+
+                    spdlog::info("Skipping write to memory instruction at {:x}", ip);
+                    emu.ctx->Registers.RegRip += decoded->Length;
+                    emu.ctx->Instruction = *decoded; // pseudo-emulate the instruction
+                    ++emu.ctx->InstructionsCount;
+
+                    if (is_call) {
+                        next_call_is_not_the_right_one = false;
+                    }
+                } else if (emu.emulate() != SHEMU_SUCCESS) { // only emulate the non-memory write instructions
+                    emu.ctx->Registers.RegRip += decoded->Length;
+                    continue;
                 }
-
-                // So we can call the original texture create function again.
-                this->texture_create_insn_bytes.resize(ix.Length);
-                memcpy(this->texture_create_insn_bytes.data(), ip, ix.Length);
-
-                this->texture_hook = builder.create_mid((void*)post_call, &VRRenderTargetManager::texture_hook_callback);
-                this->pre_texture_hook = builder.create_mid((void*)ip, &VRRenderTargetManager::pre_texture_hook_callback);
-                this->set_up_texture_hook = true;
-
-                return false;
+            } else {
+                break;
             }
-
-            if (is_call) {
-                next_call_is_not_the_right_one = false;
-            }
-
-            ip += ix.Length;
         }
 
         spdlog::error("Failed to find call instruction!");
