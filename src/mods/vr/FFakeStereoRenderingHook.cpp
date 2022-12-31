@@ -915,7 +915,14 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_active_stereo_renderin
     }
 
     for (auto i = 0; i < 0x2000; i += sizeof(void*)) {
-        const auto ptr = *(uintptr_t*)(engine + i);
+        const auto addr_of_ptr = engine + i;
+
+        if (IsBadReadPtr((void*)addr_of_ptr, sizeof(void*))) {
+            spdlog::info("Reached end of engine pointers at offset {:x}", i);
+            break;
+        }
+
+        const auto ptr = *(uintptr_t*)addr_of_ptr;
 
         if (ptr == 0 || IsBadReadPtr((void*)ptr, sizeof(void*))) {
             continue;
