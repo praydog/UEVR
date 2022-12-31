@@ -1825,6 +1825,12 @@ __declspec(noinline) void VRRenderTargetManager::CalculateRenderTargetSize(const
     VRRenderTargetManager_Base::calculate_render_target_size(Viewport, InOutSizeX, InOutSizeY);
 }
 
+__declspec(noinline) bool VRRenderTargetManager::NeedReAllocateDepthTexture(const void* DepthTarget) {
+    m_last_needs_reallocate_depth_texture_return_address = (uintptr_t)_ReturnAddress();
+
+    return false;
+}
+
 __declspec(noinline) bool VRRenderTargetManager::NeedReAllocateShadingRateTexture(const void* ShadingRateTarget) {
     const auto return_address = (uintptr_t)_ReturnAddress();
     const auto diff = return_address - m_last_calculate_render_size_return_address;
@@ -2375,6 +2381,32 @@ bool VRRenderTargetManager::AllocateRenderTargetTexture(uint32_t Index, uint32_t
     this->ui_target = OutShaderResourceTexture.texture;
 
     OutShaderResourceTexture.texture = OutTargetableTexture.texture;*/
+
+    m_last_allocate_render_target_return_address = (uintptr_t)_ReturnAddress();
+    spdlog::info("AllocateRenderTargetTexture called from: {:x}", m_last_allocate_render_target_return_address - (uintptr_t)*utility::get_module_within((void*)m_last_allocate_render_target_return_address));
+
+    // So, if CalculateRenderTargetSize was *never* called before this function
+    // that means we have the virtual index of this function wrong, and we must swap the vtable out.
+    // also, if this function was called very close to NeedReallocateDepthTexture, that also means
+    // the virtual index is wrong, and we must swap the vtable out.
+    const auto is_incorrect_vtable = 
+        m_last_calculate_render_size_return_address == 0 ||
+        m_last_allocate_render_target_return_address - m_last_needs_reallocate_depth_texture_return_address <= 0x200;
+
+    if (is_incorrect_vtable) {
+        // oh no this is the wrong vtable!!!! we need to fix it  nOW!!!
+        spdlog::info("AllocateRenderTargetTexture called instead of AllocateDepthTexture! Fixing...");
+        spdlog::info("Switching to old render target manager! Incorrect function called!");
+        //g_hook->switch_to_old_rendertarget_manager();
+
+        // Do a switcharoo on the vtable of this object to the old one because we will crash if we don't.
+        // I've decided against actually switching the entire object over in favor of just vtable
+        // swapping for now even though it's kind of a hack.
+        const auto fake_object = std::make_unique<VRRenderTargetManager_418>();
+        *(void**)this = *(void**)fake_object.get();
+
+        return false;
+    }
 
     return this->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &OutTargetableTexture, &OutShaderResourceTexture);
 

@@ -70,6 +70,7 @@ public:
     }
 
     virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override;
+    virtual bool NeedReAllocateDepthTexture(const void* DepthTarget) override; // Not actually used, we are just checking the return address
     virtual bool NeedReAllocateShadingRateTexture(const void* ShadingRateTarget) override; // Not actually used, we are just checking the return address
 
     virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
@@ -83,6 +84,8 @@ public:
 
 public:
     uintptr_t m_last_calculate_render_size_return_address{0};
+    uintptr_t m_last_needs_reallocate_depth_texture_return_address{0};
+    uintptr_t m_last_allocate_render_target_return_address{0};
 };
 
 struct VRRenderTargetManager_418 : IStereoRenderTargetManager_418, VRRenderTargetManager_Base {
