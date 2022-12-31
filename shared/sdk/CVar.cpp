@@ -91,7 +91,7 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
 
             constexpr uint64_t RAX_MAGIC_NUMBER = 0x1337BEEF;
 
-            emu.ctx->MemThreshold = 0;
+            emu.ctx->MemThreshold = 5;
             emu.ctx->Registers.RegRax = RAX_MAGIC_NUMBER;
             emu.ctx->Registers.RegRip = post_call;
 
