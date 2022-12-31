@@ -955,35 +955,35 @@ std::optional<uint32_t> FFakeStereoRenderingHook::get_stereo_view_offset_index(u
             func = utility::calculate_absolute(func + 1);
         }
 
-        auto ip = (uint8_t*)func;
+        bool found = false;
         uint32_t xmm_register_usage_count = 0;
 
-        for (auto j = 0; j < 1000; ++j) {
-            if (*ip == 0xC3 || *ip == 0xCC || *ip == 0xE9) {
-                break;
+        // We do an exhaustive decode (disassemble all possible code paths) that correctly follows the control flow
+        // because some games are obfuscated and do huge jumps across gaps of junk code.
+        // so we can't just linearly scan forward as the disassembler will fail at some point.
+        utility::exhaustive_decode((uint8_t*)func, 30, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
+            if (found) {
+                return utility::ExhaustionResult::BREAK;
             }
 
-            INSTRUX ix{};
-            const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
-
-            if (!ND_SUCCESS(status)) {
-                spdlog::info("Decoding failed with error {:x}!", (uint32_t)status);
-                break;
+            if (ix.BranchInfo.IsBranch && !ix.BranchInfo.IsConditional && std::string_view{ix.Mnemonic}.starts_with("CALL")) {
+                return utility::ExhaustionResult::STEP_OVER;
             }
-
-            ip += ix.Length;
 
             char txt[ND_MIN_BUF_SIZE]{};
             NdToText(&ix, 0, sizeof(txt), txt);
 
-            if (std::string_view{txt}.find("xmm") != std::string_view::npos) {
-                ++xmm_register_usage_count;
-
-                if (xmm_register_usage_count >= 10) {
-                    spdlog::info("Found Stereo View Offset Index: {}", i);
-                    return i;
-                }
+            if (std::string_view{txt}.find("xmm") != std::string_view::npos && ++xmm_register_usage_count >= 10) {
+                found = true;
+                return utility::ExhaustionResult::BREAK;
             }
+
+            return utility::ExhaustionResult::CONTINUE;
+        });
+
+        if (found) {
+            spdlog::info("Found Stereo View Offset Index: {}", i);
+            return i;
         }
     }
 
