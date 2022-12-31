@@ -561,7 +561,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         spdlog::info("CalculateRenderTargetSize index: {}", calculate_render_target_size_index);
 
         // To be seen if this one needs automated analysis
-        const auto should_use_separate_render_target_index = rendertexture_fn_vtable_index - 1;
+        const auto should_use_separate_render_target_index = calculate_render_target_size_index + 2;
         const auto should_use_separate_render_target_func_ptr = &((uintptr_t*)vtable)[should_use_separate_render_target_index];
 
         spdlog::info("ShouldUseSeparateRenderTarget index: {}", should_use_separate_render_target_index);
