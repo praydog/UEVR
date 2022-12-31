@@ -1914,7 +1914,7 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     // and then just overwrite the registers/stack with our own values
     if (!g_hook->has_pixel_format_cvar()) {
         if (g_hook->get_render_target_manager()->is_pre_texture_call_e8) {
-            ctx.r8 = 2; // PF_B8G8R8A8
+            //ctx.r8 = 2; // PF_B8G8R8A8 // decided not to actually set it here, we need to double check when it's actually called
         } else {
             *((uint8_t*)ctx.rsp + 0x28) = 2; // PF_B8G8R8A8
         }
@@ -2176,8 +2176,8 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     const auto stack_args = (uintptr_t*)(ctx.rsp + 0x20);
 
     spdlog::info("About to call the original!");
-
-    if (!g_hook->get_render_target_manager()->is_pre_texture_call_e8) {
+    
+    if (!rtm->is_pre_texture_call_e8) {
         spdlog::info("Calling register version of texture create");
 
         void (*func)(
@@ -2198,34 +2198,70 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
             stack_args[2], stack_args[3], stack_args[4], 
             stack_args[5], stack_args[6], stack_args[7]);
 
-        g_hook->get_render_target_manager()->ui_target = out.texture;
+        rtm->ui_target = out.texture;
+
+        if (rtm->texture_hook_ref == nullptr || rtm->texture_hook_ref->texture == nullptr) {
+            spdlog::info("Had to set texture hook ref in pre texture hook!");
+            rtm->texture_hook_ref = (FTexture2DRHIRef*)ctx.rdx;
+        }
     } else {
         spdlog::info("Calling E8 version of texture create");
+        
+        // check if RCX is near the stack pointer
+        // if it is then it's a different form of E8 call that takes the texture in the first parameter.
+        if (ctx.rcx != 0 && std::abs((int64_t)ctx.rcx - (int64_t)ctx.rsp) <= 0x300) {
+            spdlog::info("Weird form of E8 call detected...");
 
-        void (*func)(
-            uint32_t w,
-            uint32_t h,
-            uint8_t format,
-            uintptr_t mips,
-            uintptr_t samples,
-            uintptr_t flags,
-            uintptr_t a7,
-            uintptr_t a8,
-            uintptr_t a9,
-            FTexture2DRHIRef* out,
-            FTexture2DRHIRef* shader_out,
-            uintptr_t additional,
-            uintptr_t additional2) = (decltype(func))func_ptr;
+            // Format
+            ctx.r9 = 2; // PF_B8G8R8A8
 
-        func((uint32_t)size.x, (uint32_t)size.y, 2, ctx.r9,
-            stack_args[0], stack_args[1], 
-            stack_args[2], stack_args[3],
-            stack_args[4],
-            &out, &shader_out,
-            stack_args[7], stack_args[8]);
+            void (*func)(
+                FTexture2DRHIRef* out,
+                uint32_t w,
+                uint32_t h,
+                uint8_t format,
+                uintptr_t mips,
+                uintptr_t samples,
+                uintptr_t flags,
+                uintptr_t a7,
+                uintptr_t a8,
+                uintptr_t a9,
+                uintptr_t additional,
+                uintptr_t additional2) = (decltype(func))func_ptr;
+
+            func(&out, (uint32_t)size.x, (uint32_t)size.y, 2,
+                stack_args[0], stack_args[1], 
+                stack_args[2], stack_args[3],
+                stack_args[4],
+                stack_args[7], stack_args[8], stack_args[9]);
+        } else {
+            ctx.r8 = 2; // PF_B8G8R8A8
+
+            void (*func)(
+                uint32_t w,
+                uint32_t h,
+                uint8_t format,
+                uintptr_t mips,
+                uintptr_t samples,
+                uintptr_t flags,
+                uintptr_t a7,
+                uintptr_t a8,
+                uintptr_t a9,
+                FTexture2DRHIRef* out,
+                FTexture2DRHIRef* shader_out,
+                uintptr_t additional,
+                uintptr_t additional2) = (decltype(func))func_ptr;
+
+            func((uint32_t)size.x, (uint32_t)size.y, 2, ctx.r9,
+                stack_args[0], stack_args[1], 
+                stack_args[2], stack_args[3],
+                stack_args[4],
+                &out, &shader_out,
+                stack_args[7], stack_args[8]);
+        }
 
         
-        g_hook->get_render_target_manager()->ui_target = out.texture;
+        rtm->ui_target = out.texture;
     }
 
     if (out.texture == nullptr) {
