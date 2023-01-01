@@ -179,6 +179,10 @@ public:
         return m_enable_gui->value();
     }
 
+    auto get_camera_distance() const {
+        return m_camera_distance->value();
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;
@@ -326,6 +330,7 @@ private:
     const ModToggle::Ptr m_enable_gui{ ModToggle::create(generate_name("EnableGUI"), true) };
     const ModSlider::Ptr m_motion_controls_inactivity_timer{ ModSlider::create(generate_name("MotionControlsInactivityTimer"), 30.0f, 100.0f, 30.0f) };
     const ModSlider::Ptr m_joystick_deadzone{ ModSlider::create(generate_name("JoystickDeadzone"), 0.01f, 0.9f, 0.15f) };
+    const ModSlider::Ptr m_camera_distance{ ModSlider::create(generate_name("CameraDistance"), -1000.0f, 1000.0f, 0.0f) };
 
     ValueList m_options{
         *m_use_afr,
@@ -334,6 +339,7 @@ private:
         *m_enable_gui,
         *m_motion_controls_inactivity_timer,
         *m_joystick_deadzone,
+        *m_camera_distance,
     };
 
     int m_frame_count{};

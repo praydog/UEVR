@@ -1207,6 +1207,14 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         view_mat
     };
 
+    const auto camera_distance = VR::get()->get_camera_distance();
+    const auto camera_forward = view_quat * glm::vec3{0, -camera_distance, 0};
+
+    if (has_double_precision) {
+        *view_d += camera_forward;
+    } else {
+        *view_location += camera_forward;
+    }
     const auto rotation_offset = vr->get_rotation_offset();
     const auto current_hmd_rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(0)});
 

@@ -1034,6 +1034,11 @@ void VR::on_draw_ui() {
 
     ImGui::Separator();
 
+    ImGui::Text("Unreal Options");
+    m_camera_distance->draw("Camera Distance");
+
+    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_FirstUseEver);
+
     if (ImGui::TreeNode("CVars")) {
         // Boolean values
         // r.OneFrameThreadLag
