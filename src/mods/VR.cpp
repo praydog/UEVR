@@ -1035,6 +1035,8 @@ void VR::on_draw_ui() {
     ImGui::Separator();
 
     if (ImGui::TreeNode("CVars")) {
+        // Boolean values
+        // r.OneFrameThreadLag
         auto one_frame_thread_lag = sdk::rendering::get_one_frame_thread_lag_cvar()->get<int>();
 
         if (one_frame_thread_lag != nullptr) try {
@@ -1047,6 +1049,42 @@ void VR::on_draw_ui() {
             ImGui::TextWrapped("Failed to read frame thread lag cvar");
         }
 
+        // r.AllowHDR
+        static auto r_allow_hdr_cvar = sdk::find_cvar(L"Engine", L"r.AllowHDR");
+
+        if (r_allow_hdr_cvar) try {
+            auto r_allow_hdr = r_allow_hdr_cvar->get<int>();
+
+            if (r_allow_hdr != nullptr) {
+                auto value = r_allow_hdr_cvar->get<int>();
+
+                if (ImGui::Checkbox("Allow HDR", (bool*)&value)) {
+                    r_allow_hdr_cvar->set(value);
+                }
+            }
+        } catch(...) {
+            ImGui::TextWrapped("Failed to read r.AllowHDR cvar");
+        }
+
+        // r.AllowOcclusionQueries
+        static auto r_allow_occlusion_queries_cvar = sdk::find_cvar(L"Engine", L"r.AllowOcclusionQueries");
+
+        if (r_allow_occlusion_queries_cvar) try {
+            auto r_allow_occlusion_queries = r_allow_occlusion_queries_cvar->get<int>();
+
+            if (r_allow_occlusion_queries != nullptr) {
+                auto value = r_allow_occlusion_queries->get();
+
+                if (ImGui::Checkbox("Allow occlusion queries", (bool*)&value)) {
+                    r_allow_occlusion_queries->set(value);
+                }
+            }
+        } catch(...) {
+            ImGui::TextWrapped("Failed to read r.AllowOcclusionQueries cvar");
+        }
+
+        // Sliders (int values)
+        // r.AmbientOcclusionLevels
         static auto r_ambient_occlusion_levels_cvar = sdk::find_cvar(L"Engine", L"r.AmbientOcclusionLevels");
 
         if (r_ambient_occlusion_levels_cvar) try {
@@ -1061,6 +1099,23 @@ void VR::on_draw_ui() {
             }
         } catch(...) {
             ImGui::TextWrapped("Failed to read ambient occlusion levels cvar");
+        }
+
+        // r.LightCulling.Quality
+        static auto r_light_culling_quality_cvar = sdk::find_cvar(L"Engine", L"r.LightCulling.Quality");
+
+        if (r_light_culling_quality_cvar) try {
+            auto r_light_culling_quality = r_light_culling_quality_cvar->get<int>();
+
+            if (r_light_culling_quality != nullptr) {
+                auto value = r_light_culling_quality->get();
+
+                if (ImGui::SliderInt("Light culling quality", &value, 0, 2)) {
+                    r_light_culling_quality->set(value);
+                }
+            }
+        } catch(...) {
+            ImGui::TextWrapped("Failed to read light culling quality cvar");
         }
 
         ImGui::TreePop();
