@@ -33,11 +33,28 @@ std::optional<uintptr_t> locate_draw_window_renderthread_fn() {
             func = utility::find_function_start(*func - 1))
         {
             spdlog::info("Checking if {:x} is SlateRHIRenderer::DrawWindow_RenderThread", *func);
-            const auto ref = utility::scan_displacement_reference(module, *func);
+            auto ref = utility::scan_displacement_reference(module, *func);
 
             if (!ref) {
-                spdlog::info(" No reference found");
-                continue;
+                // Fallback scan for obfuscated binaries
+                spdlog::info("Performing fallback scan for obfuscated binaries");
+
+                // Function wrapper that just jmps into the function we are looking for
+                // protected/obfuscated binaries usually generate this.
+                try {
+                    ref = utility::scan_relative_reference_strict(module, *func, "E9");
+
+                    if (ref) {
+                        ref = utility::scan_displacement_reference(module, *ref - 1);
+                    }
+                } catch(...) {
+
+                }
+
+                if (!ref) {
+                    spdlog::info(" No reference found");
+                    continue;
+                }
             }
 
             spdlog::info(" Displacement found at {:x}", *ref);
