@@ -1207,14 +1207,22 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         view_mat
     };
 
+    const auto quat_converter = glm::quat{Matrix4x4f {
+        0, 0, -1, 0,
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 0, 1
+    }};
+
     const auto camera_distance = VR::get()->get_camera_distance();
-    const auto camera_forward = view_quat * glm::vec3{0, -camera_distance, 0};
+    const auto camera_forward = quat_converter * (glm::normalize(view_quat_inverse) * glm::vec3{0, 0, -camera_distance});
 
     if (has_double_precision) {
         *view_d += camera_forward;
     } else {
         *view_location += camera_forward;
     }
+
     const auto rotation_offset = vr->get_rotation_offset();
     const auto current_hmd_rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(0)});
 
@@ -1223,15 +1231,8 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
     const auto pos = glm::vec3{rotation_offset * ((vr->get_position(0) - vr->get_standing_origin()))};
 
-    const auto quat_asdf = glm::quat{Matrix4x4f {
-        0, 0, -1, 0,
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 0, 1
-    }};
-
-    const auto offset1 = quat_asdf * (glm::normalize(view_quat_inverse) * (pos * world_to_meters));
-    const auto offset2 = quat_asdf * (glm::normalize(new_rotation) * (eye_offset * world_to_meters));
+    const auto offset1 = quat_converter * (glm::normalize(view_quat_inverse) * (pos * world_to_meters));
+    const auto offset2 = quat_converter * (glm::normalize(new_rotation) * (eye_offset * world_to_meters));
 
     if (!has_double_precision) {
         *view_location -= offset1;
