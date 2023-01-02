@@ -330,7 +330,7 @@ private:
     const ModToggle::Ptr m_enable_gui{ ModToggle::create(generate_name("EnableGUI"), true) };
     const ModSlider::Ptr m_motion_controls_inactivity_timer{ ModSlider::create(generate_name("MotionControlsInactivityTimer"), 30.0f, 100.0f, 30.0f) };
     const ModSlider::Ptr m_joystick_deadzone{ ModSlider::create(generate_name("JoystickDeadzone"), 0.01f, 0.9f, 0.15f) };
-    const ModSlider::Ptr m_camera_distance{ ModSlider::create(generate_name("CameraDistance"), -1000.0f, 1000.0f, 0.0f) };
+    const ModSlider::Ptr m_camera_distance{ ModSlider::create(generate_name("CameraDistance"), -4000.0f, 4000.0f, 0.0f) };
 
     ValueList m_options{
         *m_use_afr,
