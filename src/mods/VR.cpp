@@ -1036,6 +1036,7 @@ void VR::on_draw_ui() {
 
     ImGui::Text("Unreal Options");
     m_camera_distance->draw("Camera Distance");
+    m_world_scale->draw("World Scale");
 
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_FirstUseEver);
 

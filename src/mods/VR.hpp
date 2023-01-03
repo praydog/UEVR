@@ -183,6 +183,10 @@ public:
         return m_camera_distance->value();
     }
 
+    auto get_world_scale() const {
+        return m_world_scale->value();
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;
@@ -331,6 +335,7 @@ private:
     const ModSlider::Ptr m_motion_controls_inactivity_timer{ ModSlider::create(generate_name("MotionControlsInactivityTimer"), 30.0f, 100.0f, 30.0f) };
     const ModSlider::Ptr m_joystick_deadzone{ ModSlider::create(generate_name("JoystickDeadzone"), 0.01f, 0.9f, 0.15f) };
     const ModSlider::Ptr m_camera_distance{ ModSlider::create(generate_name("CameraDistance"), -4000.0f, 4000.0f, 0.0f) };
+    const ModSlider::Ptr m_world_scale{ ModSlider::create(generate_name("WorldScale"), 0.01f, 10.0f, 1.0f) };
 
     ValueList m_options{
         *m_use_afr,
@@ -340,6 +345,7 @@ private:
         *m_motion_controls_inactivity_timer,
         *m_joystick_deadzone,
         *m_camera_distance,
+        *m_world_scale,
     };
 
     int m_frame_count{};

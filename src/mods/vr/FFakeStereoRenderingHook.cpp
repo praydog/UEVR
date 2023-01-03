@@ -1216,6 +1216,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
     const auto camera_distance = VR::get()->get_camera_distance();
     const auto camera_forward = quat_converter * (glm::normalize(view_quat_inverse) * glm::vec3{0, 0, -camera_distance});
+    const auto world_scale = world_to_meters * VR::get()->get_world_scale();
 
     if (has_double_precision) {
         *view_d += camera_forward;
@@ -1231,8 +1232,8 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
     const auto pos = glm::vec3{rotation_offset * ((vr->get_position(0) - vr->get_standing_origin()))};
 
-    const auto offset1 = quat_converter * (glm::normalize(view_quat_inverse) * (pos * world_to_meters));
-    const auto offset2 = quat_converter * (glm::normalize(new_rotation) * (eye_offset * world_to_meters));
+    const auto offset1 = quat_converter * (glm::normalize(view_quat_inverse) * (pos * world_scale));
+    const auto offset2 = quat_converter * (glm::normalize(new_rotation) * (eye_offset * world_scale));
 
     if (!has_double_precision) {
         *view_location -= offset1;
