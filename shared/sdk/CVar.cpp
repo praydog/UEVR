@@ -492,7 +492,15 @@ void IConsoleVariable::locate_vtable_indices() {
                 previous_nullptr_index = i;
             } else if (previous_nullptr_index) {
                 s_set_vtable_index = *previous_nullptr_index + 2;
-                s_get_int_vtable_index = *s_set_vtable_index + 1;
+                auto potential_get_int_index = *s_set_vtable_index + 1;
+
+                // means this function is GetBool or something like that.
+                if (is_vfunc_pattern(vtable[potential_get_int_index], "83 79")) {
+                    spdlog::info("GetBool detected, skipping ahead...");
+                    potential_get_int_index += 1;
+                }
+
+                s_get_int_vtable_index = potential_get_int_index;
                 s_get_float_vtable_index = *s_get_int_vtable_index + 1;
                 spdlog::info("Encountered final nullptr at index {}", *previous_nullptr_index);
                 spdlog::info("IConsoleVariable::Set vtable index: {}", *s_set_vtable_index);
