@@ -2246,30 +2246,97 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         } else {
             ctx.r8 = 2; // PF_B8G8R8A8
 
-            void (*func)(
-                uint32_t w,
-                uint32_t h,
-                uint8_t format,
-                uintptr_t mips,
-                uintptr_t samples,
-                uintptr_t flags,
-                uintptr_t a7,
-                uintptr_t a8,
-                uintptr_t a9,
-                FTexture2DRHIRef* out,
-                FTexture2DRHIRef* shader_out,
-                uintptr_t additional,
-                uintptr_t additional2) = (decltype(func))func_ptr;
+            std::optional<int> previous_stack_found_index{};
+            std::optional<int> previous_stack_repeating_index{};
 
-            func((uint32_t)size.x, (uint32_t)size.y, 2, ctx.r9,
-                stack_args[0], stack_args[1], 
-                stack_args[2], stack_args[3],
-                stack_args[4],
-                &out, &shader_out,
-                stack_args[7], stack_args[8]);
+            std::optional<int> texture_argument_index{};
+            std::optional<int> shader_argument_index{};
+
+            for (auto i = 0; i < 10; ++i) {
+                const auto stack_ptr = stack_args[i];
+
+                if (std::abs((int64_t)stack_ptr - (int64_t)ctx.rsp) <= 0x300) {
+                    if (previous_stack_found_index && *previous_stack_found_index == i - 1) {
+                        previous_stack_repeating_index = i;
+                    }
+
+                    previous_stack_found_index = i;
+                    spdlog::info("Stack pointer found at arg index {} ({} stack)", i + 4, i);
+                } else if (previous_stack_repeating_index && *previous_stack_repeating_index == i - 1) {
+                    texture_argument_index = i - 2;
+                    shader_argument_index = i - 1;
+                    spdlog::info("Texture argument may be at index {} ({} stack)", *texture_argument_index + 4, *texture_argument_index);
+                    spdlog::info("Shader argument may be at index {} ({} stack)", *shader_argument_index + 4, *shader_argument_index);
+                    break;
+                }
+            }
+
+            if (!texture_argument_index && !shader_argument_index) {
+                // operate on a wild guess (hardcoded function signature)
+                spdlog::info("Calling E8 version of texture create with hardcoded function signature");
+
+                void (*func)(
+                    uint32_t w,
+                    uint32_t h,
+                    uint8_t format,
+                    uintptr_t mips,
+                    uintptr_t samples,
+                    uintptr_t flags,
+                    uintptr_t a7,
+                    uintptr_t a8,
+                    uintptr_t a9,
+                    FTexture2DRHIRef* out,
+                    FTexture2DRHIRef* shader_out,
+                    uintptr_t additional,
+                    uintptr_t additional2) = (decltype(func))func_ptr;
+
+                func((uint32_t)size.x, (uint32_t)size.y, 2, ctx.r9,
+                    stack_args[0], stack_args[1], 
+                    stack_args[2], stack_args[3],
+                    stack_args[4],
+                    &out, &shader_out,
+                    stack_args[7], stack_args[8]);
+            } else {
+                // dynamically generate the function call
+                spdlog::info("Calling E8 version of texture create with dynamically generated function signature");
+
+                void (*func)(
+                    uint32_t w,
+                    uint32_t h,
+                    uint8_t format,
+                    uintptr_t mips,
+                    uintptr_t stack_0,
+                    uintptr_t stack_1,
+                    uintptr_t stack_2,
+                    uintptr_t stack_3,
+                    uintptr_t stack_4,
+                    uintptr_t stack_5,
+                    uintptr_t stack_6,
+                    uintptr_t stack_7,
+                    uintptr_t stack_8) = (decltype(func))func_ptr;
+
+                std::array<uintptr_t, 9> cloned_stack{};
+                for (auto i = 0; i < 9; ++i) {
+                    cloned_stack[i] = stack_args[i];
+                }
+
+                cloned_stack[*texture_argument_index] = (uintptr_t)&out;
+                cloned_stack[*shader_argument_index] = (uintptr_t)&shader_out;
+
+                func((uint32_t)size.x, (uint32_t)size.y, 2, ctx.r9,
+                    cloned_stack[0], cloned_stack[1], 
+                    cloned_stack[2], cloned_stack[3],
+                    cloned_stack[4],
+                    cloned_stack[5], cloned_stack[6],
+                    cloned_stack[7], cloned_stack[8]);
+
+                if (rtm->texture_hook_ref == nullptr || rtm->texture_hook_ref->texture == nullptr) {
+                    spdlog::info("Had to set texture hook ref in pre texture hook!");
+                    rtm->texture_hook_ref = (FTexture2DRHIRef*)stack_args[*texture_argument_index];
+                }
+            }
         }
 
-        
         rtm->ui_target = out.texture;
     }
 
@@ -2290,19 +2357,22 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
 void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx) {
     auto rtm = g_hook->get_render_target_manager();
 
-    spdlog::info("Ref: {:x}", (uintptr_t)rtm->texture_hook_ref);
+    spdlog::info("Post texture hook called!");
+    spdlog::info(" Ref: {:x}", (uintptr_t)rtm->texture_hook_ref);
 
     auto texture = rtm->texture_hook_ref->texture;
 
     // happens?
     if (rtm->texture_hook_ref->texture == nullptr) {
+        spdlog::info(" Texture is null, trying to get it from RAX...");
+
         const auto ref = (FTexture2DRHIRef*)ctx.rax;
         texture = ref->texture;
     }
 
-    spdlog::info("last texture index: {}", rtm->last_texture_index);
-    spdlog::info("Resulting texture: {:x}", (uintptr_t)texture);
-    spdlog::info("Real resource: {:x}", (uintptr_t)texture->get_native_resource());
+    spdlog::info(" last texture index: {}", rtm->last_texture_index);
+    spdlog::info(" Resulting texture: {:x}", (uintptr_t)texture);
+    spdlog::info(" Real resource: {:x}", (uintptr_t)texture->get_native_resource());
 
     rtm->render_target = texture;
     //rtm->ui_target = texture;
