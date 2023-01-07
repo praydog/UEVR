@@ -1048,7 +1048,7 @@ void VR::on_draw_ui() {
         if (one_frame_thread_lag != nullptr) try {
             auto value = one_frame_thread_lag->get();
 
-            if (ImGui::Checkbox("One frame thread lag", (bool*)&value)) {
+            if (ImGui::Checkbox("One Frame Thread Lag", (bool*)&value)) {
                 one_frame_thread_lag->set(value);
             }
         } catch(...) {
@@ -1081,7 +1081,7 @@ void VR::on_draw_ui() {
             if (r_allow_occlusion_queries != nullptr) {
                 auto value = r_allow_occlusion_queries->get();
 
-                if (ImGui::Checkbox("Allow occlusion queries", (bool*)&value)) {
+                if (ImGui::Checkbox("Allow Occlusion Queries", (bool*)&value)) {
                     r_allow_occlusion_queries->set(value);
                 }
             }
@@ -1099,7 +1099,7 @@ void VR::on_draw_ui() {
             if (r_ambient_occlusion_levels != nullptr) {
                 auto value = r_ambient_occlusion_levels->get();
 
-                if (ImGui::SliderInt("Ambient occlusion levels", &value, 0, 4)) {
+                if (ImGui::SliderInt("Ambient Occlusion Levels", &value, 0, 4)) {
                     r_ambient_occlusion_levels->set(value);
                 }
             }
@@ -1116,12 +1116,28 @@ void VR::on_draw_ui() {
             if (r_light_culling_quality != nullptr) {
                 auto value = r_light_culling_quality->get();
 
-                if (ImGui::SliderInt("Light culling quality", &value, 0, 2)) {
+                if (ImGui::SliderInt("Light Culling Quality", &value, 0, 2)) {
                     r_light_culling_quality->set(value);
                 }
             }
         } catch(...) {
             ImGui::TextWrapped("Failed to read light culling quality cvar");
+        }
+
+        static auto r_subsurface_scattering_cvar = sdk::find_cvar(L"Engine", L"r.SubsurfaceScattering");
+
+        if (r_subsurface_scattering_cvar) try {
+            auto r_subsurface_scattering = r_subsurface_scattering_cvar->get<int>();
+
+            if (r_subsurface_scattering != nullptr) {
+                auto value = r_subsurface_scattering->get();
+
+                if (ImGui::SliderInt("Subsurface Scattering", &value, 0, 2)) {
+                    r_subsurface_scattering->set(value);
+                }
+            }
+        } catch(...) {
+            ImGui::TextWrapped("Failed to read subsurface scattering cvar");
         }
 
         ImGui::TreePop();
