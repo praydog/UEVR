@@ -1005,7 +1005,7 @@ void VR::on_draw_ui() {
 
         if (runtime->error && runtime->dll_missing) {
             ImGui::TextWrapped("%s not loaded: %s not found", runtime->name().data(), dll_name.data());
-            ImGui::TextWrapped("Please drop the %s file into the game's directory if you want to use %s", dll_name.data(), runtime->name().data());
+            ImGui::TextWrapped("Please select %s from the loader if you want to use %s", runtime->name().data(), runtime->name().data());
         } else if (runtime->error) {
             ImGui::TextWrapped("%s not loaded: %s", runtime->name().data(), runtime->error->c_str());
         } else {
