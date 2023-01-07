@@ -27,6 +27,7 @@
 #include <bddisasm.h>
 #include <disasmtypes.h>
 
+#include "GameThreadWorker.hpp"
 #include "../VR.hpp"
 
 #include "FFakeStereoRenderingHook.hpp"
@@ -114,6 +115,9 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick() {
         }
 
         g_hook->attempt_hooking();
+
+        // Best place to run game thread jobs.
+        GameThreadWorker::get().execute();
 
         const auto& mods = g_framework->get_mods()->get_mods();
         for (auto& mod : mods) {
@@ -1102,6 +1106,11 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
     if (!g_framework->is_game_data_intialized()) {
         return;
+    }
+
+    // if we were unable to hook UGameEngine::Tick, we can run our game thread jobs here instead.
+    if (g_hook->m_attempted_hook_game_engine_tick && !g_hook->m_hooked_game_engine_tick) {
+        GameThreadWorker::get().execute();
     }
 
     const auto& mods = g_framework->get_mods()->get_mods();

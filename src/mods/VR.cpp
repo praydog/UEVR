@@ -9,6 +9,7 @@
 
 #include <sdk/CVar.hpp>
 
+#include "vr/GameThreadWorker.hpp"
 #include "Framework.hpp"
 
 #include "VR.hpp"
@@ -1115,7 +1116,9 @@ void VR::on_draw_ui() {
             auto value = cvar->GetInt();
 
             if (ImGui::SliderInt("Light Culling Quality", &value, 0, 2)) {
-                cvar->Set(std::to_wstring(value).c_str(), -1);
+                GameThreadWorker::get().enqueue([cvar, value] {
+                    cvar->Set(std::to_wstring(value).c_str());
+                });
             }
         } catch(...) {
             ImGui::TextWrapped("Failed to read light culling quality cvar");
