@@ -1056,7 +1056,7 @@ void VR::on_draw_ui() {
         }
 
         // r.AllowHDR
-        static auto r_allow_hdr_cvar = sdk::find_cvar(L"Engine", L"r.AllowHDR");
+        static auto r_allow_hdr_cvar = sdk::find_cvar_data(L"Engine", L"r.AllowHDR");
 
         if (r_allow_hdr_cvar) try {
             auto r_allow_hdr = r_allow_hdr_cvar->get<int>();
@@ -1073,7 +1073,7 @@ void VR::on_draw_ui() {
         }
 
         // r.AllowOcclusionQueries
-        static auto r_allow_occlusion_queries_cvar = sdk::find_cvar(L"Engine", L"r.AllowOcclusionQueries");
+        static auto r_allow_occlusion_queries_cvar = sdk::find_cvar_data(L"Engine", L"r.AllowOcclusionQueries");
 
         if (r_allow_occlusion_queries_cvar) try {
             auto r_allow_occlusion_queries = r_allow_occlusion_queries_cvar->get<int>();
@@ -1091,7 +1091,7 @@ void VR::on_draw_ui() {
 
         // Sliders (int values)
         // r.AmbientOcclusionLevels
-        static auto r_ambient_occlusion_levels_cvar = sdk::find_cvar(L"Engine", L"r.AmbientOcclusionLevels");
+        static auto r_ambient_occlusion_levels_cvar = sdk::find_cvar_data(L"Engine", L"r.AmbientOcclusionLevels");
 
         if (r_ambient_occlusion_levels_cvar) try {
             auto r_ambient_occlusion_levels = r_ambient_occlusion_levels_cvar->get<int>();
@@ -1110,21 +1110,18 @@ void VR::on_draw_ui() {
         // r.LightCulling.Quality
         static auto r_light_culling_quality_cvar = sdk::find_cvar(L"Engine", L"r.LightCulling.Quality");
 
-        if (r_light_culling_quality_cvar) try {
-            auto r_light_culling_quality = r_light_culling_quality_cvar->get<int>();
+        if (r_light_culling_quality_cvar != nullptr && *r_light_culling_quality_cvar != nullptr) try {
+            auto cvar = *r_light_culling_quality_cvar;
+            auto value = cvar->GetInt();
 
-            if (r_light_culling_quality != nullptr) {
-                auto value = r_light_culling_quality->get();
-
-                if (ImGui::SliderInt("Light Culling Quality", &value, 0, 2)) {
-                    r_light_culling_quality->set(value);
-                }
+            if (ImGui::SliderInt("Light Culling Quality", &value, 0, 2)) {
+                cvar->Set(std::to_wstring(value).c_str(), -1);
             }
         } catch(...) {
             ImGui::TextWrapped("Failed to read light culling quality cvar");
         }
 
-        static auto r_subsurface_scattering_cvar = sdk::find_cvar(L"Engine", L"r.SubsurfaceScattering");
+        static auto r_subsurface_scattering_cvar = sdk::find_cvar_data(L"Engine", L"r.SubsurfaceScattering");
 
         if (r_subsurface_scattering_cvar) try {
             auto r_subsurface_scattering = r_subsurface_scattering_cvar->get<int>();

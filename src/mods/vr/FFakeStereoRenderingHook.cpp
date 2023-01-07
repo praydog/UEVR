@@ -18,6 +18,7 @@
 #include <sdk/Slate.hpp>
 #include <sdk/DynamicRHI.hpp>
 #include <sdk/FViewportInfo.hpp>
+#include <sdk/Utility.hpp>
 
 #include "Framework.hpp"
 #include "Mods.hpp"
@@ -201,51 +202,8 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     const auto module_vtable_within = utility::get_module_within(vtable);
 
-    auto is_vfunc_pattern = [](uintptr_t addr, std::string_view pattern) {
-        if (utility::scan(addr, 100, pattern.data()).value_or(0) == addr) {
-            return true;
-        }
-
-        // In some very rare cases, there can be obfuscation that makes the above scan fail.
-        // One such form of obfuscation is multiple jmps and/or calls to reach the real function.
-        // We can use emulation to find the real function.
-        const auto module_within = utility::get_module_within(addr);
-
-        if (!module_within) {
-            spdlog::error("Cannot perform emulation, module not found to create pseudo shellcode");
-            return false;
-        }
-
-        spdlog::info("Performing emulation to find real function...");
-
-        utility::ShemuContext ctx{ *module_within };
-
-        ctx.ctx->Registers.RegRip = addr;
-        bool prev_was_branch = true;
-
-        do {
-            prev_was_branch = ctx.ctx->InstructionsCount == 0 || ctx.ctx->Instruction.BranchInfo.IsBranch;
-
-            if (prev_was_branch) {
-                spdlog::info("Branch!");
-            }
-
-            spdlog::info("Emulating at {:x}", ctx.ctx->Registers.RegRip);
-
-            if (prev_was_branch && !IsBadReadPtr((void*)ctx.ctx->Registers.RegRip, 4)) {
-                if (utility::scan(ctx.ctx->Registers.RegRip, 100, pattern.data()).value_or(0) == ctx.ctx->Registers.RegRip) {
-                    spdlog::info("Encountered true vfunc at {:x}", ctx.ctx->Registers.RegRip);
-                    return true;
-                }
-            }
-        } while(ctx.emulate() == SHEMU_SUCCESS && ctx.ctx->InstructionsCount < 50);
-
-        spdlog::error("Failed to find true vfunc at {:x}, reason {}", addr, ctx.status);
-        return false;
-    };
-
     // In 4.18 the destructor virtual doesn't exist or is at the very end of the vtable.
-    const auto is_stereo_enabled_index = is_vfunc_pattern(*(uintptr_t*)vtable, "B0 01") ? 0 : 1;
+    const auto is_stereo_enabled_index = sdk::is_vfunc_pattern(*(uintptr_t*)vtable, "B0 01") ? 0 : 1;
     const auto is_stereo_enabled_func_ptr = &((uintptr_t*)vtable)[is_stereo_enabled_index];
 
     spdlog::info("IsStereoEnabled Index: {}", is_stereo_enabled_index);
@@ -307,8 +265,8 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     bool is_4_11 = false;
 
-    if (!is_vfunc_pattern(*(uintptr_t*)get_render_target_manager_func_ptr, "33 C0")) {
-        spdlog::info("Expected GetRenderTargetManager function at index {} does not return null, scanning forward for return nullptr.", render_target_manager_vtable_index);
+    //if (!sdk::is_vfunc_pattern(*(uintptr_t*)get_render_target_manager_func_ptr, "33 C0")) {
+        //spdlog::info("Expected GetRenderTargetManager function at index {} does not return null, scanning forward for return nullptr.", render_target_manager_vtable_index);
 
         for (;;++render_target_manager_vtable_index) {
             get_render_target_manager_func_ptr = &((uintptr_t*)vtable)[render_target_manager_vtable_index];
@@ -318,7 +276,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 return false;
             }
 
-            if (is_vfunc_pattern(*(uintptr_t*)get_render_target_manager_func_ptr, "33 C0")) {
+            if (sdk::is_vfunc_pattern(*(uintptr_t*)get_render_target_manager_func_ptr, "33 C0")) {
                 const auto distance_from_rendertexture_fn = render_target_manager_vtable_index - rendertexture_fn_vtable_index;
 
                 // means it's 4.17 I think. 12 means 4.11.
@@ -352,7 +310,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                             break;
                         }
 
-                        if (!is_vfunc_pattern(func, "33 C0")) {
+                        if (!sdk::is_vfunc_pattern(func, "33 C0")) {
                             spdlog::info("Reached end of double check at index {}, {} appears to be the correct index.", i, render_target_manager_vtable_index);
                             break;
                         }
@@ -523,7 +481,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 return false;
             }
             
-            if (is_vfunc_pattern(func, "32 C0")) {
+            if (sdk::is_vfunc_pattern(func, "32 C0")) {
                 prev_function_returned_false = true;
             } else {
                 if (prev_function_returned_false) {
@@ -550,7 +508,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 break;
             }
 
-            if (is_vfunc_pattern(func, "C3") || is_vfunc_pattern(func, "C2 00 00")) {
+            if (sdk::is_vfunc_pattern(func, "C3") || sdk::is_vfunc_pattern(func, "C2 00 00")) {
                 spdlog::info("Dynamically found CalculateRenderTargetSize index: {}", i);
                 calculate_render_target_size_index = i;
                 break;
@@ -578,7 +536,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 break;
             }
 
-            if (is_vfunc_pattern(func, "32 C0")) {
+            if (sdk::is_vfunc_pattern(func, "32 C0")) {
                 spdlog::info("Dynamically found AllocateRenderTarget index: {}", i);
                 allocate_render_target_index = i;
                 break;

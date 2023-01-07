@@ -25,9 +25,22 @@ struct TConsoleVariableData {
     T values[2];
 };
 
-struct IConsoleVariable {
-    // todo maybe dont care
-    virtual void pad() = 0;
+// Dummy interface for IConsoleObject
+// The functions will actually dynamically scan the vtable for the right index
+struct IConsoleObject {
+    virtual ~IConsoleObject() {}
+};
+
+struct IConsoleVariable : IConsoleObject {
+    void Set(const wchar_t* in, uint32_t set_by_flags = 0x8000000);
+    int32_t GetInt();
+    float GetFloat();
+
+private:
+    void locate_vtable_indices();
+    static inline std::optional<uint32_t> s_set_vtable_index{};
+    static inline std::optional<uint32_t> s_get_int_vtable_index{};
+    static inline std::optional<uint32_t> s_get_float_vtable_index{};
 };
 
 struct FConsoleVariableBase : public IConsoleVariable {
@@ -90,7 +103,8 @@ std::optional<uintptr_t> find_alternate_cvar_ref(std::wstring_view str, uint32_t
 std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring_view str, bool stop_at_first_mov = false);
 std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::wstring_view cvar_name, uint32_t known_default, HMODULE module, bool stop_at_first_mov = false);
 
-std::optional<ConsoleVariableDataWrapper> find_cvar(std::wstring_view module, std::wstring_view name, bool stop_at_first_mov = false);
+std::optional<ConsoleVariableDataWrapper> find_cvar_data(std::wstring_view module, std::wstring_view name, bool stop_at_first_mov = false);
+IConsoleVariable** find_cvar(std::wstring_view module, std::wstring_view name, bool stop_at_first_mov = false);
 
 namespace rendering {
 std::optional<ConsoleVariableDataWrapper> get_one_frame_thread_lag_cvar();

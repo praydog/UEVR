@@ -125,7 +125,7 @@ UEVR_SDKFunctions g_sdk_functions {
         };
 
         if (!cvars.contains(name)) {
-            const auto cvar = sdk::find_cvar(utility::widen(module_name), utility::widen(name));
+            const auto cvar = sdk::find_cvar_data(utility::widen(module_name), utility::widen(name));
 
             if (cvar) {
                 cvars[name] = (sdk::TConsoleVariableData<int>**)cvar->address();

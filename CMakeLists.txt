@@ -278,6 +278,7 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/StereoStuff.cpp"
 	"shared/sdk/UEngine.cpp"
 	"shared/sdk/UGameEngine.cpp"
+	"shared/sdk/Utility.cpp"
 	"shared/sdk/CVar.hpp"
 	"shared/sdk/DynamicRHI.hpp"
 	"shared/sdk/EngineModule.hpp"
@@ -287,6 +288,7 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/StereoStuff.hpp"
 	"shared/sdk/UEngine.hpp"
 	"shared/sdk/UGameEngine.hpp"
+	"shared/sdk/Utility.hpp"
 )
 
 list(APPEND sdk_SOURCES

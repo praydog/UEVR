@@ -10,6 +10,7 @@
 #include <bdshemu.h>
 
 #include "EngineModule.hpp"
+#include "Utility.hpp"
 
 #include "CVar.hpp"
 
@@ -285,7 +286,7 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::ws
     return resolve_cvar_from_address(*str_ref + 4, cvar_name, stop_at_first_mov);
 }
 
-std::optional<ConsoleVariableDataWrapper> find_cvar(std::wstring_view module_name, std::wstring_view name, bool stop_at_first_mov) {
+std::optional<ConsoleVariableDataWrapper> find_cvar_data(std::wstring_view module_name, std::wstring_view name, bool stop_at_first_mov) {
     spdlog::info("Attempting to locate {} {} cvar", utility::narrow(module_name.data()), utility::narrow(name.data()));
 
     const auto module = sdk::get_ue_module(module_name.data());
@@ -312,9 +313,37 @@ std::optional<ConsoleVariableDataWrapper> find_cvar(std::wstring_view module_nam
     return result;
 }
 
+IConsoleVariable** find_cvar(std::wstring_view module_name, std::wstring_view name, bool stop_at_first_mov) {
+    spdlog::info("Attempting to locate {} {} cvar", utility::narrow(module_name.data()), utility::narrow(name.data()));
+
+    const auto module = sdk::get_ue_module(module_name.data());
+    const auto str = utility::scan_string(module, name.data());
+
+    if (!str) {
+        spdlog::error("Failed to find {} string!", utility::narrow(name.data()));
+        return nullptr;
+    }
+
+    const auto str_ref = utility::scan_displacement_reference(module, *str);
+
+    if (!str_ref) {
+        spdlog::error("Failed to find {} string reference!");
+        return nullptr;
+    }
+
+    auto result = sdk::resolve_cvar_from_address(*str_ref + 4, name.data(), stop_at_first_mov);
+
+    if (result) {
+        *result -= sizeof(void*);
+        spdlog::info("Found {} at {:x}", utility::narrow(name.data()), (uintptr_t)*result);
+    }
+
+    return (IConsoleVariable**)*result;
+}
+
 std::optional<ConsoleVariableDataWrapper> vr::get_enable_stereo_emulation_cvar() {
     static auto enable_stereo_emulation_cvar = []() -> std::optional<ConsoleVariableDataWrapper> {
-        return find_cvar(L"Engine", L"r.EnableStereoEmulation");
+        return find_cvar_data(L"Engine", L"r.EnableStereoEmulation");
     }();
 
     return enable_stereo_emulation_cvar;
@@ -322,7 +351,7 @@ std::optional<ConsoleVariableDataWrapper> vr::get_enable_stereo_emulation_cvar()
 
 std::optional<ConsoleVariableDataWrapper> vr::get_slate_draw_to_vr_render_target_real_cvar() {
     static auto cvar = []() -> std::optional<ConsoleVariableDataWrapper> {
-        return find_cvar(L"SlateRHIRenderer", L"Slate.DrawToVRRenderTarget", true);
+        return find_cvar_data(L"SlateRHIRenderer", L"Slate.DrawToVRRenderTarget", true);
     }();
 
     return cvar;
@@ -400,10 +429,88 @@ std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_usage_location()
 namespace rendering {
 std::optional<ConsoleVariableDataWrapper> get_one_frame_thread_lag_cvar() {
     static auto cvar = []() -> std::optional<ConsoleVariableDataWrapper> {
-        return find_cvar(L"Engine", L"r.OneFrameThreadLag");
+        return find_cvar_data(L"Engine", L"r.OneFrameThreadLag");
     }();
 
     return cvar;
 }
+}
+}
+
+namespace sdk {
+void IConsoleVariable::Set(const wchar_t* value, uint32_t set_by_flags) {
+    locate_vtable_indices();
+
+    using SetFn = void(__thiscall*)(IConsoleVariable*, const wchar_t*, uint32_t);
+    const auto func = (*(SetFn**)this)[*s_set_vtable_index];
+
+    func(this, value, set_by_flags);
+}
+
+int32_t IConsoleVariable::GetInt() {
+    locate_vtable_indices();
+
+    using GetIntFn = int32_t(__thiscall*)(IConsoleVariable*);
+    const auto func = (*(GetIntFn**)this)[*s_get_int_vtable_index];
+
+    return func(this);
+}
+
+float IConsoleVariable::GetFloat() {
+    locate_vtable_indices();
+
+    using GetFloatFn = float(__thiscall*)(IConsoleVariable*);
+    const auto func = (*(GetFloatFn**)this)[*s_get_float_vtable_index];
+
+    return func(this);
+}
+
+void IConsoleVariable::locate_vtable_indices() {
+    // easy thread safe way to execute this function only once
+    // the way this works is that the lambda is executed, and the result is stored in the static variable
+    // the compiler uses thread safe static initialization to ensure that the lambda is only executed once
+    // so there are no race conditions here.
+    static bool once = [this]() {
+        // Search the vtable for the last function that returns nullptr (AsConsoleCommand)
+        // in most cases the +2 function will be the Set function (the +1 function is Release)
+        // from there, GetInt, GetFloat, etc will be the next subsequent functions
+        // THIS MUST BE CALLED FROM AN ACTUAL IConsoleVariable INSTANCE, NOT A CONSOLE COMMAND!!!
+        spdlog::info("Locating IConsoleVariable vtable indices...");
+
+        const auto vtable = *(uintptr_t**)this;
+        std::optional<uint32_t> previous_nullptr_index{};
+
+        for (auto i = 0; i < 20; ++i) {
+            const auto func = vtable[i];
+
+            if (func == 0 || IsBadReadPtr((void*)func, 1)) {
+                spdlog::error("Reached end of IConsoleVariable vtable at index {}", i);
+                break;
+            }
+
+            if (is_vfunc_pattern(func, "33 C0")) {
+                previous_nullptr_index = i;
+            } else if (previous_nullptr_index) {
+                s_set_vtable_index = *previous_nullptr_index + 2;
+                s_get_int_vtable_index = *s_set_vtable_index + 1;
+                s_get_float_vtable_index = *s_get_int_vtable_index + 1;
+                spdlog::info("Encountered final nullptr at index {}", *previous_nullptr_index);
+                spdlog::info("IConsoleVariable::Set vtable index: {}", *s_set_vtable_index);
+                spdlog::info("IConsoleVariable::GetInt vtable index: {}", *s_get_int_vtable_index);
+                spdlog::info("IConsoleVariable::GetFloat vtable index: {}", *s_get_float_vtable_index);
+                break;
+            }
+        }
+
+        if (!s_set_vtable_index) {
+            spdlog::error("Failed to locate IConsoleVariable::Set vtable index!");
+        }
+
+        // TODO: verify that the destructor
+        // hasnt been randomly inserted at the end
+        // which will fuck everything up
+
+        return true;
+    }();
 }
 }
