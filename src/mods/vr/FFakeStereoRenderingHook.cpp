@@ -330,9 +330,9 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 break;
             }
         }
-    } else {
-        spdlog::info("GetRenderTargetManager function at index {} appears to be valid.", render_target_manager_vtable_index);
-    }
+    //} else {
+        //spdlog::info("GetRenderTargetManager function at index {} appears to be valid.", render_target_manager_vtable_index);
+    //}
     
     const auto get_stereo_layers_func_ptr = (uintptr_t)(get_render_target_manager_func_ptr + sizeof(void*));
 
