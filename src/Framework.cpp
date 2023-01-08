@@ -887,10 +887,13 @@ void Framework::draw_ui() {
     }
 
     if (m_set_cursor_pos_patch.get() == nullptr) {
-        spdlog::info("Patching SetCursorPos");
         // Make SetCursorPos ret early
         const auto set_cursor_pos_addr = (uintptr_t)GetProcAddress(GetModuleHandleA("user32.dll"), "SetCursorPos");
-        m_set_cursor_pos_patch = Patch::create(set_cursor_pos_addr, {0xC3});
+
+        if (set_cursor_pos_addr != 0) {
+            spdlog::info("Patching SetCursorPos");
+            m_set_cursor_pos_patch = Patch::create(set_cursor_pos_addr, {0xC3});
+        }
     }
     
     // UI Specific code:
