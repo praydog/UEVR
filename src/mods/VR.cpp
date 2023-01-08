@@ -1200,6 +1200,7 @@ void VR::on_draw_ui() {
     ImGui::Checkbox("Disable View Matrix Override", &m_disable_view_matrix_override);
     ImGui::Checkbox("Disable Backbuffer Size Override", &m_disable_backbuffer_size_override);
     ImGui::Checkbox("Disable VR Overlay", &m_disable_overlay);
+    ImGui::Checkbox("Stereo Emulation Mode", &m_stereo_emulation_mode);
 
     const double min_ = 0.0;
     const double max_ = 25.0;

@@ -579,7 +579,9 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 spdlog::info("ShouldUseSeparateRenderTarget (embedded)");
             #endif
 
-                return VR::get()->is_hmd_active();
+                auto vr = VR::get();
+
+                return vr->is_hmd_active() && !vr->is_stereo_emulation_enabled();
             }
         );
     }
@@ -1087,8 +1089,13 @@ void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, in
         index_starts_from_one = false;
     }
 
-    *w = VR::get()->get_hmd_width() * 2;
-    *h = VR::get()->get_hmd_height();
+    if (VR::get()->is_stereo_emulation_enabled()) {
+        *w *= 2;
+    } else {
+        *w = VR::get()->get_hmd_width() * 2;
+        *h = VR::get()->get_hmd_height();
+    }
+
 
     *w = *w / 2;
 
@@ -1202,35 +1209,40 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         *view_location += camera_up;
     }
 
-    const auto rotation_offset = vr->get_rotation_offset();
-    const auto current_hmd_rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(0)});
+    // Don't apply any headset transformations
+    // if we have stereo emulation mode enabled
+    // it is only for debugging purposes
+    if (!vr->is_stereo_emulation_enabled()) {
+        const auto rotation_offset = vr->get_rotation_offset();
+        const auto current_hmd_rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(0)});
 
-    const auto new_rotation = glm::normalize(view_quat_inverse * current_hmd_rotation);
-    const auto eye_offset = glm::vec3{vr->get_eye_offset((VRRuntime::Eye)(true_index))};
+        const auto new_rotation = glm::normalize(view_quat_inverse * current_hmd_rotation);
+        const auto eye_offset = glm::vec3{vr->get_eye_offset((VRRuntime::Eye)(true_index))};
 
-    const auto pos = glm::vec3{rotation_offset * ((vr->get_position(0) - vr->get_standing_origin()))};
+        const auto pos = glm::vec3{rotation_offset * ((vr->get_position(0) - vr->get_standing_origin()))};
 
-    const auto offset1 = quat_converter * (vqi_norm * (pos * world_scale));
-    const auto offset2 = quat_converter * (glm::normalize(new_rotation) * (eye_offset * world_scale));
+        const auto offset1 = quat_converter * (vqi_norm * (pos * world_scale));
+        const auto offset2 = quat_converter * (glm::normalize(new_rotation) * (eye_offset * world_scale));
 
-    if (!has_double_precision) {
-        *view_location -= offset1;
-        *view_location -= offset2;
-    } else {
-        *view_d -= offset1;
-        *view_d -= offset2;
-    }
+        if (!has_double_precision) {
+            *view_location -= offset1;
+            *view_location -= offset2;
+        } else {
+            *view_d -= offset1;
+            *view_d -= offset2;
+        }
 
-    const auto euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
+        const auto euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
 
-    if (!has_double_precision) {
-        view_rotation->pitch = euler.x;
-        view_rotation->yaw = euler.y;
-        view_rotation->roll = euler.z;
-    } else {
-        rot_d->pitch = euler.x;
-        rot_d->yaw = euler.y;
-        rot_d->roll = euler.z;
+        if (!has_double_precision) {
+            view_rotation->pitch = euler.x;
+            view_rotation->yaw = euler.y;
+            view_rotation->roll = euler.z;
+        } else {
+            rot_d->pitch = euler.x;
+            rot_d->yaw = euler.y;
+            rot_d->roll = euler.z;
+        }
     }
 
     for (auto& mod : mods) {
@@ -1468,7 +1480,13 @@ IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_
         return nullptr;
     }
 
-    if (!VR::get()->get_runtime()->got_first_poses || VR::get()->is_hmd_active()) {
+    auto vr = VR::get();
+
+    if (vr->is_stereo_emulation_enabled()) {
+        return nullptr;
+    }
+
+    if (!vr->get_runtime()->got_first_poses || vr->is_hmd_active()) {
         if (g_hook->m_uses_old_rendertarget_manager) {
             return (IStereoRenderTargetManager*)&g_hook->m_rtm_418;
         }
@@ -1764,7 +1782,9 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
     };
 
 
-    if (!VR::get()->is_hmd_active()) {
+    auto vr = VR::get();
+
+    if (!vr->is_hmd_active() || vr->is_stereo_emulation_enabled()) {
         return call_orig();
     }
 
@@ -1788,9 +1808,7 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
         spdlog::info("No slate resource, skipping!");
         return call_orig();
     }
-
-    auto vr = VR::get();
-
+    
     // Replace the texture with one we have control over.
     // This isolates the UI to render on our own texture separate from the scene.
     const auto old_texture = slate_resource->get_mutable_resource();

@@ -104,7 +104,7 @@ public:
     }
 
     bool is_hmd_active() const {
-        return get_runtime()->ready();
+        return get_runtime()->ready() || (m_stereo_emulation_mode && get_runtime()->loaded);
     }
 
     auto get_hmd() const {
@@ -193,6 +193,10 @@ public:
 
     auto get_world_scale() const {
         return m_world_scale->value();
+    }
+
+    auto is_stereo_emulation_enabled() const {
+        return m_stereo_emulation_mode;
     }
 
 private:
@@ -346,6 +350,8 @@ private:
     const ModSlider::Ptr m_camera_right_offset{ ModSlider::create(generate_name("CameraRightOffset"), -4000.0f, 4000.0f, 0.0f) };
     const ModSlider::Ptr m_camera_up_offset{ ModSlider::create(generate_name("CameraUpOffset"), -4000.0f, 4000.0f, 0.0f) };
     const ModSlider::Ptr m_world_scale{ ModSlider::create(generate_name("WorldScale"), 0.01f, 10.0f, 1.0f) };
+
+    bool m_stereo_emulation_mode{false}; // not a good config option, just for debugging
 
     ValueList m_options{
         *m_use_afr,
