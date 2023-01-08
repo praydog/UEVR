@@ -6,6 +6,7 @@
 #include <utility/Thread.hpp>
 #include <utility/Module.hpp>
 
+#include "WindowFilter.hpp"
 #include "Framework.hpp"
 
 #include "D3D12Hook.hpp"
@@ -357,6 +358,16 @@ HRESULT WINAPI D3D12Hook::present(IDXGISwapChain3* swap_chain, UINT sync_interva
 
     auto d3d12 = g_d3d12_hook;
 
+    // This line must be called before calling our detour function because we might have to unhook the function inside our detour.
+    auto present_fn = d3d12->m_present_hook->get_original<decltype(D3D12Hook::present)*>();
+
+    HWND swapchain_wnd{nullptr};
+    swap_chain->GetHwnd(&swapchain_wnd);
+
+    if (WindowFilter::get().is_filtered(swapchain_wnd)) {
+        return present_fn(swap_chain, sync_interval, flags);
+    }
+
     d3d12->m_inside_present = true;
     d3d12->m_swap_chain = swap_chain;
 
@@ -376,9 +387,6 @@ HRESULT WINAPI D3D12Hook::present(IDXGISwapChain3* swap_chain, UINT sync_interva
     } else if (d3d12->m_swapchain_1 == nullptr && swap_chain != d3d12->m_swapchain_0) {
         d3d12->m_swapchain_1 = swap_chain;
     }
-
-	// This line must be called before calling our detour function because we might have to unhook the function inside our detour.
-    auto present_fn = d3d12->m_present_hook->get_original<decltype(D3D12Hook::present)*>();
 
     // Restore the original bytes
     // if an infinite loop occurs, this will prevent the game from crashing
@@ -430,12 +438,18 @@ HRESULT WINAPI D3D12Hook::resize_buffers(IDXGISwapChain3* swap_chain, UINT buffe
     spdlog::info("D3D12 resize buffers called");
 
     auto d3d12 = g_d3d12_hook;
+    auto& hook = d3d12->m_resize_buffers_hook;
+    auto resize_buffers_fn = hook->get_original<decltype(D3D12Hook::resize_buffers)*>();
+
+    HWND swapchain_wnd{nullptr};
+    swap_chain->GetHwnd(&swapchain_wnd);
+
+    if (WindowFilter::get().is_filtered(swapchain_wnd)) {
+        return resize_buffers_fn(swap_chain, buffer_count, width, height, new_format, swap_chain_flags);
+    }
 
     d3d12->m_display_width = width;
     d3d12->m_display_height = height;
-
-    auto& hook = d3d12->m_resize_buffers_hook;
-    auto resize_buffers_fn = hook->get_original<decltype(D3D12Hook::resize_buffers)*>();
 
     if (g_inside_resize_buffers) {
         auto original_bytes = utility::get_original_bytes(Address{resize_buffers_fn});
@@ -474,11 +488,17 @@ HRESULT WINAPI D3D12Hook::resize_target(IDXGISwapChain3* swap_chain, const DXGI_
     spdlog::info("D3D12 resize target called");
 
     auto d3d12 = g_d3d12_hook;
+    auto resize_buffers_fn = d3d12->m_resize_target_hook->get_original<decltype(D3D12Hook::resize_target)*>();
+
+    HWND swapchain_wnd{nullptr};
+    swap_chain->GetHwnd(&swapchain_wnd);
+
+    if (WindowFilter::get().is_filtered(swapchain_wnd)) {
+        return resize_buffers_fn(swap_chain, new_target_parameters);
+    }
 
     d3d12->m_render_width = new_target_parameters->Width;
     d3d12->m_render_height = new_target_parameters->Height;
-
-    auto resize_buffers_fn = d3d12->m_resize_target_hook->get_original<decltype(D3D12Hook::resize_target)*>();
 
     // Restore the original code to the resize_buffers function.
     if (g_inside_resize_target) {
