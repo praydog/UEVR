@@ -870,6 +870,13 @@ void Framework::draw_ui() {
     std::lock_guard _{m_input_mutex};
 
     if (!m_draw_ui) {
+        // remove SetCursorPos patch
+        if (m_set_cursor_pos_patch.get() != nullptr) {
+            spdlog::info("Removing SetCursorPos patch");
+        }
+
+        m_set_cursor_pos_patch.reset();
+
         m_is_ui_focused = false;
         if (m_last_draw_ui) {
             m_windows_message_hook->window_toggle_cursor(m_cursor_state);
@@ -877,6 +884,13 @@ void Framework::draw_ui() {
         //m_dinput_hook->acknowledge_input();
         // ImGui::GetIO().MouseDrawCursor = false;
         return;
+    }
+
+    if (m_set_cursor_pos_patch.get() == nullptr) {
+        spdlog::info("Patching SetCursorPos");
+        // Make SetCursorPos ret early
+        const auto set_cursor_pos_addr = (uintptr_t)GetProcAddress(GetModuleHandleA("user32.dll"), "SetCursorPos");
+        m_set_cursor_pos_patch = Patch::create(set_cursor_pos_addr, {0xC3});
     }
     
     // UI Specific code:

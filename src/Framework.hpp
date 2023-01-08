@@ -9,6 +9,7 @@
 
 #include <utility/Address.hpp>
 #include <sdk/Math.hpp>
+#include <utility/Patch.hpp>
 
 class Mods;
 
@@ -199,6 +200,7 @@ private:
     std::unique_ptr<XInputHook> m_xinput_hook{};
     std::shared_ptr<spdlog::logger> m_logger{};
     std::unique_ptr<UEVRSharedMemory> m_uevr_shared_memory{};
+    Patch::Ptr m_set_cursor_pos_patch{};
 
     std::string m_error{""};
 
