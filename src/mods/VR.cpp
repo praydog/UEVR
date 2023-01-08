@@ -1036,7 +1036,9 @@ void VR::on_draw_ui() {
     ImGui::Separator();
 
     ImGui::Text("Unreal Options");
-    m_camera_distance->draw("Camera Distance");
+    m_camera_forward_offset->draw("Camera Forward Offset");
+    m_camera_right_offset->draw("Camera Right Offset");
+    m_camera_up_offset->draw("Camera Up Offset");
     m_world_scale->draw("World Scale");
 
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_FirstUseEver);

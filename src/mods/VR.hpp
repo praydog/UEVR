@@ -179,8 +179,16 @@ public:
         return m_enable_gui->value();
     }
 
-    auto get_camera_distance() const {
-        return m_camera_distance->value();
+    auto get_camera_forward_offset() const {
+        return m_camera_forward_offset->value();
+    }
+
+    auto get_camera_right_offset() const {
+        return m_camera_right_offset->value();
+    }
+
+    auto get_camera_up_offset() const {
+        return m_camera_up_offset->value();
     }
 
     auto get_world_scale() const {
@@ -334,7 +342,9 @@ private:
     const ModToggle::Ptr m_enable_gui{ ModToggle::create(generate_name("EnableGUI"), true) };
     const ModSlider::Ptr m_motion_controls_inactivity_timer{ ModSlider::create(generate_name("MotionControlsInactivityTimer"), 30.0f, 100.0f, 30.0f) };
     const ModSlider::Ptr m_joystick_deadzone{ ModSlider::create(generate_name("JoystickDeadzone"), 0.01f, 0.9f, 0.15f) };
-    const ModSlider::Ptr m_camera_distance{ ModSlider::create(generate_name("CameraDistance"), -4000.0f, 4000.0f, 0.0f) };
+    const ModSlider::Ptr m_camera_forward_offset{ ModSlider::create(generate_name("CameraForwardOffset"), -4000.0f, 4000.0f, 0.0f) };
+    const ModSlider::Ptr m_camera_right_offset{ ModSlider::create(generate_name("CameraRightOffset"), -4000.0f, 4000.0f, 0.0f) };
+    const ModSlider::Ptr m_camera_up_offset{ ModSlider::create(generate_name("CameraUpOffset"), -4000.0f, 4000.0f, 0.0f) };
     const ModSlider::Ptr m_world_scale{ ModSlider::create(generate_name("WorldScale"), 0.01f, 10.0f, 1.0f) };
 
     ValueList m_options{
@@ -344,7 +354,9 @@ private:
         *m_enable_gui,
         *m_motion_controls_inactivity_timer,
         *m_joystick_deadzone,
-        *m_camera_distance,
+        *m_camera_forward_offset,
+        *m_camera_right_offset,
+        *m_camera_up_offset,
         *m_world_scale,
     };
 
