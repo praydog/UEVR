@@ -64,6 +64,40 @@ UEngine* UEngine::get() {
     return *engine;
 }
 
+std::optional<uintptr_t> UEngine::get_emulatestereo_string_ref_address() {
+    static const auto addr = []() -> std::optional<uintptr_t> {
+        spdlog::info("Searching for correct string reference to \"emulatestereo\"...");
+
+        const auto mod = sdk::get_ue_module(L"Engine");
+        const auto size = utility::get_module_size(mod);
+        const auto end = (uintptr_t)mod + *size;
+
+        // String pooling is disabled so we need to do this.
+        bool found = false;
+        for (auto str = utility::scan_string(mod, L"emulatestereo"); str; str = utility::scan_string(*str + 1, (end - (*str + 1)) - 0x1000, L"emulatestereo")) {
+            spdlog::info("On string at {:x}", (uintptr_t)*str);
+
+            for (auto ref = utility::scan_displacement_reference(mod, *str); ref; ref = utility::scan_displacement_reference(*ref + 1, (end - (*ref + 1)) - 0x1000, *str)) {
+                spdlog::info("On reference at {:x}", (uintptr_t)*ref);
+
+                // InitializeHMDDevice has always been guaranteed to be a virtual function
+                // so we can just use find_virtual_function_start.
+                // The other function that "emulatestereo" is in is not a virtual function.
+                const auto func = utility::find_virtual_function_start(*ref);
+
+                if (func) {
+                    return ref;
+                }
+            }
+        }
+
+        spdlog::error("Failed to find emulatestereo string reference!");
+        return std::nullopt;
+    }();
+
+    return addr;
+}
+
 std::optional<uintptr_t> UEngine::get_initialize_hmd_device_address() {
     static const auto addr = []() -> std::optional<uintptr_t> {
         spdlog::info("Searching for InitializeHMDDevice function...");
@@ -72,30 +106,18 @@ std::optional<uintptr_t> UEngine::get_initialize_hmd_device_address() {
         auto fallback_scan = []() -> std::optional<uintptr_t> {
             spdlog::info("Performing fallback scan for InitializeHMDDevice function...");
 
-            const auto mod = sdk::get_ue_module(L"Engine");
-            const auto size = utility::get_module_size(mod);
-            const auto end = (uintptr_t)mod + *size;
+            const auto emulate_stereo_ref = get_emulatestereo_string_ref_address();
 
-            // String pooling is disabled so we need to do this.
-            bool found = false;
-            for (auto str = utility::scan_string(mod, L"emulatestereo"); str; str = utility::scan_string(*str + 1, (end - (*str + 1)) - 0x1000, L"emulatestereo")) {
-                spdlog::info("On string at {:x}", (uintptr_t)*str);
+            if (emulate_stereo_ref) {
+                const auto func = utility::find_virtual_function_start(*emulate_stereo_ref);
 
-                for (auto ref = utility::scan_displacement_reference(mod, *str); ref; ref = utility::scan_displacement_reference(*ref + 1, (end - (*ref + 1)) - 0x1000, *str)) {
-                    spdlog::info("On reference at {:x}", (uintptr_t)*ref);
-
-                    // InitializeHMDDevice has always been guaranteed to be a virtual function
-                    // so we can just use find_virtual_function_start.
-                    // The other function that "emulatestereo" is in is not a virtual function.
-                    const auto func = utility::find_virtual_function_start(*ref);
-
-                    if (func) {
-                        spdlog::info("Found InitializeHMDDevice at {:x}", (uintptr_t)*func);
-                        return func;
-                    }
+                if (func) {
+                    spdlog::info("Found InitializeHMDDevice function at {:x}", *func);
+                    return func;
                 }
             }
-            
+
+            spdlog::error("Failed to find InitializeHMDDevice function!");
             return std::nullopt;
         };
 

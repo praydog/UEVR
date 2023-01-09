@@ -1026,7 +1026,25 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
                     spdlog::error("Access violation occurred when writing to r.EnableStereoEmulation, the address may be incorrect!");
                 }
             } else {
-                spdlog::error("Failed to locate r.EnableStereoEmulation cvar, next call may fail.");
+                //spdlog::error("Failed to locate r.EnableStereoEmulation cvar, next call may fail.");
+                spdlog::info("r.EnableStereoEmulation cvar not found, using fallback method of forcing -emulatestereo flag.");
+                
+                const auto emulate_stereo_string_ref = sdk::UGameEngine::get_emulatestereo_string_ref_address();
+
+                if (emulate_stereo_string_ref) {
+                    const auto resolved = utility::resolve_instruction(*emulate_stereo_string_ref);
+
+                    if (resolved) {
+                        // Scan forward for a call instruction, this call checks the command line for "emulatestereo".
+                        const auto call = utility::scan_disasm(resolved->addr, 20, "E8 ? ? ? ?");
+
+                        if (call) {
+                            // Patch the instruction to mov al, 1
+                            spdlog::info("Patching instruction at {:x} to mov al, 1", (uintptr_t)*call);
+                            static auto patch = Patch::create(*call, { 0xB0, 0x01, 0x90, 0x90, 0x90 });
+                        }
+                    }
+                }
             }
 
             spdlog::info("Calling InitializeHMDDevice... AGAIN");
