@@ -1689,6 +1689,18 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
     std::optional<uint32_t> idx{};
     const auto engine = sdk::UEngine::get_lvalue();
 
+    if (engine == nullptr) {
+        spdlog::error("Cannot proceed without engine!");
+        return;
+    }
+
+    const auto vtable = *(uintptr_t**)localplayer;
+
+    if (vtable == nullptr || IsBadReadPtr((void*)vtable, sizeof(void*))) {
+        spdlog::error("Cannot proceed, vtable for so-called \"local player\" is invalid!");
+        return;
+    }
+
     INSTRUX ix{};
 
     for (auto i = 1; i < 25; ++i) {
@@ -1696,7 +1708,9 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
             break;
         }
 
-        const auto vfunc = (*(uintptr_t**)localplayer)[i];
+        spdlog::info("Analyzing index {}...", i);
+
+        const auto vfunc = vtable[i];
 
         if (vfunc == 0 || IsBadReadPtr((void*)vfunc, 1)) {
             spdlog::error("Encountered invalid vfunc at index {}!", i);
