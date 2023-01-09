@@ -1565,7 +1565,27 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
 
         if (!g_hook->m_projection_matrix_stack.empty() && g_hook->m_projection_matrix_stack.size() >= 3) {
             const auto post_get_projection_data = g_hook->m_projection_matrix_stack[2];
-            const auto get_projection_data = utility::find_function_start(post_get_projection_data);
+
+            const auto get_projection_data_candidate_1 = utility::find_function_start_with_call(post_get_projection_data);
+            const auto get_projection_data_candidate_2 = utility::find_virtual_function_start(post_get_projection_data);
+
+            // Select whichever one is closest to post_get_projection_data
+            std::optional<uintptr_t> get_projection_data{};
+
+            if (get_projection_data_candidate_1 && get_projection_data_candidate_2) {
+                const auto candidate_1_distance = std::abs((int64_t)post_get_projection_data - (int64_t)*get_projection_data_candidate_1);
+                const auto candidate_2_distance = std::abs((int64_t)post_get_projection_data - (int64_t)*get_projection_data_candidate_2);
+
+                if (candidate_1_distance < candidate_2_distance) {
+                    get_projection_data = get_projection_data_candidate_1;
+                } else {
+                    get_projection_data = get_projection_data_candidate_2;
+                }
+            } else if (get_projection_data_candidate_1) {
+                get_projection_data = get_projection_data_candidate_1;
+            } else if (get_projection_data_candidate_2) {
+                get_projection_data = get_projection_data_candidate_2;
+            }
 
             if (get_projection_data) {
                 spdlog::info("Successfully found GetProjectionData at {:x}", *get_projection_data);
@@ -1584,6 +1604,8 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
                 } else {
                     spdlog::error("Failed to hook GetProjectionData");
                 }
+            } else {
+                spdlog::error("Failed to find GetProjectionData!");
             }
         }
     }
