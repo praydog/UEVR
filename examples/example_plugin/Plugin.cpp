@@ -64,7 +64,7 @@ public:
         } else if (renderer_data->renderer_type == UEVR_RENDERER_D3D12) {
             auto command_queue = (ID3D12CommandQueue*)renderer_data->command_queue;
 
-            if (command_queue == nullptr ){
+            if (command_queue == nullptr) {
                 return;
             }
 
@@ -125,6 +125,15 @@ public:
                                              UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double) override
     {
         PLUGIN_LOG_ONCE("Pre Calculate Stereo View Offset");
+
+        auto rotationd = (UEVR_Rotatord*)rotation;
+
+        // Decoupled pitch.
+        if (!is_double) {
+            rotation->pitch = 0.0f;
+        } else {
+            rotationd->pitch = 0.0;
+        }
     }
 
     void on_post_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle, int view_index, float world_to_meters, 
