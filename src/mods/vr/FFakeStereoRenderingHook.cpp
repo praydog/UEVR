@@ -1017,15 +1017,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
         if (!locate_active_stereo_rendering_device()) {
             spdlog::info("Previous call to InitializeHMDDevice did not setup the stereo rendering device, attempting to call again...");
 
-            // We don't call this before because the cvar will not be set up
-            // until it's referenced once. after we set this we need to call the function again.
-            if (enable_stereo_emulation_cvar) {
-                try {
-                    enable_stereo_emulation_cvar->set<int>(1);
-                } catch(...) {
-                    spdlog::error("Access violation occurred when writing to r.EnableStereoEmulation, the address may be incorrect!");
-                }
-            } else {
+            auto patch_emulate_stereo_flag = []() {
                 //spdlog::error("Failed to locate r.EnableStereoEmulation cvar, next call may fail.");
                 spdlog::info("r.EnableStereoEmulation cvar not found, using fallback method of forcing -emulatestereo flag.");
                 
@@ -1045,6 +1037,20 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
                         }
                     }
                 }
+            };
+
+            // We don't call this before because the cvar will not be set up
+            // until it's referenced once. after we set this we need to call the function again.
+            if (enable_stereo_emulation_cvar) {
+                try {
+                    enable_stereo_emulation_cvar->set<int>(1);
+                } catch(...) {
+                    spdlog::error("Access violation occurred when writing to r.EnableStereoEmulation, the address may be incorrect!");
+                    patch_emulate_stereo_flag();
+                }
+            } else {
+                //spdlog::error("Failed to locate r.EnableStereoEmulation cvar, next call may fail.");
+                patch_emulate_stereo_flag();
             }
 
             spdlog::info("Calling InitializeHMDDevice... AGAIN");
