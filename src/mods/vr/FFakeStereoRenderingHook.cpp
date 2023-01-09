@@ -1585,6 +1585,10 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
                 get_projection_data = get_projection_data_candidate_1;
             } else if (get_projection_data_candidate_2) {
                 get_projection_data = get_projection_data_candidate_2;
+            } else {
+                // emergency fallback
+                spdlog::info("Failed to find GetProjectionData, falling back to emergency fallback (this may not work)");
+                get_projection_data = utility::find_function_start(post_get_projection_data);
             }
 
             if (get_projection_data) {
