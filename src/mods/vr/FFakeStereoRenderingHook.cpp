@@ -1761,13 +1761,31 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
         const auto seh_handler = [](PEXCEPTION_POINTERS info) -> LONG {
             if (info->ExceptionRecord->ExceptionCode == EXCEPTION_BREAKPOINT) {
                 spdlog::info("Skipping int3 breakpoint at {:x}!", info->ContextRecord->Rip);
+                const auto insn = utility::decode_one((uint8_t*)info->ContextRecord->Rip);
+
+                if (insn) {
+                    info->ContextRecord->Rip += insn->Length;
+
+                    // Nop out the next function call.
+                    // It logs and does some other stuff and causes a crash later on.
+                    // To be seen if this will cause any issues, does not appear to (on 4.9 debug builds)
+                    const auto call = utility::scan_disasm((uintptr_t)info->ContextRecord->Rip, 20, "E8 ? ? ? ?");
+
+                    if (call) {
+                        new Patch{*call, {0x90, 0x90, 0x90, 0x90, 0x90}};
+                    }
+
+                    return EXCEPTION_CONTINUE_EXECUTION;
+                }
+                
                 info->ContextRecord->Rip += 1;
                 return EXCEPTION_CONTINUE_EXECUTION;
-            } else {
-                spdlog::info("Encountered exception {:x} at {:x}!", info->ExceptionRecord->ExceptionCode, info->ContextRecord->Rip);
             }
 
-            return EXCEPTION_CONTINUE_SEARCH;
+            spdlog::info("Encountered exception {:x} at {:x}!", info->ExceptionRecord->ExceptionCode, info->ContextRecord->Rip);
+
+            // yolo? idk xd
+            return EXCEPTION_CONTINUE_EXECUTION;
         };
 
         const auto exception_handler = AddVectoredExceptionHandler(1, seh_handler);
