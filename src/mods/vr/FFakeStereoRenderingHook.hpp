@@ -51,6 +51,8 @@ protected:
     bool allocated_views{false};
     bool set_up_texture_hook{false};
     bool is_pre_texture_call_e8{false};
+    bool is_using_texture_desc{false};
+    bool is_version_greq_5_1{false};
 
     uint32_t last_width{0};
     uint32_t last_height{0};

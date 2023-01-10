@@ -2267,23 +2267,38 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     if (!rtm->is_pre_texture_call_e8) {
         spdlog::info("Calling register version of texture create");
 
-        void (*func)(
-            uintptr_t rhi,
-            FTexture2DRHIRef* out,
-            uintptr_t command_list,
-            uintptr_t w,
-            uintptr_t h,
-            uintptr_t format,
-            uintptr_t mips,
-            uintptr_t samples,
-            uintptr_t flags,
-            uintptr_t create_info,
-            uintptr_t additional,
-            uintptr_t additional2) = (decltype(func))func_ptr;
+        if (rtm->is_using_texture_desc && rtm->is_version_greq_5_1) {
+            spdlog::info("Calling UE5 texture desc version of texture create");
 
-        func(ctx.rcx, &out, ctx.r8, size.x, size.y, 2, 
-            stack_args[2], stack_args[3], stack_args[4], 
-            stack_args[5], stack_args[6], stack_args[7]);
+            void (*func)(
+                uintptr_t rhi,
+                FTexture2DRHIRef* out,
+                uintptr_t desc,
+                uintptr_t command_list
+            ) = (decltype(func))func_ptr;
+
+            func(ctx.rcx, &out, ctx.r8, ctx.r9);
+        } else if (rtm->is_using_texture_desc) {
+            // TODO!!!!
+        } else {
+            void (*func)(
+                uintptr_t rhi,
+                FTexture2DRHIRef* out,
+                uintptr_t command_list,
+                uintptr_t w,
+                uintptr_t h,
+                uintptr_t format,
+                uintptr_t mips,
+                uintptr_t samples,
+                uintptr_t flags,
+                uintptr_t create_info,
+                uintptr_t additional,
+                uintptr_t additional2) = (decltype(func))func_ptr;
+
+            func(ctx.rcx, &out, ctx.r8, size.x, size.y, 2, 
+                stack_args[2], stack_args[3], stack_args[4], 
+                stack_args[5], stack_args[6], stack_args[7]);
+        }
 
         rtm->ui_target = out.texture;
 
@@ -2467,6 +2482,30 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
         spdlog::info("Scanning for call instr...");
 
         bool next_call_is_not_the_right_one = false;
+        const auto return_addr_module = utility::get_module_within(return_address);
+
+        if (return_addr_module) {
+            // This string is present in UE5 (>= 5.1) and used when using texture descriptors to create textures.
+            const auto buffered_rt_string = utility::scan_string(*return_addr_module, L"BufferedRT", true);
+
+            if (buffered_rt_string) {
+                const auto string_ref = utility::scan_displacement_reference(*return_addr_module, (uintptr_t)*buffered_rt_string);
+
+                // Check if the string ref is nearby the return address
+                // if it is, that means this is UE5 and the function
+                // will take a texture descriptor instead of a bunch of arguments.
+                if (string_ref) {
+                    const auto string_ref_func_start = utility::find_function_start((uintptr_t)*string_ref);
+                    const auto return_addr_func_start = utility::find_function_start(return_address);
+
+                    if (string_ref_func_start && return_addr_func_start && *string_ref_func_start == *return_addr_func_start) {
+                        spdlog::info("Found string ref for BufferedRT, this is UE5!");
+                        this->is_using_texture_desc = true;
+                        this->is_version_greq_5_1 = true;
+                    }
+                }
+            }
+        }
 
         // Now, we need to emulate from where AllocateRenderTargetTexture returns from
         // we will set RAX to false, to get the control flow correct
@@ -2493,6 +2532,17 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
             // seen in UE5 or debug builds?
             if (bytes[0] == 0xB2 && bytes[1] == 0x32) {
                 next_call_is_not_the_right_one = true;
+            } else try {
+                const auto addr = utility::resolve_displacement(ip);
+
+                if (addr && !IsBadReadPtr((void*)*addr, 12) && std::wstring_view{(const wchar_t*)*addr}.starts_with(L"BufferedRT")) {
+                    this->is_using_texture_desc = true;
+                    this->is_version_greq_5_1 = true;
+
+                    spdlog::info("Found usage of string \"BufferedRT\" while analyzing AllocateRenderTargetTexture!");
+                }
+            } catch(...) {
+
             }
 
             // make sure we are not emulating any instructions that write to memory

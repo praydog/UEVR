@@ -75,6 +75,7 @@ struct FIntPoint {
 
 struct FViewport {};
 
+// 4.24+ or so only has the NeedReAllocateShadingRateTexture function.
 struct IStereoRenderTargetManager {
     virtual bool ShouldUseSeparateRenderTarget() const = 0;
     virtual void UpdateViewport(bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) = 0;
@@ -88,6 +89,11 @@ struct IStereoRenderTargetManager {
         FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples = 1) {
         return false;
     }
+
+    // On 5.1 there is a GetActualColorSwapchainFormat virtual here
+    // however it might not be necessary to add it because we don't actually
+    // use the below two functions.
+    
     virtual bool AllocateDepthTexture(uint32_t Index, uint32_t SizeX, uint32_t SizeY, uint8_t Format, uint32_t NumMips,
         ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTargetableTexture,
         FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples = 1) {
@@ -97,6 +103,13 @@ struct IStereoRenderTargetManager {
         ETextureCreateFlags Flags, ETextureCreateFlags TargetableTextureFlags, FTexture2DRHIRef& OutTexture, FIntPoint& OutTextureSize) {
         return false;
     }
+
+    // additional padding for unknown functions (necessary for 5.1+)
+    virtual bool pad1() { return false; }
+    virtual bool pad2() { return false; }
+    virtual bool pad3() { return false; }
+    virtual bool pad4() { return false; }
+    virtual bool pad5() { return false; }
 };
 
 struct IStereoRenderTargetManager_Special {
@@ -130,6 +143,7 @@ struct IStereoRenderTargetManager_Special {
     virtual bool pad5() { return false; }
 };
 
+// says 418 but its actually 4.23 or 4.24 or so and below.
 struct IStereoRenderTargetManager_418 {
     virtual bool ShouldUseSeparateRenderTarget() const = 0;
     virtual void UpdateViewport(
@@ -148,6 +162,12 @@ struct IStereoRenderTargetManager_418 {
         uint32_t NumSamples = 1) {
         return false;
     }
+
+    virtual bool pad1() { return false; }
+    virtual bool pad2() { return false; }
+    virtual bool pad3() { return false; }
+    virtual bool pad4() { return false; }
+    virtual bool pad5() { return false; }
 };
 
 struct FFakeStereoRendering {
