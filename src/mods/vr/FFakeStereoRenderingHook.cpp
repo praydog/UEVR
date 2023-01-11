@@ -1999,10 +1999,12 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     // refers to the current pixel format, which we can overwrite (which may not be safe)
     // so we could just follow how the global is being written to registers or the stack
     // and then just overwrite the registers/stack with our own values
+    auto rtm = g_hook->get_render_target_manager();
+
     if (!g_hook->has_pixel_format_cvar()) {
         if (g_hook->get_render_target_manager()->is_pre_texture_call_e8) {
             //ctx.r8 = 2; // PF_B8G8R8A8 // decided not to actually set it here, we need to double check when it's actually called
-        } else {
+        } else if (!rtm->is_using_texture_desc) {
             *((uint8_t*)ctx.rsp + 0x28) = 2; // PF_B8G8R8A8
         }
     }
@@ -2018,8 +2020,6 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     using namespace asmjit::x86;
 
     spdlog::info("Attempting to JIT a function to call the original function!");
-
-    auto rtm = g_hook->get_render_target_manager();
 
     const auto ix = utility::decode_one(rtm->texture_create_insn_bytes.data(), rtm->texture_create_insn_bytes.size());
 
@@ -2273,11 +2273,49 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
             void (*func)(
                 uintptr_t rhi,
                 FTexture2DRHIRef* out,
-                uintptr_t desc,
-                uintptr_t command_list
+                uintptr_t command_list,
+                uintptr_t desc
             ) = (decltype(func))func_ptr;
 
+            // Scan for the render target width and height in the desc
+            // and replace it with the desktop resolution (This is for the UI texture)
+            const auto scan_x = VR::get()->get_hmd_width() * 2;
+            const auto scan_y = VR::get()->get_hmd_height();
+
+            std::optional<int32_t> width_offset{};
+            std::optional<int32_t> height_offset{};
+
+            int32_t old_width{};
+            int32_t old_height{};
+
+            for (auto i = 0; i < 0x100; ++i) {
+                auto& x = *(int32_t*)(ctx.r9 + i);
+                auto& y = *(int32_t*)(ctx.r9 + i + 4);
+
+                if (x == scan_x && y == scan_y) {
+                    spdlog::info("UE5: Found render target width and height at offset: {:x}", i);
+
+                    width_offset = i;
+                    height_offset = i + 4;
+
+                    old_width = x;
+                    old_height = y;
+
+                    x = size.x;
+                    y = size.y;
+                    break;
+                }
+            }
+
             func(ctx.rcx, &out, ctx.r8, ctx.r9);
+
+            if (width_offset && height_offset) {
+                auto& x = *(int32_t*)(ctx.r9 + *width_offset);
+                auto& y = *(int32_t*)(ctx.r9 + *height_offset);
+
+                x = old_width;
+                y = old_height;
+            }
         } else if (rtm->is_using_texture_desc) {
             // TODO!!!!
         } else {
