@@ -317,6 +317,10 @@ void get_joystick_axis(UEVR_InputSourceHandle source, UEVR_Vector2f* out_axis) {
 void trigger_haptic_vibration(float seconds_from_now, float duration, float frequency, float amplitude, UEVR_InputSourceHandle source) {
     ::VR::get()->trigger_haptic_vibration(seconds_from_now, duration, frequency, amplitude, (::vr::VRInputValueHandle_t)source);
 }
+
+bool is_using_controllers() {
+    return ::VR::get()->is_using_controllers();
+}
 }
 }
 
@@ -342,6 +346,7 @@ UEVR_VRData g_vr_data {
     uevr::vr::is_action_active,
     uevr::vr::get_joystick_axis,
     uevr::vr::trigger_haptic_vibration,
+    uevr::vr::is_using_controllers,
 };
 
 

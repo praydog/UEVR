@@ -243,7 +243,7 @@ typedef struct {
     void (*get_eye_offset)(UEVR_Eye eye, UEVR_Vector3f* out_position);
 
     /* Converted to UE projection matrix */
-    void (*get_ue_projection_matrix)(UEVR_Eye eye, UEVR_Matrix4x4f* put_projection);
+    void (*get_ue_projection_matrix)(UEVR_Eye eye, UEVR_Matrix4x4f* out_projection);
 
     UEVR_InputSourceHandle (*get_left_joystick_source)();
     UEVR_InputSourceHandle (*get_right_joystick_source)();
@@ -253,6 +253,8 @@ typedef struct {
     bool (*is_action_active)(UEVR_ActionHandle action, UEVR_InputSourceHandle source);
     void (*get_joystick_axis)(UEVR_InputSourceHandle source, UEVR_Vector2f* out_axis);
     void (*trigger_haptic_vibration)(float seconds_from_now, float duration, float frequency, float amplitude, UEVR_InputSourceHandle source);
+    /* if any controller action is active or has been active within certain previous timeframe */
+    bool (*is_using_controllers)();
 } UEVR_VRData;
 
 typedef struct {
