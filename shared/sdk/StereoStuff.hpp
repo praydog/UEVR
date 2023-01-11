@@ -177,3 +177,30 @@ struct FFakeStereoRendering {
     int32_t width, height;
     int32_t num_views;
 };
+
+
+struct IRefCountedObject {
+    virtual uint32_t AddRef() = 0;
+    virtual uint32_t Release() = 0;
+    virtual uint32_t GetRefCount() = 0;
+};
+
+struct FSceneRenderTargetItem {
+    FTexture2DRHIRef texture;
+    FTexture2DRHIRef srt;
+    void** uav;
+    char pad[0x20];
+};
+
+struct IPooledRenderTarget : public IRefCountedObject {
+    virtual bool IsFree() = 0;
+    virtual void* GetDesc() = 0;
+
+    FSceneRenderTargetItem item;
+};
+
+template<typename ReferencedType>
+struct TRefCountPtr {
+    // todo: actually implement this
+    ReferencedType* reference;
+};

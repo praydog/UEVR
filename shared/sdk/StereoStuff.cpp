@@ -56,7 +56,14 @@ void* FRHITexture::get_native_resource() const {
             // so we don't cause a segfault.
             uint8_t filler_data[0x100]{};
 
-            const auto potential_resource = func(tex, &filler_data);
+            void* potential_resource = nullptr;
+
+            try {
+                potential_resource = func(tex, &filler_data);
+            } catch(...) {
+                spdlog::error("Encountered exception when calling function at index {}", i);
+                continue;
+            }
 
             if (potential_resource == nullptr || IsBadReadPtr(potential_resource, sizeof(void*))) {
                 continue;

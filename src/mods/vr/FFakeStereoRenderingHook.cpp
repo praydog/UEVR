@@ -2316,9 +2316,75 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
                 x = old_width;
                 y = old_height;
             }
-        } else if (rtm->is_using_texture_desc) {
-            // TODO!!!!
-        } else {
+
+            if (rtm->texture_hook_ref == nullptr || rtm->texture_hook_ref->texture == nullptr) {
+                spdlog::info("Had to set texture hook ref in pre texture hook!");
+                rtm->texture_hook_ref = (FTexture2DRHIRef*)ctx.rdx;
+            }
+        } else if (rtm->is_using_texture_desc) { // extremely rare.
+            spdlog::info("Calling UE4 texture desc version of texture create");
+
+            void (*func)(
+                uintptr_t rhi,
+                uintptr_t desc,
+                TRefCountPtr<IPooledRenderTarget>* out,
+                uintptr_t name // wchar_t*
+            ) = (decltype(func))func_ptr;
+
+            // Scan for the render target width and height in the desc
+            // and replace it with the desktop resolution (This is for the UI texture)
+            const auto scan_x = VR::get()->get_hmd_width() * 2;
+            const auto scan_y = VR::get()->get_hmd_height();
+
+            std::optional<int32_t> width_offset{};
+            std::optional<int32_t> height_offset{};
+
+            int32_t old_width{};
+            int32_t old_height{};
+
+            for (auto i = 0; i < 0x100; ++i) {
+                auto& x = *(int32_t*)(ctx.rdx + i);
+                auto& y = *(int32_t*)(ctx.rdx + i + 4);
+
+                if (x == scan_x && y == scan_y) {
+                    spdlog::info("UE4: Found render target width and height at offset: {:x}", i);
+
+                    width_offset = i;
+                    height_offset = i + 4;
+
+                    old_width = x;
+                    old_height = y;
+
+                    x = size.x;
+                    y = size.y;
+                    break;
+                }
+            }
+
+            static TRefCountPtr<IPooledRenderTarget> real_out{};
+
+            func(ctx.rcx, ctx.rdx, &real_out, ctx.r9);
+
+            if (real_out.reference != nullptr) {
+                const auto& tex = real_out.reference->item.texture;
+                const auto& shader = real_out.reference->item.srt;
+                out.texture = tex.texture;
+                shader_out.texture = shader.texture;
+            }
+
+            if (width_offset && height_offset) {
+                auto& x = *(int32_t*)(ctx.rdx + *width_offset);
+                auto& y = *(int32_t*)(ctx.rdx + *height_offset);
+
+                x = old_width;
+                y = old_height;
+            }
+
+            if (rtm->texture_hook_ref == nullptr || rtm->texture_hook_ref->texture == nullptr) {
+                spdlog::info("Had to set texture hook ref in pre texture hook!");
+                rtm->texture_hook_ref = (FTexture2DRHIRef*)ctx.r8;
+            }
+        } else { // most common version.
             void (*func)(
                 uintptr_t rhi,
                 FTexture2DRHIRef* out,
@@ -2336,14 +2402,14 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
             func(ctx.rcx, &out, ctx.r8, size.x, size.y, 2, 
                 stack_args[2], stack_args[3], stack_args[4], 
                 stack_args[5], stack_args[6], stack_args[7]);
+
+            if (rtm->texture_hook_ref == nullptr || rtm->texture_hook_ref->texture == nullptr) {
+                spdlog::info("Had to set texture hook ref in pre texture hook!");
+                rtm->texture_hook_ref = (FTexture2DRHIRef*)ctx.rdx;
+            }
         }
 
         rtm->ui_target = out.texture;
-
-        if (rtm->texture_hook_ref == nullptr || rtm->texture_hook_ref->texture == nullptr) {
-            spdlog::info("Had to set texture hook ref in pre texture hook!");
-            rtm->texture_hook_ref = (FTexture2DRHIRef*)ctx.rdx;
-        }
     } else {
         spdlog::info("Calling E8 version of texture create");
         
@@ -2491,6 +2557,15 @@ void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx)
     spdlog::info("Post texture hook called!");
     spdlog::info(" Ref: {:x}", (uintptr_t)rtm->texture_hook_ref);
 
+    // very rare...
+    if (rtm->is_using_texture_desc && !rtm->is_version_greq_5_1) {
+        const auto pooled_rt_container = (TRefCountPtr<IPooledRenderTarget>*)rtm->texture_hook_ref;
+
+        if (pooled_rt_container != nullptr && pooled_rt_container->reference != nullptr) {
+            rtm->texture_hook_ref = &pooled_rt_container->reference->item.texture;
+        }
+    }
+
     auto texture = rtm->texture_hook_ref->texture;
 
     // happens?
@@ -2520,29 +2595,55 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
         spdlog::info("Scanning for call instr...");
 
         bool next_call_is_not_the_right_one = false;
-        const auto return_addr_module = utility::get_module_within(return_address);
 
-        if (return_addr_module) {
-            // This string is present in UE5 (>= 5.1) and used when using texture descriptors to create textures.
-            const auto buffered_rt_string = utility::scan_string(*return_addr_module, L"BufferedRT", true);
+        auto is_string_nearby = [](uintptr_t addr, std::wstring_view str) {
+            const auto addr_module = utility::get_module_within(addr);
+            if (!addr_module) {
+                return false;
+            }
 
-            if (buffered_rt_string) {
-                const auto string_ref = utility::scan_displacement_reference(*return_addr_module, (uintptr_t)*buffered_rt_string);
+            const auto module_size = utility::get_module_size(*addr_module);
+            const auto module_end = (uintptr_t)*addr_module + *module_size - 0x1000;
 
-                // Check if the string ref is nearby the return address
-                // if it is, that means this is UE5 and the function
-                // will take a texture descriptor instead of a bunch of arguments.
+            // Find all possible strings, not just the first one
+            for (auto str_addr = utility::scan_string(*addr_module, str.data(), true); 
+                str_addr.has_value(); 
+                str_addr = utility::scan_string(*str_addr + 1, (module_end - (*str_addr + 1)), str.data(), true)) 
+            {
+                const auto string_ref = utility::scan_displacement_reference(*addr_module, (uintptr_t)*str_addr);
+
                 if (string_ref) {
                     const auto string_ref_func_start = utility::find_function_start((uintptr_t)*string_ref);
-                    const auto return_addr_func_start = utility::find_function_start(return_address);
+                    const auto return_addr_func_start = utility::find_function_start(addr);
+
+                    spdlog::info("String ref func start: {:x}", (uintptr_t)*string_ref_func_start);
+                    spdlog::info("Return addr func start: {:x}", (uintptr_t)*return_addr_func_start);
 
                     if (string_ref_func_start && return_addr_func_start && *string_ref_func_start == *return_addr_func_start) {
-                        spdlog::info("Found string ref for BufferedRT, this is UE5!");
-                        this->is_using_texture_desc = true;
-                        this->is_version_greq_5_1 = true;
+                        return true;
                     }
                 }
             }
+
+            return false;
+        };
+
+        // This string is present in UE5 (>= 5.1) and used when using texture descriptors to create textures.
+        // that means this is UE5 and the function will take a texture descriptor instead of a bunch of arguments.
+        if (is_string_nearby(return_address, L"BufferedRT")) {
+            spdlog::info("Found string ref for BufferedRT, this is UE5!");
+            this->is_using_texture_desc = true;
+            this->is_version_greq_5_1 = true;
+        }
+
+        // Present in a specific game or game(s), somewhere around 4.8-4.12 (?)
+        // indicates that texture descriptors are being used.
+        if (is_string_nearby(return_address, L"SceneViewBuffer")) {
+            spdlog::info("Found string ref for SceneViewBuffer, texture descriptors are being used!");
+            this->is_using_texture_desc = true;
+            this->is_version_greq_5_1 = false;
+
+            next_call_is_not_the_right_one = true; // not seen a case where this isn't true (yet)
         }
 
         // Now, we need to emulate from where AllocateRenderTargetTexture returns from
