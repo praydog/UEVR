@@ -122,6 +122,24 @@ type = "plugin"
 sources = ["examples/example_plugin/**.cpp", "examples/example_plugin/**.c"]
 headers = ["examples/example_plugin/**.hpp", "examples/example_plugin/**.h"]
 
+[target.vr-plugin-nullifier]
+type = "shared"
+sources = ["vr-plugin-nullifier/**.cpp", "vr-plugin-nullifier/**.c"]
+compile-options = ["/GS-", "/EHa", "/MP"]
+compile-features = ["cxx_std_20"]
+link-libraries = [
+    "kananlib"
+]
+
+[target.vr-plugin-nullifier.properties]
+OUTPUT_NAME = "UnrealVRPluginNullifier"
+RUNTIME_OUTPUT_DIRECTORY_RELEASE = "${CMAKE_BINARY_DIR}/bin/${CMKR_TARGET}"
+RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/bin/${CMKR_TARGET}"
+LIBRARY_OUTPUT_DIRECTORY_RELEASE = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+ARCHIVE_OUTPUT_DIRECTORY_RELEASE = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+
 [target.ue4poc]
 type = "shared"
 sources = ["src/**.cpp", "src/**.c"]

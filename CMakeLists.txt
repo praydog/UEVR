@@ -420,6 +420,61 @@ target_link_libraries(example_plugin PUBLIC
 unset(CMKR_TARGET)
 unset(CMKR_SOURCES)
 
+# Target vr-plugin-nullifier
+set(CMKR_TARGET vr-plugin-nullifier)
+set(vr-plugin-nullifier_SOURCES "")
+
+list(APPEND vr-plugin-nullifier_SOURCES
+	"vr-plugin-nullifier/Main.cpp"
+)
+
+list(APPEND vr-plugin-nullifier_SOURCES
+	cmake.toml
+)
+
+set(CMKR_SOURCES ${vr-plugin-nullifier_SOURCES})
+add_library(vr-plugin-nullifier SHARED)
+
+if(vr-plugin-nullifier_SOURCES)
+	target_sources(vr-plugin-nullifier PRIVATE ${vr-plugin-nullifier_SOURCES})
+endif()
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${vr-plugin-nullifier_SOURCES})
+
+target_compile_features(vr-plugin-nullifier PUBLIC
+	cxx_std_20
+)
+
+target_compile_options(vr-plugin-nullifier PUBLIC
+	"/GS-"
+	"/EHa"
+	"/MP"
+)
+
+target_link_libraries(vr-plugin-nullifier PUBLIC
+	kananlib
+)
+
+set_target_properties(vr-plugin-nullifier PROPERTIES
+	OUTPUT_NAME
+		UnrealVRPluginNullifier
+	RUNTIME_OUTPUT_DIRECTORY_RELEASE
+		"${CMAKE_BINARY_DIR}/bin/${CMKR_TARGET}"
+	RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO
+		"${CMAKE_BINARY_DIR}/bin/${CMKR_TARGET}"
+	LIBRARY_OUTPUT_DIRECTORY_RELEASE
+		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+	LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO
+		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+	ARCHIVE_OUTPUT_DIRECTORY_RELEASE
+		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+	ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO
+		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+)
+
+unset(CMKR_TARGET)
+unset(CMKR_SOURCES)
+
 # Target ue4poc
 set(CMKR_TARGET ue4poc)
 set(ue4poc_SOURCES "")
