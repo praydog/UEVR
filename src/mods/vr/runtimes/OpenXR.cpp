@@ -17,6 +17,7 @@ void OpenXR::on_draw_ui() {
     ImGui::SetNextItemOpen(true, ImGuiCond_Once);
     if (ImGui::TreeNode("OpenXR Options")) {
         this->resolution_scale->draw("Resolution Scale");
+        this->use_pose_queue->draw("Use Pose Queue");
 
         if (ImGui::TreeNode("Bindings")) {
             display_bindings_editor();
@@ -115,6 +116,10 @@ VRRuntime::Error OpenXR::update_poses() {
     if (result != XR_SUCCESS) {
         spdlog::error("[VR] xrLocateViews for stage space failed: {}", this->get_result_string(result));
         return (VRRuntime::Error)result;
+    }
+
+    if (!this->use_pose_queue->value()) {
+        this->stage_view_queue.clear();
     }
 
     this->stage_view_queue.push_back(this->stage_views);

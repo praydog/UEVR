@@ -166,9 +166,11 @@ public:
     std::deque<std::vector<XrView>> stage_view_queue{};
     
     const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 5.0f, 1.0f) };
+    const ModToggle::Ptr use_pose_queue{ ModToggle::create("OpenXR_UsePoseQueue", true) };
 
     Mod::ValueList options{
         *resolution_scale,
+        *use_pose_queue,
     };
 
     enum class SwapchainIndex {
