@@ -204,3 +204,28 @@ struct TRefCountPtr {
     // todo: actually implement this
     ReferencedType* reference;
 };
+
+template<typename ReferencedType>
+struct TWeakPtr {
+    ReferencedType* reference;
+    void* counter_impl;
+};
+
+struct ISceneViewExtension {
+    virtual ~ISceneViewExtension() {}
+};
+
+template<typename T>
+struct TArray {
+    T* data;
+    int32_t count;
+    int32_t capacity;
+};
+
+struct FSceneViewExtensions {
+    TArray<TWeakPtr<ISceneViewExtension>> extensions;
+};
+
+struct FSceneViewFamily {
+
+};
