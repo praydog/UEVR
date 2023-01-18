@@ -236,7 +236,11 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         for (auto i = 2; i < 10; ++i) {
             const auto func = ((uintptr_t*)vtable)[stereo_projection_matrix_index + i];
 
-            if (!utility::is_stub_code((uint8_t*)func)) {
+            // Some protectors can fool this check, so we also check for the vfunc pattern (emulates the code)
+            if (!utility::is_stub_code((uint8_t*)func) && 
+                !sdk::is_vfunc_pattern(func, "33 C0") &&
+                !sdk::is_vfunc_pattern(func, "32 C0"))
+            {
                 render_texture_render_thread_func = func;
                 break;
             }
