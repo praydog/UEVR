@@ -1092,6 +1092,23 @@ void VR::on_draw_ui() {
             ImGui::TextWrapped("Failed to read r.AllowOcclusionQueries cvar");
         }
 
+        // r.VolumetricCloud
+        static auto r_volumetric_cloud_cvar = sdk::find_cvar_data(L"Engine", L"r.VolumetricCloud");
+
+        if (r_volumetric_cloud_cvar) try {
+            auto r_volumetric_cloud = r_volumetric_cloud_cvar->get<int>();
+
+            if (r_volumetric_cloud != nullptr) {
+                auto value = r_volumetric_cloud->get();
+
+                if (ImGui::Checkbox("Volumetric Cloud", (bool*)&value)) {
+                    r_volumetric_cloud->set(value);
+                }
+            }
+        } catch(...) {
+            ImGui::TextWrapped("Failed to read r.VolumetricCloud cvar");
+        }
+
         // Sliders (int values)
         // r.AmbientOcclusionLevels
         static auto r_ambient_occlusion_levels_cvar = sdk::find_cvar_data(L"Engine", L"r.AmbientOcclusionLevels");
