@@ -783,6 +783,10 @@ void VR::on_config_load(const utility::Config& cfg) {
         option.config_load(cfg);
     }
 
+    if (m_fake_stereo_hook != nullptr) {
+        m_fake_stereo_hook->on_config_load(cfg);
+    }
+
     if (get_runtime()->loaded) {
         get_runtime()->on_config_load(cfg);
     }
@@ -803,6 +807,10 @@ void VR::on_config_load(const utility::Config& cfg) {
 void VR::on_config_save(utility::Config& cfg) {
     for (IModValue& option : m_options) {
         option.config_save(cfg);
+    }
+
+    if (m_fake_stereo_hook != nullptr) {
+        m_fake_stereo_hook->on_config_save(cfg);
     }
 
     if (get_runtime()->loaded) {
@@ -1028,7 +1036,7 @@ void VR::on_draw_ui() {
 
     if (m_has_hw_scheduling) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-        ImGui::TextWrapped("WARNING: Hardware-accelerated GPU scheduling is enabled. This will cause the game to run slower.");
+        ImGui::TextWrapped("WARNING: Hardware-accelerated GPU scheduling is enabled. This may cause the game to run slower.");
         ImGui::TextWrapped("Go into your Windows Graphics settings and disable \"Hardware-accelerated GPU scheduling\"");
         ImGui::PopStyleColor();
     }
@@ -1036,10 +1044,13 @@ void VR::on_draw_ui() {
     ImGui::Separator();
 
     ImGui::Text("Unreal Options");
+
     m_camera_forward_offset->draw("Camera Forward Offset");
     m_camera_right_offset->draw("Camera Right Offset");
     m_camera_up_offset->draw("Camera Up Offset");
     m_world_scale->draw("World Scale");
+
+    m_enable_gui->draw("Enable GUI");
 
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_FirstUseEver);
 
@@ -1162,6 +1173,12 @@ void VR::on_draw_ui() {
         ImGui::TreePop();
     }
 
+    if (m_fake_stereo_hook != nullptr) {
+        m_fake_stereo_hook->on_draw_ui();
+    }
+
+    ImGui::Text("Runtime Information");
+
     ImGui::TextWrapped("VR Runtime: %s", get_runtime()->name().data());
     ImGui::TextWrapped("Render Resolution: %d x %d", get_runtime()->get_width(), get_runtime()->get_height());
 
@@ -1183,6 +1200,8 @@ void VR::on_draw_ui() {
         m_standing_origin.y = get_position(0).y;
     }
 
+    ImGui::SameLine();
+
     if (ImGui::Button("Set Standing Origin")) {
         m_standing_origin = get_position(0);
     }
@@ -1195,12 +1214,6 @@ void VR::on_draw_ui() {
         get_runtime()->wants_reinitialize = true;
     }
 
-    ImGui::Separator();
-
-    m_use_afr->draw("Use AFR");
-    m_enable_gui->draw("Enable GUI");
-
-    ImGui::Separator();
     ImGui::Text("Graphical Options");
 
     if (ImGui::TreeNode("Desktop Recording Fix")) {

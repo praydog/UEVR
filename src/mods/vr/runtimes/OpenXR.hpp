@@ -53,6 +53,12 @@ struct OpenXR final : public VRRuntime {
     void on_config_save(utility::Config& cfg) override;
     void on_draw_ui() override;
 
+    void on_device_reset() override {
+        std::scoped_lock _{this->sync_mtx};
+        std::scoped_lock __{this->pose_mtx};
+        stage_view_queue.clear();
+    }
+
     VRRuntime::Error synchronize_frame() override;
     VRRuntime::Error update_poses() override;
     VRRuntime::Error update_render_target_size() override;

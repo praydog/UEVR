@@ -70,6 +70,14 @@ FFakeStereoRenderingHook::FFakeStereoRenderingHook() {
     g_hook = this;
 }
 
+void FFakeStereoRenderingHook::on_draw_ui() {
+    ImGui::Text("Stereo Hook Options");
+
+    m_recreate_textures_on_reset->draw("Recreate Textures on Reset");
+
+    ImGui::Separator();
+}
+
 void FFakeStereoRenderingHook::attempt_hooking() {
     if (m_finished_hooking || m_tried_hooking) {
         return;
@@ -1985,9 +1993,10 @@ bool VRRenderTargetManager_Base::need_reallocate_view_target(const FViewport& Vi
     const auto w = VR::get()->get_hmd_width();
     const auto h = VR::get()->get_hmd_height();
 
-    if (w != this->last_width || h != this->last_height) {
+    if (w != this->last_width || h != this->last_height || g_hook->should_recreate_textures()) {
         this->last_width = w;
         this->last_height = h;
+        g_hook->set_should_recreate_textures(false);
         return true;
     }
 

@@ -31,6 +31,13 @@ public:
     void on_present() override;
     void on_post_present() override;
 
+    void on_device_reset() override {
+        get_runtime()->on_device_reset();
+
+        if (m_fake_stereo_hook != nullptr) {
+            m_fake_stereo_hook->on_device_reset();
+        }
+    }
 
     bool on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) override;
     void on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) override;

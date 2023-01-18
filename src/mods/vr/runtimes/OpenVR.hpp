@@ -41,6 +41,11 @@ struct OpenVR final : public VRRuntime {
 
     vr::HmdMatrix34_t get_pose_for_submit();
 
+    void on_device_reset() override {
+        std::unique_lock _{ this->pose_mtx };
+        pose_queue.clear();
+    }
+
     bool is_hmd_active{false};
     bool was_hmd_active{true};
 

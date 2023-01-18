@@ -26,10 +26,7 @@ VRRuntime::Error OpenVR::update_poses() {
 
     std::unique_lock _{ this->pose_mtx };
 
-    //memcpy(this->render_poses.data(), this->real_render_poses.data(), sizeof(this->render_poses));
-
-    // get the exact poses RIGHT NOW without using WaitGetPoses, we will pass these to VRTextureWithPose_t
-    this->hmd->GetDeviceToAbsoluteTrackingPose(vr::ETrackingUniverseOrigin::TrackingUniverseStanding, vr::VRCompositor()->GetFrameTimeRemaining(), this->render_poses.data(), 1);
+    memcpy(this->render_poses.data(), this->real_render_poses.data(), sizeof(this->render_poses));
     this->pose_queue.push_back(this->render_poses[vr::k_unTrackedDeviceIndex_Hmd].mDeviceToAbsoluteTracking);
 
     this->needs_pose_update = false;
@@ -129,7 +126,7 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
 void OpenVR::destroy() {
     if (this->loaded) {
         vr::VR_Shutdown();
-    }
+}
 }
 
 vr::HmdMatrix34_t OpenVR::get_pose_for_submit() {

@@ -99,6 +99,7 @@ struct VRRuntime {
     virtual void on_config_load(const utility::Config& cfg) {}
     virtual void on_config_save(utility::Config& cfg) {}
     virtual void on_draw_ui() {}
+    virtual void on_device_reset() {}
 
     bool is_openxr() const {
         return this->type() == Type::OPENXR;

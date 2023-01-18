@@ -10,6 +10,8 @@
 #include <sdk/StereoStuff.hpp>
 #include <sdk/FViewportInfo.hpp>
 
+#include "Mod.hpp"
+
 struct FRHICommandListImmediate;
 struct VRRenderTargetManager_418;
 struct FSceneView;
@@ -134,7 +136,7 @@ struct VRRenderTargetManager_Special : IStereoRenderTargetManager_Special, VRRen
         FTexture2DRHIRef& OutShaderResourceTexture, uint32_t NumSamples = 1) override;
 };
 
-class FFakeStereoRenderingHook {
+class FFakeStereoRenderingHook : public ModComponent {
 public:
     FFakeStereoRenderingHook();
 
@@ -169,7 +171,15 @@ public:
         return m_hooked_slate_thread;
     }
 
-    void on_frame() {
+    bool should_recreate_textures() const {
+        return m_wants_texture_recreation;
+    }
+
+    void set_should_recreate_textures(bool recreate) {
+        m_wants_texture_recreation = recreate;
+    }
+
+    void on_frame() override {
         attempt_hook_game_engine_tick();
         attempt_hook_slate_thread();
 
@@ -180,6 +190,26 @@ public:
             attempt_hooking();
         }
     }
+
+    void on_device_reset() override {
+        if (m_recreate_textures_on_reset->value()) {
+            m_wants_texture_recreation = true;
+        }
+    }
+
+    void on_config_load(const utility::Config& cfg) {
+        for (IModValue& option : m_options) {
+            option.config_load(cfg);
+        }
+    }
+
+    void on_config_save(utility::Config& cfg) {
+        for (IModValue& option : m_options) {
+            option.config_save(cfg);
+        }
+    }
+
+    void on_draw_ui() override;
 
 private:
     bool hook();
@@ -255,6 +285,7 @@ private:
     bool m_injected_stereo_at_runtime{false};
     bool m_has_double_precision{false}; // for the projection matrix... AND the view offset... IS UE5 DOING THIS NOW???
     bool m_fixed_localplayer_view_count{false};
+    bool m_wants_texture_recreation{false};
 
     /*FFakeStereoRendering m_stereo_recreation {
         90.0f, 
@@ -274,4 +305,10 @@ private:
         std::unique_ptr<PointerHook> calculate_render_target_size_hook{};
         std::unique_ptr<PointerHook> allocate_render_target_texture_hook{};
     } m_embedded_rtm;
+
+    const ModToggle::Ptr m_recreate_textures_on_reset{ ModToggle::create("VR_RecreateTexturesOnReset", true) };
+
+    ValueList m_options{
+        *m_recreate_textures_on_reset
+    };
 };
