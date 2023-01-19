@@ -1103,6 +1103,22 @@ void VR::on_draw_ui() {
             ImGui::TextWrapped("Failed to read r.AllowOcclusionQueries cvar");
         }
 
+        // r.HZBOcclusion
+        static auto r_hzbo_cvar = sdk::find_cvar(L"Engine", L"r.HZBOcclusion");
+
+        if (r_hzbo_cvar != nullptr && *r_hzbo_cvar != nullptr) try {
+            auto cvar = *r_hzbo_cvar;
+            auto value = cvar->GetInt();
+
+            if (ImGui::Checkbox("HZBOcclusion", (bool*)&value)) {
+                GameThreadWorker::get().enqueue([cvar, value] {
+                    cvar->Set(std::to_wstring(value).c_str());
+                });
+            }
+        } catch(...) {
+            ImGui::TextWrapped("Failed to read r.HZBOcclusion cvar");
+        }
+
         // r.VolumetricCloud
         static auto r_volumetric_cloud_cvar = sdk::find_cvar_data(L"Engine", L"r.VolumetricCloud");
 
