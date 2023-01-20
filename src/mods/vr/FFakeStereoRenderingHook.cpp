@@ -642,6 +642,8 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         patch_vtable_checks(); // fallback to patching vtable checks
     }
 
+    hook_game_viewport_client();
+
     spdlog::info("Finished hooking FFakeStereoRendering!");
 
     return true;
@@ -763,6 +765,82 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
     return true;
 }
 
+bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
+    spdlog::info("Attempting to hook UGameViewportClient::Draw...");
+
+    const auto engine_module = sdk::get_ue_module(L"Engine");
+    const auto canvas_object_strings = utility::scan_strings(engine_module, L"CanvasObject", true);
+
+    if (canvas_object_strings.empty()) {
+        spdlog::error("Failed to find CanvasObject string!");
+        m_has_game_viewport_client_draw_hook = false;
+        return false;
+    }
+
+    std::optional<uintptr_t> game_viewport_client_draw{};
+
+    for (const auto canvas_object_string : canvas_object_strings) {
+        spdlog::info("Analyzing CanvasObject string at {:x}", (uintptr_t)canvas_object_string);
+
+        const auto string_ref = utility::scan_displacement_reference(engine_module, canvas_object_string);
+
+        if (!string_ref) {
+            spdlog::info(" No string reference, continuing on to next string...");
+            continue;
+        }
+
+        const auto func = utility::find_virtual_function_start(*string_ref);
+
+        if (func) {
+            game_viewport_client_draw = func;
+            break;
+        }
+    }
+
+    // Luckily this function is the only one with a CanvasObject string.
+    if (!game_viewport_client_draw) {
+        spdlog::error("Failed to find UGameViewportClient::Draw function!");
+        m_has_game_viewport_client_draw_hook = false;
+        return false;
+    }
+
+    spdlog::info("Found UGameViewportClient::Draw function at {:x}", (uintptr_t)*game_viewport_client_draw);
+
+    auto factory = SafetyHookFactory::init();
+    auto builder = factory->acquire();
+
+    m_gameviewportclient_draw_hook = builder.create_inline((void*)*game_viewport_client_draw, +[](void* viewport, void* canvas, void* a3, void* a4) -> void {
+        auto call_orig = [&]() {
+            g_hook->m_gameviewportclient_draw_hook->call(viewport, canvas, a3, a4);
+        };
+
+        if (!g_framework->is_game_data_intialized()) {
+            call_orig();
+            return;
+        }
+
+        auto vr = VR::get();
+
+        if (!vr->is_hmd_active()) {
+            call_orig();
+            return;
+        }
+
+        if (g_hook->m_has_view_extension_hook) {
+            //vr->update_hmd_state(true, vr->get_openxr_runtime()->internal_frame_count);
+        } else {
+            vr->update_hmd_state(false);
+        }
+
+        call_orig();
+    });
+
+    m_has_game_viewport_client_draw_hook = true;
+    return true;
+} catch(...) {
+    spdlog::error("Failed to hook UGameViewportClient!");
+    return false;
+}
 std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_constructor() {
     static std::optional<uintptr_t> cached_result{};
 

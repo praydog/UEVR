@@ -216,6 +216,7 @@ private:
     bool standard_fake_stereo_hook(uintptr_t vtable);
     bool nonstandard_create_stereo_device_hook();
     
+    bool hook_game_viewport_client();
     static std::optional<uintptr_t> locate_fake_stereo_rendering_constructor();
     static std::optional<uintptr_t> locate_fake_stereo_rendering_vtable();
     static std::optional<uintptr_t> locate_active_stereo_rendering_device();
@@ -252,6 +253,7 @@ private:
     std::unique_ptr<safetyhook::InlineHook> m_calculate_stereo_projection_matrix_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_render_texture_render_thread_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_slate_thread_hook{};
+    std::unique_ptr<safetyhook::InlineHook> m_gameviewportclient_draw_hook{};
 
     // both of these are used to figure out where the localplayer is, they aren't actively
     // used for anything else, the second one is an alternative hook if the first one
@@ -286,6 +288,7 @@ private:
     bool m_has_double_precision{false}; // for the projection matrix... AND the view offset... IS UE5 DOING THIS NOW???
     bool m_fixed_localplayer_view_count{false};
     bool m_wants_texture_recreation{false};
+    bool m_has_game_viewport_client_draw_hook{false};
 
     /*FFakeStereoRendering m_stereo_recreation {
         90.0f, 
