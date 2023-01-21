@@ -205,21 +205,71 @@ struct TRefCountPtr {
     ReferencedType* reference;
 };
 
+template<typename Mode>
+struct FWeakReferencer {
+    struct FReferenceControllerBase {
+        virtual void DestroyObject() {};
+        virtual ~FReferenceControllerBase() {}
+
+        int32_t shared_reference_count{1};
+        int32_t weak_reference_count{1};
+
+        uint64_t poopdata{};
+    };
+
+    void allocate_naive() {
+        controller = new FReferenceControllerBase{};
+    }
+
+    FReferenceControllerBase* controller{};
+};
+
 template<typename ReferencedType>
 struct TWeakPtr {
+    void allocate_naive() {
+        counter.allocate_naive();
+        reference = new ReferencedType{};
+    }
+
     ReferencedType* reference;
-    void* counter_impl;
+    FWeakReferencer<int> counter;
 };
 
 struct ISceneViewExtension {
     virtual ~ISceneViewExtension() {}
+
+    virtual bool dummy_1() { return false; }
+    virtual bool dummy_2() { return false; }
+    virtual bool dummy_3() { return false; }
+    virtual bool dummy_4() { return false; }
+    virtual bool dummy_5() { return false; }
+    virtual bool dummy_6() { return false; }
+    virtual bool dummy_7() { return false; }
+    virtual bool dummy_8() { return false; }
+    virtual bool dummy_9() { return false; }
+    virtual bool dummy_10() { return false; }
+    virtual bool dummy_11() { return false; }
+    virtual bool dummy_12() { return false; }
+    virtual bool dummy_13() { return false; }
+    virtual bool dummy_14() { return false; }
+    virtual bool dummy_15() { return false; }
+    virtual bool dummy_16() { return false; }
+    virtual bool dummy_17() { return false; }
+    virtual bool dummy_18() { return false; }
+    virtual bool dummy_19() { return false; }
+    virtual bool dummy_20() { return false; }
+    virtual bool dummy_21() { return false; }
+    virtual bool dummy_22() { return false; }
+    virtual bool dummy_23() { return false; }
+    virtual bool dummy_24() { return false; }
+    virtual bool dummy_25() { return false; }
 };
 
 template<typename T>
 struct TArray {
-    T* data;
-    int32_t count;
-    int32_t capacity;
+    T* data{nullptr};
+    int32_t count{0};
+    int32_t capacity{0};
 };
 
 struct FSceneViewExtensions {
@@ -227,5 +277,5 @@ struct FSceneViewExtensions {
 };
 
 struct FSceneViewFamily {
-
+    char padding[0x100];
 };

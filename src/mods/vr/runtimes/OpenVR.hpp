@@ -28,7 +28,7 @@ struct OpenVR final : public VRRuntime {
     }
 
     VRRuntime::Error synchronize_frame() override;
-    VRRuntime::Error update_poses() override;
+    VRRuntime::Error update_poses(bool from_view_extensions = false, uint32_t frame_count = 0) override;
     VRRuntime::Error update_render_target_size() override;
 
     uint32_t get_width() const override;
@@ -39,11 +39,21 @@ struct OpenVR final : public VRRuntime {
 
     void destroy() override;
 
+    void enqueue_render_poses(uint32_t frame_count) override;
+    void enqueue_render_poses_unsafe(uint32_t frame_count);
+
+    vr::HmdMatrix34_t get_hmd_pose(uint32_t frame_count) {
+        return this->pose_queue[frame_count % this->pose_queue.size()];
+    }
+
+    vr::HmdMatrix34_t get_current_hmd_pose() {
+        return this->pose_queue[internal_frame_count % this->pose_queue.size()];
+    }
+
     vr::HmdMatrix34_t get_pose_for_submit();
 
     void on_device_reset() override {
         std::unique_lock _{ this->pose_mtx };
-        pose_queue.clear();
     }
 
     bool is_hmd_active{false};
@@ -62,6 +72,6 @@ struct OpenVR final : public VRRuntime {
 
     std::chrono::system_clock::time_point last_hmd_active_time{};
 
-    std::deque<vr::HmdMatrix34_t> pose_queue{};
+    std::array<vr::HmdMatrix34_t, 3> pose_queue{};
 };
 }

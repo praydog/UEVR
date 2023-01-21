@@ -6,6 +6,8 @@
 #include <utility/String.hpp>
 #include <imgui.h>
 
+#include <sdk/CVar.hpp>
+
 #include "Framework.hpp"
 
 #include "OpenXR.hpp"
@@ -45,10 +47,16 @@ VRRuntime::Error OpenXR::synchronize_frame() {
 
     // cant sync frame between begin and endframe
     if (!this->session_ready || this->frame_began) {
+        if (this->frame_began) {
+            spdlog::info("Frame already began, skipping xrWaitFrame call.");
+        }
+        
         return VRRuntime::Error::UNSPECIFIED;
     }
 
     if (this->frame_synced) {
+        spdlog::info("Frame already synchronized, skipping xrWaitFrame call.");
+
         return VRRuntime::Error::SUCCESS;
     }
 
@@ -71,7 +79,7 @@ VRRuntime::Error OpenXR::synchronize_frame() {
     return VRRuntime::Error::SUCCESS;
 }
 
-VRRuntime::Error OpenXR::update_poses() {
+VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_count) {
     std::scoped_lock _{ this->sync_mtx };
     std::unique_lock __{ this->pose_mtx };
 
@@ -118,11 +126,20 @@ VRRuntime::Error OpenXR::update_poses() {
         return (VRRuntime::Error)result;
     }
 
-    if (!this->use_pose_queue->value()) {
-        this->stage_view_queue.clear();
+    bool should_enqueue = false;
+
+    if (frame_count == 0) {
+        frame_count = ++this->internal_frame_count;
+        should_enqueue = true;
+    } else {
+        this->internal_frame_count = frame_count;
     }
 
-    this->stage_view_queue.push_back(this->stage_views);
+    this->stage_view_queue[frame_count % this->stage_view_queue.size()] = this->stage_views;
+    
+    if (should_enqueue) {
+        enqueue_render_poses_unsafe(frame_count); // because we've already locked the mutexes.
+    }
 
     result = xrLocateSpace(this->view_space, this->stage_space, display_time, &this->view_space_location);
 
@@ -130,6 +147,8 @@ VRRuntime::Error OpenXR::update_poses() {
         spdlog::error("[VR] xrLocateSpace for view space failed: {}", this->get_result_string(result));
         return (VRRuntime::Error)result;
     }
+
+    this->view_space_location_queue[frame_count % this->view_space_location_queue.size()] = this->view_space_location;
 
     for (auto& hand : this->hands) {
         hand.location.next = &hand.velocity;
@@ -397,17 +416,24 @@ std::vector<XrView> OpenXR::get_stage_view_for_submit() {
     std::scoped_lock _{ this->sync_mtx };
     std::unique_lock __{ this->pose_mtx };
 
-    if (this->stage_view_queue.size() > 3) {
-        this->stage_view_queue.clear();
-    }
-
-    const auto last_view = this->stage_view_queue.empty() ? this->stage_views : this->stage_view_queue.front();
-    if (!this->stage_view_queue.empty()) {
-        this->stage_view_queue.pop_front();
-    }
+    const auto last_view = !this->has_render_frame_count ? get_current_stage_view() : get_stage_view(this->internal_render_frame_count);
+    this->has_render_frame_count = false;
 
     return last_view;
 }
+
+void OpenXR::enqueue_render_poses(uint32_t frame_count) {
+    std::scoped_lock _{ this->sync_mtx };
+    std::unique_lock __{ this->pose_mtx };
+
+    enqueue_render_poses_unsafe(frame_count);
+}
+
+void OpenXR::enqueue_render_poses_unsafe(uint32_t frame_count) {
+    this->internal_render_frame_count = frame_count;
+    this->has_render_frame_count = true;
+}
+
 
 std::string OpenXR::get_result_string(XrResult result) const {
     std::string result_string{};
@@ -1358,6 +1384,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
     // in xrEndFrame, so we must only do it when shouldRender is true
     if (this->frame_state.shouldRender == XR_TRUE) {
         const auto stage_views = get_stage_view_for_submit();
+
         projection_layer_views.resize(stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
 
         for (auto i = 0; i < projection_layer_views.size(); ++i) {

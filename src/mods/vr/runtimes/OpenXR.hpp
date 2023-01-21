@@ -56,11 +56,12 @@ struct OpenXR final : public VRRuntime {
     void on_device_reset() override {
         std::scoped_lock _{this->sync_mtx};
         std::scoped_lock __{this->pose_mtx};
-        stage_view_queue.clear();
+        //stage_view_queue.clear();
+        //stage_view_queue_renderthread.clear();
     }
 
     VRRuntime::Error synchronize_frame() override;
-    VRRuntime::Error update_poses() override;
+    VRRuntime::Error update_poses(bool from_view_extensions = false, uint32_t frame_count = 0) override;
     VRRuntime::Error update_render_target_size() override;
     uint32_t get_width() const override;
     uint32_t get_height() const override;
@@ -71,6 +72,8 @@ struct OpenXR final : public VRRuntime {
     VRRuntime::Error update_input() override;
 
     void destroy() override;
+    void enqueue_render_poses(uint32_t frame_count) override;
+    void enqueue_render_poses_unsafe(uint32_t frame_count);
 
     std::vector<XrView> get_stage_view_for_submit();
 
@@ -169,7 +172,25 @@ public:
     std::vector<XrView> views{};
     std::vector<XrView> stage_views{};
 
-    std::deque<std::vector<XrView>> stage_view_queue{};
+    //std::deque<std::vector<XrView>> stage_view_queue{};
+    std::array<std::vector<XrView>, 3> stage_view_queue{};
+    std::array<XrSpaceLocation, 3> view_space_location_queue{};
+
+    const auto& get_stage_view(uint32_t frame_count) {
+        return stage_view_queue[frame_count % stage_view_queue.size()];
+    }
+
+    const auto& get_current_stage_view() {
+        return get_stage_view(internal_frame_count);
+    }
+
+    const auto& get_view_space_location(uint32_t frame_count) {
+        return view_space_location_queue[frame_count % view_space_location_queue.size()];
+    }
+
+    const auto& get_current_view_space_location() {
+        return get_view_space_location(internal_frame_count);
+    }
     
     const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 5.0f, 1.0f) };
     const ModToggle::Ptr use_pose_queue{ ModToggle::create("OpenXR_UsePoseQueue", true) };

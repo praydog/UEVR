@@ -217,6 +217,8 @@ private:
     bool nonstandard_create_stereo_device_hook();
     
     bool hook_game_viewport_client();
+    bool setup_view_extensions();
+    
     static std::optional<uintptr_t> locate_fake_stereo_rendering_constructor();
     static std::optional<uintptr_t> locate_fake_stereo_rendering_vtable();
     static std::optional<uintptr_t> locate_active_stereo_rendering_device();
@@ -288,6 +290,7 @@ private:
     bool m_has_double_precision{false}; // for the projection matrix... AND the view offset... IS UE5 DOING THIS NOW???
     bool m_fixed_localplayer_view_count{false};
     bool m_wants_texture_recreation{false};
+    bool m_has_view_extension_hook{false};
     bool m_has_game_viewport_client_draw_hook{false};
 
     /*FFakeStereoRendering m_stereo_recreation {

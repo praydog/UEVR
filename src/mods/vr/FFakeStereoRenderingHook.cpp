@@ -19,6 +19,7 @@
 #include <sdk/DynamicRHI.hpp>
 #include <sdk/FViewportInfo.hpp>
 #include <sdk/Utility.hpp>
+#include <sdk/RHICommandList.hpp>
 
 #include "Framework.hpp"
 #include "Mods.hpp"
@@ -642,6 +643,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         patch_vtable_checks(); // fallback to patching vtable checks
     }
 
+    setup_view_extensions();
     hook_game_viewport_client();
 
     spdlog::info("Finished hooking FFakeStereoRendering!");
@@ -827,7 +829,7 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
         }
 
         if (g_hook->m_has_view_extension_hook) {
-            //vr->update_hmd_state(true, vr->get_openxr_runtime()->internal_frame_count);
+            vr->update_hmd_state(true, vr->get_runtime()->internal_frame_count + 1);
         } else {
             vr->update_hmd_state(false);
         }
@@ -841,6 +843,501 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
     spdlog::error("Failed to hook UGameViewportClient!");
     return false;
 }
+
+static std::array<uintptr_t, 50> g_view_extension_vtable{};
+struct SceneViewExtensionAnalyzer;
+
+// Analyzes all of the virtual functions for ISceneViewExtension
+// We create the ISceneViewExtension ourselves and overwrite all of the virtual functions
+// The class will count how many times each virtual is getting called
+// and then when a threshold is reached, it finds the most called one
+// the most called one is IsActiveThisFrame which we need to activate the ISceneViewExtension
+struct SceneViewExtensionAnalyzer {
+    template<int N>
+    struct FillVtable {
+        static void fill(std::array<uintptr_t, 50>& table);
+        static void fill2(std::array<uintptr_t, 50>& table);
+    };
+
+    template<>
+    struct FillVtable<-1> {
+        static void fill(std::array<uintptr_t, 50>& table) {}
+        static void fill2(std::array<uintptr_t, 50>& table) {}
+    };
+
+    struct AnalyzedFunction {
+        uint32_t call_count{0};
+        uint32_t frame_count_a2{0};
+        uint32_t frame_count_a3{0};
+        uint32_t frame_count_offset_a2{0};
+        uint32_t frame_count_offset_a3{0};
+        uint32_t times_frame_count_correct_a2{0};
+        uint32_t times_frame_count_correct_a3{0};
+        std::array<uint8_t, 0x100> a2_data{};
+        std::array<uint8_t, 0x100> a3_data{};
+    };
+
+    static inline std::recursive_mutex dummy_mutex{};
+    static inline uint32_t total_call_count{};
+    static inline std::unordered_map<uint32_t, AnalyzedFunction> functions{};
+    static inline bool has_found_is_active_this_frame_index{false};
+    static inline bool has_found_begin_render_viewfamily{false};
+    static inline bool index_0_called{false};
+    
+    static inline uint32_t is_active_this_frame_index{0};
+    static inline uint32_t begin_render_viewfamily_index{0};
+    static inline uint32_t frame_count_offset{0};
+
+    template<int N>
+    static bool analysis_dummy_stage1(ISceneViewExtension* extension, uintptr_t a2, uintptr_t a3, uintptr_t a4) {
+        if (N == 0) {
+            index_0_called = true;
+        }
+
+        if (has_found_is_active_this_frame_index) {
+            return false;
+        }
+
+        std::scoped_lock _{dummy_mutex};
+
+        auto& func = functions[N];
+
+        ++total_call_count;
+        ++functions[N].call_count;
+
+        if (total_call_count >= 50) {
+            // Find the most called index, it's going to be IsActiveThisFrame
+            uint32_t max_count = 0;
+            uint32_t max_index = 0;
+
+            for (const auto& func : functions) {
+                const auto count = func.second.call_count;
+                const auto index = func.first;
+
+                if (count > max_count) {
+                    max_count = count;
+                    max_index = index;
+                }
+            }
+
+            spdlog::info("Found most called index to be {} with {} calls", max_index, max_count);
+
+            functions.clear();
+            FillVtable<g_view_extension_vtable.size() - 1>::fill2(g_view_extension_vtable);
+
+            // Force the function to return true
+            g_view_extension_vtable[max_index] = (uintptr_t)+[](ISceneViewExtension* ext) -> bool {
+                return true;
+            };
+
+            has_found_is_active_this_frame_index = true;
+            is_active_this_frame_index = max_index;
+        } else {
+            spdlog::info("[Stage 1] ISceneViewExtension Index {} called!", N);
+        }
+
+        return false;
+    };
+
+    template<int N>
+    static bool analysis_dummy_stage2(ISceneViewExtension* extension, uintptr_t a2, uintptr_t a3, uintptr_t a4) {
+        if (has_found_begin_render_viewfamily) {
+            return false;
+        }
+        
+        spdlog::info("[Stage 2] SceneViewExtension Index {} called!", N);
+
+        std::scoped_lock _{dummy_mutex};
+
+        if (functions.contains(N)) {
+            auto& func = functions[N];
+
+            const auto& last_view_family_data_a2 = func.a2_data;
+            const auto view_family_a2 = (uintptr_t)a2;
+
+            if (a2 != 0 && !IsBadReadPtr((void*)a2, 0x100)) {
+                for (auto i = 0x10; i < last_view_family_data_a2.size(); i += sizeof(uint32_t)) {
+                    const auto a = *(uint32_t*)&last_view_family_data_a2[i];
+                    const auto b = *(uint32_t*)&((uint8_t*)view_family_a2)[i];
+
+                    if (b == a + 1) {
+                        if (func.frame_count_a2 + 1 == b) {
+                            spdlog::info("[A2] Function index {} Found frame count offset at {:x}, ({})", N, i, b);
+
+                            func.frame_count_offset_a2 = i;
+                            const auto& next = functions[N + 1];
+
+                            if (++func.times_frame_count_correct_a2 >= 50 && next.times_frame_count_correct_a3 >= 50 && func.frame_count_offset_a2 == next.frame_count_offset_a3) {
+                                spdlog::info("Found final frame count offset at {:x}", i);
+                                spdlog::info("Found BeginRenderViewFamily at index {}", N);
+                                has_found_begin_render_viewfamily = true;
+                                begin_render_viewfamily_index = N;
+                                frame_count_offset = i;
+
+                                setup_begin_render_viewfamily_hook();
+                                return false;
+                            }
+                        }
+
+                        func.frame_count_a2 = b;
+                        break;
+                    }
+                }
+            }
+
+            const auto& last_view_family_data_a3 = func.a3_data;
+            const auto view_family_a3 = (uintptr_t)a3;
+
+            if (a3 != 0 && !IsBadReadPtr((void*)a3, 0x100)) {
+                for (auto i = 0x10; i < last_view_family_data_a3.size(); i += sizeof(uint32_t)) {
+                    const auto a = *(uint32_t*)&last_view_family_data_a3[i];
+                    const auto b = *(uint32_t*)&((uint8_t*)view_family_a3)[i];
+
+                    if (b == a + 1) {
+                        if (func.frame_count_a3 + 1 == b) {
+                            spdlog::info("[A3] Function index {} Found frame count offset at {:x} ({})", N, i, b);
+                            ++func.times_frame_count_correct_a3;
+                        }
+
+                        func.frame_count_a3 = b;
+                        func.frame_count_offset_a3 = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (a2 != 0 && !IsBadReadPtr((void*)a2, 0x100)) {
+            memcpy(functions[N].a2_data.data(), (void*)a2, 0x100);
+        }
+
+        if (a3 != 0 && !IsBadReadPtr((void*)a3, 0x100)) {
+            memcpy(functions[N].a3_data.data(), (void*)a3, 0x100);
+        }
+
+        return false;
+    }
+
+    static void setup_begin_render_viewfamily_hook() {
+        std::scoped_lock _{dummy_mutex};
+
+        spdlog::info("Setting up BeginRenderViewFamily hook...");
+
+        g_view_extension_vtable[begin_render_viewfamily_index] = (uintptr_t)+[](ISceneViewExtension* extension, FSceneViewFamily& view_family) -> void {
+            if (!g_framework->is_game_data_intialized()) {
+                return;
+            }
+
+            auto vr = VR::get();
+
+            if (!vr->is_hmd_active()) {
+                return;
+            }
+
+            const auto frame_count = *(uint32_t*)((uintptr_t)&view_family + frame_count_offset);
+            //vr->update_hmd_state(true, frame_count);
+            vr->get_runtime()->internal_frame_count = frame_count;
+        };
+
+        // PreRenderViewFamily_RenderThread
+        g_view_extension_vtable[begin_render_viewfamily_index+1] = (uintptr_t)+[](ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, FSceneViewFamily& view_family) -> void {
+            if (!g_framework->is_game_data_intialized()) {
+                return;
+            }
+
+            auto& vr = VR::get();
+
+            if (!vr->is_hmd_active()) {
+                return;
+            }
+
+            //vr->wait_for_present();
+
+            auto frame_count = *(uint32_t*)((uintptr_t)&view_family + frame_count_offset);
+
+            // wacky...
+            /*if (g_framework->is_dx12()) {
+                frame_count -= 1;
+            }
+
+            auto one_frame_thread_lag_cvar = sdk::rendering::get_one_frame_thread_lag_cvar();
+
+            if (!one_frame_thread_lag_cvar) {
+                frame_count -= 1; // assume it's enabled if we can't find the cvar
+            } else {
+                auto data = one_frame_thread_lag_cvar->get<int>();
+
+                if (data == nullptr) {
+                    frame_count -= 1; // again, assume it's enabled if we can't find the cvar   
+                } else if (data->get(0) == 1) {
+                    frame_count -= 1;
+                } else {
+                    frame_count -= 1;
+                }
+            }*/
+
+            //spdlog::info("Current command count: {}", cmd_list->num_commands);
+
+            // Hijack the top command in the command list so we can enqueue the render poses on the RHI thread
+            if (cmd_list->root != nullptr) {
+                static bool analyzed_root_already = false;
+                static bool is_old_command_base = false;
+
+                if (!analyzed_root_already) try {
+                    auto root = cmd_list->root;
+
+                    // If we read the pointer at the start of the root and it's not a module, then it's the old FRHICommandBase
+                    // this is because all vtables reside within a module
+                    if (utility::get_module_within(*(void**)root).value_or(nullptr) == nullptr) {
+                        spdlog::info("Old FRHICommandBase detected");
+                        is_old_command_base = true;
+                    } else {
+                        spdlog::info("New FRHICommandBase detected");
+                    }
+
+                    analyzed_root_already = true;
+                } catch(...) {
+                    spdlog::error("Failed to analyze root command");
+                    analyzed_root_already = true;
+                }
+
+                if (!is_old_command_base) {
+                    hook_new_rhi_command((sdk::FRHICommandBase_New*)cmd_list->root, frame_count);
+                } else {
+                    hook_old_rhi_command((sdk::FRHICommandBase_Old*)cmd_list->root, frame_count);
+                }
+            } else {
+                //spdlog::error("Command list is empty!");
+                vr->get_runtime()->enqueue_render_poses(frame_count); // this is a good fallback
+            }
+        };
+
+        spdlog::info("Done setting up BeginRenderViewFamily hook!");
+    }
+
+    static void hook_new_rhi_command(sdk::FRHICommandBase_New* last_command, uint32_t frame_count) {
+        static std::recursive_mutex vtable_mutex{};
+        static std::unordered_map<sdk::FRHICommandBase_New*, void**> original_vtables{};
+        static std::unordered_map<sdk::FRHICommandBase_New*, uint32_t> cmd_frame_counts{};
+
+        std::scoped_lock __{vtable_mutex};
+
+        cmd_frame_counts[last_command] = frame_count;
+
+        static auto func_override = +[](sdk::FRHICommandBase_New* cmd, sdk::FRHICommandListBase* cmd_list, void* debug_context) {
+            std::scoped_lock _{vtable_mutex};
+            //std::scoped_lock __{VR::get()->get_vr_mutex()};
+
+            static bool once = true;
+
+            if (once) {
+                spdlog::info("[ISceneViewExtension] Successfully hijacked command list!");
+                once = false;
+            }
+
+            auto& vr = VR::get();
+
+            if (vr->get_runtime()->is_openxr() && vr->get_runtime()->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
+                vr->get_openxr_runtime()->begin_frame();
+            }
+
+            if (!original_vtables.contains(cmd)) {
+                spdlog::error("oh no!!!!");
+            }
+
+            if (!cmd_frame_counts.contains(cmd)) {
+                spdlog::error("WTF!!!!!!!!");
+            }
+
+            const auto original_vtable = original_vtables[cmd];
+            const auto original_func = original_vtable[0];
+
+            const auto func = (void(*)(sdk::FRHICommandBase_New*, sdk::FRHICommandListBase*, void*))original_func;
+            const auto frame_count = cmd_frame_counts[cmd];
+
+            vr->get_runtime()->enqueue_render_poses(frame_count);
+
+            func(cmd, cmd_list, debug_context);
+
+            // I think command lists are guaranteed to execute in order, so we can just clear the map here
+            cmd_frame_counts.clear();
+            original_vtables.clear();
+        };
+
+        static std::array<uintptr_t, 3> new_vtable{
+            (uintptr_t)func_override,
+            (uintptr_t)+[](sdk::FRHICommandBase_New* cmd, void* a2, void* a3, void* a4) -> void* {
+                std::scoped_lock _{vtable_mutex};
+
+                const auto original_vtable = original_vtables[cmd];
+                const auto original_func = original_vtable[1];
+
+                const auto func = (void* (*)(sdk::FRHICommandBase_New*, void*, void*, void*))original_func;
+
+                return func(cmd, a2, a3, a4);
+            },
+            (uintptr_t)+[](sdk::FRHICommandBase_New* cmd, void* a2, void* a3, void* a4) -> void* {
+                std::scoped_lock _{vtable_mutex};
+
+                const auto original_vtable = original_vtables[cmd];
+                const auto original_func = original_vtable[2];
+
+                const auto func = (void* (*)(sdk::FRHICommandBase_New*, void*, void*, void*))original_func;
+
+                return func(cmd, a2, a3, a4);
+            }
+        };
+
+        original_vtables[last_command] = *(void***)last_command;
+        *(void***)last_command = (void**)new_vtable.data();
+    }
+
+    static void hook_old_rhi_command(sdk::FRHICommandBase_Old* last_command, uint32_t frame_count) {
+        static std::recursive_mutex func_mutex{};
+        static std::unordered_map<sdk::FRHICommandBase_Old*, sdk::FRHICommandBase_Old::Func> original_funcs{};
+        static std::unordered_map<sdk::FRHICommandBase_Old*, uint32_t> cmd_frame_counts{};
+
+        std::scoped_lock __{func_mutex};
+
+        cmd_frame_counts[last_command] = frame_count;
+
+        static auto func_override = +[](sdk::FRHICommandListBase* cmd_list, sdk::FRHICommandBase_Old* cmd) {
+            std::scoped_lock _{func_mutex};
+            //std::scoped_lock __{VR::get()->get_vr_mutex()};
+
+            static bool once = true;
+
+            if (once) {
+                spdlog::info("[ISceneViewExtension] Successfully hijacked command list!");
+                once = false;
+            }
+
+            auto& vr = VR::get();
+
+            if (vr->get_runtime()->is_openxr() && vr->get_runtime()->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
+                vr->get_openxr_runtime()->begin_frame();
+            }
+
+            if (!original_funcs.contains(cmd)) {
+                spdlog::error("oh no!!!!");
+            }
+
+            if (!cmd_frame_counts.contains(cmd)) {
+                spdlog::error("WTF!!!!!!!!");
+            }
+
+            const auto func = original_funcs[cmd];
+            const auto frame_count = cmd_frame_counts[cmd];
+
+            vr->get_runtime()->enqueue_render_poses(frame_count);
+
+            func(*cmd_list, cmd);
+
+            // I think command lists are guaranteed to execute in order, so we can just clear the map here
+            cmd_frame_counts.clear();
+            original_funcs.clear();
+        };
+    }
+};
+
+template<int N>
+void SceneViewExtensionAnalyzer::FillVtable<N>::fill(std::array<uintptr_t, 50>& table) {
+    table[N] = (uintptr_t)&SceneViewExtensionAnalyzer::analysis_dummy_stage1<N>;
+    FillVtable<N - 1>::fill(table);
+}
+
+template<int N>
+void SceneViewExtensionAnalyzer::FillVtable<N>::fill2(std::array<uintptr_t, 50>& table) {
+    table[N] = (uintptr_t)&SceneViewExtensionAnalyzer::analysis_dummy_stage2<N>;
+    FillVtable<N - 1>::fill2(table);
+}
+
+bool FFakeStereoRenderingHook::setup_view_extensions() try {
+    spdlog::info("Attempting to set up view extensions...");
+
+    auto engine = sdk::UEngine::get();
+
+    if (engine == nullptr) {
+        spdlog::error("Failed to get engine pointer! Cannot set up view extensions!");
+        return false;
+    }
+
+    const auto active_stereo_device = locate_active_stereo_rendering_device();
+
+    if (!active_stereo_device || !s_stereo_rendering_device_offset) {
+        spdlog::error("Failed to locate active stereo rendering device!");
+        return false;
+    }
+
+    // This is a proof of concept at the moment for newer UE versions
+    // older versions may not work or crash.
+    // TODO: Figure out older versions.
+    constexpr auto weak_ptr_size = sizeof(TWeakPtr<void*>);
+    uintptr_t potential_view_extensions = (uintptr_t)engine + s_stereo_rendering_device_offset + (weak_ptr_size * 2); // 2 to skip over the XRSystem
+
+    TWeakPtr<FSceneViewExtensions>& view_extensions_tweakptr = 
+        *(TWeakPtr<FSceneViewExtensions>*)potential_view_extensions;
+
+    // This means it's an old version of UE
+    // so the view extensions are a TArray and not a TWeakPtr<TArray>
+    if (!m_rendertarget_manager_embedded_in_stereo_device) {
+        if (view_extensions_tweakptr.reference == nullptr) {
+            view_extensions_tweakptr.allocate_naive();
+        }
+    }
+
+    FSceneViewExtensions& view_extensions = m_rendertarget_manager_embedded_in_stereo_device ?  
+                                            *(FSceneViewExtensions*)potential_view_extensions : *view_extensions_tweakptr.reference;
+
+    if (view_extensions.extensions.data == nullptr || view_extensions.extensions.data[0].reference == nullptr || view_extensions.extensions.count == 0) {
+        auto ext_ptr = new TWeakPtr<ISceneViewExtension>();
+        ext_ptr->allocate_naive();
+
+        view_extensions.extensions.data = ext_ptr;
+        view_extensions.extensions.count = 1;
+        view_extensions.extensions.capacity = 1;
+    }
+
+    if (view_extensions.extensions.count > 0 && view_extensions.extensions.data != nullptr) {
+        // Replace the vtable of the first entry
+        auto& entry = view_extensions.extensions.data[0];
+
+        if (entry.reference == nullptr) {
+            spdlog::error("Failed to get first view extension entry!");
+            return false;
+        }
+
+        auto& vtable = *(uintptr_t**)entry.reference;
+
+        if (vtable == nullptr) {
+            // just set it to vtable_copy
+            vtable = g_view_extension_vtable.data();
+        }
+
+        if (!m_rendertarget_manager_embedded_in_stereo_device) {
+            SceneViewExtensionAnalyzer::FillVtable<g_view_extension_vtable.size()-1>::fill(g_view_extension_vtable);
+        } else {
+            // Skip straight to stage 2.
+            spdlog::info("Skipping view extension stage 1...");
+            SceneViewExtensionAnalyzer::FillVtable<g_view_extension_vtable.size()-1>::fill2(g_view_extension_vtable);
+        }
+
+        // overwrite the vtable
+        vtable = g_view_extension_vtable.data();
+        m_has_view_extension_hook = true;
+    } else {
+        // TODO: Allocate a new one.
+        m_has_view_extension_hook = false;
+
+        spdlog::info("Failed to set up view extensions! (not yet implemented to allocate a new one)");
+    }
+
+    return true;
+} catch(...) {
+    spdlog::error("Unknown exception while setting up view extensions!");
+    return false;
+}
+
 std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_constructor() {
     static std::optional<uintptr_t> cached_result{};
 
@@ -1229,6 +1726,34 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         return;
     }
 
+    auto vr = VR::get();
+    std::scoped_lock _{vr->get_vr_mutex()};
+
+    static bool index_starts_from_one = true;
+
+    if (view_index == 2) {
+        index_starts_from_one = true;
+    } else if (view_index == 0) {
+        index_starts_from_one = false;
+    }
+
+    const auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
+
+    if (true_index == 0) {
+        //vr->wait_for_present();
+        
+        if (!g_hook->m_has_view_extension_hook && !g_hook->m_has_game_viewport_client_draw_hook) {
+            vr->update_hmd_state();
+        }
+    }
+
+    /*if (view_index % 2 == 1 && VR::get()->get_runtime()->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
+        std::scoped_lock _{ vr->get_runtime()->render_mtx };
+        spdlog::info("SYNCING!!!");
+        //vr->get_runtime()->synchronize_frame();
+        vr->update_hmd_state();
+    }*/
+
     // if we were unable to hook UGameEngine::Tick, we can run our game thread jobs here instead.
     if (g_hook->m_attempted_hook_game_engine_tick && !g_hook->m_hooked_game_engine_tick) {
         GameThreadWorker::get().execute();
@@ -1240,32 +1765,9 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         mod->on_pre_calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location, g_hook->m_has_double_precision);
     }
 
-    static bool index_starts_from_one = true;
-
-    if (view_index == 2) {
-        index_starts_from_one = true;
-    } else if (view_index == 0) {
-        index_starts_from_one = false;
-    }
-
     const auto has_double_precision = g_hook->m_has_double_precision;
-    const auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
     const auto rot_d = (Rotator<double>*)view_rotation;
     const auto view_d = (Vector3d*)view_location;
-
-    auto vr = VR::get();
-
-    /*if (view_index % 2 == 1 && VR::get()->get_runtime()->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
-        std::scoped_lock _{ vr->get_runtime()->render_mtx };
-        spdlog::info("SYNCING!!!");
-        //vr->get_runtime()->synchronize_frame();
-        vr->update_hmd_state();
-    }*/
-
-    if (true_index == 0) {
-        std::scoped_lock _{ vr->m_openvr_mtx };
-        vr->update_hmd_state();
-    }
 
     const auto view_mat = !has_double_precision ? 
         glm::yawPitchRoll(

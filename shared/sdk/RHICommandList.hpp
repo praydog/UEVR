@@ -28,7 +28,7 @@ struct FRHICommandBase_New {
 };
 
 struct FRHICommandBase_Old {
-    using Func = void(*)(FRHICommandListBase& cmd_list, void* debug_context);
+    using Func = void(*)(FRHICommandListBase& CmdList, FRHICommandBase_Old *Cmd);
 
     FRHICommandBase_Old* next{nullptr};
     Func func;

@@ -46,7 +46,7 @@ public:
 
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
 
-    void update_hmd_state();
+    void update_hmd_state(bool from_view_extensions = false, uint32_t frame_count = 0);
     void update_action_states();
 
     void reinitialize_renderer() {
@@ -206,6 +206,27 @@ public:
         return m_stereo_emulation_mode;
     }
 
+    void wait_for_present() {
+        if (!m_wait_for_present) {
+            return;
+        }
+
+        if (m_frame_count <= m_game_frame_count) {
+            //return;
+        }
+
+        if (WaitForSingleObject(m_present_finished_event, 11) == WAIT_TIMEOUT) {
+            //timed_out = true;
+        }
+
+        m_game_frame_count = m_frame_count;
+        //ResetEvent(m_present_finished_event);
+    }
+
+    auto& get_vr_mutex() {
+        return m_openvr_mtx;
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;
@@ -359,6 +380,7 @@ private:
     const ModSlider::Ptr m_world_scale{ ModSlider::create(generate_name("WorldScale"), 0.01f, 10.0f, 1.0f) };
 
     bool m_stereo_emulation_mode{false}; // not a good config option, just for debugging
+    bool m_wait_for_present{true};
 
     ValueList m_options{
         *m_use_afr,
@@ -373,6 +395,7 @@ private:
         *m_world_scale,
     };
 
+    int m_game_frame_count{};
     int m_frame_count{};
     int m_render_frame_count{};
     int m_last_frame_count{-1};

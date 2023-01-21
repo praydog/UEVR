@@ -8,7 +8,7 @@ VRRuntime::Error OpenVR::synchronize_frame() {
         return VRRuntime::Error::SUCCESS;
     }
 
-    //std::unique_lock _{ this->pose_mtx };
+    std::unique_lock _{ this->pose_mtx };
     vr::VRCompositor()->SetTrackingSpace(vr::TrackingUniverseStanding);
     auto ret = vr::VRCompositor()->WaitGetPoses(this->real_render_poses.data(), vr::k_unMaxTrackedDeviceCount, this->real_game_poses.data(), vr::k_unMaxTrackedDeviceCount);
 
@@ -19,7 +19,7 @@ VRRuntime::Error OpenVR::synchronize_frame() {
     return (VRRuntime::Error)ret;
 }
 
-VRRuntime::Error OpenVR::update_poses() {
+VRRuntime::Error OpenVR::update_poses(bool from_view_extensions, uint32_t frame_count) {
     if (!this->ready()) {
         return VRRuntime::Error::SUCCESS;
     }
@@ -27,7 +27,21 @@ VRRuntime::Error OpenVR::update_poses() {
     std::unique_lock _{ this->pose_mtx };
 
     memcpy(this->render_poses.data(), this->real_render_poses.data(), sizeof(this->render_poses));
-    this->pose_queue.push_back(this->render_poses[vr::k_unTrackedDeviceIndex_Hmd].mDeviceToAbsoluteTracking);
+
+    bool should_enqueue = false;
+    if (frame_count == 0) {
+        frame_count = ++this->internal_frame_count;
+        should_enqueue = true;
+    } else {
+        this->internal_frame_count = frame_count;
+    }
+
+    const auto& hmd_pose = this->render_poses[vr::k_unTrackedDeviceIndex_Hmd].mDeviceToAbsoluteTracking;
+    this->pose_queue[frame_count % this->pose_queue.size()] = hmd_pose;
+    
+    if (should_enqueue) {
+        enqueue_render_poses_unsafe(frame_count); // because we've already locked the mutexes.
+    }
 
     this->needs_pose_update = false;
     return VRRuntime::Error::SUCCESS;
@@ -126,22 +140,28 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
 void OpenVR::destroy() {
     if (this->loaded) {
         vr::VR_Shutdown();
+    }
 }
+
+void  OpenVR::enqueue_render_poses(uint32_t frame_count) {
+    std::unique_lock _{ this->pose_mtx };
+    enqueue_render_poses_unsafe(frame_count);
+}
+
+void OpenVR::enqueue_render_poses_unsafe(uint32_t frame_count) {
+    this->internal_render_frame_count = frame_count;
+    this->has_render_frame_count = true;
 }
 
 vr::HmdMatrix34_t OpenVR::get_pose_for_submit() {
     std::unique_lock _{ this->pose_mtx };
 
-    if (this->pose_queue.size() > 3) {
-        this->pose_queue.clear();
-    }
+    const auto frame_count = has_render_frame_count ? internal_render_frame_count : internal_frame_count;
+    const auto out = get_hmd_pose(frame_count);
 
-    const auto last_pose = this->pose_queue.empty() ? this->real_render_poses[0].mDeviceToAbsoluteTracking : this->pose_queue.front();
-    if (!this->pose_queue.empty()) {
-        this->pose_queue.pop_front();
-    }
+    this->has_render_frame_count = false;
 
-    return last_pose;
+    return out;
 }
 }
 

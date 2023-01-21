@@ -14,6 +14,24 @@
 
 #include "VR.hpp"
 
+class ScopeGuard {
+public:
+    ScopeGuard() = delete;
+    ScopeGuard(std::function<void()> on_exit)
+        : m_on_exit{on_exit}
+    {
+    }
+
+    ~ScopeGuard() {
+        if (m_on_exit) {
+            m_on_exit();
+        }
+    }
+
+private:
+    std::function<void()> m_on_exit;
+};
+
 std::shared_ptr<VR>& VR::get() {
     static std::shared_ptr<VR> instance = std::make_shared<VR>();
     return instance;
@@ -672,8 +690,9 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     update_action_states();
 }
 
-void VR::update_hmd_state() {
+void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
     std::scoped_lock _{m_openvr_mtx};
+
     auto runtime = get_runtime();
     
     if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
@@ -694,7 +713,7 @@ void VR::update_hmd_state() {
         }
     }
     
-    runtime->update_poses();
+    runtime->update_poses(from_view_extensions, frame_count);
 
     // Update the poses used for the game
     // If we used the data directly from the WaitGetPoses call, we would have to lock a different mutex and wait a long time
@@ -718,8 +737,8 @@ void VR::update_hmd_state() {
     }
 
     if (!runtime->got_first_poses && runtime->is_openvr()) {
-        std::unique_lock _{m_openvr->pose_mtx};
-        m_openvr->pose_queue.clear();
+        //std::unique_lock _{m_openvr->pose_mtx};
+        //m_openvr->pose_queue.clear();
     }
 
     runtime->got_first_poses = true;
@@ -831,7 +850,17 @@ void VR::on_pre_imgui_frame() {
 }
 
 void VR::on_present() {
-    if ((m_render_frame_count + 1) % 2 == m_left_eye_interval) {
+    ScopeGuard _guard {[&]() {
+        if (!m_use_afr->value() || (m_render_frame_count + 1) % 2 == m_left_eye_interval) {
+            SetEvent(m_present_finished_event);
+        }
+
+        m_last_frame_count = m_render_frame_count;
+    }};
+
+    ++m_frame_count;
+
+    if (!m_use_afr->value() || (m_render_frame_count + 1) % 2 == m_left_eye_interval) {
         ResetEvent(m_present_finished_event);
     }
 
@@ -893,10 +922,6 @@ void VR::on_present() {
 
         if (!runtime->got_first_poses || !had_sync) {
             update_hmd_state();
-            if (runtime->is_openvr()) {
-                std::unique_lock _{m_openvr->pose_mtx};
-                m_openvr->pose_queue.clear();
-            }
         }
     }
 
@@ -925,8 +950,6 @@ void VR::on_present() {
         openvr->needs_pose_update = true;
     }
 
-    m_last_frame_count = m_render_frame_count;
-
     if (m_submitted || runtime->needs_pose_update) {
         if (m_submitted) {
             if (!m_disable_overlay) {
@@ -942,43 +965,39 @@ void VR::on_present() {
         //runtime->needs_pose_update = true;
         m_submitted = false;
     }
-
-    if ((m_render_frame_count + 1) % 2 == m_left_eye_interval) {
-        SetEvent(m_present_finished_event);
-    }
-
-    ++m_render_frame_count;
 }
 
 void VR::on_post_present() {
+    m_render_frame_count = m_frame_count;
+
     auto runtime = get_runtime();
 
     if (!get_runtime()->loaded) {
         return;
     }
 
+    std::scoped_lock _{m_openvr_mtx};
+
     detect_controllers();
-    
+
     if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
         const auto had_sync = runtime->got_first_sync;
         runtime->synchronize_frame();
 
         if (!runtime->got_first_poses || !had_sync) {
             update_hmd_state();
-            if (runtime->is_openvr()) {
-                std::unique_lock _{m_openvr->pose_mtx};
-                m_openvr->pose_queue.clear();
-            }
         }
     }
 
-    if (runtime->is_openxr() && runtime->ready() && !m_use_afr->value()) {
+    if (runtime->is_openxr() && runtime->ready() && !m_use_afr->value() && runtime->get_synchronize_stage() > VRRuntime::SynchronizeStage::EARLY) {
         if (!m_openxr->frame_began) {
             m_openxr->begin_frame();
         }
     }
 
-    std::scoped_lock _{m_openvr_mtx};
+    if (runtime->get_synchronize_stage() > VRRuntime::SynchronizeStage::EARLY) {
+        //update_hmd_state();
+    }
 
     if (runtime->wants_reinitialize) {
         if (runtime->is_openvr()) {
@@ -1247,6 +1266,7 @@ void VR::on_draw_ui() {
     ImGui::Checkbox("Disable Backbuffer Size Override", &m_disable_backbuffer_size_override);
     ImGui::Checkbox("Disable VR Overlay", &m_disable_overlay);
     ImGui::Checkbox("Stereo Emulation Mode", &m_stereo_emulation_mode);
+    ImGui::Checkbox("Wait for Present", &m_wait_for_present);
 
     const double min_ = 0.0;
     const double max_ = 25.0;
@@ -1293,6 +1313,15 @@ Vector4f VR::get_position_unsafe(uint32_t index) const {
             return Vector4f{};
         }
 
+        if (index == vr::k_unTrackedDeviceIndex_Hmd) {
+            const auto pose = m_openvr->get_current_hmd_pose();
+            auto matrix = Matrix4x4f{ *(Matrix3x4f*)&pose };
+            auto result = glm::rowMajor4(matrix)[3];
+            result.w = 1.0f;
+
+            return result;
+        }
+
         auto& pose = get_openvr_poses()[index];
         auto matrix = Matrix4x4f{ *(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking };
         auto result = glm::rowMajor4(matrix)[3];
@@ -1306,7 +1335,7 @@ Vector4f VR::get_position_unsafe(uint32_t index) const {
 
         // HMD position
         if (index == 0 && !m_openxr->stage_views.empty()) {
-            return Vector4f{ *(Vector3f*)&m_openxr->view_space_location.pose.position, 1.0f };
+            return Vector4f{ *(Vector3f*)&m_openxr->get_current_view_space_location().pose.position, 1.0f };
         } else if (index > 0) {
             return Vector4f{ *(Vector3f*)&m_openxr->hands[index-1].location.pose.position, 1.0f };
         }
@@ -1377,6 +1406,12 @@ Matrix4x4f VR::get_rotation(uint32_t index) const {
 
         std::shared_lock _{ get_runtime()->pose_mtx };
 
+        if (index == vr::k_unTrackedDeviceIndex_Hmd) {
+            const auto pose = m_openvr->get_current_hmd_pose();
+            const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&pose };
+            return glm::extractMatrixRotation(glm::rowMajor4(matrix));
+        }
+
         auto& pose = get_openvr_poses()[index];
         auto matrix = Matrix4x4f{ *(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking };
         return glm::extractMatrixRotation(glm::rowMajor4(matrix));
@@ -1386,7 +1421,7 @@ Matrix4x4f VR::get_rotation(uint32_t index) const {
 
         // HMD rotation
         if (index == 0 && !m_openxr->stage_views.empty()) {
-            const auto q = runtimes::OpenXR::to_glm(m_openxr->view_space_location.pose.orientation);
+            const auto q = runtimes::OpenXR::to_glm(m_openxr->get_current_view_space_location().pose.orientation);
             const auto m = glm::extractMatrixRotation(Matrix4x4f{q});
 
             return m;
@@ -1413,16 +1448,23 @@ Matrix4x4f VR::get_transform(uint32_t index) const {
 
         std::shared_lock _{ get_runtime()->pose_mtx };
 
-        auto& pose = get_openvr_poses()[index];
-        auto matrix = Matrix4x4f{ *(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking };
+        if (index == vr::k_unTrackedDeviceIndex_Hmd) {
+            const auto pose = m_openvr->get_current_hmd_pose();
+            const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&pose };
+            return glm::rowMajor4(matrix);
+        }
+
+        const auto& pose = get_openvr_poses()[index];
+        const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking };
         return glm::rowMajor4(matrix);
     } else if (get_runtime()->is_openxr()) {
         std::shared_lock _{ get_runtime()->pose_mtx };
 
         // HMD rotation
         if (index == 0 && !m_openxr->stage_views.empty()) {
-            auto mat = Matrix4x4f{runtimes::OpenXR::to_glm(m_openxr->view_space_location.pose.orientation)};
-            mat[3] = Vector4f{*(Vector3f*)&m_openxr->view_space_location.pose.position, 1.0f};
+            const auto& vspl = m_openxr->get_current_view_space_location();
+            auto mat = Matrix4x4f{runtimes::OpenXR::to_glm(vspl.pose.orientation)};
+            mat[3] = Vector4f{*(Vector3f*)&vspl.pose.position, 1.0f};
             return mat;
         } else if (index > 0) {
             if (index == VRRuntime::Hand::LEFT+1) {
@@ -1447,6 +1489,10 @@ vr::HmdMatrix34_t VR::get_raw_transform(uint32_t index) const {
         }
 
         std::shared_lock _{ get_runtime()->pose_mtx };
+
+        if (index == vr::k_unTrackedDeviceIndex_Hmd) {
+            return m_openvr->get_current_hmd_pose();
+        }
 
         auto& pose = get_openvr_poses()[index];
         return pose.mDeviceToAbsoluteTracking;

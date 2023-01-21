@@ -63,7 +63,7 @@ struct VRRuntime {
         return Error::SUCCESS;
     }
 
-    virtual Error update_poses() {
+    virtual Error update_poses(bool from_view_extensions = false, uint32_t frame_count = 0) {
         return Error::SUCCESS;
     }
 
@@ -95,6 +95,9 @@ struct VRRuntime {
         return Error::SUCCESS;
     }
 
+    virtual void enqueue_render_poses(uint32_t frame_count) {
+
+    }
 
     virtual void on_config_load(const utility::Config& cfg) {}
     virtual void on_config_save(utility::Config& cfg) {}
@@ -134,4 +137,8 @@ struct VRRuntime {
     Vector4f raw_projections[2]{};
 
     SynchronizeStage custom_stage{SynchronizeStage::EARLY};
+
+    uint32_t internal_frame_count{};
+    uint32_t internal_render_frame_count{};
+    bool has_render_frame_count{false};
 };
