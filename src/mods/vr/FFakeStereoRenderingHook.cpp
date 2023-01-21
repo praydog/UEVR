@@ -760,6 +760,12 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
     m_fallback_device.vtable = m_fallback_vtable.data();
     *(uintptr_t*)((uintptr_t)engine + 0xAC8) = (uintptr_t)&m_fallback_device; // TODO: Automatically find this offset.
 
+    // So the view extension hook will work.
+    s_stereo_rendering_device_offset = 0xAC8;
+
+    hook_game_viewport_client();
+    setup_view_extensions();
+
     spdlog::info("Finished creating stereo device for the game using nonstandard method");
 
     m_finished_hooking = true;
@@ -1357,6 +1363,11 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_
     static std::optional<uintptr_t> cached_result{};
 
     if (cached_result) {
+        return cached_result;
+    }
+
+    if (g_hook->m_special_detected) {
+        cached_result = *(uintptr_t*)((uintptr_t)sdk::UGameEngine::get() + s_stereo_rendering_device_offset);
         return cached_result;
     }
 
