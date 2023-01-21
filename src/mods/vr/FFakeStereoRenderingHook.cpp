@@ -1141,14 +1141,6 @@ struct SceneViewExtensionAnalyzer {
                 vr->get_openxr_runtime()->begin_frame();
             }
 
-            if (!original_vtables.contains(cmd)) {
-                spdlog::error("oh no!!!!");
-            }
-
-            if (!cmd_frame_counts.contains(cmd)) {
-                spdlog::error("WTF!!!!!!!!");
-            }
-
             const auto original_vtable = original_vtables[cmd];
             const auto original_func = original_vtable[0];
 
@@ -1216,14 +1208,6 @@ struct SceneViewExtensionAnalyzer {
 
             if (vr->get_runtime()->is_openxr() && vr->get_runtime()->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
                 vr->get_openxr_runtime()->begin_frame();
-            }
-
-            if (!original_funcs.contains(cmd)) {
-                spdlog::error("oh no!!!!");
-            }
-
-            if (!cmd_frame_counts.contains(cmd)) {
-                spdlog::error("WTF!!!!!!!!");
             }
 
             const auto func = original_funcs[cmd];
