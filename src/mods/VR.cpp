@@ -695,7 +695,7 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
 
     auto runtime = get_runtime();
     
-    if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
+    /*if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
         if (runtime->is_openxr()) {
             if (g_framework->get_renderer_type() == Framework::RendererType::D3D11) {
                 if (!runtime->got_first_sync || runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
@@ -711,7 +711,7 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
                 return;
             }
         }
-    }
+    }*/
     
     runtime->update_poses(from_view_extensions, frame_count);
 

@@ -284,6 +284,7 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/EngineModule.hpp"
 	"shared/sdk/FViewportInfo.hpp"
 	"shared/sdk/Math.hpp"
+	"shared/sdk/RHICommandList.hpp"
 	"shared/sdk/Slate.hpp"
 	"shared/sdk/StereoStuff.hpp"
 	"shared/sdk/UEngine.hpp"

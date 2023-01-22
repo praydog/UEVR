@@ -1199,7 +1199,7 @@ struct SceneViewExtensionAnalyzer {
 
         cmd_frame_counts[last_command] = frame_count;
 
-        static auto func_override = +[](sdk::FRHICommandListBase* cmd_list, sdk::FRHICommandBase_Old* cmd) {
+        static auto func_override = (sdk::FRHICommandBase_Old::Func)+[](sdk::FRHICommandListBase* cmd_list, sdk::FRHICommandBase_Old* cmd) {
             std::scoped_lock _{func_mutex};
             //std::scoped_lock __{VR::get()->get_vr_mutex()};
 
@@ -1227,6 +1227,9 @@ struct SceneViewExtensionAnalyzer {
             cmd_frame_counts.clear();
             original_funcs.clear();
         };
+
+        original_funcs[last_command] = last_command->func;
+        last_command->func = func_override;
     }
 };
 
