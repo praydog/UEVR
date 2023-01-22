@@ -1142,9 +1142,24 @@ struct SceneViewExtensionAnalyzer {
             }
 
             auto& vr = VR::get();
+            auto runtime = vr->get_runtime();
 
-            if (vr->get_runtime()->is_openxr() && vr->get_runtime()->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
-                vr->get_openxr_runtime()->begin_frame();
+            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
+                if (runtime->is_openxr()) {
+                    if (g_framework->get_renderer_type() == Framework::RendererType::D3D11) {
+                        if (!runtime->got_first_sync || runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+                            return;
+                        }  
+                    } else if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+                        return;
+                    }
+
+                    vr->get_openxr_runtime()->begin_frame();
+                } else {
+                    if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+                        return;
+                    }
+                }
             }
 
             const auto original_vtable = original_vtables[cmd];
@@ -1211,11 +1226,25 @@ struct SceneViewExtensionAnalyzer {
             }
 
             auto& vr = VR::get();
+            auto runtime = vr->get_runtime();
 
-            if (vr->get_runtime()->is_openxr() && vr->get_runtime()->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
-                vr->get_openxr_runtime()->begin_frame();
+            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
+                if (runtime->is_openxr()) {
+                    if (g_framework->get_renderer_type() == Framework::RendererType::D3D11) {
+                        if (!runtime->got_first_sync || runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+                            return;
+                        }  
+                    } else if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+                        return;
+                    }
+
+                    vr->get_openxr_runtime()->begin_frame();
+                } else {
+                    if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+                        return;
+                    }
+                }
             }
-
             const auto func = original_funcs[cmd];
             const auto frame_count = cmd_frame_counts[cmd];
 
