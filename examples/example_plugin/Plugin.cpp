@@ -142,11 +142,11 @@ public:
         PLUGIN_LOG_ONCE("Post Calculate Stereo View Offset");
     }
 
-    void on_pre_viewport_client_draw(UEVR_UGameViewportClientHandle viewport_client, UEVR_UCanvasHandle canvas) {
+    void on_pre_viewport_client_draw(UEVR_UGameViewportClientHandle viewport_client, UEVR_FViewportHandle viewport, UEVR_FCanvasHandle canvas) {
         PLUGIN_LOG_ONCE("Pre Viewport Client Draw");
     }
 
-    void on_post_viewport_client_draw(UEVR_UGameViewportClientHandle viewport_client, UEVR_UCanvasHandle canvas) {
+    void on_post_viewport_client_draw(UEVR_UGameViewportClientHandle viewport_client, UEVR_FViewportHandle viewport, UEVR_FCanvasHandle canvas) {
         PLUGIN_LOG_ONCE("Post Viewport Client Draw");
     }
 

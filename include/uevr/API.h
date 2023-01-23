@@ -33,7 +33,8 @@ DECLARE_UEVR_HANDLE(UEVR_UEngineHandle);
 DECLARE_UEVR_HANDLE(UEVR_FSlateRHIRendererHandle);
 DECLARE_UEVR_HANDLE(UEVR_FViewportInfoHandle);
 DECLARE_UEVR_HANDLE(UEVR_UGameViewportClientHandle);
-DECLARE_UEVR_HANDLE(UEVR_UCanvasHandle);
+DECLARE_UEVR_HANDLE(UEVR_FViewportHandle);
+DECLARE_UEVR_HANDLE(UEVR_FCanvasHandle);
 
 // OpenXR stuff
 DECLARE_UEVR_HANDLE(UEVR_XrInstance);
@@ -110,7 +111,7 @@ typedef void (*UEVR_OnXInputGetStateCb)(unsigned int*, unsigned int, void*); /* 
 typedef void (*UEVR_OnXInputSetStateCb)(unsigned int*, unsigned int, void*); /* retval, dwUserIndex, pVibration, read MSDN for details */
 typedef void (*UEVR_Engine_TickCb)(UEVR_UGameEngineHandle engine, float delta_seconds);
 typedef void (*UEVR_Slate_DrawWindow_RenderThreadCb)(UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info);
-typedef void (*UEVR_ViewportClient_DrawCb)(UEVR_UGameViewportClientHandle viewport_client, UEVR_UCanvasHandle canvas);
+typedef void (*UEVR_ViewportClient_DrawCb)(UEVR_UGameViewportClientHandle viewport_client, UEVR_FViewportHandle viewport, UEVR_FCanvasHandle canvas);
 
 DECLARE_UEVR_HANDLE(UEVR_StereoRenderingDeviceHandle);
 /* the position and rotation must be converted to double format based on the is_double parameter. */
