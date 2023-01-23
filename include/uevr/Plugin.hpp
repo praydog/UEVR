@@ -41,6 +41,9 @@ public:
     virtual void on_post_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle, int view_index, float world_to_meters, 
                                                       UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double) {};
 
+    virtual void on_pre_viewport_client_draw(UEVR_UGameViewportClientHandle viewport_client, UEVR_UCanvasHandle) {}
+    virtual void on_post_viewport_client_draw(UEVR_UGameViewportClientHandle viewport_client, UEVR_UCanvasHandle) {}
+
 protected:
 };
 }
@@ -102,6 +105,14 @@ extern "C" __declspec(dllexport) bool uevr_plugin_initialize(const UEVR_PluginIn
     sdk_callbacks->on_post_calculate_stereo_view_offset([](UEVR_StereoRenderingDeviceHandle device, int view_index, float world_to_meters, 
                                                            UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double) {
         uevr::detail::g_plugin->on_post_calculate_stereo_view_offset(device, view_index, world_to_meters, position, rotation, is_double);
+    });
+
+    sdk_callbacks->on_pre_viewport_client_draw([](UEVR_UGameViewportClientHandle viewport_client, UEVR_UCanvasHandle canvas) {
+        uevr::detail::g_plugin->on_pre_viewport_client_draw(viewport_client, canvas);
+    });
+
+    sdk_callbacks->on_post_viewport_client_draw([](UEVR_UGameViewportClientHandle viewport_client, UEVR_UCanvasHandle canvas) {
+        uevr::detail::g_plugin->on_post_viewport_client_draw(viewport_client, canvas);
     });
 
     return true;

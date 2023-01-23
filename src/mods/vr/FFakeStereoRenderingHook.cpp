@@ -834,13 +834,30 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
             return;
         }
 
+        static bool once = true;
+
+        if (once) {
+            spdlog::info("UGameViewportClient::Draw called for the first time.");
+            once = false;
+        }
+
         if (g_hook->m_has_view_extension_hook) {
             vr->update_hmd_state(true, vr->get_runtime()->internal_frame_count + 1);
         } else {
             vr->update_hmd_state(false);
         }
 
+        const auto& mods = g_framework->get_mods()->get_mods();
+
+        for (const auto& mod : mods) {
+            mod->on_pre_viewport_client_draw(viewport, canvas);
+        }
+
         call_orig();
+
+        for (const auto& mod : mods) {
+            mod->on_post_viewport_client_draw(viewport, canvas);
+        }
     });
 
     m_has_game_viewport_client_draw_hook = true;

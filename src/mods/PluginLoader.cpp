@@ -185,6 +185,22 @@ bool on_post_calculate_stereo_view_offset(UEVR_Stereo_CalculateStereoViewOffsetC
 
     return PluginLoader::get()->add_on_post_calculate_stereo_view_offset(cb);
 }
+
+bool on_pre_viewport_client_draw(UEVR_ViewportClient_DrawCb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_pre_viewport_client_draw(cb);
+}
+
+bool on_post_viewport_client_draw(UEVR_ViewportClient_DrawCb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_post_viewport_client_draw(cb);
+}
 }
 
 UEVR_SDKCallbacks g_sdk_callbacks {
@@ -193,7 +209,9 @@ UEVR_SDKCallbacks g_sdk_callbacks {
     uevr::on_pre_slate_draw_window_render_thread,
     uevr::on_post_slate_draw_window_render_thread,
     uevr::on_pre_calculate_stereo_view_offset,
-    uevr::on_post_calculate_stereo_view_offset
+    uevr::on_post_calculate_stereo_view_offset,
+    uevr::on_pre_viewport_client_draw,
+    uevr::on_post_viewport_client_draw
 };
 
 UEVR_SDKData g_sdk_data {
@@ -918,6 +936,30 @@ void PluginLoader::on_post_calculate_stereo_view_offset(void* stereo_device, con
     }
 }
 
+void PluginLoader::on_pre_viewport_client_draw(void* viewport_client, void* canvas) {
+    std::shared_lock _{m_api_cb_mtx};
+
+    for (auto&& cb : m_on_pre_viewport_client_draw_cbs) {
+        try {
+            cb((UEVR_UGameViewportClientHandle)viewport_client, (UEVR_UCanvasHandle)canvas);
+        } catch(...) {
+            spdlog::error("[APIProxy] Exception occurred in on_pre_viewport_client_draw callback; one of the plugins has an error.");
+        }
+    }
+}
+
+void PluginLoader::on_post_viewport_client_draw(void* viewport_client, void* canvas) {
+    std::shared_lock _{m_api_cb_mtx};
+
+    for (auto&& cb : m_on_post_viewport_client_draw_cbs) {
+        try {
+            cb((UEVR_UGameViewportClientHandle)viewport_client, (UEVR_UCanvasHandle)canvas);
+        } catch(...) {
+            spdlog::error("[APIProxy] Exception occurred in on_post_viewport_client_draw callback; one of the plugins has an error.");
+        }
+    }
+}
+
 bool PluginLoader::add_on_present(UEVR_OnPresentCb cb) {
     std::unique_lock _{m_api_cb_mtx};
 
@@ -995,3 +1037,16 @@ bool PluginLoader::add_on_post_calculate_stereo_view_offset(UEVR_Stereo_Calculat
     return true;
 }
 
+bool PluginLoader::add_on_pre_viewport_client_draw(UEVR_ViewportClient_DrawCb cb) {
+    std::unique_lock _{m_api_cb_mtx};
+
+    m_on_pre_viewport_client_draw_cbs.push_back(cb);
+    return true;
+}
+
+bool PluginLoader::add_on_post_viewport_client_draw(UEVR_ViewportClient_DrawCb cb) {
+    std::unique_lock _{m_api_cb_mtx};
+
+    m_on_post_viewport_client_draw_cbs.push_back(cb);
+    return true;
+}
