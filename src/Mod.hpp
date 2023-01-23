@@ -273,8 +273,8 @@ public:
                                                      const float world_to_meters, Vector3f* view_location, bool is_double) {};
     virtual void on_post_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
                                                       const float world_to_meters, Vector3f* view_location, bool is_double) {};
-    virtual void on_pre_viewport_client_draw(void* viewport_client, void* canvas) {};
-    virtual void on_post_viewport_client_draw(void* viewport_client, void* canvas) {};
+    virtual void on_pre_viewport_client_draw(void* viewport_client, void* viewport, void* canvas) {};
+    virtual void on_post_viewport_client_draw(void* viewport_client, void* viewport, void* canvas) {};
 };
 
 class ModComponent : public Mod {

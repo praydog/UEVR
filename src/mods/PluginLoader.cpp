@@ -936,24 +936,24 @@ void PluginLoader::on_post_calculate_stereo_view_offset(void* stereo_device, con
     }
 }
 
-void PluginLoader::on_pre_viewport_client_draw(void* viewport_client, void* canvas) {
+void PluginLoader::on_pre_viewport_client_draw(void* viewport_client, void* viewport, void* canvas) {
     std::shared_lock _{m_api_cb_mtx};
 
     for (auto&& cb : m_on_pre_viewport_client_draw_cbs) {
         try {
-            cb((UEVR_UGameViewportClientHandle)viewport_client, (UEVR_UCanvasHandle)canvas);
+            cb((UEVR_UGameViewportClientHandle)viewport_client, (UEVR_FViewportHandle)viewport, (UEVR_FCanvasHandle)canvas);
         } catch(...) {
             spdlog::error("[APIProxy] Exception occurred in on_pre_viewport_client_draw callback; one of the plugins has an error.");
         }
     }
 }
 
-void PluginLoader::on_post_viewport_client_draw(void* viewport_client, void* canvas) {
+void PluginLoader::on_post_viewport_client_draw(void* viewport_client, void* viewport, void* canvas) {
     std::shared_lock _{m_api_cb_mtx};
 
     for (auto&& cb : m_on_post_viewport_client_draw_cbs) {
         try {
-            cb((UEVR_UGameViewportClientHandle)viewport_client, (UEVR_UCanvasHandle)canvas);
+            cb((UEVR_UGameViewportClientHandle)viewport_client, (UEVR_FViewportHandle)viewport, (UEVR_FCanvasHandle)canvas);
         } catch(...) {
             spdlog::error("[APIProxy] Exception occurred in on_post_viewport_client_draw callback; one of the plugins has an error.");
         }

@@ -817,9 +817,9 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
     auto factory = SafetyHookFactory::init();
     auto builder = factory->acquire();
 
-    m_gameviewportclient_draw_hook = builder.create_inline((void*)*game_viewport_client_draw, +[](void* viewport, void* canvas, void* a3, void* a4) -> void {
+    m_gameviewportclient_draw_hook = builder.create_inline((void*)*game_viewport_client_draw, +[](void* viewport_client, void* viewport, void* canvas, void* a4) -> void {
         auto call_orig = [&]() {
-            g_hook->m_gameviewportclient_draw_hook->call(viewport, canvas, a3, a4);
+            g_hook->m_gameviewportclient_draw_hook->call(viewport_client, viewport, canvas, a4);
         };
 
         if (!g_framework->is_game_data_intialized()) {
@@ -850,13 +850,13 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
         const auto& mods = g_framework->get_mods()->get_mods();
 
         for (const auto& mod : mods) {
-            mod->on_pre_viewport_client_draw(viewport, canvas);
+            mod->on_pre_viewport_client_draw(viewport_client, viewport, canvas);
         }
 
         call_orig();
 
         for (const auto& mod : mods) {
-            mod->on_post_viewport_client_draw(viewport, canvas);
+            mod->on_post_viewport_client_draw(viewport_client, viewport, canvas);
         }
     });
 
