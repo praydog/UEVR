@@ -1804,9 +1804,25 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     }
 
     auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
+    const auto has_double_precision = g_hook->m_has_double_precision;
+    const auto rot_d = (Rotator<double>*)view_rotation;
 
     if (vr->is_using_afr()) {
         true_index = g_frame_count % 2;
+
+        if (g_hook->m_has_double_precision) {
+            if (true_index == 1) {
+                *rot_d = g_hook->m_last_afr_rotation_double;
+            } else {
+                g_hook->m_last_afr_rotation_double = *rot_d;
+            }
+        } else {
+            if (true_index == 1) {
+                *view_rotation = g_hook->m_last_afr_rotation;
+            } else {
+                g_hook->m_last_afr_rotation = *view_rotation;
+            }
+        }
     }
 
     if (true_index == 0) {
@@ -1835,8 +1851,6 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         mod->on_pre_calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location, g_hook->m_has_double_precision);
     }
 
-    const auto has_double_precision = g_hook->m_has_double_precision;
-    const auto rot_d = (Rotator<double>*)view_rotation;
     const auto view_d = (Vector3d*)view_location;
 
     const auto view_mat = !has_double_precision ? 

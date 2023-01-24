@@ -274,6 +274,9 @@ private:
     VRRenderTargetManager_418 m_rtm_418{};
     VRRenderTargetManager_Special m_rtm_special{};
 
+    Rotator<float> m_last_afr_rotation{};
+    Rotator<double> m_last_afr_rotation_double{};
+
     std::vector<uintptr_t> m_projection_matrix_stack{};
     bool m_hooked_alternative_localplayer_scan{false};
 
