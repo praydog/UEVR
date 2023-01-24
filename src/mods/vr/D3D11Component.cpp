@@ -81,7 +81,15 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     if (vr->m_render_frame_count % 2 == vr->m_left_eye_interval && vr->m_use_afr->value()) {
         if (runtime->is_openxr() && runtime->ready()) {
             LOG_VERBOSE("Copying left eye");
-            m_openxr.copy(0, backbuffer.Get());
+            //m_openxr.copy(0, backbuffer.Get());
+            D3D11_BOX src_box{};
+            src_box.left = 0;
+            src_box.right = m_backbuffer_size[0] / 2;
+            src_box.top = 0;
+            src_box.bottom = m_backbuffer_size[1];
+            src_box.front = 0;
+            src_box.back = 1;
+            m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::LEFT_EYE, backbuffer.Get(), &src_box);
         }
 
         const auto has_skip_present_fix = vr->m_desktop_fix->value() && vr->m_desktop_fix_skip_present->value();
@@ -129,12 +137,22 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             LOG_VERBOSE("Copying right eye");
 
             D3D11_BOX src_box{};
-            src_box.left = m_backbuffer_size[0] / 2;
-            src_box.right = m_backbuffer_size[0];
-            src_box.top = 0;
-            src_box.bottom = m_backbuffer_size[1];
-            src_box.front = 0;
-            src_box.back = 1;
+            if (!vr->m_use_afr->value()) {
+                src_box.left = m_backbuffer_size[0] / 2;
+                src_box.right = m_backbuffer_size[0];
+                src_box.top = 0;
+                src_box.bottom = m_backbuffer_size[1];
+                src_box.front = 0;
+                src_box.back = 1;
+            } else { // Copy the left eye on AFR
+                src_box.left = 0;
+                src_box.right = m_backbuffer_size[0] / 2;
+                src_box.top = 0;
+                src_box.bottom = m_backbuffer_size[1];
+                src_box.front = 0;
+                src_box.back = 1;
+            }
+
             m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::RIGHT_EYE, backbuffer.Get(), &src_box);
 
             LOG_VERBOSE("Ending frame");

@@ -36,6 +36,7 @@
 //#define FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
 
 FFakeStereoRenderingHook* g_hook = nullptr;
+uint32_t g_frame_count{};
 
 // Scan through function instructions to detect usage of double
 // floating point precision instructions.
@@ -601,7 +602,27 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     
     //m_get_stereo_layers_hook = std::make_unique<PointerHook>((void**)get_stereo_layers_func_ptr, (void*)&get_stereo_layers_hook);
     m_is_stereo_enabled_hook = std::make_unique<PointerHook>((void**)is_stereo_enabled_func_ptr, (void*)&is_stereo_enabled);
-    //m_init_canvas_hook = std::make_unique<PointerHook>((void**)init_canvas_func_ptr, (void*)&init_canvas);
+
+    // scan for GetDesiredNumberOfViews function, we use this function to perform AFR if needed
+    spdlog::info("Searching for GetDesiredNumberOfViews function...");
+
+    for (auto i = 1; i < 20; ++i) {
+        auto func_ptr = &((uintptr_t*)vtable)[i];
+
+        if (IsBadReadPtr((void*)*func_ptr, 8)) {
+            spdlog::info("Could not locate GetDesiredNumberOfViews function, this is okay, not really needed");
+            break;
+        }
+
+        // pretty consistent patterns
+        if (sdk::is_vfunc_pattern(*func_ptr, "0F B6 C2 FF C0 C3") ||
+            sdk::is_vfunc_pattern(*func_ptr, "84 D2 74 04 8B 41 14 C3 B8 01")) 
+        {
+            spdlog::info("Found GetDesiredNumberOfViews function at index: {}", i);
+            m_get_desired_number_of_views_hook = std::make_unique<PointerHook>((void**)func_ptr, (void*)&get_desired_number_of_views_hook);
+            break;
+        }
+    }
 
     spdlog::info("Leaving FFakeStereoRenderingHook::hook");
 
@@ -617,8 +638,6 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     } else {
         spdlog::error("Failed to find backbuffer format cvar, continuing anyways...");
     }
-
-    m_finished_hooking = true;
 
     // make a shadow copy of FFakeStereoRendering's vtable to get past weird compiler optimizations
     // that cause the hook to not work, reason being that the compiler will optimize
@@ -645,6 +664,8 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     setup_view_extensions();
     hook_game_viewport_client();
+
+    m_finished_hooking = true;
 
     spdlog::info("Finished hooking FFakeStereoRendering!");
 
@@ -842,6 +863,7 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
         }
 
         if (g_hook->m_has_view_extension_hook) {
+            g_frame_count = vr->get_runtime()->internal_frame_count;
             vr->update_hmd_state(true, vr->get_runtime()->internal_frame_count + 1);
         } else {
             vr->update_hmd_state(false);
@@ -1781,7 +1803,11 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         index_starts_from_one = false;
     }
 
-    const auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
+    auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
+
+    if (vr->is_using_afr()) {
+        true_index = g_frame_count % 2;
+    }
 
     if (true_index == 0) {
         //vr->wait_for_present();
@@ -1969,7 +1995,13 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
     // spdlog::info("NearZ: {}", old_znear);
 
     if (out != nullptr) {
-        const auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
+        auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
+    
+        auto& vr = VR::get();
+        if (vr->is_using_afr()) {
+            true_index = g_frame_count % 2;
+        }
+
         auto& double_matrix = *(Matrix4x4d*)out;
 
         if (!g_hook->m_has_double_precision) {
@@ -2129,6 +2161,22 @@ void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneV
 
     //*(Matrix4x4f*)((uintptr_t)view + fsceneview_viewproj_offset) = VR::get()->get_projection_matrix(VRRuntime::Eye::LEFT);
     *(Matrix4x4f*)((uintptr_t)canvas + ucanvas_viewproj_offset) = *(Matrix4x4f*)((uintptr_t)view + fsceneview_viewproj_offset);
+}
+
+uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoRendering* stereo, bool is_stereo_enabled) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    spdlog::info("get desired number of views hook called!");
+#endif
+
+    if (!is_stereo_enabled) {
+        return 1;
+    }
+
+    if (VR::get()->is_using_afr()) {
+        return 1;
+    }
+
+    return 2;
 }
 
 IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_hook(FFakeStereoRendering* stereo) {

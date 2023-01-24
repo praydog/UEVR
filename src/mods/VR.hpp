@@ -227,6 +227,10 @@ public:
         return m_openvr_mtx;
     }
 
+    bool is_using_afr() const {
+        return m_use_afr->value();
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;

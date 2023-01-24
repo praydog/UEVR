@@ -694,24 +694,37 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
     std::scoped_lock _{m_openvr_mtx};
 
     auto runtime = get_runtime();
-    
-    /*if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
-        if (runtime->is_openxr()) {
-            if (g_framework->get_renderer_type() == Framework::RendererType::D3D11) {
-                if (!runtime->got_first_sync || runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
-                    return;
-                }  
-            } else if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
-                return;
-            }
 
-            m_openxr->begin_frame();
+    if (is_using_afr() && frame_count % 2 == 0) {
+        if (runtime->is_openxr()) {
+            const auto last_frame = (frame_count - 1) % m_openxr->view_space_location_queue.size();
+            const auto now_frame = frame_count % m_openxr->view_space_location_queue.size();
+            m_openxr->view_space_location_queue[now_frame] = m_openxr->view_space_location_queue[last_frame];
+            m_openxr->stage_view_queue[now_frame] = m_openxr->stage_view_queue[last_frame];
         } else {
-            if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
-                return;
-            }
+            const auto last_frame = (frame_count - 1) % m_openvr->pose_queue.size();
+            const auto now_frame = frame_count % m_openvr->pose_queue.size();
+            m_openvr->pose_queue[now_frame] = m_openvr->pose_queue[last_frame];
         }
-    }*/
+
+        // Forcefully disable motion blur because it freaks out with AFR
+        static auto r_default_feature_motion_blur_cvar = sdk::find_cvar_data(L"Engine", L"r.DefaultFeature.MotionBlur");
+
+        if (r_default_feature_motion_blur_cvar) try {
+            auto r_default_feature_motion_blur = r_default_feature_motion_blur_cvar->get<int>();
+
+            if (r_default_feature_motion_blur != nullptr) {
+                auto value = r_default_feature_motion_blur->get();
+
+                if (value != 0) {
+                    r_default_feature_motion_blur->set(0);
+                }
+            }
+        } catch(...) {
+        }
+
+        return;
+    }
     
     runtime->update_poses(from_view_extensions, frame_count);
 
@@ -858,9 +871,9 @@ void VR::on_present() {
         m_last_frame_count = m_render_frame_count;
     }};
 
-    ++m_frame_count;
+    m_frame_count = get_runtime()->internal_render_frame_count;
 
-    if (!m_use_afr->value() || (m_render_frame_count + 1) % 2 == m_left_eye_interval) {
+    if (!m_use_afr->value() || m_render_frame_count % 2 == m_left_eye_interval) {
         ResetEvent(m_present_finished_event);
     }
 
@@ -916,7 +929,9 @@ void VR::on_present() {
     const auto renderer = g_framework->get_renderer_type();
     vr::EVRCompositorError e = vr::EVRCompositorError::VRCompositorError_None;
 
-    if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::LATE) {
+    const auto is_left_eye_frame = is_using_afr() ? (m_render_frame_count % 2 == m_left_eye_interval) : true;
+
+    if (is_left_eye_frame && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::LATE) {
         const auto had_sync = runtime->got_first_sync;
         runtime->synchronize_frame();
 
@@ -924,8 +939,6 @@ void VR::on_present() {
             update_hmd_state();
         }
     }
-
-
     if (renderer == Framework::RendererType::D3D11) {
         // if we don't do this then D3D11 OpenXR freezes for some reason.
         if (!runtime->got_first_sync) {
@@ -980,23 +993,23 @@ void VR::on_post_present() {
 
     detect_controllers();
 
-    if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
-        const auto had_sync = runtime->got_first_sync;
-        runtime->synchronize_frame();
+    const auto is_left_eye_frame = is_using_afr() ? (m_render_frame_count % 2 == m_left_eye_interval) : true;
 
-        if (!runtime->got_first_poses || !had_sync) {
-            update_hmd_state();
+    if (is_left_eye_frame) {
+        if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
+            const auto had_sync = runtime->got_first_sync;
+            runtime->synchronize_frame();
+
+            if (!runtime->got_first_poses || !had_sync) {
+                update_hmd_state();
+            }
         }
-    }
 
-    if (runtime->is_openxr() && runtime->ready() && !m_use_afr->value() && runtime->get_synchronize_stage() > VRRuntime::SynchronizeStage::EARLY) {
-        if (!m_openxr->frame_began) {
-            m_openxr->begin_frame();
+        if (runtime->is_openxr() && runtime->ready() && runtime->get_synchronize_stage() > VRRuntime::SynchronizeStage::EARLY) {
+            if (!m_openxr->frame_began) {
+                m_openxr->begin_frame();
+            }
         }
-    }
-
-    if (runtime->get_synchronize_stage() > VRRuntime::SynchronizeStage::EARLY) {
-        //update_hmd_state();
     }
 
     if (runtime->wants_reinitialize) {
@@ -1224,6 +1237,7 @@ void VR::on_draw_ui() {
     get_runtime()->on_draw_ui();
     
     ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
+    m_use_afr->draw("Use AFR");
     ImGui::DragFloat4("Right Bounds", (float*)&m_right_bounds, 0.005f, -2.0f, 2.0f);
     ImGui::DragFloat4("Left Bounds", (float*)&m_left_bounds, 0.005f, -2.0f, 2.0f);
 
