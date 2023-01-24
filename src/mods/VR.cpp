@@ -695,7 +695,7 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
 
     auto runtime = get_runtime();
 
-    if (is_using_afr() && frame_count % 2 == 0) {
+    if (frame_count != 0 && is_using_afr() && frame_count % 2 == 0) {
         if (runtime->is_openxr()) {
             const auto last_frame = (frame_count - 1) % m_openxr->view_space_location_queue.size();
             const auto now_frame = frame_count % m_openxr->view_space_location_queue.size();
@@ -963,7 +963,7 @@ void VR::on_present() {
         openvr->needs_pose_update = true;
     }
 
-    if (m_submitted || runtime->needs_pose_update) {
+    if (m_submitted) {
         if (m_submitted) {
             if (!m_disable_overlay) {
                 m_overlay_component.on_post_compositor_submit();
@@ -971,7 +971,7 @@ void VR::on_present() {
 
             if (runtime->is_openvr()) {
                 //vr::VRCompositor()->SetExplicitTimingMode(vr::VRCompositorTimingMode_Explicit_ApplicationPerformsPostPresentHandoff);
-                vr::VRCompositor()->PostPresentHandoff();
+                //vr::VRCompositor()->PostPresentHandoff();
             }
         }
 
