@@ -257,6 +257,7 @@ private:
     std::unique_ptr<safetyhook::InlineHook> m_render_texture_render_thread_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_slate_thread_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_gameviewportclient_draw_hook{};
+    std::unique_ptr<safetyhook::InlineHook> m_viewport_draw_hook{}; // for AFR
 
     // both of these are used to figure out where the localplayer is, they aren't actively
     // used for anything else, the second one is an alternative hook if the first one

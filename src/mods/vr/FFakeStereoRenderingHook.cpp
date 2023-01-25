@@ -29,6 +29,8 @@
 #include <disasmtypes.h>
 
 #include "GameThreadWorker.hpp"
+#include "RenderThreadWorker.hpp"
+#include "RHIThreadWorker.hpp"
 #include "../VR.hpp"
 
 #include "FFakeStereoRenderingHook.hpp"
@@ -600,7 +602,6 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         );
     }
     
-    //m_get_stereo_layers_hook = std::make_unique<PointerHook>((void**)get_stereo_layers_func_ptr, (void*)&get_stereo_layers_hook);
     m_is_stereo_enabled_hook = std::make_unique<PointerHook>((void**)is_stereo_enabled_func_ptr, (void*)&is_stereo_enabled);
 
     // scan for GetDesiredNumberOfViews function, we use this function to perform AFR if needed
@@ -876,6 +877,84 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
         }
 
         call_orig();
+
+        static bool ignore_next = false;
+
+        // Perform synced eye rendering (synced AFR)
+        if (vr->is_using_afr()) {
+            static bool hooked_viewport_draw = false;
+
+            if (!hooked_viewport_draw) {
+                hooked_viewport_draw = true;
+
+                // Go up the stack and find the viewport draw function.
+                constexpr auto max_stack_depth = 100;
+                uintptr_t stack[max_stack_depth]{};
+
+                const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
+                if (depth >= 2) {
+                    const auto viewport_draw_middle = stack[2]; // +1 for the call to the lambda
+                    const auto viewport_draw = utility::find_function_start_with_call(viewport_draw_middle);
+
+                    if (!viewport_draw) {
+                        spdlog::error("Failed to find viewport draw function! Cannot perform synced AFR!");
+                        return;
+                    }
+
+                    spdlog::info("Found FViewport::Draw function at {:x}", (uintptr_t)*viewport_draw);
+
+                    auto factory = SafetyHookFactory::init();
+                    auto builder = factory->acquire();
+
+                    g_hook->m_viewport_draw_hook = builder.create_inline((void*)*viewport_draw, +[](void* viewport, void* a2, void* a3, void* a4) -> void {
+                        auto call_orig = [&]() {
+                            g_hook->m_viewport_draw_hook->call(viewport, a2, a3, a4);
+                        };
+
+                        if (ignore_next) {
+                            ignore_next = false;
+                            return;
+                        }
+
+                        if (!g_framework->is_game_data_intialized()) {
+                            call_orig();
+                            return;
+                        }
+
+                        auto vr = VR::get();
+
+                        if (!vr->is_hmd_active()) {
+                            call_orig();
+                            return;
+                        }
+
+                        static bool once = true;
+
+                        if (once) {
+                            spdlog::info("FViewport::Draw called for the first time.");
+                            once = false;
+                        }
+
+                        call_orig();
+                    });
+                }
+            }
+        }
+
+        if (vr->is_using_afr() && g_frame_count % 2 == 0) {
+            GameThreadWorker::get().enqueue([=]() {
+                vr->wait_for_present();
+                //vr->update_hmd_state(true, vr->get_runtime()->internal_frame_count + 1);
+                //g_hook->m_gameviewportclient_draw_hook->call(viewport_client, viewport, canvas, a4);
+
+                if (g_hook->m_viewport_draw_hook != nullptr) {
+                    const auto tgt = (void (*)(void*, bool))g_hook->m_viewport_draw_hook->target();
+                    tgt(viewport, true);
+
+                    ignore_next = true;
+                }
+            });
+        }
 
         for (const auto& mod : mods) {
             mod->on_post_viewport_client_draw(viewport_client, viewport, canvas);
@@ -1155,6 +1234,8 @@ struct SceneViewExtensionAnalyzer {
                 //spdlog::error("Command list is empty!");
                 vr->get_runtime()->enqueue_render_poses(frame_count); // this is a good fallback
             }
+
+            RenderThreadWorker::get().execute();
         };
 
         spdlog::info("Done setting up BeginRenderViewFamily hook!");
@@ -1214,6 +1295,8 @@ struct SceneViewExtensionAnalyzer {
             // I think command lists are guaranteed to execute in order, so we can just clear the map here
             cmd_frame_counts.clear();
             original_vtables.clear();
+
+            RHIThreadWorker::get().execute();
         };
 
         static std::array<uintptr_t, 3> new_vtable{
@@ -1294,6 +1377,8 @@ struct SceneViewExtensionAnalyzer {
             // I think command lists are guaranteed to execute in order, so we can just clear the map here
             cmd_frame_counts.clear();
             original_funcs.clear();
+
+            RHIThreadWorker::get().execute();
         };
 
         original_funcs[last_command] = last_command->func;
