@@ -276,6 +276,11 @@ struct FSceneViewExtensions {
     TArray<TWeakPtr<ISceneViewExtension>> extensions;
 };
 
+struct FSceneView {
+
+};
+
 struct FSceneViewFamily {
+    TArray<FSceneView> views{};
     char padding[0x100];
 };

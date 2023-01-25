@@ -941,13 +941,14 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
             }
         }
 
+        // This is how synchronized AFR works. it forces a world draw
+        // on the start of the next engine tick, before the world ticks again.
+        // that will allow both views and the world to be drawn in sync with no artifacts.
         if (vr->is_using_afr() && g_frame_count % 2 == 0) {
             GameThreadWorker::get().enqueue([=]() {
-                vr->wait_for_present();
-                //vr->update_hmd_state(true, vr->get_runtime()->internal_frame_count + 1);
-                //g_hook->m_gameviewportclient_draw_hook->call(viewport_client, viewport, canvas, a4);
-
                 if (g_hook->m_viewport_draw_hook != nullptr) {
+                    vr->wait_for_present();
+
                     const auto tgt = (void (*)(void*, bool))g_hook->m_viewport_draw_hook->target();
                     tgt(viewport, true);
 
@@ -1220,6 +1221,11 @@ struct SceneViewExtensionAnalyzer {
             const auto frame_count = *(uint32_t*)((uintptr_t)&view_family + frame_count_offset);
             //vr->update_hmd_state(true, frame_count);
             vr->get_runtime()->internal_frame_count = frame_count;
+
+            // If we couldn't find GetDesiredNumberOfViews, we need to set the view count to 1 as a workaround
+            if (vr->is_using_afr() && view_family.views.count > 1) {
+                view_family.views.count = 1;
+            }
         };
 
         // PreRenderViewFamily_RenderThread
