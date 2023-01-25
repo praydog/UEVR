@@ -39,6 +39,8 @@
 
 FFakeStereoRenderingHook* g_hook = nullptr;
 uint32_t g_frame_count{};
+bool g_in_engine_tick{};
+
 
 // Scan through function instructions to detect usage of double
 // floating point precision instructions.
@@ -187,6 +189,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
             return g_hook->m_tick_hook->call<void*>(engine, delta, idle);
         }
 
+        g_in_engine_tick = true;
         g_hook->attempt_hooking();
 
         // Best place to run game thread jobs.
@@ -203,6 +206,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
             mod->on_post_engine_tick(engine, delta);
         }
 
+        g_in_engine_tick = false;
         return result;
     });
 
@@ -924,11 +928,45 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
             once = false;
         }
 
-        if (g_hook->m_has_view_extension_hook) {
-            g_frame_count = vr->get_runtime()->internal_frame_count;
-            vr->update_hmd_state(true, vr->get_runtime()->internal_frame_count + 1);
+        static uint32_t hook_attempts = 0;
+        static bool run_anyways = false;
+
+        if (hook_attempts < 100 && !g_hook->m_hooked_game_engine_tick && g_hook->m_attempted_hook_game_engine_tick) {
+            spdlog::info("Performing alternative UGameEngine::Tick hook for synced AFR.");
+
+            ++hook_attempts;
+
+            // Go up the stack and find the viewport draw function.
+            constexpr auto max_stack_depth = 100;
+            uintptr_t stack[max_stack_depth]{};
+
+            const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
+
+            for (auto i = 0; i < depth; ++i) {
+                spdlog::info("Stack[{}]: {:x}", i, stack[i]);
+            }
+
+            for (auto i = 3; i < depth; ++i) {
+                const auto ret = stack[i];
+
+                g_hook->attempt_hook_game_engine_tick(ret);
+
+                if (g_hook->m_hooked_game_engine_tick) {
+                    spdlog::info("Successfully hooked UGameEngine::Tick for synced AFR.");
+                    break;
+                }
+            }
         } else {
-            vr->update_hmd_state(false);
+            run_anyways = !g_hook->m_hooked_game_engine_tick;
+        }
+
+        if (run_anyways || g_in_engine_tick) {
+            if (g_hook->m_has_view_extension_hook) {
+                g_frame_count = vr->get_runtime()->internal_frame_count;
+                vr->update_hmd_state(true, vr->get_runtime()->internal_frame_count + 1);
+            } else {
+                vr->update_hmd_state(false);
+            }
         }
 
         const auto& mods = g_framework->get_mods()->get_mods();
@@ -940,35 +978,10 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
         call_orig();
 
         // Perform synced eye rendering (synced AFR)
-        if (vr->is_using_synchronized_afr()) {
-            if (!g_hook->m_hooked_game_engine_tick && g_hook->m_attempted_hook_game_engine_tick) {
-                spdlog::info("Performing alternative UGameEngine::Tick hook for synced AFR.");
-
-                // Go up the stack and find the viewport draw function.
-                constexpr auto max_stack_depth = 100;
-                uintptr_t stack[max_stack_depth]{};
-
-                const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
-
-                for (auto i = 0; i < depth; ++i) {
-                    spdlog::info("Stack[{}]: {:x}", i, stack[i]);
-                }
-
-                for (auto i = 3; i < depth; ++i) {
-                    const auto ret = stack[i];
-
-                    g_hook->attempt_hook_game_engine_tick(ret);
-
-                    if (g_hook->m_hooked_game_engine_tick) {
-                        spdlog::info("Successfully hooked UGameEngine::Tick for synced AFR.");
-                        break;
-                    }
-                }
-            }
-
+        if (g_in_engine_tick && vr->is_using_synchronized_afr()) {
             static bool hooked_viewport_draw = false;
 
-            if (!hooked_viewport_draw) {
+            if (g_hook->m_hooked_game_engine_tick && !hooked_viewport_draw && g_in_engine_tick) {
                 hooked_viewport_draw = true;
 
                 // Go up the stack and find the viewport draw function.
@@ -998,11 +1011,9 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
         // This is how synchronized AFR works. it forces a world draw
         // on the start of the next engine tick, before the world ticks again.
         // that will allow both views and the world to be drawn in sync with no artifacts.
-        if (g_hook->m_hooked_game_engine_tick && vr->is_using_synchronized_afr() && g_frame_count % 2 == 0) {
+        if (g_in_engine_tick && vr->is_using_synchronized_afr() && g_frame_count % 2 == 0) {
             GameThreadWorker::get().enqueue([=]() {
                 if (g_hook->m_viewport_draw_hook != nullptr) {
-                    vr->wait_for_present();
-
                     const auto tgt = (void (*)(void*, bool))g_hook->m_viewport_draw_hook->target();
                     tgt(viewport, true);
 
