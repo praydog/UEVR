@@ -1010,6 +1010,7 @@ struct SceneViewExtensionAnalyzer {
     
     static inline uint32_t is_active_this_frame_index{0};
     static inline uint32_t begin_render_viewfamily_index{0};
+    static inline uint32_t pre_render_viewfamily_renderthread_index{0};
     static inline uint32_t frame_count_offset{0};
 
     template<int N>
@@ -1068,6 +1069,10 @@ struct SceneViewExtensionAnalyzer {
         if (has_found_begin_render_viewfamily) {
             return false;
         }
+
+        if (N == 0) {
+            index_0_called = true;
+        }
         
         spdlog::info("[Stage 2] SceneViewExtension Index {} called!", N);
 
@@ -1084,22 +1089,46 @@ struct SceneViewExtensionAnalyzer {
                     const auto a = *(uint32_t*)&last_view_family_data_a2[i];
                     const auto b = *(uint32_t*)&((uint8_t*)view_family_a2)[i];
 
-                    if (b == a + 1) {
+                    if (b == a + 1 && a >= 10) { // rule out really low frame counts (this could be something else)
                         if (func.frame_count_a2 + 1 == b) {
                             spdlog::info("[A2] Function index {} Found frame count offset at {:x}, ({})", N, i, b);
 
                             func.frame_count_offset_a2 = i;
-                            const auto& next = functions[N + 1];
+                            ++func.times_frame_count_correct_a2;
 
-                            if (++func.times_frame_count_correct_a2 >= 50 && next.times_frame_count_correct_a3 >= 50 && func.frame_count_offset_a2 == next.frame_count_offset_a3) {
-                                spdlog::info("Found final frame count offset at {:x}", i);
-                                spdlog::info("Found BeginRenderViewFamily at index {}", N);
-                                has_found_begin_render_viewfamily = true;
-                                begin_render_viewfamily_index = N;
-                                frame_count_offset = i;
+                            // func_next is one of the functions ahead of N and has the frame count in a3
+                            AnalyzedFunction* func_next = nullptr;
+                            uint32_t next_index = 0;
 
-                                setup_begin_render_viewfamily_hook();
-                                return false;
+                            for (auto j = N + 1; j < g_view_extension_vtable.size(); j++) {
+                                if (functions.contains(j)) {
+                                    const auto& next = functions[j];
+
+                                    if (next.times_frame_count_correct_a3 >= 10) {
+                                        func_next = &functions[j];
+                                        next_index = j;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (func_next != nullptr) {
+                                if (func.times_frame_count_correct_a2 >= 50 && 
+                                    func_next->times_frame_count_correct_a3 >= 50 && 
+                                    func.frame_count_offset_a2 == func_next->frame_count_offset_a3) 
+                                {
+                                    spdlog::info("Found final frame count offset at {:x}", i);
+                                    spdlog::info("Found BeginRenderViewFamily at index {}", N);
+                                    spdlog::info("Found PreRenderViewFamily_RenderThread at index {}", next_index);
+                                    has_found_begin_render_viewfamily = true;
+                                    begin_render_viewfamily_index = N;
+                                    pre_render_viewfamily_renderthread_index = next_index;
+
+                                    frame_count_offset = i;
+
+                                    setup_begin_render_viewfamily_hook();
+                                    return false;
+                                }   
                             }
                         }
 
@@ -1117,7 +1146,7 @@ struct SceneViewExtensionAnalyzer {
                     const auto a = *(uint32_t*)&last_view_family_data_a3[i];
                     const auto b = *(uint32_t*)&((uint8_t*)view_family_a3)[i];
 
-                    if (b == a + 1) {
+                    if (b == a + 1 && a >= 10) { // rule out really low frame counts (this could be something else)
                         if (func.frame_count_a3 + 1 == b) {
                             spdlog::info("[A3] Function index {} Found frame count offset at {:x} ({})", N, i, b);
                             ++func.times_frame_count_correct_a3;
@@ -1147,12 +1176,42 @@ struct SceneViewExtensionAnalyzer {
 
         spdlog::info("Setting up BeginRenderViewFamily hook...");
 
-        g_view_extension_vtable[begin_render_viewfamily_index] = (uintptr_t)+[](ISceneViewExtension* extension, FSceneViewFamily& view_family) -> void {
+        const auto setup_view_family_index = index_0_called ? 0 : 1;
+
+        g_view_extension_vtable[setup_view_family_index] = (uintptr_t)+[](ISceneViewExtension* extension, FSceneViewFamily& view_family) -> void {
+            static bool once = true;
+
+            if (once) {
+                spdlog::info("Called SetupViewFamily for the first time");
+                once = false;
+            }
+
             if (!g_framework->is_game_data_intialized()) {
                 return;
             }
 
-            auto vr = VR::get();
+            auto& vr = VR::get();
+
+            if (!vr->is_hmd_active()) {
+                return;
+            }
+
+            //vr->update_hmd_state(true, vr->get_runtime()->internal_frame_count + 1);
+        };
+
+        g_view_extension_vtable[begin_render_viewfamily_index] = (uintptr_t)+[](ISceneViewExtension* extension, FSceneViewFamily& view_family) -> void {
+            static bool once = true;
+
+            if (once) {
+                spdlog::info("Called BeginRenderViewFamily for the first time");
+                once = false;
+            }
+
+            if (!g_framework->is_game_data_intialized()) {
+                return;
+            }
+
+            auto& vr = VR::get();
 
             if (!vr->is_hmd_active()) {
                 return;
@@ -1164,7 +1223,14 @@ struct SceneViewExtensionAnalyzer {
         };
 
         // PreRenderViewFamily_RenderThread
-        g_view_extension_vtable[begin_render_viewfamily_index+1] = (uintptr_t)+[](ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, FSceneViewFamily& view_family) -> void {
+        g_view_extension_vtable[pre_render_viewfamily_renderthread_index] = (uintptr_t)+[](ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, FSceneViewFamily& view_family) -> void {
+            static bool once = true;
+
+            if (once) {
+                spdlog::info("Called PreRenderViewFamily_RenderThread for the first time");
+                once = false;
+            }
+            
             if (!g_framework->is_game_data_intialized()) {
                 return;
             }
@@ -1175,32 +1241,7 @@ struct SceneViewExtensionAnalyzer {
                 return;
             }
 
-            //vr->wait_for_present();
-
             auto frame_count = *(uint32_t*)((uintptr_t)&view_family + frame_count_offset);
-
-            // wacky...
-            /*if (g_framework->is_dx12()) {
-                frame_count -= 1;
-            }
-
-            auto one_frame_thread_lag_cvar = sdk::rendering::get_one_frame_thread_lag_cvar();
-
-            if (!one_frame_thread_lag_cvar) {
-                frame_count -= 1; // assume it's enabled if we can't find the cvar
-            } else {
-                auto data = one_frame_thread_lag_cvar->get<int>();
-
-                if (data == nullptr) {
-                    frame_count -= 1; // again, assume it's enabled if we can't find the cvar   
-                } else if (data->get(0) == 1) {
-                    frame_count -= 1;
-                } else {
-                    frame_count -= 1;
-                }
-            }*/
-
-            //spdlog::info("Current command count: {}", cmd_list->num_commands);
 
             // Hijack the top command in the command list so we can enqueue the render poses on the RHI thread
             if (cmd_list->root != nullptr) {
