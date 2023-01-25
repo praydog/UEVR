@@ -228,7 +228,12 @@ public:
     }
 
     bool is_using_afr() const {
-        return m_rendering_method->value() == RenderingMethod::ALTERNATING;
+        return m_rendering_method->value() == RenderingMethod::ALTERNATING || 
+               m_rendering_method->value() == RenderingMethod::SYNCHRONIZED;
+    }
+
+    bool is_using_synchronized_afr() const {
+        return m_rendering_method->value() == RenderingMethod::SYNCHRONIZED;
     }
 
 private:
@@ -374,11 +379,13 @@ private:
 
     enum RenderingMethod {
         NATIVE_STEREO = 0,
-        ALTERNATING = 1,
+        SYNCHRONIZED = 1,
+        ALTERNATING = 2,
     };
 
     static const inline std::vector<std::string> s_rendering_method_names {
         "Native Stereo",
+        "Synchronized Sequential",
         "Alternating/AFR",
     };
 
