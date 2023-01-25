@@ -964,7 +964,7 @@ void VR::on_present() {
 }
 
 void VR::on_post_present() {
-    const auto is_same_frame = m_render_frame_count == m_frame_count;
+    const auto is_same_frame = m_render_frame_count > 0 && m_render_frame_count == m_frame_count;
 
     m_render_frame_count = m_frame_count;
 

@@ -1,5 +1,6 @@
 #include <openvr.h>
 #include <utility/String.hpp>
+#include <utility/ScopeGuard.hpp>
 
 #include "Framework.hpp"
 #include "../VR.hpp"
@@ -44,7 +45,14 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     // Update the UI overlay.
     auto runtime = vr->get_runtime();
 
-    if (runtime->is_openxr() && runtime->ready() && !vr->m_use_afr->value()) {
+    const auto is_same_frame = m_last_rendered_frame > 0 && m_last_rendered_frame == vr->m_render_frame_count;
+    m_last_rendered_frame = vr->m_render_frame_count;
+
+    const auto is_afr = !is_same_frame && vr->m_use_afr->value();
+    const auto is_left_eye_frame = is_afr && vr->m_render_frame_count % 2 == vr->m_left_eye_interval;
+    const auto is_right_eye_frame = !is_afr || vr->m_render_frame_count % 2 == vr->m_right_eye_interval;
+
+    if (runtime->is_openxr() && runtime->ready() && !is_afr) {
         if (!vr->m_openxr->frame_began) {
             vr->m_openxr->begin_frame();
         }
@@ -85,10 +93,20 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     const auto frame_count = vr->m_render_frame_count;
 
     // If m_frame_count is even, we're rendering the left eye.
-    if (vr->m_render_frame_count % 2 == vr->m_left_eye_interval && vr->m_use_afr->value()) {
+    if (is_left_eye_frame) {
+        m_submitted_left_eye = true;
+
         // OpenXR texture
         if (runtime->is_openxr() && vr->m_openxr->ready()) {
-            m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::LEFT_EYE, backbuffer.Get());
+            D3D12_BOX src_box{};
+            src_box.left = 0;
+            src_box.right = m_backbuffer_size[0] / 2;
+            src_box.top = 0;
+            src_box.bottom = m_backbuffer_size[1];
+            src_box.front = 0;
+            src_box.back = 1;
+
+            m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::LEFT_EYE, backbuffer.Get(), {}, D3D12_RESOURCE_STATE_RENDER_TARGET, &src_box);
         }
 
         // OpenVR texture
@@ -112,9 +130,13 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             }
         }
     } else {
+        utility::ScopeGuard __{[&]() {
+            m_submitted_left_eye = false;
+        }};
+
         // OpenXR texture
         if (runtime->is_openxr() && vr->m_openxr->ready()) {
-            if (!vr->m_use_afr->value()) {
+            if (!is_afr && !m_submitted_left_eye) {
                 D3D12_BOX src_box{};
                 src_box.left = 0;
                 src_box.right = m_backbuffer_size[0] / 2;
@@ -127,12 +149,21 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             }
 
             D3D12_BOX src_box{};
-            src_box.left = m_backbuffer_size[0] / 2;
-            src_box.right = m_backbuffer_size[0];
-            src_box.top = 0;
-            src_box.bottom = m_backbuffer_size[1];
-            src_box.front = 0;
-            src_box.back = 1;
+            if (!is_afr) {
+                src_box.left = m_backbuffer_size[0] / 2;
+                src_box.right = m_backbuffer_size[0];
+                src_box.top = 0;
+                src_box.bottom = m_backbuffer_size[1];
+                src_box.front = 0;
+                src_box.back = 1;
+            } else { // Copy the left eye on AFR
+                src_box.left = 0;
+                src_box.right = m_backbuffer_size[0] / 2;
+                src_box.top = 0;
+                src_box.bottom = m_backbuffer_size[1];
+                src_box.front = 0;
+                src_box.back = 1;
+            }
             m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::RIGHT_EYE, backbuffer.Get(), {}, D3D12_RESOURCE_STATE_RENDER_TARGET, &src_box);
         }
 
@@ -142,7 +173,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             auto openvr = vr->get_runtime<runtimes::OpenVR>();
             const auto submit_pose = openvr->get_pose_for_submit();
 
-            if (!vr->m_use_afr->value()) {
+            if (!is_afr) {
                 m_openvr.copy_left(backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
                 vr::D3D12TextureData_t left {
@@ -164,7 +195,11 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 }
             }
 
-            m_openvr.copy_right(backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+            if (!is_afr) {
+                m_openvr.copy_right(backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+            } else {
+                m_openvr.copy_left_to_right(backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+            }
 
             vr::D3D12TextureData_t right {
                 m_openvr.get_right().texture.Get(),
@@ -190,7 +225,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         }
     }
 
-    if (vr->m_render_frame_count % 2 == vr->m_right_eye_interval || !vr->m_use_afr->value()) {
+    if (is_right_eye_frame) {
         if ((runtime->ready() && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE) || !runtime->got_first_sync) {
             //vr->update_hmd_state();
         }
@@ -198,7 +233,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
     vr::EVRCompositorError e = vr::EVRCompositorError::VRCompositorError_None;
 
-    if (frame_count % 2 == vr->m_right_eye_interval || !vr->m_use_afr->value()) {
+    if (is_right_eye_frame) {
         ////////////////////////////////////////////////////////////////////////////////
         // OpenXR start ////////////////////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////////////////////////

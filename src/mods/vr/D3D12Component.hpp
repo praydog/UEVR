@@ -168,6 +168,22 @@ private:
             ctx.copier.copy_region(src, ctx.texture.Get(), &src_box, src_state, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             ctx.copier.execute();
         }
+        
+        // For AFR
+        void copy_left_to_right(ID3D12Resource* src, D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT) {
+            auto& ctx = this->acquire_right();
+            //ctx.copier.copy(src, ctx.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            // Copy the right half of the backbuffer to the right eye texture.
+            D3D12_BOX src_box{};
+            src_box.left = 0;
+            src_box.top = 0;
+            src_box.right = parent->m_backbuffer_size[0] / 2;
+            src_box.bottom = parent->m_backbuffer_size[1];
+            src_box.front = 0;
+            src_box.back = 1;
+            ctx.copier.copy_region(src, ctx.texture.Get(), &src_box, src_state, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            ctx.copier.execute();
+        }
 
         std::array<TextureContext, 3> left_eye_tex{};
         std::array<TextureContext, 3> right_eye_tex{};
@@ -212,6 +228,9 @@ private:
     } m_openxr;
 
     uint32_t m_backbuffer_size[2]{};
+
+    uint32_t m_last_rendered_frame{0};
     bool m_force_reset{false};
+    bool m_submitted_left_eye{false};
 };
 } // namespace vrmod
