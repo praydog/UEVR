@@ -50,7 +50,9 @@ private:
     std::array<ComPtr<ID3D11Texture2D>, 2> m_backbuffer_references{};
     std::array<uint32_t, 2> m_backbuffer_size{};
 
+    uint32_t m_last_rendered_frame{0};
     bool m_force_reset{false};
+    bool m_submitted_left_eye{false};
 
     struct OpenXR {
         OpenXR(D3D11Component* p) : parent(p) {}

@@ -6,6 +6,7 @@
 #include <imgui.h>
 #include <utility/Module.hpp>
 #include <utility/Registry.hpp>
+#include <utility/ScopeGuard.hpp>
 
 #include <sdk/CVar.hpp>
 
@@ -13,24 +14,6 @@
 #include "Framework.hpp"
 
 #include "VR.hpp"
-
-class ScopeGuard {
-public:
-    ScopeGuard() = delete;
-    ScopeGuard(std::function<void()> on_exit)
-        : m_on_exit{on_exit}
-    {
-    }
-
-    ~ScopeGuard() {
-        if (m_on_exit) {
-            m_on_exit();
-        }
-    }
-
-private:
-    std::function<void()> m_on_exit;
-};
 
 std::shared_ptr<VR>& VR::get() {
     static std::shared_ptr<VR> instance = std::make_shared<VR>();
@@ -863,7 +846,7 @@ void VR::on_pre_imgui_frame() {
 }
 
 void VR::on_present() {
-    ScopeGuard _guard {[&]() {
+    utility::ScopeGuard _guard {[&]() {
         if (!m_use_afr->value() || (m_render_frame_count + 1) % 2 == m_left_eye_interval) {
             SetEvent(m_present_finished_event);
         }
@@ -981,6 +964,8 @@ void VR::on_present() {
 }
 
 void VR::on_post_present() {
+    const auto is_same_frame = m_render_frame_count == m_frame_count;
+
     m_render_frame_count = m_frame_count;
 
     auto runtime = get_runtime();
@@ -993,7 +978,7 @@ void VR::on_post_present() {
 
     detect_controllers();
 
-    const auto is_left_eye_frame = is_using_afr() ? (m_render_frame_count % 2 == m_left_eye_interval) : true;
+    const auto is_left_eye_frame = is_using_afr() ? (is_same_frame || (m_render_frame_count % 2 == m_left_eye_interval)) : true;
 
     if (is_left_eye_frame) {
         if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
