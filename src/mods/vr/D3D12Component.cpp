@@ -48,7 +48,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     const auto is_same_frame = m_last_rendered_frame > 0 && m_last_rendered_frame == vr->m_render_frame_count;
     m_last_rendered_frame = vr->m_render_frame_count;
 
-    const auto is_afr = !is_same_frame && vr->m_use_afr->value();
+    const auto is_afr = !is_same_frame && vr->is_using_afr();
     const auto is_left_eye_frame = is_afr && vr->m_render_frame_count % 2 == vr->m_left_eye_interval;
     const auto is_right_eye_frame = !is_afr || vr->m_render_frame_count % 2 == vr->m_right_eye_interval;
 

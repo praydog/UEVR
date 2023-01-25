@@ -228,7 +228,7 @@ public:
     }
 
     bool is_using_afr() const {
-        return m_use_afr->value();
+        return m_rendering_method->value() == RenderingMethod::ALTERNATING;
     }
 
 private:
@@ -372,7 +372,17 @@ private:
     std::chrono::nanoseconds m_last_input_delay{};
     std::chrono::nanoseconds m_avg_input_delay{};
 
-    const ModToggle::Ptr m_use_afr{ ModToggle::create(generate_name("AlternateFrameRendering"), false) };
+    enum RenderingMethod {
+        NATIVE_STEREO = 0,
+        ALTERNATING = 1,
+    };
+
+    static const inline std::vector<std::string> s_rendering_method_names {
+        "Native Stereo",
+        "Alternating/AFR",
+    };
+
+    const ModCombo::Ptr m_rendering_method{ ModCombo::create(generate_name("RenderingMethod"), s_rendering_method_names) };
     const ModToggle::Ptr m_desktop_fix{ ModToggle::create(generate_name("DesktopRecordingFix"), false) };
     const ModToggle::Ptr m_desktop_fix_skip_present{ ModToggle::create(generate_name("DesktopRecordingFixSkipPresent"), false) };
     const ModToggle::Ptr m_enable_gui{ ModToggle::create(generate_name("EnableGUI"), true) };
@@ -387,7 +397,7 @@ private:
     bool m_wait_for_present{true};
 
     ValueList m_options{
-        *m_use_afr,
+        *m_rendering_method,
         *m_desktop_fix,
         *m_desktop_fix_skip_present,
         *m_enable_gui,

@@ -847,7 +847,7 @@ void VR::on_pre_imgui_frame() {
 
 void VR::on_present() {
     utility::ScopeGuard _guard {[&]() {
-        if (!m_use_afr->value() || (m_render_frame_count + 1) % 2 == m_left_eye_interval) {
+        if (!is_using_afr() || (m_render_frame_count + 1) % 2 == m_left_eye_interval) {
             SetEvent(m_present_finished_event);
         }
 
@@ -856,7 +856,7 @@ void VR::on_present() {
 
     m_frame_count = get_runtime()->internal_render_frame_count;
 
-    if (!m_use_afr->value() || m_render_frame_count % 2 == m_left_eye_interval) {
+    if (!is_using_afr() || m_render_frame_count % 2 == m_left_eye_interval) {
         ResetEvent(m_present_finished_event);
     }
 
@@ -1222,7 +1222,7 @@ void VR::on_draw_ui() {
     get_runtime()->on_draw_ui();
     
     ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
-    m_use_afr->draw("Use AFR");
+    m_rendering_method->draw("Rendering Method");
     ImGui::DragFloat4("Right Bounds", (float*)&m_right_bounds, 0.005f, -2.0f, 2.0f);
     ImGui::DragFloat4("Left Bounds", (float*)&m_left_bounds, 0.005f, -2.0f, 2.0f);
 
