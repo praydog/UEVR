@@ -941,6 +941,31 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
 
         // Perform synced eye rendering (synced AFR)
         if (vr->is_using_synchronized_afr()) {
+            if (!g_hook->m_hooked_game_engine_tick && g_hook->m_attempted_hook_game_engine_tick) {
+                spdlog::info("Performing alternative UGameEngine::Tick hook for synced AFR.");
+
+                // Go up the stack and find the viewport draw function.
+                constexpr auto max_stack_depth = 100;
+                uintptr_t stack[max_stack_depth]{};
+
+                const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
+
+                for (auto i = 0; i < depth; ++i) {
+                    spdlog::info("Stack[{}]: {:x}", i, stack[i]);
+                }
+
+                for (auto i = 3; i < depth; ++i) {
+                    const auto ret = stack[i];
+
+                    g_hook->attempt_hook_game_engine_tick(ret);
+
+                    if (g_hook->m_hooked_game_engine_tick) {
+                        spdlog::info("Successfully hooked UGameEngine::Tick for synced AFR.");
+                        break;
+                    }
+                }
+            }
+
             static bool hooked_viewport_draw = false;
 
             if (!hooked_viewport_draw) {
@@ -958,25 +983,6 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
                     if (!viewport_draw) {
                         spdlog::error("Failed to find viewport draw function! Cannot perform synced AFR!");
                         return;
-                    }
-
-                    if (!g_hook->m_hooked_game_engine_tick && g_hook->m_attempted_hook_game_engine_tick) {
-                        spdlog::info("Performing alternative UGameEngine::Tick hook for synced AFR.");
-
-                        for (auto i = 0; i < depth; ++i) {
-                            spdlog::info("Stack[{}]: {:x}", i, stack[i]);
-                        }
-
-                        for (auto i = 3; i < depth; ++i) {
-                            const auto ret = stack[i];
-
-                            g_hook->attempt_hook_game_engine_tick(ret);
-
-                            if (g_hook->m_hooked_game_engine_tick) {
-                                spdlog::info("Successfully hooked UGameEngine::Tick for synced AFR.");
-                                break;
-                            }
-                        }
                     }
 
                     spdlog::info("Found FViewport::Draw function at {:x}", (uintptr_t)*viewport_draw);
