@@ -95,8 +95,12 @@ void FFakeStereoRenderingHook::attempt_hooking() {
     m_hooked = hook();
 }
 
-void FFakeStereoRenderingHook::attempt_hook_game_engine_tick() {
-    if (m_hooked_game_engine_tick || m_attempted_hook_game_engine_tick) {
+void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_address) {
+    if (m_hooked_game_engine_tick) {
+        return;
+    }
+
+    if (return_address == 0 && m_attempted_hook_game_engine_tick) {
         return;
     }
     
@@ -104,11 +108,68 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick() {
 
     m_attempted_hook_game_engine_tick = true;
 
-    const auto func = sdk::UGameEngine::get_tick_address();
+    auto func = sdk::UGameEngine::get_tick_address();
 
     if (!func) {
-        spdlog::error("Cannot hook UGameEngine::Tick");
-        return;
+        if (return_address == 0) {
+            spdlog::error("Cannot hook UGameEngine::Tick");
+            return;
+        }
+
+        const auto engine_module = sdk::get_ue_module(L"Engine");
+        static const auto negative_delta_time_strings = 
+            utility::scan_strings(engine_module, L"Negative delta time!");
+        
+        if (negative_delta_time_strings.empty()) {
+            spdlog::error("Cannot hook UGameEngine::Tick (Negative delta time! not found)");
+            return;
+        }
+
+        static std::vector<uintptr_t> negative_delta_time_funcs = [&]() {
+            std::vector<uintptr_t> out{};
+
+            for (auto str : negative_delta_time_strings) {
+                const auto ref = utility::scan_displacement_reference(engine_module, str);
+
+                if (!ref) {
+                    continue;
+                }
+                //
+                const auto func_start = utility::find_virtual_function_start(*ref);
+
+                if (!func_start) {
+                    continue;
+                }
+
+                spdlog::info("Negative delta time string function @ {:x}", *func_start);
+
+                out.push_back(*func_start);
+            }
+
+            return out;
+        }();
+
+        const auto return_address_func = utility::find_virtual_function_start(return_address);
+
+        if (!return_address_func) {
+            spdlog::error("Return address is not within a valid function!");
+            return;
+        }
+
+        // Check if the return address is within one of the negative delta time functions.
+        // If it is, then it's UGameEngine::Tick. Set func to the return_address_func.
+        for (auto potential : negative_delta_time_funcs) {
+            if (potential == *return_address_func) {
+                spdlog::info("Found UGameEngine::Tick @ {:x}", *return_address_func);
+                func = *return_address_func;
+                break;
+            }
+        }
+
+        if (!func) {
+            spdlog::error("Return address is not the correct function!");
+            return;
+        }
     }
 
     auto factory = SafetyHookFactory::init();
@@ -878,8 +939,6 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
 
         call_orig();
 
-        static bool ignore_next = false;
-
         // Perform synced eye rendering (synced AFR)
         if (vr->is_using_synchronized_afr()) {
             static bool hooked_viewport_draw = false;
@@ -901,42 +960,31 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
                         return;
                     }
 
+                    if (!g_hook->m_hooked_game_engine_tick && g_hook->m_attempted_hook_game_engine_tick) {
+                        spdlog::info("Performing alternative UGameEngine::Tick hook for synced AFR.");
+
+                        for (auto i = 0; i < depth; ++i) {
+                            spdlog::info("Stack[{}]: {:x}", i, stack[i]);
+                        }
+
+                        for (auto i = 3; i < depth; ++i) {
+                            const auto ret = stack[i];
+
+                            g_hook->attempt_hook_game_engine_tick(ret);
+
+                            if (g_hook->m_hooked_game_engine_tick) {
+                                spdlog::info("Successfully hooked UGameEngine::Tick for synced AFR.");
+                                break;
+                            }
+                        }
+                    }
+
                     spdlog::info("Found FViewport::Draw function at {:x}", (uintptr_t)*viewport_draw);
 
                     auto factory = SafetyHookFactory::init();
                     auto builder = factory->acquire();
 
-                    g_hook->m_viewport_draw_hook = builder.create_inline((void*)*viewport_draw, +[](void* viewport, void* a2, void* a3, void* a4) -> void {
-                        auto call_orig = [&]() {
-                            g_hook->m_viewport_draw_hook->call(viewport, a2, a3, a4);
-                        };
-
-                        if (ignore_next) {
-                            ignore_next = false;
-                            return;
-                        }
-
-                        if (!g_framework->is_game_data_intialized()) {
-                            call_orig();
-                            return;
-                        }
-
-                        auto vr = VR::get();
-
-                        if (!vr->is_hmd_active()) {
-                            call_orig();
-                            return;
-                        }
-
-                        static bool once = true;
-
-                        if (once) {
-                            spdlog::info("FViewport::Draw called for the first time.");
-                            once = false;
-                        }
-
-                        call_orig();
-                    });
+                    g_hook->m_viewport_draw_hook = builder.create_inline((void*)*viewport_draw, &viewport_draw_hook);
                 }
             }
         }
@@ -944,7 +992,7 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
         // This is how synchronized AFR works. it forces a world draw
         // on the start of the next engine tick, before the world ticks again.
         // that will allow both views and the world to be drawn in sync with no artifacts.
-        if (vr->is_using_synchronized_afr() && g_frame_count % 2 == 0) {
+        if (g_hook->m_hooked_game_engine_tick && vr->is_using_synchronized_afr() && g_frame_count % 2 == 0) {
             GameThreadWorker::get().enqueue([=]() {
                 if (g_hook->m_viewport_draw_hook != nullptr) {
                     vr->wait_for_present();
@@ -952,7 +1000,7 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
                     const auto tgt = (void (*)(void*, bool))g_hook->m_viewport_draw_hook->target();
                     tgt(viewport, true);
 
-                    ignore_next = true;
+                    g_hook->m_ignore_next_viewport_draw = true;
                 }
             });
         }
@@ -967,6 +1015,38 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
 } catch(...) {
     spdlog::error("Failed to hook UGameViewportClient!");
     return false;
+}
+
+void FFakeStereoRenderingHook::viewport_draw_hook(void* viewport, bool should_present) {
+    auto call_orig = [&]() {
+        g_hook->m_viewport_draw_hook->call(viewport, should_present);
+    };
+
+    if (!g_framework->is_game_data_intialized()) {
+        call_orig();
+        return;
+    }
+
+    if (g_hook->m_ignore_next_viewport_draw) {
+        g_hook->m_ignore_next_viewport_draw = false;
+        return;
+    }
+
+    auto vr = VR::get();
+
+    if (!vr->is_hmd_active()) {
+        call_orig();
+        return;
+    }
+
+    static bool once = true;
+
+    if (once) {
+        spdlog::info("FViewport::Draw called for the first time.");
+        once = false;
+    }
+
+    call_orig();
 }
 
 static std::array<uintptr_t, 50> g_view_extension_vtable{};

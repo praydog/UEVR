@@ -161,7 +161,7 @@ public:
     }
 
     void attempt_hooking();
-    void attempt_hook_game_engine_tick();
+    void attempt_hook_game_engine_tick(uintptr_t return_address = 0);
     void attempt_hook_slate_thread(uintptr_t return_address = 0);
     bool has_attempted_to_hook_slate() const {
         return m_attempted_hook_slate_thread;
@@ -250,6 +250,8 @@ private:
     static void* slate_draw_window_render_thread(void* renderer, void* command_list, sdk::FViewportInfo* viewport_info, 
                                                  void* elements, void* params, void* unk1, void* unk2);
 
+    static void viewport_draw_hook(void* viewport, bool should_present);
+
     std::unique_ptr<safetyhook::InlineHook> m_tick_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_adjust_view_rect_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_calculate_stereo_view_offset_hook{};
@@ -298,6 +300,9 @@ private:
     bool m_wants_texture_recreation{false};
     bool m_has_view_extension_hook{false};
     bool m_has_game_viewport_client_draw_hook{false};
+
+    // Synchronized AFR
+    bool m_ignore_next_viewport_draw{false};
 
     /*FFakeStereoRendering m_stereo_recreation {
         90.0f, 
