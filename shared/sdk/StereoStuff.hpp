@@ -281,6 +281,6 @@ struct FSceneView {
 };
 
 struct FSceneViewFamily {
-    TArray<FSceneView> views{};
+    TArray<FSceneView*> views{};
     char padding[0x100];
 };
