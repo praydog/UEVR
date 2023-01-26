@@ -1322,7 +1322,7 @@ struct SceneViewExtensionAnalyzer {
             // If we couldn't find GetDesiredNumberOfViews, we need to set the view count to 1 as a workaround
             // TODO: Check if this can cause a memory leak, I don't know who is resonsible
             // for destroying the views in the array
-            if (vr->is_using_afr() && view_family.views.count > 1) {
+            if (vr->is_using_afr() && view_family.views.count == 2) {
                 view_family.views.count = 1;
             }
         };
