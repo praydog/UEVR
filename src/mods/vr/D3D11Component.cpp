@@ -77,10 +77,14 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     const auto ui_target = ffsr->get_render_target_manager()->get_ui_target();
 
     if (ui_target != nullptr) {
-        if (runtime->is_openvr() && get_ui_tex().Get() != nullptr) {
-            copy_tex((ID3D11Resource*)ui_target->get_native_resource(), get_ui_tex().Get());
-        } else if (runtime->is_openxr() && vr->m_openxr->frame_began) {
-            m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, (ID3D11Texture2D*)ui_target->get_native_resource());
+        // Duplicate frames can sometimes cause the UI to get stuck on the screen.
+        // and can lock up the compositor.
+        if (is_right_eye_frame) {
+            if (runtime->is_openvr() && get_ui_tex().Get() != nullptr) {
+                copy_tex((ID3D11Resource*)ui_target->get_native_resource(), get_ui_tex().Get());
+            } else if (runtime->is_openxr() && vr->m_openxr->frame_began) {
+                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, (ID3D11Texture2D*)ui_target->get_native_resource());
+            }
         }
 
         clear_tex((ID3D11Resource*)ui_target->get_native_resource());
