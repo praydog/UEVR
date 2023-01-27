@@ -1062,6 +1062,9 @@ void VR::on_draw_ui() {
 
     ImGui::Text("Unreal Options");
 
+    m_rendering_method->draw("Rendering Method");
+    m_synced_afr_method->draw("Synced Sequential Method");
+
     m_camera_forward_offset->draw("Camera Forward Offset");
     m_camera_right_offset->draw("Camera Right Offset");
     m_camera_up_offset->draw("Camera Up Offset");
@@ -1220,9 +1223,8 @@ void VR::on_draw_ui() {
     }
 
     get_runtime()->on_draw_ui();
-    
+
     ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
-    m_rendering_method->draw("Rendering Method");
     ImGui::DragFloat4("Right Bounds", (float*)&m_right_bounds, 0.005f, -2.0f, 2.0f);
     ImGui::DragFloat4("Left Bounds", (float*)&m_left_bounds, 0.005f, -2.0f, 2.0f);
 

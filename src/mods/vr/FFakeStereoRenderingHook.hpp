@@ -302,7 +302,10 @@ private:
     bool m_has_game_viewport_client_draw_hook{false};
 
     // Synchronized AFR
+    float m_ignored_engine_delta{0.0f};
+    bool m_in_engine_tick{false};
     bool m_ignore_next_viewport_draw{false};
+    bool m_ignore_next_engine_tick{false};
 
     /*FFakeStereoRendering m_stereo_recreation {
         90.0f, 

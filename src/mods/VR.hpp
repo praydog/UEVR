@@ -18,6 +18,18 @@
 
 class VR : public Mod {
 public:
+    enum RenderingMethod {
+        NATIVE_STEREO = 0,
+        SYNCHRONIZED = 1,
+        ALTERNATING = 2,
+    };
+
+    enum SyncedSequentialMethod {
+        SKIP_TICK = 0,
+        SKIP_DRAW = 1,
+    };
+
+public:
     static std::shared_ptr<VR>& get();
 
     std::string_view get_name() const override { return "VR"; }
@@ -236,6 +248,10 @@ public:
         return m_rendering_method->value() == RenderingMethod::SYNCHRONIZED;
     }
 
+    SyncedSequentialMethod get_synced_sequential_method() const {
+        return (SyncedSequentialMethod)m_synced_afr_method->value();
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;
@@ -377,19 +393,19 @@ private:
     std::chrono::nanoseconds m_last_input_delay{};
     std::chrono::nanoseconds m_avg_input_delay{};
 
-    enum RenderingMethod {
-        NATIVE_STEREO = 0,
-        SYNCHRONIZED = 1,
-        ALTERNATING = 2,
-    };
-
     static const inline std::vector<std::string> s_rendering_method_names {
         "Native Stereo",
         "Synchronized Sequential",
         "Alternating/AFR",
     };
 
+    static const inline std::vector<std::string> s_synced_afr_method_names {
+        "Skip Tick",
+        "Skip Draw",
+    };
+
     const ModCombo::Ptr m_rendering_method{ ModCombo::create(generate_name("RenderingMethod"), s_rendering_method_names) };
+    const ModCombo::Ptr m_synced_afr_method{ ModCombo::create(generate_name("SyncedSequentialMethod"), s_synced_afr_method_names) };
     const ModToggle::Ptr m_desktop_fix{ ModToggle::create(generate_name("DesktopRecordingFix"), false) };
     const ModToggle::Ptr m_desktop_fix_skip_present{ ModToggle::create(generate_name("DesktopRecordingFixSkipPresent"), false) };
     const ModToggle::Ptr m_enable_gui{ ModToggle::create(generate_name("EnableGUI"), true) };
@@ -405,6 +421,7 @@ private:
 
     ValueList m_options{
         *m_rendering_method,
+        *m_synced_afr_method,
         *m_desktop_fix,
         *m_desktop_fix_skip_present,
         *m_enable_gui,

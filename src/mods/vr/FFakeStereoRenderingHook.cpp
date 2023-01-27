@@ -10,6 +10,7 @@
 #include <utility/String.hpp>
 #include <utility/Thread.hpp>
 #include <utility/Emulation.hpp>
+#include <utility/ScopeGuard.hpp>
 
 #include <sdk/EngineModule.hpp>
 #include <sdk/UEngine.hpp>
@@ -39,8 +40,6 @@
 
 FFakeStereoRenderingHook* g_hook = nullptr;
 uint32_t g_frame_count{};
-bool g_in_engine_tick{};
-
 
 // Scan through function instructions to detect usage of double
 // floating point precision instructions.
@@ -178,6 +177,14 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
     auto builder = factory->acquire();
 
     m_tick_hook = builder.create_inline((void*)*func, +[](sdk::UGameEngine* engine, float delta, bool idle) -> void* {
+        auto hook = g_hook;
+        
+        hook->m_in_engine_tick = true;
+
+        utility::ScopeGuard _{[]() {
+            g_hook->m_in_engine_tick = false;
+        }};
+        
         static bool once = true;
 
         if (once) {
@@ -186,27 +193,34 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
         }
 
         if (!g_framework->is_game_data_intialized()) {
-            return g_hook->m_tick_hook->call<void*>(engine, delta, idle);
+            return hook->m_tick_hook->call<void*>(engine, delta, idle);
         }
 
-        g_in_engine_tick = true;
-        g_hook->attempt_hooking();
+        hook->attempt_hooking();
 
         // Best place to run game thread jobs.
         GameThreadWorker::get().execute();
+
+        if (hook->m_ignore_next_engine_tick) {
+            hook->m_ignored_engine_delta = delta;
+            hook->m_ignore_next_engine_tick = false;
+            return nullptr;
+        }
+
+        delta += hook->m_ignored_engine_delta;
+        hook->m_ignored_engine_delta = 0.0f;
 
         const auto& mods = g_framework->get_mods()->get_mods();
         for (auto& mod : mods) {
             mod->on_pre_engine_tick(engine, delta);
         }
 
-        const auto result = g_hook->m_tick_hook->call<void*>(engine, delta, idle);
+        const auto result = hook->m_tick_hook->call<void*>(engine, delta, idle);
 
         for (auto& mod : mods) {
             mod->on_post_engine_tick(engine, delta);
         }
 
-        g_in_engine_tick = false;
         return result;
     });
 
@@ -960,7 +974,9 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
             run_anyways = !g_hook->m_hooked_game_engine_tick;
         }
 
-        if (run_anyways || g_in_engine_tick) {
+        const auto in_engine_tick = g_hook->m_in_engine_tick;
+
+        if (run_anyways || in_engine_tick) {
             if (g_hook->m_has_view_extension_hook) {
                 g_frame_count = vr->get_runtime()->internal_frame_count;
                 vr->update_hmd_state(true, vr->get_runtime()->internal_frame_count + 1);
@@ -978,10 +994,10 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
         call_orig();
 
         // Perform synced eye rendering (synced AFR)
-        if (g_in_engine_tick && vr->is_using_synchronized_afr()) {
+        if (in_engine_tick && vr->is_using_synchronized_afr()) {
             static bool hooked_viewport_draw = false;
 
-            if (g_hook->m_hooked_game_engine_tick && !hooked_viewport_draw && g_in_engine_tick) {
+            if (g_hook->m_hooked_game_engine_tick && !hooked_viewport_draw && in_engine_tick) {
                 hooked_viewport_draw = true;
 
                 // Go up the stack and find the viewport draw function.
@@ -1011,13 +1027,20 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
         // This is how synchronized AFR works. it forces a world draw
         // on the start of the next engine tick, before the world ticks again.
         // that will allow both views and the world to be drawn in sync with no artifacts.
-        if (g_in_engine_tick && vr->is_using_synchronized_afr() && g_frame_count % 2 == 0) {
+        if (in_engine_tick && vr->is_using_synchronized_afr() && g_frame_count % 2 == 0) {
             GameThreadWorker::get().enqueue([=]() {
                 if (g_hook->m_viewport_draw_hook != nullptr) {
                     const auto tgt = (void (*)(void*, bool))g_hook->m_viewport_draw_hook->target();
                     tgt(viewport, true);
 
-                    g_hook->m_ignore_next_viewport_draw = true;
+                    auto& vr = VR::get();
+                    const auto method = vr->get_synced_sequential_method();
+                    
+                    if (method == VR::SyncedSequentialMethod::SKIP_TICK) {
+                        g_hook->m_ignore_next_engine_tick = true;
+                    } else if (method == VR::SyncedSequentialMethod::SKIP_DRAW) {
+                        g_hook->m_ignore_next_viewport_draw = true;
+                    }
                 }
             });
         }
