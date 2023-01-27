@@ -251,6 +251,7 @@ private:
                                                  void* elements, void* params, void* unk1, void* unk2);
 
     static void viewport_draw_hook(void* viewport, bool should_present);
+    static void game_viewport_client_draw_hook(void* gameviewportclient, void* viewport, void* canvas, void* a4);
 
     std::unique_ptr<safetyhook::InlineHook> m_tick_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_adjust_view_rect_hook{};
@@ -304,8 +305,14 @@ private:
     // Synchronized AFR
     float m_ignored_engine_delta{0.0f};
     bool m_in_engine_tick{false};
+    bool m_in_viewport_client_draw{false};
     bool m_ignore_next_viewport_draw{false};
     bool m_ignore_next_engine_tick{false};
+
+
+    bool m_analyzing_view_extensions{false};
+
+    std::chrono::time_point<std::chrono::high_resolution_clock> m_analyze_view_extensions_start_time{};
 
     /*FFakeStereoRendering m_stereo_recreation {
         90.0f, 

@@ -918,139 +918,9 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
     auto factory = SafetyHookFactory::init();
     auto builder = factory->acquire();
 
-    m_gameviewportclient_draw_hook = builder.create_inline((void*)*game_viewport_client_draw, +[](void* viewport_client, void* viewport, void* canvas, void* a4) -> void {
-        auto call_orig = [&]() {
-            g_hook->m_gameviewportclient_draw_hook->call(viewport_client, viewport, canvas, a4);
-        };
-
-        if (!g_framework->is_game_data_intialized()) {
-            call_orig();
-            return;
-        }
-
-        auto vr = VR::get();
-
-        if (!vr->is_hmd_active()) {
-            call_orig();
-            return;
-        }
-
-        static bool once = true;
-
-        if (once) {
-            spdlog::info("UGameViewportClient::Draw called for the first time.");
-            once = false;
-        }
-
-        static uint32_t hook_attempts = 0;
-        static bool run_anyways = false;
-
-        if (hook_attempts < 100 && !g_hook->m_hooked_game_engine_tick && g_hook->m_attempted_hook_game_engine_tick) {
-            spdlog::info("Performing alternative UGameEngine::Tick hook for synced AFR.");
-
-            ++hook_attempts;
-
-            // Go up the stack and find the viewport draw function.
-            constexpr auto max_stack_depth = 100;
-            uintptr_t stack[max_stack_depth]{};
-
-            const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
-
-            for (auto i = 0; i < depth; ++i) {
-                spdlog::info("Stack[{}]: {:x}", i, stack[i]);
-            }
-
-            for (auto i = 3; i < depth; ++i) {
-                const auto ret = stack[i];
-
-                g_hook->attempt_hook_game_engine_tick(ret);
-
-                if (g_hook->m_hooked_game_engine_tick) {
-                    spdlog::info("Successfully hooked UGameEngine::Tick for synced AFR.");
-                    break;
-                }
-            }
-        } else {
-            run_anyways = !g_hook->m_hooked_game_engine_tick;
-        }
-
-        const auto in_engine_tick = g_hook->m_in_engine_tick;
-
-        if (run_anyways || in_engine_tick) {
-            if (g_hook->m_has_view_extension_hook) {
-                g_frame_count = vr->get_runtime()->internal_frame_count;
-                vr->update_hmd_state(true, vr->get_runtime()->internal_frame_count + 1);
-            } else {
-                vr->update_hmd_state(false);
-            }
-        }
-
-        const auto& mods = g_framework->get_mods()->get_mods();
-
-        for (const auto& mod : mods) {
-            mod->on_pre_viewport_client_draw(viewport_client, viewport, canvas);
-        }
-
-        call_orig();
-
-        // Perform synced eye rendering (synced AFR)
-        if (in_engine_tick && vr->is_using_synchronized_afr()) {
-            static bool hooked_viewport_draw = false;
-
-            if (g_hook->m_hooked_game_engine_tick && !hooked_viewport_draw && in_engine_tick) {
-                hooked_viewport_draw = true;
-
-                // Go up the stack and find the viewport draw function.
-                constexpr auto max_stack_depth = 100;
-                uintptr_t stack[max_stack_depth]{};
-
-                const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
-                if (depth >= 2) {
-                    const auto viewport_draw_middle = stack[2]; // +1 for the call to the lambda
-                    const auto viewport_draw = utility::find_function_start_with_call(viewport_draw_middle);
-
-                    if (!viewport_draw) {
-                        spdlog::error("Failed to find viewport draw function! Cannot perform synced AFR!");
-                        return;
-                    }
-
-                    spdlog::info("Found FViewport::Draw function at {:x}", (uintptr_t)*viewport_draw);
-
-                    auto factory = SafetyHookFactory::init();
-                    auto builder = factory->acquire();
-
-                    g_hook->m_viewport_draw_hook = builder.create_inline((void*)*viewport_draw, &viewport_draw_hook);
-                }
-            }
-        }
-
-        // This is how synchronized AFR works. it forces a world draw
-        // on the start of the next engine tick, before the world ticks again.
-        // that will allow both views and the world to be drawn in sync with no artifacts.
-        if (in_engine_tick && vr->is_using_synchronized_afr() && g_frame_count % 2 == 0) {
-            GameThreadWorker::get().enqueue([=]() {
-                if (g_hook->m_viewport_draw_hook != nullptr) {
-                    const auto tgt = (void (*)(void*, bool))g_hook->m_viewport_draw_hook->target();
-                    tgt(viewport, true);
-
-                    auto& vr = VR::get();
-                    const auto method = vr->get_synced_sequential_method();
-                    
-                    if (method == VR::SyncedSequentialMethod::SKIP_TICK) {
-                        g_hook->m_ignore_next_engine_tick = true;
-                    } else if (method == VR::SyncedSequentialMethod::SKIP_DRAW) {
-                        g_hook->m_ignore_next_viewport_draw = true;
-                    }
-                }
-            });
-        }
-
-        for (const auto& mod : mods) {
-            mod->on_post_viewport_client_draw(viewport_client, viewport, canvas);
-        }
-    });
-
+    m_gameviewportclient_draw_hook = builder.create_inline((void*)*game_viewport_client_draw, &game_viewport_client_draw_hook);
     m_has_game_viewport_client_draw_hook = true;
+
     return true;
 } catch(...) {
     spdlog::error("Failed to hook UGameViewportClient!");
@@ -1087,6 +957,165 @@ void FFakeStereoRenderingHook::viewport_draw_hook(void* viewport, bool should_pr
     }
 
     call_orig();
+}
+
+void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_client, void* viewport, void* canvas, void* a4) {
+    auto call_orig = [&]() {
+        g_hook->m_gameviewportclient_draw_hook->call(viewport_client, viewport, canvas, a4);
+    };
+
+    if (!g_framework->is_game_data_intialized()) {
+        call_orig();
+        return;
+    }
+
+    g_hook->m_in_viewport_client_draw = true;
+
+    utility::ScopeGuard _{ 
+        []() { 
+            g_hook->m_in_viewport_client_draw = false;
+        } 
+    };
+
+    auto vr = VR::get();
+
+    if (!vr->is_hmd_active()) {
+        call_orig();
+        return;
+    }
+
+    static bool once = true;
+
+    if (once) {
+        spdlog::info("UGameViewportClient::Draw called for the first time.");
+        once = false;
+    }
+
+    static uint32_t hook_attempts = 0;
+    static bool run_anyways = false;
+
+    if (hook_attempts < 100 && !g_hook->m_hooked_game_engine_tick && g_hook->m_attempted_hook_game_engine_tick) {
+        spdlog::info("Performing alternative UGameEngine::Tick hook for synced AFR.");
+
+        ++hook_attempts;
+
+        // Go up the stack and find the viewport draw function.
+        constexpr auto max_stack_depth = 100;
+        uintptr_t stack[max_stack_depth]{};
+
+        const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
+
+        for (auto i = 0; i < depth; ++i) {
+            spdlog::info("Stack[{}]: {:x}", i, stack[i]);
+        }
+
+        for (auto i = 3; i < depth; ++i) {
+            const auto ret = stack[i];
+
+            g_hook->attempt_hook_game_engine_tick(ret);
+
+            if (g_hook->m_hooked_game_engine_tick) {
+                spdlog::info("Successfully hooked UGameEngine::Tick for synced AFR.");
+                break;
+            }
+        }
+    } else {
+        run_anyways = !g_hook->m_hooked_game_engine_tick;
+    }
+
+    const auto in_engine_tick = g_hook->m_in_engine_tick;
+
+    if (run_anyways || in_engine_tick) {
+        if (g_hook->m_has_view_extension_hook) {
+            g_frame_count = vr->get_runtime()->internal_frame_count;
+            vr->update_hmd_state(true, vr->get_runtime()->internal_frame_count + 1);
+        } else {
+            vr->update_hmd_state(false);
+        }
+    }
+
+    const auto& mods = g_framework->get_mods()->get_mods();
+
+    for (const auto& mod : mods) {
+        mod->on_pre_viewport_client_draw(viewport_client, viewport, canvas);
+    }
+
+    call_orig();
+
+    // Perform synced eye rendering (synced AFR)
+    if (in_engine_tick && vr->is_using_synchronized_afr()) {
+        static bool hooked_viewport_draw = false;
+
+        // Hook for FViewport::Draw
+        if (g_hook->m_hooked_game_engine_tick && !hooked_viewport_draw) {
+            hooked_viewport_draw = true;
+
+            // Go up the stack and find the viewport draw function.
+            constexpr auto max_stack_depth = 100;
+            uintptr_t stack[max_stack_depth]{};
+
+            const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
+            if (depth >= 2) {
+                // Log the stack functions
+                for (auto i = 0; i < depth; ++i) {
+                    spdlog::info("(Stack[{}]: {:x}", i, stack[i]);
+                }
+
+                auto try_hook_index = [&](uint32_t index) -> bool {
+                    spdlog::info("Attempting to locate FViewport::Draw function @ stack[{}]", index);
+
+                    const auto viewport_draw_middle = stack[index];
+                    const auto viewport_draw = utility::find_function_start_with_call(viewport_draw_middle);
+
+                    if (!viewport_draw) {
+                        spdlog::error("Failed to find viewport draw function @ {}", index);
+                        return false;
+                    }
+
+                    spdlog::info("Found FViewport::Draw function at {:x}", (uintptr_t)*viewport_draw);
+
+                    auto factory = SafetyHookFactory::init();
+                    auto builder = factory->acquire();
+
+                    g_hook->m_viewport_draw_hook = builder.create_inline((void*)*viewport_draw, &viewport_draw_hook);
+                    return true;
+                };
+
+                if (!try_hook_index(1)) {
+                    // Fallback to index 3, on some UE4 games the viewport draw function is called from a different stack index.
+                    if (!try_hook_index(2)) {
+                        spdlog::error("Failed to find viewport draw function! Cannot perform synced AFR!");
+                    }
+                }
+            }
+        }
+    }
+
+    // This is how synchronized AFR works. it forces a world draw
+    // on the start of the next engine tick, before the world ticks again.
+    // that will allow both views and the world to be drawn in sync with no artifacts.
+    if (in_engine_tick && vr->is_using_synchronized_afr() && g_frame_count % 2 == 0) {
+        GameThreadWorker::get().enqueue([=]() {
+            if (g_hook->m_viewport_draw_hook != nullptr) {
+                const auto viewport_draw = (void (*)(void*, bool))g_hook->m_viewport_draw_hook->target();
+                viewport_draw(viewport, true);
+
+                auto& vr = VR::get();
+                const auto method = vr->get_synced_sequential_method();
+                
+                if (method == VR::SyncedSequentialMethod::SKIP_TICK) {
+                    g_hook->m_ignore_next_engine_tick = true;
+                    //g_hook->m_ignore_next_viewport_draw = true;
+                } else if (method == VR::SyncedSequentialMethod::SKIP_DRAW) {
+                    g_hook->m_ignore_next_viewport_draw = true;
+                }
+            }
+        });
+    }
+
+    for (const auto& mod : mods) {
+        mod->on_post_viewport_client_draw(viewport_client, viewport, canvas);
+    }
 }
 
 static std::array<uintptr_t, 50> g_view_extension_vtable{};
@@ -1345,13 +1374,17 @@ struct SceneViewExtensionAnalyzer {
             // If we couldn't find GetDesiredNumberOfViews, we need to set the view count to 1 as a workaround
             // TODO: Check if this can cause a memory leak, I don't know who is resonsible
             // for destroying the views in the array
-            if (vr->is_using_afr() && view_family.views.count == 2) {
+            if (vr->is_using_afr() && (view_family.views.count == 2 || view_family.views.count == 3)) {
                 view_family.views.count = 1;
             }
         };
 
         // PreRenderViewFamily_RenderThread
         g_view_extension_vtable[pre_render_viewfamily_renderthread_index] = (uintptr_t)+[](ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, FSceneViewFamily& view_family) -> void {
+            utility::ScopeGuard _{[]() {
+                RenderThreadWorker::get().execute();
+            }};
+            
             static bool once = true;
 
             if (once) {
@@ -1398,13 +1431,12 @@ struct SceneViewExtensionAnalyzer {
                     hook_new_rhi_command((sdk::FRHICommandBase_New*)cmd_list->root, frame_count);
                 } else {
                     hook_old_rhi_command((sdk::FRHICommandBase_Old*)cmd_list->root, frame_count);
+                    //vr->get_runtime()->enqueue_render_poses(frame_count); // PLACEHOLDER.
                 }
             } else {
                 //spdlog::error("Command list is empty!");
                 vr->get_runtime()->enqueue_render_poses(frame_count); // this is a good fallback
             }
-
-            RenderThreadWorker::get().execute();
         };
 
         spdlog::info("Done setting up BeginRenderViewFamily hook!");
@@ -1629,6 +1661,9 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
             vtable = g_view_extension_vtable.data();
         }
 
+        g_hook->m_analyze_view_extensions_start_time = std::chrono::high_resolution_clock::now();
+        g_hook->m_analyzing_view_extensions = true;
+
         if (!m_rendertarget_manager_embedded_in_stereo_device) {
             SceneViewExtensionAnalyzer::FillVtable<g_view_extension_vtable.size()-1>::fill(g_view_extension_vtable);
         } else {
@@ -1636,6 +1671,11 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
             spdlog::info("Skipping view extension stage 1...");
             SceneViewExtensionAnalyzer::FillVtable<g_view_extension_vtable.size()-1>::fill2(g_view_extension_vtable);
         }
+
+        // Will get called when the view extensions are finally hooked.
+        RenderThreadWorker::get().enqueue([]() {
+            g_hook->m_analyzing_view_extensions = false;
+        });
 
         // overwrite the vtable
         vtable = g_view_extension_vtable.data();
@@ -1990,6 +2030,17 @@ bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
     if (!g_framework->is_game_data_intialized()) {
         return false;
     }
+    
+    /*if (g_hook->m_analyzing_view_extensions) {
+        const auto now = std::chrono::high_resolution_clock::now();
+
+        if (now - g_hook->m_analyze_view_extensions_start_time > std::chrono::seconds(15)) {
+            spdlog::info("Timed out waiting for view extensions to be analyzed.");
+            g_hook->m_analyzing_view_extensions = false;
+        }
+
+        return false;
+    }*/
 
     static uint32_t count = 0;
 
@@ -3227,8 +3278,16 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
                 uintptr_t rhi,
                 FTexture2DRHIRef* out,
                 uintptr_t command_list,
-                uintptr_t desc
-            ) = (decltype(func))func_ptr;
+                uintptr_t desc,
+                uintptr_t stack_0, // Stack dummies in-case this is the wrong function
+                uintptr_t stack_1,
+                uintptr_t stack_2,
+                uintptr_t stack_3,
+                uintptr_t stack_4,
+                uintptr_t stack_5,
+                uintptr_t stack_6,
+                uintptr_t stack_7,
+                uintptr_t stack_8) = (decltype(func))func_ptr;
 
             // Scan for the render target width and height in the desc
             // and replace it with the desktop resolution (This is for the UI texture)
@@ -3260,7 +3319,13 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
                 }
             }
 
-            func(ctx.rcx, &out, ctx.r8, ctx.r9);
+            func(ctx.rcx, &out, ctx.r8, ctx.r9,
+                stack_args[0], stack_args[1], 
+                stack_args[2], stack_args[3],
+                stack_args[4],
+                stack_args[5], stack_args[6],
+                stack_args[7], stack_args[8]
+            );
 
             if (width_offset && height_offset) {
                 auto& x = *(int32_t*)(ctx.r9 + *width_offset);
