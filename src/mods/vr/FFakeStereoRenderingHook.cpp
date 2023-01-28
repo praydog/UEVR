@@ -1404,6 +1404,13 @@ struct SceneViewExtensionAnalyzer {
 
             auto frame_count = *(uint32_t*)((uintptr_t)&view_family + frame_count_offset);
 
+            static bool is_ue5_rdg_builder = false;
+            static uint32_t ue5_command_offset = 0;
+
+            if (is_ue5_rdg_builder) {
+                cmd_list = *(sdk::FRHICommandListBase**)((uintptr_t)cmd_list + ue5_command_offset);
+            }
+
             // Hijack the top command in the command list so we can enqueue the render poses on the RHI thread
             if (cmd_list->root != nullptr) {
                 static bool analyzed_root_already = false;
@@ -1412,11 +1419,59 @@ struct SceneViewExtensionAnalyzer {
                 if (!analyzed_root_already) try {
                     auto root = cmd_list->root;
 
+                    auto analyze_for_ue5 = [&]() {
+                        // Find the real command list.
+                        is_ue5_rdg_builder = true;
+                        const auto rdg_builder = (uintptr_t)cmd_list;
+
+                        for (auto i = 0x10; i < 0x100; i += sizeof(void*)) {
+                            const auto value = *(uintptr_t*)(rdg_builder + i);
+
+                            if (value == 0 || IsBadReadPtr((void*)value, sizeof(void*))) {
+                                continue;
+                            }
+
+                            if (utility::get_module_within((void*)value).has_value()) {
+                                continue;
+                            }
+
+                            const auto value_deref = *(uintptr_t*)value;
+
+                            if (value_deref == 0 || IsBadReadPtr((void*)value_deref, sizeof(void*))) {
+                                continue;
+                            }
+
+                            if (utility::get_module_within((void*)value_deref).has_value()) {
+                                continue;
+                            }
+
+                            const auto root_vtable = *(uintptr_t*)value_deref;
+
+                            if (root_vtable == 0 || IsBadReadPtr((void*)root_vtable, sizeof(void*))) {
+                                continue;
+                            }
+
+                            if (!utility::get_module_within((void*)root_vtable).has_value()) {
+                                continue;
+                            }
+
+                            spdlog::info("Possible UE5 command list found at offset 0x{:x}", i);
+                            ue5_command_offset = i;
+                            cmd_list = (sdk::FRHICommandListBase*)value;
+                            break;
+                        }
+                    };
+
                     // If we read the pointer at the start of the root and it's not a module, then it's the old FRHICommandBase
                     // this is because all vtables reside within a module
                     if (utility::get_module_within(*(void**)root).value_or(nullptr) == nullptr) {
-                        spdlog::info("Old FRHICommandBase detected");
-                        is_old_command_base = true;
+                        // UE5
+                        if (g_hook->has_double_precision()) {
+                            analyze_for_ue5();
+                        } else {
+                            spdlog::info("Old FRHICommandBase detected");
+                            is_old_command_base = true;
+                        }
                     } else {
                         spdlog::info("New FRHICommandBase detected");
                     }
@@ -1493,9 +1548,14 @@ struct SceneViewExtensionAnalyzer {
 
             func(cmd, cmd_list, debug_context);
 
-            // I think command lists are guaranteed to execute in order, so we can just clear the map here
-            cmd_frame_counts.clear();
-            original_vtables.clear();
+            // We used to be able to immediately erase the maps here
+            // but in UE5 (5.1?) they deferred the cleanup of the command list
+            // onto the render thread.
+            RenderThreadWorker::get().enqueue([=]() {
+                std::scoped_lock _{vtable_mutex};
+                cmd_frame_counts.erase(cmd);
+                original_vtables.erase(cmd);
+            });
 
             RHIThreadWorker::get().execute();
         };

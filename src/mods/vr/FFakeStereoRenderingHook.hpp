@@ -163,6 +163,11 @@ public:
     void attempt_hooking();
     void attempt_hook_game_engine_tick(uintptr_t return_address = 0);
     void attempt_hook_slate_thread(uintptr_t return_address = 0);
+
+    bool has_double_precision() const {
+        return m_has_double_precision;
+    }
+
     bool has_attempted_to_hook_slate() const {
         return m_attempted_hook_slate_thread;
     }
