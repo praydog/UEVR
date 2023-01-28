@@ -1195,7 +1195,7 @@ struct SceneViewExtensionAnalyzer {
                 }
             }
 
-            spdlog::info("Found most called index to be {} with {} calls", max_index, max_count);
+            spdlog::info("[Stage 1] Found most called index to be {} with {} calls", max_index, max_count);
 
             functions.clear();
             FillVtable<g_view_extension_vtable.size() - 1>::fill2(g_view_extension_vtable);
@@ -1276,7 +1276,7 @@ struct SceneViewExtensionAnalyzer {
 
                                     frame_count_offset = i;
 
-                                    setup_begin_render_viewfamily_hook();
+                                    setup_view_extension_hook();
                                     return false;
                                 }   
                             }
@@ -1321,7 +1321,8 @@ struct SceneViewExtensionAnalyzer {
         return false;
     }
 
-    static void setup_begin_render_viewfamily_hook() {
+    // Meant to be called after analysis has been completed
+    static void setup_view_extension_hook() {
         std::scoped_lock _{dummy_mutex};
 
         spdlog::info("Setting up BeginRenderViewFamily hook...");
@@ -1548,14 +1549,10 @@ struct SceneViewExtensionAnalyzer {
 
             func(cmd, cmd_list, debug_context);
 
-            // We used to be able to immediately erase the maps here
-            // but in UE5 (5.1?) they deferred the cleanup of the command list
-            // onto the render thread.
-            RenderThreadWorker::get().enqueue([=]() {
-                std::scoped_lock _{vtable_mutex};
-                cmd_frame_counts.erase(cmd);
-                original_vtables.erase(cmd);
-            });
+            // set the vtable back
+            *(void**)cmd = original_vtable;
+            original_vtables.erase(cmd);
+            cmd_frame_counts.erase(cmd);
 
             RHIThreadWorker::get().execute();
         };
@@ -1635,9 +1632,9 @@ struct SceneViewExtensionAnalyzer {
 
             func(*cmd_list, cmd);
 
-            // I think command lists are guaranteed to execute in order, so we can just clear the map here
-            cmd_frame_counts.clear();
-            original_funcs.clear();
+            cmd->func = func;
+            original_funcs.erase(cmd);
+            cmd_frame_counts.erase(cmd);
 
             RHIThreadWorker::get().execute();
         };
