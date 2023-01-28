@@ -869,6 +869,8 @@ void Framework::invalidate_device_objects() {
 void Framework::draw_ui() {
     std::lock_guard _{m_input_mutex};
 
+    ImGui::GetIO().MouseDrawCursor = m_draw_ui;
+
     if (!m_draw_ui) {
         // remove SetCursorPos patch
         if (m_set_cursor_pos_patch.get() != nullptr) {
