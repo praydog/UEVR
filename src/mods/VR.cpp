@@ -1075,136 +1075,96 @@ void VR::on_draw_ui() {
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_FirstUseEver);
 
     if (ImGui::TreeNode("CVars")) {
+        #define DISPLAY_CVAR_DATA_INT(cvar_variable, cvar_module, cvar_name, friendly_name, mn, mx) \
+            static auto cvar_variable = sdk::find_cvar_data(cvar_module, cvar_name); \
+            if (cvar_variable) try {\
+                auto cvar = cvar_variable->get<int>();\
+                if (cvar != nullptr) {\
+                    auto value = cvar->get();\
+                    if (ImGui::SliderInt(friendly_name, &value, mn, mx)) {\
+                        cvar->set(value);\
+                    }\
+                }\
+            } catch(...) {\
+                ImGui::TextWrapped("Failed to read " #cvar_name " cvar");\
+            }
+
+        #define DISPLAY_CVAR_DATA_FLOAT(cvar_variable, cvar_module, cvar_name, friendly_name, mn, mx) \
+            static auto cvar_variable = sdk::find_cvar_data(cvar_module, cvar_name); \
+            if (cvar_variable) try {\
+                auto cvar = cvar_variable->get<float>();\
+                if (cvar != nullptr) {\
+                    auto value = cvar->get();\
+                    if (ImGui::SliderFloat(friendly_name, &value, mn, mx)) {\
+                        cvar->set(value);\
+                    }\
+                }\
+            } catch(...) {\
+                ImGui::TextWrapped("Failed to read " #cvar_name " cvar");\
+            }
+
+        #define DISPLAY_CVAR_DATA_BOOL(cvar_variable, cvar_module, cvar_name, friendly_name) \
+            static auto cvar_variable = sdk::find_cvar_data(cvar_module, cvar_name); \
+            if (cvar_variable) try {\
+                auto cvar = cvar_variable->get<int>();\
+                if (cvar != nullptr) {\
+                    auto value = cvar->get();\
+                    if (ImGui::Checkbox(friendly_name, (bool*)&value)) {\
+                        cvar->set(value);\
+                    }\
+                }\
+            } catch(...) {\
+                ImGui::TextWrapped("Failed to read " #cvar_name " cvar");\
+            }
+
+        // This is the one that uses find_cvar and GameThreadWorker
+        #define DISPLAY_CVAR_REF_INT(cvar_variable, cvar_module, cvar_name, friendly_name, mn, mx)\
+            static auto cvar_variable = sdk::find_cvar(cvar_module, cvar_name); \
+            if (cvar_variable != nullptr && *cvar_variable != nullptr) try {\
+                auto cvar = *cvar_variable;\
+                auto value = cvar->GetInt();\
+                if (ImGui::SliderInt(friendly_name, &value, mn, mx)) {\
+                    GameThreadWorker::get().enqueue([cvar, value] {\
+                        cvar->Set(std::to_wstring(value).c_str());\
+                    });\
+                }\
+            } catch(...) {\
+                ImGui::TextWrapped("Failed to read " #cvar_name " cvar");\
+            }
+
+        #define DISPLAY_CVAR_REF_BOOL(cvar_variable, cvar_module, cvar_name, friendly_name)\
+            static auto cvar_variable = sdk::find_cvar(cvar_module, cvar_name); \
+            if (cvar_variable != nullptr && *cvar_variable != nullptr) try {\
+                auto cvar = *cvar_variable;\
+                auto value = cvar->GetInt();\
+                if (ImGui::Checkbox(friendly_name, (bool*)&value)) {\
+                    GameThreadWorker::get().enqueue([cvar, value] {\
+                        cvar->Set(std::to_wstring(value).c_str());\
+                    });\
+                }\
+            } catch(...) {\
+                ImGui::TextWrapped("Failed to read " #cvar_name " cvar");\
+            }
+
         // Boolean values
         // r.OneFrameThreadLag
-        auto one_frame_thread_lag = sdk::rendering::get_one_frame_thread_lag_cvar()->get<int>();
-
-        if (one_frame_thread_lag != nullptr) try {
-            auto value = one_frame_thread_lag->get();
-
-            if (ImGui::Checkbox("One Frame Thread Lag", (bool*)&value)) {
-                one_frame_thread_lag->set(value);
-            }
-        } catch(...) {
-            ImGui::TextWrapped("Failed to read frame thread lag cvar");
-        }
-
-        // r.AllowHDR
-        static auto r_allow_hdr_cvar = sdk::find_cvar_data(L"Engine", L"r.AllowHDR");
-
-        if (r_allow_hdr_cvar) try {
-            auto r_allow_hdr = r_allow_hdr_cvar->get<int>();
-
-            if (r_allow_hdr != nullptr) {
-                auto value = r_allow_hdr_cvar->get<int>();
-
-                if (ImGui::Checkbox("Allow HDR", (bool*)&value)) {
-                    r_allow_hdr_cvar->set(value);
-                }
-            }
-        } catch(...) {
-            ImGui::TextWrapped("Failed to read r.AllowHDR cvar");
-        }
-
-        // r.AllowOcclusionQueries
-        static auto r_allow_occlusion_queries_cvar = sdk::find_cvar_data(L"Engine", L"r.AllowOcclusionQueries");
-
-        if (r_allow_occlusion_queries_cvar) try {
-            auto r_allow_occlusion_queries = r_allow_occlusion_queries_cvar->get<int>();
-
-            if (r_allow_occlusion_queries != nullptr) {
-                auto value = r_allow_occlusion_queries->get();
-
-                if (ImGui::Checkbox("Allow Occlusion Queries", (bool*)&value)) {
-                    r_allow_occlusion_queries->set(value);
-                }
-            }
-        } catch(...) {
-            ImGui::TextWrapped("Failed to read r.AllowOcclusionQueries cvar");
-        }
-
-        // r.HZBOcclusion
-        static auto r_hzbo_cvar = sdk::find_cvar(L"Engine", L"r.HZBOcclusion");
-
-        if (r_hzbo_cvar != nullptr && *r_hzbo_cvar != nullptr) try {
-            auto cvar = *r_hzbo_cvar;
-            auto value = cvar->GetInt();
-
-            if (ImGui::Checkbox("HZBOcclusion", (bool*)&value)) {
-                GameThreadWorker::get().enqueue([cvar, value] {
-                    cvar->Set(std::to_wstring(value).c_str());
-                });
-            }
-        } catch(...) {
-            ImGui::TextWrapped("Failed to read r.HZBOcclusion cvar");
-        }
-
-        // r.VolumetricCloud
-        static auto r_volumetric_cloud_cvar = sdk::find_cvar_data(L"Engine", L"r.VolumetricCloud");
-
-        if (r_volumetric_cloud_cvar) try {
-            auto r_volumetric_cloud = r_volumetric_cloud_cvar->get<int>();
-
-            if (r_volumetric_cloud != nullptr) {
-                auto value = r_volumetric_cloud->get();
-
-                if (ImGui::Checkbox("Volumetric Cloud", (bool*)&value)) {
-                    r_volumetric_cloud->set(value);
-                }
-            }
-        } catch(...) {
-            ImGui::TextWrapped("Failed to read r.VolumetricCloud cvar");
-        }
+        DISPLAY_CVAR_DATA_BOOL(one_frame_thread_lag, L"Engine", L"r.OneFrameThreadLag", "One Frame Thread Lag");
+        DISPLAY_CVAR_DATA_BOOL(r_allow_hdr, L"Engine", L"r.AllowHDR", "Allow HDR");
+        DISPLAY_CVAR_DATA_BOOL(r_allow_occlusion_queries, L"Engine", L"r.AllowOcclusionQueries", "Allow Occlusion Queries");
+        DISPLAY_CVAR_REF_BOOL(r_hzbo_cvar, L"Engine", L"r.HZBOcclusion", "HZBOcclusion");
+        DISPLAY_CVAR_DATA_BOOL(r_volumetric_cloud, L"Engine", L"r.VolumetricCloud", "Volumetric Cloud");
 
         // Sliders (int values)
-        // r.AmbientOcclusionLevels
-        static auto r_ambient_occlusion_levels_cvar = sdk::find_cvar_data(L"Engine", L"r.AmbientOcclusionLevels");
+        DISPLAY_CVAR_DATA_INT(r_ambient_occlusion_levels_cvar, L"Engine", L"r.AmbientOcclusionLevels", "Ambient Occlusion Levels", 0, 4);
+        DISPLAY_CVAR_DATA_INT(r_depth_of_field_quality_cvar, L"Engine", L"r.DepthOfFieldQuality", "Depth of Field Quality", 0, 2);
+        DISPLAY_CVAR_DATA_INT(r_motion_blur_quality_cvar, L"Engine", L"r.MotionBlurQuality", "Motion Blur Quality", 0, 4);
+        DISPLAY_CVAR_DATA_FLOAT(r_motion_blur_max_cvar, L"Engine", L"r.MotionBlur.Max", "Motion Blur Max", -1, 100);
+        DISPLAY_CVAR_DATA_FLOAT(r_scene_color_fringe_max_cvar, L"Engine", L"r.SceneColorFringe.Max", "Scene Color Fringe Max", -1, 100);
+        DISPLAY_CVAR_DATA_FLOAT(r_scene_color_fringe_quality_cvar, L"Engine", L"r.SceneColorFringe.Quality", "Scene Color Fringe Quality", 0, 1);
 
-        if (r_ambient_occlusion_levels_cvar) try {
-            auto r_ambient_occlusion_levels = r_ambient_occlusion_levels_cvar->get<int>();
+        DISPLAY_CVAR_REF_INT(r_light_culling_quality_cvar, L"Engine", L"r.LightCulling.Quality", "Light Culling Quality", 0, 2);
 
-            if (r_ambient_occlusion_levels != nullptr) {
-                auto value = r_ambient_occlusion_levels->get();
-
-                if (ImGui::SliderInt("Ambient Occlusion Levels", &value, 0, 4)) {
-                    r_ambient_occlusion_levels->set(value);
-                }
-            }
-        } catch(...) {
-            ImGui::TextWrapped("Failed to read ambient occlusion levels cvar");
-        }
-
-        // r.LightCulling.Quality
-        static auto r_light_culling_quality_cvar = sdk::find_cvar(L"Engine", L"r.LightCulling.Quality");
-
-        if (r_light_culling_quality_cvar != nullptr && *r_light_culling_quality_cvar != nullptr) try {
-            auto cvar = *r_light_culling_quality_cvar;
-            auto value = cvar->GetInt();
-
-            if (ImGui::SliderInt("Light Culling Quality", &value, 0, 2)) {
-                GameThreadWorker::get().enqueue([cvar, value] {
-                    cvar->Set(std::to_wstring(value).c_str());
-                });
-            }
-        } catch(...) {
-            ImGui::TextWrapped("Failed to read light culling quality cvar");
-        }
-
-        static auto r_subsurface_scattering_cvar = sdk::find_cvar_data(L"Engine", L"r.SubsurfaceScattering");
-
-        if (r_subsurface_scattering_cvar) try {
-            auto r_subsurface_scattering = r_subsurface_scattering_cvar->get<int>();
-
-            if (r_subsurface_scattering != nullptr) {
-                auto value = r_subsurface_scattering->get();
-
-                if (ImGui::SliderInt("Subsurface Scattering", &value, 0, 2)) {
-                    r_subsurface_scattering->set(value);
-                }
-            }
-        } catch(...) {
-            ImGui::TextWrapped("Failed to read subsurface scattering cvar");
-        }
+        DISPLAY_CVAR_DATA_INT(r_subsurface_scattering_cvar, L"Engine", L"r.SubsurfaceScattering", "Subsurface Scattering", 0, 2);
 
         ImGui::TreePop();
     }
