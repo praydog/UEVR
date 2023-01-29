@@ -1303,6 +1303,9 @@ bool Framework::initialize() {
                     }
 
                     spdlog::error("Initialization of mods failed. Reason: {}", m_error);
+                } else {
+                    // Do an initial config save to set the default values for the frontend
+                    save_config();
                 }
 
                 m_game_data_initialized = true;
