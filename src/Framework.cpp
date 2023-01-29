@@ -19,6 +19,8 @@
 #include "utility/String.hpp"
 #include "utility/Input.hpp"
 
+#include "WindowFilter.hpp"
+
 #include "Mods.hpp"
 #include "mods/PluginLoader.hpp"
 
@@ -67,7 +69,7 @@ void Framework::hook_monitor() {
         || (renderer_type == Framework::RendererType::D3D12 && d3d12 != nullptr && !d3d12->is_inside_present())) 
     {
         // check if present time is more than 5 seconds ago
-        if (now - m_last_present_time > std::chrono::seconds(5)) {
+        if (now - m_last_present_time >= std::chrono::seconds(1)) {
             if (m_has_last_chance) {
                 // the purpose of this is to make sure that the game is not frozen
                 // e.g. if we are debugging the game, so we don't rehook anything on accident
@@ -136,6 +138,23 @@ void Framework::hook_monitor() {
         } else {
             m_sent_message = false;
         }
+    }
+}
+
+void Framework::command_thread() {
+    m_uevr_shared_memory->data().command_thread_id = GetCurrentThreadId();
+
+    MSG msg{};
+    if (PeekMessageA(&msg, (HWND)-1, WM_USER, WM_USER, PM_NOREMOVE) == 0) {
+        return;
+    }
+
+    if (msg.message != WM_USER) {
+        return;
+    }
+
+    if (msg.wParam == UEVRSharedMemory::MESSAGE_IDENTIFIER) {
+        on_frontend_command((UEVRSharedMemory::Command)msg.lParam);
     }
 }
 
@@ -213,10 +232,17 @@ Framework::Framework(HMODULE framework_module)
 
     m_last_present_time = std::chrono::steady_clock::now();
     m_last_message_time = std::chrono::steady_clock::now();
-    m_d3d_monitor_thread = std::make_unique<std::thread>([this]() {
-        while (true) {
+    m_d3d_monitor_thread = std::make_unique<std::jthread>([this](std::stop_token s) {
+        while (!s.stop_requested() && !m_terminating) {
             this->hook_monitor();
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+    });
+
+    m_command_thread = std::make_unique<std::jthread>([this](std::stop_token s) {
+        while (!s.stop_requested() && !m_terminating) {
+            this->command_thread();
+            std::this_thread::sleep_for(std::chrono::milliseconds(33));
         }
     });
 
@@ -303,7 +329,11 @@ bool Framework::hook_d3d12() {
 Framework::~Framework() {
     spdlog::info("Framework shutting down...");
 
-    std::scoped_lock _{ m_hook_monitor_mutex };
+    m_terminating = true;
+    m_d3d_monitor_thread->request_stop();
+    if (m_d3d_monitor_thread->joinable()) {
+        m_d3d_monitor_thread->join();
+    }
 
     if (m_is_d3d11) {
         ImGui_ImplDX11_Shutdown();
@@ -634,11 +664,12 @@ bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_para
         return true;
     }
 
+    if (!WindowFilter::get().is_filtered(wnd)) {
+        m_uevr_shared_memory->data().main_thread_id = GetCurrentThreadId();
+    }
+
     bool is_mouse_moving{false};
     switch (message) {
-    //case WM_KILLFOCUS:
-    //case 0x14FD:
-        //return false; // do not allow this message to be handled by the game so we can alt tab without pausing
     case WM_KEYDOWN:
         if (w_param == VK_INSERT) {
             set_draw_ui(!m_draw_ui, true);
@@ -726,6 +757,22 @@ bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_para
     }
 
     return !any_false;
+}
+
+void Framework::on_frontend_command(UEVRSharedMemory::Command command) {
+    spdlog::info("Received frontend command: {}", (int)command);
+
+    switch (command) {
+    case UEVRSharedMemory::Command::RELOAD_CONFIG:
+        m_frame_worker->enqueue([this]() {
+            m_mods->reload_config();
+        });
+
+        break;
+    default:
+        spdlog::error("Unknown frontend command received: {}", (int)command);
+        break;
+    }
 }
 
 // this is unfortunate.
@@ -1309,6 +1356,7 @@ void Framework::call_on_frame() {
 
     if (is_init_ok) {
         // Run mod frame callbacks.
+        m_frame_worker->execute();
         m_mods->on_frame();
     }
 }

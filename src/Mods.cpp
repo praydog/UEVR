@@ -24,14 +24,18 @@ std::optional<std::string> Mods::on_initialize() const {
         }
     }
 
+    reload_config();
+
+    return std::nullopt;
+}
+
+void Mods::reload_config() const {
     utility::Config cfg{ Framework::get_persistent_dir("config.txt").string() };
 
     for (auto& mod : m_mods) {
         spdlog::info("{:s}::on_config_load()", mod->get_name().data());
         mod->on_config_load(cfg);
     }
-
-    return std::nullopt;
 }
 
 void Mods::on_pre_imgui_frame() const {

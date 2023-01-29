@@ -446,6 +446,7 @@ private:
     uint8_t m_left_eye_interval{0};
     uint8_t m_right_eye_interval{1};
 
+    bool m_first_config_load{true};
     bool m_is_d3d12{false};
     bool m_backbuffer_inconsistency{false};
     bool m_init_finished{false};

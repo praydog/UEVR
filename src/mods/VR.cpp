@@ -798,22 +798,26 @@ void VR::on_config_load(const utility::Config& cfg) {
         option.config_load(cfg);
     }
 
-    if (m_fake_stereo_hook != nullptr) {
-        m_fake_stereo_hook->on_config_load(cfg);
-    }
-
     if (get_runtime()->loaded) {
         get_runtime()->on_config_load(cfg);
     }
 
     // Run the rest of OpenXR initialization code here that depends on config values
-    if (get_runtime()->is_openxr() && get_runtime()->loaded) {
-        spdlog::info("[VR] Finishing up OpenXR initialization");
-        initialize_openxr_swapchains();
+    if (m_first_config_load) {
+        m_first_config_load = false; // because the frontend can request config reloads
+
+         if (get_runtime()->is_openxr() && get_runtime()->loaded) {
+            spdlog::info("[VR] Finishing up OpenXR initialization");
+            initialize_openxr_swapchains();
+        }
+
+        if (get_runtime()->loaded) {
+            m_fake_stereo_hook = std::make_unique<FFakeStereoRenderingHook>();
+        }   
     }
 
-    if (get_runtime()->loaded) {
-        m_fake_stereo_hook = std::make_unique<FFakeStereoRenderingHook>();
+    if (m_fake_stereo_hook != nullptr) {
+        m_fake_stereo_hook->on_config_load(cfg);
     }
 
     m_overlay_component.on_config_load(cfg);

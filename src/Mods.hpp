@@ -8,6 +8,7 @@ public:
     virtual ~Mods() {}
 
     std::optional<std::string> on_initialize() const;
+    void reload_config() const;
 
     void on_pre_imgui_frame() const;
     void on_frame() const;

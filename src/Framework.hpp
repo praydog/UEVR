@@ -11,6 +11,8 @@
 #include <sdk/Math.hpp>
 #include <utility/Patch.hpp>
 
+#include "mods/vr/ThreadWorker.hpp"
+
 class Mods;
 
 #include "hooks/D3D11Hook.hpp"
@@ -19,6 +21,13 @@ class Mods;
 #include "hooks/XInputHook.hpp"
 
 class UEVRSharedMemory {
+public:
+    static inline int MESSAGE_IDENTIFIER = *(int*)"VRMOD";
+
+    enum Command {
+        RELOAD_CONFIG = 0,
+    };
+
 public:
     UEVRSharedMemory();
 
@@ -31,8 +40,14 @@ public:
     struct Data {
         char path[MAX_PATH]{}; // Path to the game exe
         uint32_t pid{}; // Process ID of the game
+        uint32_t main_thread_id{}; // Main thread ID of the game
+        uint32_t command_thread_id{}; // Thread ID commands are sent to (via PostThreadMessage)
     };
     #pragma pack(pop)
+
+    Data& data() {
+        return *m_data;
+    }
 
 private:
     HANDLE m_memory{};
@@ -43,6 +58,7 @@ private:
 class Framework {
 private:
     void hook_monitor();
+    void command_thread();
 
 public:
     Framework(HMODULE framework_module);
@@ -74,6 +90,7 @@ public:
     void on_post_present_d3d12();
     void on_reset(uint32_t w, uint32_t h);
     bool on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param);
+    void on_frontend_command(UEVRSharedMemory::Command command);
     void on_direct_input_keys(const std::array<uint8_t, 256>& keys);
 
     static std::filesystem::path get_persistent_dir();
@@ -157,6 +174,7 @@ private:
     bool m_valid{false};
     bool m_initialized{false};
     bool m_created_default_cfg{false};
+    std::atomic<bool> m_terminating{false};
     std::atomic<bool> m_game_data_initialized{false};
     
     // UI
@@ -202,13 +220,16 @@ private:
     std::unique_ptr<UEVRSharedMemory> m_uevr_shared_memory{};
     Patch::Ptr m_set_cursor_pos_patch{};
 
+    std::unique_ptr<ThreadWorker> m_frame_worker{ std::make_unique<ThreadWorker>() };
+
     std::string m_error{""};
 
     // Game-specific stuff
     std::unique_ptr<Mods> m_mods;
 
     std::recursive_mutex m_hook_monitor_mutex{};
-    std::unique_ptr<std::thread> m_d3d_monitor_thread{};
+    std::unique_ptr<std::jthread> m_d3d_monitor_thread{};
+    std::unique_ptr<std::jthread> m_command_thread{};
     std::chrono::steady_clock::time_point m_last_present_time{};
     std::chrono::steady_clock::time_point m_last_message_time{};
     std::chrono::steady_clock::time_point m_last_sendmessage_time{};
