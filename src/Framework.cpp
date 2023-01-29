@@ -145,7 +145,7 @@ void Framework::command_thread() {
     m_uevr_shared_memory->data().command_thread_id = GetCurrentThreadId();
 
     MSG msg{};
-    if (PeekMessageA(&msg, (HWND)-1, WM_USER, WM_USER, PM_NOREMOVE) == 0) {
+    if (PeekMessageA(&msg, (HWND)-1, WM_USER, WM_USER, PM_REMOVE) == 0) {
         return;
     }
 
