@@ -40,10 +40,7 @@ std::optional<std::string> VR::on_initialize() try {
             m_openxr->needs_pose_update = false;
         }
     } else {
-        m_openxr->error = 
-R"(OpenVR loaded first.
-If you want to use OpenXR, remove the openvr_api.dll from your game folder, 
-and place the openxr_loader.dll in the same folder.)";
+        m_openxr->error = "OpenVR loaded first.";
     }
 
     if (!get_runtime()->loaded) {
@@ -1153,12 +1150,12 @@ void VR::on_draw_ui() {
         // Boolean values
         // r.OneFrameThreadLag
         DISPLAY_CVAR_DATA_BOOL(one_frame_thread_lag, L"Engine", L"r.OneFrameThreadLag", "One Frame Thread Lag");
-        DISPLAY_CVAR_DATA_BOOL(r_allow_hdr, L"Engine", L"r.AllowHDR", "Allow HDR");
         DISPLAY_CVAR_DATA_BOOL(r_allow_occlusion_queries, L"Engine", L"r.AllowOcclusionQueries", "Allow Occlusion Queries");
         DISPLAY_CVAR_REF_BOOL(r_hzbo_cvar, L"Engine", L"r.HZBOcclusion", "HZBOcclusion");
         DISPLAY_CVAR_DATA_BOOL(r_volumetric_cloud, L"Engine", L"r.VolumetricCloud", "Volumetric Cloud");
 
         // Sliders (int values)
+        DISPLAY_CVAR_REF_INT(r_default_feature_anti_aliasing_cvar, L"Engine", L"r.DefaultFeature.AntiAliasing", "Anti Aliasing", 0, 2);
         DISPLAY_CVAR_DATA_INT(r_ambient_occlusion_levels_cvar, L"Engine", L"r.AmbientOcclusionLevels", "Ambient Occlusion Levels", 0, 4);
         DISPLAY_CVAR_DATA_INT(r_depth_of_field_quality_cvar, L"Engine", L"r.DepthOfFieldQuality", "Depth of Field Quality", 0, 2);
         DISPLAY_CVAR_DATA_INT(r_motion_blur_quality_cvar, L"Engine", L"r.MotionBlurQuality", "Motion Blur Quality", 0, 4);
