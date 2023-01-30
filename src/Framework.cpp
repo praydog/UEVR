@@ -674,11 +674,12 @@ bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_para
         if (w_param == VK_INSERT) {
             set_draw_ui(!m_draw_ui, true);
 
-            if (m_draw_ui) {
+            // Dont do this it breaks stuff.
+            /*if (m_draw_ui) {
                 ShowCursor(TRUE);
             } else {
                 ShowCursor(FALSE);
-            }
+            }*/
             return false;
         }
         break;
