@@ -3329,6 +3329,13 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         spdlog::info("Calling register version of texture create");
 
         if (rtm->is_using_texture_desc && rtm->is_version_greq_5_1) {
+            if (ctx.r9 == 0 || IsBadReadPtr((void*)ctx.r9, sizeof(void*))) {
+                spdlog::info("Possible UE 5.0.3 detected, not 5.1 or above");
+                rtm->is_using_texture_desc = false;
+            }
+        }
+
+        if (rtm->is_using_texture_desc && rtm->is_version_greq_5_1) {
             spdlog::info("Calling UE5 texture desc version of texture create");
 
             void (*func)(
