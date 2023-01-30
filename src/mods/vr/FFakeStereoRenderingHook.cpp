@@ -3733,8 +3733,14 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
         emu.ctx->Registers.RegRip = (ND_UINT64)return_address;
         emu.ctx->MemThreshold = 100;
 
+        const std::vector<std::string> bad_patterns_before_call = {
+            "B2 32", // mov dl, 32h, (seen in UE5 debug/dev builds)
+            "BA 2F 00 00 00", // mov edx, 2Fh (seen in UE5 debug/dev builds)
+            "F6 85 ? ? ? ? 05", // test byte ptr [rbp+?], 5 (seen in UE5 debug/dev builds)
+        };
+
         while(true) {
-            if (emu.ctx->InstructionsCount > 100) {
+            if (emu.ctx->InstructionsCount > 200) {
                 break;
             }
 
@@ -3742,11 +3748,17 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
             const auto bytes = (uint8_t*)ip;
             const auto decoded = utility::decode_one((uint8_t*)ip);
 
-            // mov dl, 32h
-            // seen in UE5 or debug builds?
-            if (bytes[0] == 0xB2 && bytes[1] == 0x32) {
-                next_call_is_not_the_right_one = true;
-            } else try {
+            if (ip != 0) {
+                for (const auto& pattern : bad_patterns_before_call) {
+                    if (utility::scan(ip, 100, pattern).value_or(0) == ip) {
+                        spdlog::info("Found bad pattern before call, skipping next call: {:x} ({})", ip, pattern);
+                        next_call_is_not_the_right_one = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!next_call_is_not_the_right_one) try {
                 const auto addr = utility::resolve_displacement(ip);
 
                 if (addr && !IsBadReadPtr((void*)*addr, 12) && std::wstring_view{(const wchar_t*)*addr}.starts_with(L"BufferedRT")) {
@@ -3769,6 +3781,23 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                     // This instruction calls RHICreateTargetableShaderResource2D(TexSizeX, TexSizeY, SceneTargetFormat, 1, TexCreate_None,
                     // TexCreate_RenderTargetable, false, CreateInfo, BufferedRTRHI, BufferedSRVRHI); Which sets up the BufferedRTRHI and
                     // BufferedSRVRHI variables.
+                    if (is_call && !next_call_is_not_the_right_one && bytes[0] == 0xE8) try {
+                        // Analyze some of the instructions inside the call first
+                        // If it has a mov eax, 0x800, then returns, we can skip this function
+                        const auto fn = utility::calculate_absolute(ip + 1);
+                        spdlog::info("Analyzing call at {:x} to {:x}", ip, fn);
+
+                        if (auto result = utility::scan(fn, 10, "41 B8 30 00 00 00"); result.has_value() && *result == fn) {
+                            spdlog::info("First instruction is a mov r8d, 30h, skipping this call!");
+                            next_call_is_not_the_right_one = true;
+                        } else if (auto result = utility::scan(fn, 50, "B8 00 08 00 00 C3"); result.has_value()) {
+                            spdlog::info("First few instructions are a mov eax, 800h, ret, skipping this call!");
+                            next_call_is_not_the_right_one = true;
+                        }
+                    } catch(...) {
+                        spdlog::info("Failed to analyze call at {:x}", ip);
+                    }
+
                     if (is_call && !next_call_is_not_the_right_one) {
                         const auto post_call = (uintptr_t)ip + decoded->Length;
                         spdlog::info("AllocateRenderTargetTexture post_call: {:x}", post_call - (uintptr_t)*utility::get_module_within((void*)post_call));
@@ -3794,7 +3823,7 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                         return false;
                     }
 
-                    spdlog::info("Skipping write to memory instruction at {:x}", ip);
+                    spdlog::info("Skipping write to memory instruction at {:x} ({:x} bytes, landing at {:x})", ip, decoded->Length, ip + decoded->Length);
                     emu.ctx->Registers.RegRip += decoded->Length;
                     emu.ctx->Instruction = *decoded; // pseudo-emulate the instruction
                     ++emu.ctx->InstructionsCount;
@@ -3803,7 +3832,10 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                         next_call_is_not_the_right_one = false;
                     }
                 } else if (emu.emulate() != SHEMU_SUCCESS) { // only emulate the non-memory write instructions
-                    emu.ctx->Registers.RegRip += decoded->Length;
+                    spdlog::info("Emulation failed at {:x} ({:x} bytes, landing at {:x})", ip, decoded->Length, ip + decoded->Length);
+                    // instead of just adding it onto the RegRip, we need to use the ip we had previously from the decode
+                    // because the emulator can move the instruction pointer after emulate() is called
+                    emu.ctx->Registers.RegRip = ip + decoded->Length;
                     continue;
                 }
             } else {
