@@ -2164,6 +2164,19 @@ bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
         return false;
     }*/
 
+    // The best way to enable stereo rendering without causing crashes
+    // while also allowing the desktop view to initially display
+    // if the HMD is not on at the start.
+    if (g_hook->m_has_game_viewport_client_draw_hook) {
+        static bool enabled_in_viewport_draw = false;
+
+        if (g_hook->m_in_viewport_client_draw) {
+            enabled_in_viewport_draw = VR::get()->is_hmd_active();
+        }
+
+        return enabled_in_viewport_draw;
+    }
+
     static uint32_t count = 0;
 
     // Forcefully return true the first few times to let stuff initialize.
