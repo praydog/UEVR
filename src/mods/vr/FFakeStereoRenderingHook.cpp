@@ -2609,7 +2609,7 @@ uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoR
     spdlog::info("get desired number of views hook called!");
 #endif
 
-    if (!is_stereo_enabled || !VR::get()->is_hmd_active()) {
+    if (!is_stereo_enabled) {
         return 1;
     }
 
