@@ -79,7 +79,8 @@ public:
 
     Vector4f get_eye_offset(VRRuntime::Eye eye) const;
     Vector4f get_current_offset();
-
+    
+    Matrix4x4f get_eye_transform(uint32_t index);
     Matrix4x4f get_current_eye_transform(bool flip = false);
     Matrix4x4f get_projection_matrix(VRRuntime::Eye eye, bool flip = false);
     Matrix4x4f get_current_projection_matrix(bool flip = false);

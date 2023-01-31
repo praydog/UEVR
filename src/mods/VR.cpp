@@ -1494,6 +1494,16 @@ Vector4f VR::get_current_offset() {
     //return Vector4f{m_eye_distance, 0.0f, 0.0f, 0.0f};
 }
 
+Matrix4x4f VR::get_eye_transform(uint32_t index) {
+    if (!is_hmd_active() || index > 2) {
+        return glm::identity<Matrix4x4f>();
+    }
+
+    std::shared_lock _{get_runtime()->eyes_mtx};
+
+    return get_runtime()->eyes[index];
+}
+
 Matrix4x4f VR::get_current_eye_transform(bool flip) {
     if (!is_hmd_active()) {
         return glm::identity<Matrix4x4f>();

@@ -2355,8 +2355,9 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     if (!vr->is_stereo_emulation_enabled()) {
         const auto rotation_offset = vr->get_rotation_offset();
         const auto current_hmd_rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(0)});
+        const auto current_eye_rotation_offset = glm::normalize(glm::quat{vr->get_eye_transform(true_index)});
 
-        const auto new_rotation = glm::normalize(view_quat_inverse * current_hmd_rotation);
+        const auto new_rotation = glm::normalize(view_quat_inverse * current_hmd_rotation * current_eye_rotation_offset);
         const auto eye_offset = glm::vec3{vr->get_eye_offset((VRRuntime::Eye)(true_index))};
 
         const auto pos = glm::vec3{rotation_offset * ((vr->get_position(0) - vr->get_standing_origin()))};
