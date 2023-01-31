@@ -355,6 +355,7 @@ private:
         std::unique_ptr<PointerHook> should_use_separate_render_target_hook{};
         std::unique_ptr<PointerHook> calculate_render_target_size_hook{};
         std::unique_ptr<PointerHook> allocate_render_target_texture_hook{};
+        std::unique_ptr<PointerHook> need_reallocate_viewport_render_target_hook{};
     } m_embedded_rtm;
 
     const ModToggle::Ptr m_recreate_textures_on_reset{ ModToggle::create("VR_RecreateTexturesOnReset", true) };

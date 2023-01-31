@@ -619,9 +619,29 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         spdlog::info("CalculateRenderTargetSize index: {}", calculate_render_target_size_index);
 
         // To be seen if this one needs automated analysis
+        const auto need_reallocate_viewport_render_target_index = calculate_render_target_size_index + 1;
+        const auto need_reallocate_viewport_render_target_func_ptr = &((uintptr_t*)vtable)[need_reallocate_viewport_render_target_index];
+
+        // To be seen if this one needs automated analysis
         const auto should_use_separate_render_target_index = calculate_render_target_size_index + 2;
         const auto should_use_separate_render_target_func_ptr = &((uintptr_t*)vtable)[should_use_separate_render_target_index];
 
+        // Log a warning if NeedReallocateViewportRenderTarget or ShouldUseSeparateRenderTarget are not
+        // functions that plainly return false, but do not fail entirely.
+        bool need_reallocate_viewport_render_target_is_bad = false;
+        bool should_use_separate_render_target_is_bad = false;
+
+        if (!sdk::is_vfunc_pattern(*need_reallocate_viewport_render_target_func_ptr, "32 C0")) {
+            spdlog::warn("NeedReallocateViewportRenderTarget is not a function that returns false");
+            need_reallocate_viewport_render_target_is_bad = true;
+        }
+
+        if (!sdk::is_vfunc_pattern(*should_use_separate_render_target_func_ptr, "32 C0")) {
+            spdlog::warn("ShouldUseSeparateRenderTarget is not a function that returns false");
+            should_use_separate_render_target_is_bad = true;
+        }
+
+        spdlog::info("NeedReallocateViewportRenderTarget index: {}", need_reallocate_viewport_render_target_index);
         spdlog::info("ShouldUseSeparateRenderTarget index: {}", should_use_separate_render_target_index);
 
         // Scan forward from RenderTexture_RenderThread for the first virtual that returns false
@@ -668,7 +688,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 return g_hook->get_render_target_manager()->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &out_texture, &out_shader_resource);
             }
         );
-
+    
         m_embedded_rtm.should_use_separate_render_target_hook = 
             std::make_unique<PointerHook>((void**)should_use_separate_render_target_func_ptr, +[](void* self) -> bool {
             #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
@@ -680,6 +700,18 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 return vr->is_hmd_active() && !vr->is_stereo_emulation_enabled();
             }
         );
+
+        if (!need_reallocate_viewport_render_target_is_bad) {
+            m_embedded_rtm.need_reallocate_viewport_render_target_hook = 
+                std::make_unique<PointerHook>((void**)need_reallocate_viewport_render_target_func_ptr, +[](void* self, FViewport* viewport) -> bool {
+                #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+                    spdlog::info("NeedReallocateViewportRenderTarget (embedded)");
+                #endif
+
+                    return g_hook->get_render_target_manager()->need_reallocate_view_target(*viewport);
+                }
+            );
+        }
     }
     
     m_is_stereo_enabled_hook = std::make_unique<PointerHook>((void**)is_stereo_enabled_func_ptr, (void*)&is_stereo_enabled);
