@@ -220,7 +220,7 @@ private:
     std::unique_ptr<UEVRSharedMemory> m_uevr_shared_memory{};
     Patch::Ptr m_set_cursor_pos_patch{};
 
-    std::unique_ptr<ThreadWorker> m_frame_worker{ std::make_unique<ThreadWorker>() };
+    std::unique_ptr<ThreadWorker<void>> m_frame_worker{ std::make_unique<ThreadWorker<void>>() };
 
     std::string m_error{""};
 

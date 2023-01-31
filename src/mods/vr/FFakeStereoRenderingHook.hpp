@@ -10,6 +10,8 @@
 #include <sdk/StereoStuff.hpp>
 #include <sdk/FViewportInfo.hpp>
 
+#include "ThreadWorker.hpp"
+
 #include "Mod.hpp"
 
 struct FRHICommandListImmediate;
@@ -216,6 +218,18 @@ public:
 
     void on_draw_ui() override;
 
+    auto get_frame_delay_compensation() const {
+        return m_frame_delay_compensation->value();
+    }
+
+    auto& get_slate_thread_worker() {
+        return m_slate_thread_worker;
+    }
+
+    bool has_slate_hook() {
+        return m_slate_thread_hook != nullptr;
+    }
+
 private:
     bool hook();
     bool standard_fake_stereo_hook(uintptr_t vtable);
@@ -257,6 +271,8 @@ private:
 
     static void viewport_draw_hook(void* viewport, bool should_present);
     static void game_viewport_client_draw_hook(void* gameviewportclient, void* viewport, void* canvas, void* a4);
+
+    std::unique_ptr<ThreadWorker<FRHICommandListImmediate*>> m_slate_thread_worker{std::make_unique<ThreadWorker<FRHICommandListImmediate*>>()};
 
     std::unique_ptr<safetyhook::InlineHook> m_tick_hook{};
     std::unique_ptr<safetyhook::InlineHook> m_adjust_view_rect_hook{};
@@ -339,8 +355,10 @@ private:
     } m_embedded_rtm;
 
     const ModToggle::Ptr m_recreate_textures_on_reset{ ModToggle::create("VR_RecreateTexturesOnReset", true) };
+    const ModInt32::Ptr m_frame_delay_compensation{ ModInt32::create("VR_FrameDelayCompensation", 0) };
 
     ValueList m_options{
-        *m_recreate_textures_on_reset
+        *m_recreate_textures_on_reset,
+        *m_frame_delay_compensation
     };
 };

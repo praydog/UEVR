@@ -79,6 +79,7 @@ void FFakeStereoRenderingHook::on_draw_ui() {
     ImGui::Text("Stereo Hook Options");
 
     m_recreate_textures_on_reset->draw("Recreate Textures on Reset");
+    m_frame_delay_compensation->draw("Frame Delay Compensation");
 
     ImGui::Separator();
 }
@@ -1208,7 +1209,9 @@ struct SceneViewExtensionAnalyzer {
             has_found_is_active_this_frame_index = true;
             is_active_this_frame_index = max_index;
         } else {
-            spdlog::info("[Stage 1] ISceneViewExtension Index {} called!", N);
+            if (functions[N].call_count == 1) {
+                spdlog::info("[Stage 1] ISceneViewExtension Index {} called for the first time!", N);
+            }
         }
 
         return false;
@@ -1223,13 +1226,15 @@ struct SceneViewExtensionAnalyzer {
         if (N == 0) {
             index_0_called = true;
         }
-        
-        spdlog::info("[Stage 2] SceneViewExtension Index {} called!", N);
 
         std::scoped_lock _{dummy_mutex};
 
         if (functions.contains(N)) {
             auto& func = functions[N];
+
+            if (func.call_count++ == 0) {
+                spdlog::info("[Stage 2] SceneViewExtension Index {} called for the first time!", N);
+            }
 
             const auto& last_view_family_data_a2 = func.a2_data;
             const auto view_family_a2 = (uintptr_t)a2;
@@ -1321,6 +1326,10 @@ struct SceneViewExtensionAnalyzer {
         return false;
     }
 
+    static inline std::recursive_mutex vtable_mutex{};
+    static inline std::unordered_map<sdk::FRHICommandBase_New*, void**> original_vtables{};
+    static inline std::unordered_map<sdk::FRHICommandBase_New*, uint32_t> cmd_frame_counts{};
+
     // Meant to be called after analysis has been completed
     static void setup_view_extension_hook() {
         std::scoped_lock _{dummy_mutex};
@@ -1403,20 +1412,53 @@ struct SceneViewExtensionAnalyzer {
                 return;
             }
 
-            auto frame_count = *(uint32_t*)((uintptr_t)&view_family + frame_count_offset);
+            const auto frame_count = *(uint32_t*)((uintptr_t)&view_family + frame_count_offset);
 
             static bool is_ue5_rdg_builder = false;
             static uint32_t ue5_command_offset = 0;
+            static bool analyzed_root_already = false;
+            static bool is_old_command_base = false;
 
             if (is_ue5_rdg_builder) {
                 cmd_list = *(sdk::FRHICommandListBase**)((uintptr_t)cmd_list + ue5_command_offset);
             }
 
+            const auto compensation = g_hook->get_frame_delay_compensation();
+
+            // Using slate's draw window hook is the safest way to do this without
+            // false positives on the command list in this function
+            // otherwise we can attempt to use the command list here and hook it
+            // in the slate hook, a guaranteed proper command list is passed to the function
+            // so we can use that to hook the command list
+            // The main inspiration for this is UE5.0.3 because it passes an FRDGBuilder
+            // which *does* contain the command list in it, but for whatever reason I can't
+            // seem to hook it properly, so I'm using the slate hook instead
+            auto enqueue_poses_on_slate_thread = [&]() {
+                g_hook->get_slate_thread_worker()->enqueue([=](FRHICommandListImmediate* command_list) {
+                    static bool once_slate = true;
+
+                    if (once_slate) {
+                        spdlog::info("Called enqueued function on the Slate thread for the first time! Frame count: {}", frame_count);
+                        once_slate = false;
+                    }
+
+                    auto l = (sdk::FRHICommandListBase*)command_list;
+
+                    if (l->root != nullptr) {
+                        if (!is_old_command_base) {
+                            hook_new_rhi_command((sdk::FRHICommandBase_New*)l->root, frame_count + compensation);
+                        } else {
+                            hook_old_rhi_command((sdk::FRHICommandBase_Old*)l->root, frame_count + compensation);
+                        }
+                    } else {
+                        // welp
+                        vr->get_runtime()->enqueue_render_poses(frame_count + compensation);
+                    }
+                });
+            };
+
             // Hijack the top command in the command list so we can enqueue the render poses on the RHI thread
             if (cmd_list->root != nullptr) {
-                static bool analyzed_root_already = false;
-                static bool is_old_command_base = false;
-
                 if (!analyzed_root_already) try {
                     auto root = cmd_list->root;
 
@@ -1483,102 +1525,103 @@ struct SceneViewExtensionAnalyzer {
                     analyzed_root_already = true;
                 }
 
-                if (!is_old_command_base) {
-                    hook_new_rhi_command((sdk::FRHICommandBase_New*)cmd_list->root, frame_count);
+                if (g_hook->has_slate_hook()) {
+                    enqueue_poses_on_slate_thread();
+                } else if (!is_old_command_base) {
+                    hook_new_rhi_command((sdk::FRHICommandBase_New*)cmd_list->root, frame_count + compensation);
                 } else {
-                    hook_old_rhi_command((sdk::FRHICommandBase_Old*)cmd_list->root, frame_count);
-                    //vr->get_runtime()->enqueue_render_poses(frame_count); // PLACEHOLDER.
+                    hook_old_rhi_command((sdk::FRHICommandBase_Old*)cmd_list->root, frame_count + compensation);
                 }
             } else {
-                //spdlog::error("Command list is empty!");
-                vr->get_runtime()->enqueue_render_poses(frame_count); // this is a good fallback
+                // welp v2
+                if (g_hook->has_slate_hook()) {
+                    enqueue_poses_on_slate_thread();
+                } else {
+                    vr->get_runtime()->enqueue_render_poses(frame_count + compensation);
+                }
             }
         };
 
         spdlog::info("Done setting up BeginRenderViewFamily hook!");
     }
 
-    static void hook_new_rhi_command(sdk::FRHICommandBase_New* last_command, uint32_t frame_count) {
-        static std::recursive_mutex vtable_mutex{};
-        static std::unordered_map<sdk::FRHICommandBase_New*, void**> original_vtables{};
-        static std::unordered_map<sdk::FRHICommandBase_New*, uint32_t> cmd_frame_counts{};
+    template<int N>
+    static void* hooked_command_fn(sdk::FRHICommandBase_New* cmd, sdk::FRHICommandListBase* cmd_list, void* debug_context) {
+        std::scoped_lock _{vtable_mutex};
+        //std::scoped_lock __{VR::get()->get_vr_mutex()};
 
+        static bool once = true;
+
+        if (once) {
+            spdlog::info("[ISceneViewExtension] Successfully hijacked command list! {}", N);
+            once = false;
+        }
+
+        const auto original_vtable = original_vtables[cmd];
+        const auto original_func = original_vtable[N];
+
+        const auto func = (void* (*)(sdk::FRHICommandBase_New*, sdk::FRHICommandListBase*, void*))original_func;
+        const auto frame_count = cmd_frame_counts[cmd];
+
+        auto& vr = VR::get();
+        auto runtime = vr->get_runtime();
+
+        auto call_orig = [&]() {
+            const auto result = func(cmd, cmd_list, debug_context);
+
+            if (N == 0) {
+                runtime->enqueue_render_poses(frame_count);
+            }
+
+            return result;
+        };
+
+        if (N != 0) {
+            return call_orig();
+        }
+
+        // set the vtable back
+        *(void**)cmd = original_vtable;
+        original_vtables.erase(cmd);
+        cmd_frame_counts.erase(cmd);
+
+        RHIThreadWorker::get().execute();
+
+        if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
+            if (runtime->is_openxr()) {
+                if (g_framework->get_renderer_type() == Framework::RendererType::D3D11) {
+                    if (!runtime->got_first_sync || runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+                        return call_orig();
+                    }  
+                } else if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+                    return call_orig();
+                }
+
+                vr->get_openxr_runtime()->begin_frame();
+            } else {
+                if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+                    return call_orig();
+                }
+            }
+        }
+
+        return call_orig();
+    }
+
+    static void hook_new_rhi_command(sdk::FRHICommandBase_New* last_command, uint32_t frame_count) {
         std::scoped_lock __{vtable_mutex};
 
         cmd_frame_counts[last_command] = frame_count;
 
-        static auto func_override = +[](sdk::FRHICommandBase_New* cmd, sdk::FRHICommandListBase* cmd_list, void* debug_context) {
-            std::scoped_lock _{vtable_mutex};
-            //std::scoped_lock __{VR::get()->get_vr_mutex()};
-
-            static bool once = true;
-
-            if (once) {
-                spdlog::info("[ISceneViewExtension] Successfully hijacked command list!");
-                once = false;
-            }
-
-            auto& vr = VR::get();
-            auto runtime = vr->get_runtime();
-
-            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
-                if (runtime->is_openxr()) {
-                    if (g_framework->get_renderer_type() == Framework::RendererType::D3D11) {
-                        if (!runtime->got_first_sync || runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
-                            return;
-                        }  
-                    } else if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
-                        return;
-                    }
-
-                    vr->get_openxr_runtime()->begin_frame();
-                } else {
-                    if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
-                        return;
-                    }
-                }
-            }
-
-            const auto original_vtable = original_vtables[cmd];
-            const auto original_func = original_vtable[0];
-
-            const auto func = (void(*)(sdk::FRHICommandBase_New*, sdk::FRHICommandListBase*, void*))original_func;
-            const auto frame_count = cmd_frame_counts[cmd];
-
-            vr->get_runtime()->enqueue_render_poses(frame_count);
-
-            func(cmd, cmd_list, debug_context);
-
-            // set the vtable back
-            *(void**)cmd = original_vtable;
-            original_vtables.erase(cmd);
-            cmd_frame_counts.erase(cmd);
-
-            RHIThreadWorker::get().execute();
-        };
-
-        static std::array<uintptr_t, 3> new_vtable{
-            (uintptr_t)func_override,
-            (uintptr_t)+[](sdk::FRHICommandBase_New* cmd, void* a2, void* a3, void* a4) -> void* {
-                std::scoped_lock _{vtable_mutex};
-
-                const auto original_vtable = original_vtables[cmd];
-                const auto original_func = original_vtable[1];
-
-                const auto func = (void* (*)(sdk::FRHICommandBase_New*, void*, void*, void*))original_func;
-
-                return func(cmd, a2, a3, a4);
-            },
-            (uintptr_t)+[](sdk::FRHICommandBase_New* cmd, void* a2, void* a3, void* a4) -> void* {
-                std::scoped_lock _{vtable_mutex};
-
-                const auto original_vtable = original_vtables[cmd];
-                const auto original_func = original_vtable[2];
-
-                const auto func = (void* (*)(sdk::FRHICommandBase_New*, void*, void*, void*))original_func;
-
-                return func(cmd, a2, a3, a4);
-            }
+        // Whichever one gets called first is the winner winner chicken dinner
+        static std::array<uintptr_t, 7> new_vtable{
+            (uintptr_t)&hooked_command_fn<0>,
+            (uintptr_t)&hooked_command_fn<1>,
+            (uintptr_t)&hooked_command_fn<2>,
+            (uintptr_t)&hooked_command_fn<3>,
+            (uintptr_t)&hooked_command_fn<4>,
+            (uintptr_t)&hooked_command_fn<5>,
+            (uintptr_t)&hooked_command_fn<6>
         };
 
         original_vtables[last_command] = *(void***)last_command;
@@ -1608,35 +1651,40 @@ struct SceneViewExtensionAnalyzer {
             auto& vr = VR::get();
             auto runtime = vr->get_runtime();
 
-            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
-                if (runtime->is_openxr()) {
-                    if (g_framework->get_renderer_type() == Framework::RendererType::D3D11) {
-                        if (!runtime->got_first_sync || runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
-                            return;
-                        }  
-                    } else if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
-                        return;
-                    }
-
-                    vr->get_openxr_runtime()->begin_frame();
-                } else {
-                    if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
-                        return;
-                    }
-                }
-            }
             const auto func = original_funcs[cmd];
             const auto frame_count = cmd_frame_counts[cmd];
 
             vr->get_runtime()->enqueue_render_poses(frame_count);
 
-            func(*cmd_list, cmd);
+            auto call_orig = [&]() {
+                func(*cmd_list, cmd);
+            };
 
             cmd->func = func;
             original_funcs.erase(cmd);
             cmd_frame_counts.erase(cmd);
 
             RHIThreadWorker::get().execute();
+
+            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
+                if (runtime->is_openxr()) {
+                    if (g_framework->get_renderer_type() == Framework::RendererType::D3D11) {
+                        if (!runtime->got_first_sync || runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+                            return call_orig();
+                        }  
+                    } else if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+                        return call_orig();
+                    }
+
+                    vr->get_openxr_runtime()->begin_frame();
+                } else {
+                    if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+                        return call_orig();
+                    }
+                }
+            }
+
+            return call_orig();
         };
 
         original_funcs[last_command] = last_command->func;
@@ -2906,6 +2954,8 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
     if (!g_framework->is_game_data_intialized()) {
         return g_hook->m_slate_thread_hook->call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
     }
+
+    g_hook->get_slate_thread_worker()->execute((FRHICommandListImmediate*)command_list);
 
     const auto& mods = g_framework->get_mods()->get_mods();
 
