@@ -1433,6 +1433,9 @@ struct SceneViewExtensionAnalyzer {
             // The main inspiration for this is UE5.0.3 because it passes an FRDGBuilder
             // which *does* contain the command list in it, but for whatever reason I can't
             // seem to hook it properly, so I'm using the slate hook instead
+            // ADDENDUM: For now, I'm only using the slate hook for UE5.0.3.
+            // But I'll use it as a fallback as well for when the command list appears to be empty
+            // Reason being the slate hook doesn't appear to run every frame, so it's not a perfect solution
             auto enqueue_poses_on_slate_thread = [&]() {
                 g_hook->get_slate_thread_worker()->enqueue([=](FRHICommandListImmediate* command_list) {
                     static bool once_slate = true;
@@ -1445,6 +1448,20 @@ struct SceneViewExtensionAnalyzer {
                     auto l = (sdk::FRHICommandListBase*)command_list;
 
                     if (l->root != nullptr) {
+                        if (!analyzed_root_already) try {
+                            if (utility::get_module_within(*(void**)l->root).value_or(nullptr) == nullptr) {
+                                spdlog::info("Old FRHICommandBase detected");
+                                is_old_command_base = true;
+                            } else {
+                                spdlog::info("New FRHICommandBase detected");
+                            }
+
+                            analyzed_root_already = true;
+                        } catch(...) {
+                            spdlog::error("Failed to analyze FRHICommandBase");
+                            analyzed_root_already = true;
+                        }
+
                         if (!is_old_command_base) {
                             hook_new_rhi_command((sdk::FRHICommandBase_New*)l->root, frame_count + compensation);
                         } else {
@@ -1525,7 +1542,7 @@ struct SceneViewExtensionAnalyzer {
                     analyzed_root_already = true;
                 }
 
-                if (g_hook->has_slate_hook()) {
+                if (g_hook->get_render_target_manager()->is_ue_5_0_3() && g_hook->has_slate_hook()) {
                     enqueue_poses_on_slate_thread();
                 } else if (!is_old_command_base) {
                     hook_new_rhi_command((sdk::FRHICommandBase_New*)cmd_list->root, frame_count + compensation);
@@ -3382,6 +3399,8 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
             if (ctx.r9 == 0 || IsBadReadPtr((void*)ctx.r9, sizeof(void*))) {
                 spdlog::info("Possible UE 5.0.3 detected, not 5.1 or above");
                 rtm->is_using_texture_desc = false;
+                rtm->is_version_5_0_3 = true;
+                rtm->is_version_greq_5_1;
             }
         }
 

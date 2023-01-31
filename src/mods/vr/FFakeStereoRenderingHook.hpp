@@ -41,6 +41,8 @@ public:
     FRHITexture2D* get_render_target() { return render_target; }
     void set_render_target(FRHITexture2D* rt) { render_target = rt; }
 
+    bool is_ue_5_0_3() const { return is_version_5_0_3; }
+
 protected:
     FRHITexture2D* ui_target{};
     FRHITexture2D* render_target{};
@@ -57,6 +59,7 @@ protected:
     bool is_pre_texture_call_e8{false};
     bool is_using_texture_desc{false};
     bool is_version_greq_5_1{false};
+    bool is_version_5_0_3{false};
 
     uint32_t last_width{0};
     uint32_t last_height{0};
