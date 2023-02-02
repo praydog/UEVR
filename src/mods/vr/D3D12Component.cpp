@@ -125,15 +125,21 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         if (runtime->is_openvr()) {
             m_openvr.copy_left(backbuffer.Get());
 
+            auto openvr = vr->get_runtime<runtimes::OpenVR>();
+            const auto submit_pose = openvr->get_pose_for_submit();
+
             vr::D3D12TextureData_t left {
                 m_openvr.get_left().texture.Get(),
                 command_queue,
                 0
             };
             
-            vr::Texture_t left_eye{(void*)&left, vr::TextureType_DirectX12, vr::ColorSpace_Auto};
+            vr::VRTextureWithPose_t left_eye{
+                (void*)&left, vr::TextureType_DirectX12, vr::ColorSpace_Auto,
+                submit_pose
+            };
 
-            auto e = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &vr->m_left_bounds);
+            auto e = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &vr->m_left_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
 
             if (e != vr::VRCompositorError_None) {
                 spdlog::error("[VR] VRCompositor failed to submit left eye: {}", (int)e);
