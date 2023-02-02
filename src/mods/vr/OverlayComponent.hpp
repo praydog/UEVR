@@ -12,7 +12,7 @@ namespace vrmod{
 class D3D11Component;
 class D3D12Component;
 
-class OverlayComponent {
+class OverlayComponent : public ModComponent {
 public:
     OverlayComponent() 
         : m_openxr{this}
@@ -23,12 +23,12 @@ public:
     void on_reset();
     std::optional<std::string> on_initialize_openvr();
 
-    void on_pre_imgui_frame();
+    void on_pre_imgui_frame() override;
     void on_post_compositor_submit();
 
-    void on_config_save(utility::Config& cfg);
-    void on_config_load(const utility::Config& cfg);
-    void on_draw_ui();
+    void on_config_save(utility::Config& cfg) override;
+    void on_config_load(const utility::Config& cfg)  override;
+    void on_draw_ui() override;
 
     auto& get_openxr() {
         return m_openxr;
@@ -68,12 +68,14 @@ private:
     bool m_just_closed_ui{false};
     bool m_just_opened_ui{false};
 
-    const ModSlider::Ptr m_slate_distance{ ModSlider::create("UI_Slate_Distance", 0.5f, 10.0f, 2.0f) };
-    const ModSlider::Ptr m_slate_size{ ModSlider::create("UI_Slate_Size", 0.5f, 10.0f, 2.0f) };
+    const ModSlider::Ptr m_slate_distance{ ModSlider::create("UI_Distance", 0.5f, 10.0f, 2.0f) };
+    const ModSlider::Ptr m_slate_size{ ModSlider::create("UI_Size", 0.5f, 10.0f, 2.0f) };
+    const ModToggle::Ptr m_ui_follows_view{ ModToggle::create("UI_FollowView", false) };
 
     Mod::ValueList m_options{
         *m_slate_distance,
-        *m_slate_size
+        *m_slate_size,
+        *m_ui_follows_view
     };
 
     // OpenXR

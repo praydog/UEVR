@@ -93,6 +93,7 @@ void OverlayComponent::on_draw_ui() {
     if (ImGui::TreeNode("Overlay Options")) {
         m_slate_distance->draw("UI Distance");
         m_slate_size->draw("UI Size");
+        m_ui_follows_view->draw("UI Follows View");
         ImGui::TreePop();
     }
 }
@@ -493,15 +494,22 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
     layer.subImage.imageRect.extent.height = ui_swapchain.height;
     layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
     layer.eyeVisibility = XrEyeVisibility::XR_EYE_VISIBILITY_BOTH;
-    layer.space = vr->m_openxr->stage_space;
+
+    auto glm_matrix = glm::identity<glm::mat4>();
+
+    if (vr->m_overlay_component.m_ui_follows_view->value()) {
+        layer.space = vr->m_openxr->view_space;
+    } else {
+        glm_matrix = Matrix4x4f{glm::inverse(vr->get_rotation_offset())};   
+        glm_matrix[3] += vr->get_standing_origin();
+        layer.space = vr->m_openxr->stage_space;
+    }
 
     const auto size_meters = m_parent->m_slate_size->value();
     const auto meters_w = (float)ui_swapchain.width / (float)ui_swapchain.height * size_meters;
     const auto meters_h = size_meters;
     layer.size = {meters_w, meters_h};
 
-    auto glm_matrix = Matrix4x4f{glm::inverse(vr->get_rotation_offset())};
-    glm_matrix[3] += vr->get_standing_origin();
     glm_matrix[3] -= glm_matrix[2] * m_parent->m_slate_distance->value();
     glm_matrix[3].w = 1.0f;
 
