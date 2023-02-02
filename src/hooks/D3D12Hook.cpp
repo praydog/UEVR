@@ -407,6 +407,21 @@ HRESULT WINAPI D3D12Hook::present(IDXGISwapChain3* swap_chain, UINT sync_interva
 
     if (d3d12->m_on_present) {
         d3d12->m_on_present(*d3d12);
+
+        if (d3d12->m_next_present_interval) {
+            sync_interval = *d3d12->m_next_present_interval;
+            d3d12->m_next_present_interval = std::nullopt;
+
+            if (sync_interval == 0) {
+                BOOL is_fullscreen = 0;
+                swap_chain->GetFullscreenState(&is_fullscreen, nullptr);
+                //flags &= ~DXGI_PRESENT_DO_NOT_SEQUENCE;
+
+                if (!is_fullscreen) {
+                    flags |= DXGI_PRESENT_ALLOW_TEARING;
+                }
+            }
+        }
     }
 
     g_inside_present = true;

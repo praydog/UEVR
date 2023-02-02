@@ -28,6 +28,10 @@ public:
         m_ignore_next_present = true;
     }
 
+    void set_next_present_interval(uint32_t interval) {
+        m_next_present_interval = interval;
+    }
+
     bool hook();
     bool unhook();
 
@@ -51,6 +55,8 @@ protected:
     bool m_hooked{ false };
     bool m_inside_present{false};
     bool m_ignore_next_present{false};
+
+    std::optional<uint32_t> m_next_present_interval{};
 
     std::unique_ptr<PointerHook> m_present_hook{};
     std::unique_ptr<PointerHook> m_resize_buffers_hook{};

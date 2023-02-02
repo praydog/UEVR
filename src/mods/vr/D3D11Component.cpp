@@ -29,6 +29,8 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
     auto& hook = g_framework->get_d3d11_hook();
 
+    hook->set_next_present_interval(0); // disable vsync for vr
+
     // get device
     auto device = hook->get_device();
 

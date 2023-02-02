@@ -92,6 +92,10 @@ public:
         m_ignore_next_present = true;
     }
 
+    void set_next_present_interval(uint32_t interval) {
+        m_next_present_interval = interval;
+    }
+
 protected:
     ID3D12Device4* m_device{ nullptr };
     IDXGISwapChain3* m_swap_chain{ nullptr };
@@ -105,6 +109,8 @@ protected:
 
     uint32_t m_command_queue_offset{};
     uint32_t m_proton_swapchain_offset{};
+
+    std::optional<uint32_t> m_next_present_interval{};
 
     bool m_using_proton_swapchain{ false };
     bool m_hooked{ false };
