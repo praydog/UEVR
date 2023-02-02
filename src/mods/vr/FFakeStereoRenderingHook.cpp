@@ -1003,10 +1003,12 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_cli
     }
 
     g_hook->m_in_viewport_client_draw = true;
+    g_hook->m_was_in_viewport_client_draw = false;
 
     utility::ScopeGuard _{ 
         []() { 
             g_hook->m_in_viewport_client_draw = false;
+            g_hook->m_was_in_viewport_client_draw = false;
         } 
     };
 
@@ -2196,28 +2198,54 @@ bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
         return false;
     }*/
 
+    static std::atomic<bool> last_state = false;
+    auto hook = g_hook;
+
     // The best way to enable stereo rendering without causing crashes
     // while also allowing the desktop view to initially display
-    // if the HMD is not on at the start.
-    if (g_hook->m_has_game_viewport_client_draw_hook) {
-        static bool enabled_in_viewport_draw = false;
+    // if the HMD is not on at the start. It only allows
+    // stereo to be enabled if it starts from the first call to IsStereoEnabled inside UGameViewportClient::Draw.
+    if (hook->m_has_game_viewport_client_draw_hook) {
+        if (GameThreadWorker::get().is_same_thread()) {
+            if (hook->m_in_viewport_client_draw && !hook->m_was_in_viewport_client_draw) {
+                const auto is_hmd_active = VR::get()->is_hmd_active();
 
-        if (g_hook->m_in_viewport_client_draw) {
-            enabled_in_viewport_draw = VR::get()->is_hmd_active();
+                if (!last_state && is_hmd_active) {
+                    VR::get()->wait_for_present();
+                    hook->set_should_recreate_textures(true);
+                }
+
+                last_state = is_hmd_active;
+            }
+
+            hook->m_was_in_viewport_client_draw = hook->m_in_viewport_client_draw;
         }
 
-        return enabled_in_viewport_draw;
+        return last_state;
     }
 
     static uint32_t count = 0;
 
     // Forcefully return true the first few times to let stuff initialize.
     if (count < 50) {
+        if (count == 0) {
+            hook->set_should_recreate_textures(true);
+        }
+
         ++count;
+        last_state = true;
         return true;
     }
 
-    return !VR::get()->get_runtime()->got_first_sync || VR::get()->is_hmd_active();
+    const auto result = !VR::get()->get_runtime()->got_first_sync || VR::get()->is_hmd_active();
+
+    if (result && !last_state) {
+        hook->set_should_recreate_textures(true);
+    }
+
+    last_state = result;
+
+    return result;
 }
 
 void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h) {
@@ -2655,11 +2683,7 @@ uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoR
     spdlog::info("get desired number of views hook called!");
 #endif
 
-    if (!is_stereo_enabled) {
-        return 1;
-    }
-
-    if (VR::get()->is_using_afr()) {
+    if (!is_stereo_enabled || VR::get()->is_using_afr()) {
         return 1;
     }
 

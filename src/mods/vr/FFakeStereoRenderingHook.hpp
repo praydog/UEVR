@@ -330,6 +330,7 @@ private:
     float m_ignored_engine_delta{0.0f};
     bool m_in_engine_tick{false};
     bool m_in_viewport_client_draw{false};
+    bool m_was_in_viewport_client_draw{false}; // for IsStereoEnabled
     bool m_ignore_next_viewport_draw{false};
     bool m_ignore_next_engine_tick{false};
 
