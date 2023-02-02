@@ -11,7 +11,7 @@
 #include <sdk/Math.hpp>
 #include <utility/Patch.hpp>
 
-#include "mods/vr/ThreadWorker.hpp"
+#include <sdk/threading/ThreadWorker.hpp>
 
 class Mods;
 

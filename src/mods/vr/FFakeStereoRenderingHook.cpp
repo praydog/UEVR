@@ -29,9 +29,9 @@
 #include <bddisasm.h>
 #include <disasmtypes.h>
 
-#include "GameThreadWorker.hpp"
-#include "RenderThreadWorker.hpp"
-#include "RHIThreadWorker.hpp"
+#include <sdk/threading/GameThreadWorker.hpp>
+#include <sdk/threading/RenderThreadWorker.hpp>
+#include <sdk/threading/RHIThreadWorker.hpp>
 #include "../VR.hpp"
 
 #include "FFakeStereoRenderingHook.hpp"

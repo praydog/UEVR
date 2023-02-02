@@ -9,8 +9,7 @@
 
 #include <sdk/StereoStuff.hpp>
 #include <sdk/FViewportInfo.hpp>
-
-#include "ThreadWorker.hpp"
+#include <sdk/threading/ThreadWorker.hpp>
 
 #include "Mod.hpp"
 

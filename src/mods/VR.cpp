@@ -10,7 +10,7 @@
 
 #include <sdk/CVar.hpp>
 
-#include "vr/GameThreadWorker.hpp"
+#include "sdk/threading/GameThreadWorker.hpp"
 #include "Framework.hpp"
 
 #include "VR.hpp"
