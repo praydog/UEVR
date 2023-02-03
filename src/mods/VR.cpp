@@ -675,6 +675,17 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
 
     auto runtime = get_runtime();
 
+    if (m_uncap_framerate->value()) {
+        sdk::set_cvar_data_float(L"Engine", L"t.MaxFPS", 500.0f);
+    }
+
+    if (!is_using_afr()) {
+        // Forcefully disable r.HZBOcclusion, it doesn't work with native stereo mode
+        if (m_disable_hzbocclusion->value()) {
+            sdk::set_cvar_data_int(L"Engine", L"r.HZBOcclusion", 0);
+        }
+    }
+
     if (frame_count != 0 && is_using_afr() && frame_count % 2 == 0) {
         if (runtime->is_openxr()) {
             const auto last_frame = (frame_count - 1) % m_openxr->view_space_location_queue.size();
@@ -688,21 +699,7 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
         }
 
         // Forcefully disable motion blur because it freaks out with AFR
-        static auto r_default_feature_motion_blur_cvar = sdk::find_cvar_data(L"Engine", L"r.DefaultFeature.MotionBlur");
-
-        if (r_default_feature_motion_blur_cvar) try {
-            auto r_default_feature_motion_blur = r_default_feature_motion_blur_cvar->get<int>();
-
-            if (r_default_feature_motion_blur != nullptr) {
-                auto value = r_default_feature_motion_blur->get();
-
-                if (value != 0) {
-                    r_default_feature_motion_blur->set(0);
-                }
-            }
-        } catch(...) {
-        }
-
+        sdk::set_cvar_data_int(L"Engine", L"r.DefaultFeature.MotionBlur", 0);
         return;
     }
     
@@ -1071,6 +1068,8 @@ void VR::on_draw_ui() {
     m_camera_up_offset->draw("Camera Up Offset");
     m_world_scale->draw("World Scale");
 
+    m_disable_hzbocclusion->draw("Disable HZBOcclusion");
+    m_uncap_framerate->draw("Uncap Framerate");
     m_enable_gui->draw("Enable GUI");
 
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_FirstUseEver);

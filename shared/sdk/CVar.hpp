@@ -106,6 +106,16 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::ws
 std::optional<ConsoleVariableDataWrapper> find_cvar_data(std::wstring_view module, std::wstring_view name, bool stop_at_first_mov = false);
 IConsoleVariable** find_cvar(std::wstring_view module, std::wstring_view name, bool stop_at_first_mov = false);
 
+// Cached versions of the above functions
+std::optional<ConsoleVariableDataWrapper> find_cvar_data_cached(std::wstring_view module, std::wstring_view name, bool stop_at_first_mov = false);
+IConsoleVariable** find_cvar_cached(std::wstring_view module, std::wstring_view name, bool stop_at_first_mov = false);
+
+// Cached setters
+bool set_cvar_data_int(std::wstring_view module, std::wstring_view name, int value, bool stop_at_first_mov = false);
+bool set_cvar_data_float(std::wstring_view module, std::wstring_view name, float value, bool stop_at_first_mov = false);
+bool set_cvar_int(std::wstring_view module, std::wstring_view name, int value, bool stop_at_first_mov = false);
+bool set_cvar_float(std::wstring_view module, std::wstring_view name, float value, bool stop_at_first_mov = false);
+
 namespace rendering {
 std::optional<ConsoleVariableDataWrapper> get_one_frame_thread_lag_cvar();
 }

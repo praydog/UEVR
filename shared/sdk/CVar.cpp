@@ -9,6 +9,7 @@
 
 #include <bdshemu.h>
 
+#include "threading/GameThreadWorker.hpp"
 #include "EngineModule.hpp"
 #include "Utility.hpp"
 
@@ -339,6 +340,128 @@ IConsoleVariable** find_cvar(std::wstring_view module_name, std::wstring_view na
     }
 
     return (IConsoleVariable**)*result;
+}
+
+std::optional<ConsoleVariableDataWrapper> find_cvar_data_cached(std::wstring_view module_name, std::wstring_view name, bool stop_at_first_mov) {
+    static std::unordered_map<std::wstring, uintptr_t> cache{};
+
+    // The module name is irrelevant here, what are the chances that two modules have the same cvar name?
+    if (auto it = cache.find(name.data()); it != cache.end()) {
+        if (it->second == 0) {
+            return std::nullopt;
+        }
+
+        return cache[name.data()];
+    }
+
+    const auto result = find_cvar_data(module_name, name, stop_at_first_mov);
+
+    if (result) {
+        cache[name.data()] = (uintptr_t)result->address();
+    } else {
+        cache[name.data()] = 0;
+    }
+
+    return result;
+}
+
+IConsoleVariable** find_cvar_cached(std::wstring_view module_name, std::wstring_view name, bool stop_at_first_mov) {
+    static std::unordered_map<std::wstring, IConsoleVariable**> cache{};
+
+    // The module name is irrelevant here, what are the chances that two modules have the same cvar name?
+    if (auto it = cache.find(name.data()); it != cache.end()) {
+        return it->second;
+    }
+
+    const auto result = find_cvar(module_name, name, stop_at_first_mov);
+
+    cache[name.data()] = result;
+
+    return result;
+}
+
+bool set_cvar_data_int(std::wstring_view module, std::wstring_view name, int value, bool stop_at_first_mov) try {
+    auto cvar_data = find_cvar_data_cached(module, name, stop_at_first_mov);
+
+    if (!cvar_data) {
+        return false;
+    }
+
+    auto cvar = cvar_data->get<int>();
+
+    if (cvar == nullptr) {
+        return false;
+    }
+
+    cvar->set(value);
+    return true;
+} catch (...) {
+    // whatever.
+    return false;
+}
+
+bool set_cvar_data_float(std::wstring_view module, std::wstring_view name, float value, bool stop_at_first_mov) try {
+    auto cvar_data = find_cvar_data_cached(module, name, stop_at_first_mov);
+
+    if (!cvar_data) {
+        return false;
+    }
+
+    auto cvar = cvar_data->get<float>();
+
+    if (cvar == nullptr) {
+        return false;
+    }
+
+    cvar->set(value);
+    return true;
+} catch (...) {
+    // whatever.
+    return false;
+}
+
+bool set_cvar_int(std::wstring_view module, std::wstring_view name, int value, bool stop_at_first_mov) try {
+    auto cvarpp = find_cvar_cached(module, name, stop_at_first_mov);
+
+    if (cvarpp == nullptr || *cvarpp == nullptr) {
+        return false;
+    }
+
+    // yoink we're using the UE4 cvar setter yep thats right we're not using the console manager because we're so freaking cool
+    GameThreadWorker::get().enqueue([=]() {
+        try {
+            (*cvarpp)->Set(std::to_wstring(value).data());
+        } catch (...) {
+        }
+    });
+
+    // we're so cool we don't even need to check if it worked
+    return true;
+} catch (...) {
+    // whatever.
+    return false;
+}
+
+bool set_cvar_float(std::wstring_view module, std::wstring_view name, float value, bool stop_at_first_mov) try {
+    auto cvarpp = find_cvar_cached(module, name, stop_at_first_mov);
+
+    if (cvarpp == nullptr || *cvarpp == nullptr) {
+        return false;
+    }
+
+    // yoink we're using the UE4 cvar setter yep thats right we're not using the console manager because we're so freaking cool
+    GameThreadWorker::get().enqueue([=]() {
+        try {
+            (*cvarpp)->Set(std::to_wstring(value).data());
+        } catch (...) {
+        }
+    });
+
+    // we're so cool we don't even need to check if it worked
+    return true;
+} catch (...) {
+    // whatever.
+    return false;
 }
 
 std::optional<ConsoleVariableDataWrapper> vr::get_enable_stereo_emulation_cvar() {
