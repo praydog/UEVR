@@ -290,6 +290,10 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/UEngine.hpp"
 	"shared/sdk/UGameEngine.hpp"
 	"shared/sdk/Utility.hpp"
+	"shared/sdk/threading/GameThreadWorker.hpp"
+	"shared/sdk/threading/RHIThreadWorker.hpp"
+	"shared/sdk/threading/RenderThreadWorker.hpp"
+	"shared/sdk/threading/ThreadWorker.hpp"
 )
 
 list(APPEND sdk_SOURCES
@@ -518,11 +522,7 @@ list(APPEND ue4poc_SOURCES
 	"src/mods/vr/D3D11Component.hpp"
 	"src/mods/vr/D3D12Component.hpp"
 	"src/mods/vr/FFakeStereoRenderingHook.hpp"
-	"src/mods/vr/GameThreadWorker.hpp"
 	"src/mods/vr/OverlayComponent.hpp"
-	"src/mods/vr/RHIThreadWorker.hpp"
-	"src/mods/vr/RenderThreadWorker.hpp"
-	"src/mods/vr/ThreadWorker.hpp"
 	"src/mods/vr/runtimes/OpenVR.hpp"
 	"src/mods/vr/runtimes/OpenXR.hpp"
 	"src/mods/vr/runtimes/VRRuntime.hpp"
