@@ -415,9 +415,12 @@ HRESULT WINAPI D3D12Hook::present(IDXGISwapChain3* swap_chain, UINT sync_interva
             if (sync_interval == 0) {
                 BOOL is_fullscreen = 0;
                 swap_chain->GetFullscreenState(&is_fullscreen, nullptr);
-                //flags &= ~DXGI_PRESENT_DO_NOT_SEQUENCE;
+                flags &= ~DXGI_PRESENT_DO_NOT_SEQUENCE;
 
-                if (!is_fullscreen) {
+                DXGI_SWAP_CHAIN_DESC swap_desc{};
+                swap_chain->GetDesc(&swap_desc);
+
+                if (!is_fullscreen && (swap_desc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) != 0) {
                     flags |= DXGI_PRESENT_ALLOW_TEARING;
                 }
             }

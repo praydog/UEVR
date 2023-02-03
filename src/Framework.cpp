@@ -69,7 +69,7 @@ void Framework::hook_monitor() {
         || (renderer_type == Framework::RendererType::D3D12 && d3d12 != nullptr && !d3d12->is_inside_present())) 
     {
         // check if present time is more than 5 seconds ago
-        if (now - m_last_present_time >= std::chrono::seconds(1)) {
+        if (now - m_last_present_time >= std::chrono::seconds(5)) {
             if (m_has_last_chance) {
                 // the purpose of this is to make sure that the game is not frozen
                 // e.g. if we are debugging the game, so we don't rehook anything on accident
@@ -230,8 +230,8 @@ Framework::Framework(HMODULE framework_module)
 
     PluginLoader::get()->early_init();
 
-    m_last_present_time = std::chrono::steady_clock::now();
-    m_last_message_time = std::chrono::steady_clock::now();
+    m_last_present_time = std::chrono::steady_clock::time_point{}; // Instantly send the first message
+    m_last_message_time = std::chrono::steady_clock::time_point{}; // Instantly send the first message
     m_d3d_monitor_thread = std::make_unique<std::jthread>([this](std::stop_token s) {
         while (!s.stop_requested() && !m_terminating) {
             this->hook_monitor();
