@@ -73,6 +73,8 @@ public:
     Vector4f get_position(uint32_t index)  const;
     Vector4f get_velocity(uint32_t index)  const;
     Vector4f get_angular_velocity(uint32_t index)  const;
+    Matrix4x4f get_hmd_rotation(uint32_t frame_count) const;
+    Matrix4x4f get_hmd_transform(uint32_t frame_count) const;
     Matrix4x4f get_rotation(uint32_t index)  const;
     Matrix4x4f get_transform(uint32_t index) const;
     vr::HmdMatrix34_t get_raw_transform(uint32_t index) const;
@@ -217,6 +219,10 @@ public:
 
     auto is_stereo_emulation_enabled() const {
         return m_stereo_emulation_mode;
+    }
+
+    void reset_present_event() {
+        ResetEvent(m_present_finished_event);
     }
 
     void wait_for_present() {
@@ -417,6 +423,7 @@ private:
     const ModSlider::Ptr m_camera_forward_offset{ ModSlider::create(generate_name("CameraForwardOffset"), -4000.0f, 4000.0f, 0.0f) };
     const ModSlider::Ptr m_camera_right_offset{ ModSlider::create(generate_name("CameraRightOffset"), -4000.0f, 4000.0f, 0.0f) };
     const ModSlider::Ptr m_camera_up_offset{ ModSlider::create(generate_name("CameraUpOffset"), -4000.0f, 4000.0f, 0.0f) };
+    const ModSlider::Ptr m_camera_fov_distance_multiplier{ ModSlider::create(generate_name("CameraFOVDistanceMultiplier"), 0.00f, 1000.0f, 0.0f) };
     const ModSlider::Ptr m_world_scale{ ModSlider::create(generate_name("WorldScale"), 0.01f, 10.0f, 1.0f) };
 
     bool m_stereo_emulation_mode{false}; // not a good config option, just for debugging

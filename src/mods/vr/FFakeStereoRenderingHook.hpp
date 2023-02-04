@@ -232,6 +232,10 @@ public:
         return m_slate_thread_hook != nullptr;
     }
 
+    bool has_engine_tick_hook() {
+        return m_hooked_game_engine_tick;
+    }
+
 private:
     bool hook();
     bool standard_fake_stereo_hook(uintptr_t vtable);

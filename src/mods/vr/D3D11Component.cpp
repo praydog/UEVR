@@ -1,6 +1,15 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <openvr.h>
+#include <d3dcompiler.h>
+
+namespace vertex_shader1 {
+#include "shaders/vs.hpp"
+}
+
+namespace pixel_shader1 {
+#include "shaders/ps.hpp"
+}
 
 #include <utility/ScopeGuard.hpp>
 
@@ -220,6 +229,13 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
                 context->CopySubresourceRegion(m_left_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
 
+                if (m_is_shader_setup) {
+                    ID3D11RenderTargetView* views[] = { m_left_eye_rtv.Get() };
+                    //context->OMSetRenderTargets(1, views, nullptr);
+                    //context->ClearRenderTargetView(m_right_eye_rtv.Get(), clear_color);
+                    //invoke_shader(vr->m_render_frame_count, 0, m_backbuffer_size[0] / 2, m_backbuffer_size[1]);
+                }
+
                 vr::VRTextureWithPose_t left_eye{
                     (void*)m_left_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto,
                     submit_pose
@@ -251,7 +267,15 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 src_box.front = 0;
                 src_box.back = 1;
             }
+
             context->CopySubresourceRegion(m_right_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
+
+            if (m_is_shader_setup) {
+                ID3D11RenderTargetView* views[] = { m_right_eye_rtv.Get() };
+                //context->OMSetRenderTargets(1, views, nullptr);
+                //invoke_shader(vr->m_render_frame_count, 1, m_backbuffer_size[0] / 2, m_backbuffer_size[1]);
+                //context->OMSetRenderTargets(1, &prev_rtv, prev_depth_rtv.Get());     
+            }
 
             vr::VRTextureWithPose_t right_eye{
                 (void*)m_right_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto,
@@ -286,10 +310,21 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 void D3D11Component::on_reset(VR* vr) {
     m_left_eye_tex.Reset();
     m_right_eye_tex.Reset();
+    m_left_eye_rtv.Reset();
+    m_right_eye_rtv.Reset();
+    m_left_eye_srv.Reset();
+    m_right_eye_srv.Reset();
     m_ui_tex.Reset();
     m_blank_tex.Reset();
     m_left_eye_depthstencil.Reset();
     m_right_eye_depthstencil.Reset();
+    m_vs_shader_blob.Reset();
+    m_ps_shader_blob.Reset();
+    m_vs_shader.Reset();
+    m_ps_shader.Reset();
+    m_input_layout.Reset();
+    m_constant_buffer.Reset();
+    m_is_shader_setup = false;
 
     if (vr->get_runtime()->is_openxr() && vr->get_runtime()->loaded) {
         if (m_openxr.last_resolution[0] != vr->get_hmd_width() || m_openxr.last_resolution[1] != vr->get_hmd_height() ||
@@ -361,10 +396,18 @@ bool D3D11Component::setup() {
     spdlog::info("[VR] Format: {}", backbuffer_desc.Format);
 
     backbuffer_desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
+    backbuffer_desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
 
     // Create eye textures.
-    device->CreateTexture2D(&backbuffer_desc, nullptr, &m_left_eye_tex);
-    device->CreateTexture2D(&backbuffer_desc, nullptr, &m_right_eye_tex);
+    if (FAILED(device->CreateTexture2D(&backbuffer_desc, nullptr, &m_left_eye_tex))) {
+        spdlog::error("[VR] Failed to create left eye texture (D3D11).");
+        return false;
+    }
+
+    if (FAILED(device->CreateTexture2D(&backbuffer_desc, nullptr, &m_right_eye_tex))) {
+        spdlog::error("[VR] Failed to create right eye texture (D3D11).");
+        return false;
+    }
 
     backbuffer_desc.Width = (uint32_t)g_framework->get_d3d11_rt_size().x;
     backbuffer_desc.Height = (uint32_t)g_framework->get_d3d11_rt_size().y;
@@ -377,6 +420,37 @@ bool D3D11Component::setup() {
 
     device->GetImmediateContext(&context);
     context->CopyResource(m_right_eye_tex.Get(), backbuffer.Get());
+    context->CopyResource(m_left_eye_tex.Get(), backbuffer.Get());
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+    srv_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srv_desc.Texture2D.MipLevels = -1;
+
+    if (FAILED(device->CreateShaderResourceView(m_left_eye_tex.Get(), &srv_desc, &m_left_eye_srv))) {
+        spdlog::error("[VR] Failed to create left eye shader resource view (D3D11).");
+        return false;
+    }
+
+    if (FAILED(device->CreateShaderResourceView(m_right_eye_tex.Get(), &srv_desc, &m_right_eye_srv))) {
+        spdlog::error("[VR] Failed to create right eye shader resource view (D3D11).");
+        return false;
+    }
+
+    // Create render target views for the eye textures.
+    D3D11_RENDER_TARGET_VIEW_DESC rtv_desc{};
+    rtv_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+
+    if (FAILED(device->CreateRenderTargetView(m_left_eye_tex.Get(), &rtv_desc, &m_left_eye_rtv))) {
+        spdlog::error("[VR] Failed to create left eye render target view (D3D11).");
+        return false;
+    }
+
+    if (FAILED(device->CreateRenderTargetView(m_right_eye_tex.Get(), &rtv_desc, &m_right_eye_rtv))) {
+        spdlog::error("[VR] Failed to create right eye render target view (D3D11).");
+        return false;
+    }
 
     // Make depth stencils for both eyes.
     auto depthstencil = hook->get_last_depthstencil_used();
@@ -395,9 +469,356 @@ bool D3D11Component::setup() {
     }
 
     spdlog::info("[VR] d3d11 textures have been setup");
+
+    m_is_shader_setup = setup_shader();
     m_force_reset = false;
 
     return true;
+}
+
+bool D3D11Component::setup_shader() {
+    spdlog::info("[VR] Setting up D3D11 shader...");
+
+    auto& hook = g_framework->get_d3d11_hook();
+    auto device = hook->get_device();
+
+    // Create a new shader blob and copy the memory from the shader.
+    const auto vs_shader_size = sizeof(vertex_shader1::g_main);
+    const auto ps_shader_size = sizeof(pixel_shader1::g_main);
+
+    if (FAILED(D3DCreateBlob(vs_shader_size, &m_vs_shader_blob))) {
+        spdlog::error("[VR] Failed to create vertex shader blob.");
+        return false;
+    }
+
+    if (FAILED(D3DCreateBlob(ps_shader_size, &m_ps_shader_blob))) {
+        spdlog::error("[VR] Failed to create pixel shader blob.");
+        return false;
+    }
+
+    memcpy(m_vs_shader_blob->GetBufferPointer(), vertex_shader1::g_main, vs_shader_size);
+    memcpy(m_ps_shader_blob->GetBufferPointer(), pixel_shader1::g_main, ps_shader_size);
+
+    // Create the vertex shader.
+    if (FAILED(device->CreateVertexShader(m_vs_shader_blob->GetBufferPointer(), m_vs_shader_blob->GetBufferSize(), nullptr, &m_vs_shader))) {
+        spdlog::error("[VR] Failed to create vertex shader.");
+        return false;
+    }
+
+    // Create the pixel shader.
+    if (FAILED(device->CreatePixelShader(m_ps_shader_blob->GetBufferPointer(), m_ps_shader_blob->GetBufferSize(), nullptr, &m_ps_shader))) {
+        spdlog::error("[VR] Failed to create pixel shader.");
+        return false;
+    }
+
+    /*
+    struct VSInput {
+        float3 position : POSITION;
+        float4 color : COLOR;
+        float2 texuv0 : TEXCOORD0;
+        float2 texuv1 : TEXCOORD1;
+        float3 normal : NORMAL;
+        float3 tangent : TANGENT;
+        float3 bitangent : BITANGENT;
+    };
+
+    struct PSInput {
+        float4 position : SV_POSITION;
+        float4 color : COLOR;
+        float2 texuv0 : TEXCOORD0;
+        float2 texuv1 : TEXCOORD1;
+        float3 normal : NORMAL;
+        float3 tangent : TANGENT;
+        float3 bitangent : BITANGENT;
+    };
+    */
+
+    // Create the input layout.
+    D3D11_INPUT_ELEMENT_DESC input_layout_desc[] = {
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+    };
+
+    if (FAILED(device->CreateInputLayout(input_layout_desc, 7, m_vs_shader_blob->GetBufferPointer(), m_vs_shader_blob->GetBufferSize(), &m_input_layout))) {
+        spdlog::error("[VR] Failed to create input layout.");
+        return false;
+    }
+
+    // Create the constant buffer.
+    D3D11_BUFFER_DESC constant_buffer_desc{};
+    constant_buffer_desc.ByteWidth = sizeof(D3D11Component::ShaderGlobals);
+    constant_buffer_desc.Usage = D3D11_USAGE_DYNAMIC;
+    constant_buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    constant_buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    constant_buffer_desc.MiscFlags = 0;
+    constant_buffer_desc.StructureByteStride = 0;
+
+    m_shader_globals.model = DirectX::XMMatrixIdentity();
+    m_shader_globals.view = DirectX::XMMatrixIdentity();
+    m_shader_globals.proj = DirectX::XMMatrixIdentity();
+    m_shader_globals.resolution = DirectX::XMFLOAT4(1920.0f, 1080.0f, 0.0f, 1920.0f / 1080.0f);
+    m_shader_globals.time = 1.0f;
+
+    DirectX::XMVECTOR loc = DirectX::XMVectorSet(0, 0, -5, 0);
+    DirectX::XMVECTOR negloc = DirectX::XMVectorSet(0, 0, 5, 0);
+    DirectX::XMVECTOR target = DirectX::XMVectorSet(0, 0, 0, 0);
+    DirectX::XMVECTOR up = DirectX::XMVectorSet(0, 1, 0, 0);
+    m_shader_globals.view = DirectX::XMMatrixLookAtLH(loc, target, up);
+
+    DirectX::XMVECTOR model_pos = DirectX::XMVectorSet(0, 0, 0, 0);
+
+    m_shader_globals.model = DirectX::XMMatrixLookAtLH(model_pos, negloc, up);
+
+    const auto hmd_transform = VR::get()->get_hmd_transform(0);
+
+    const auto model_pos2 = hmd_transform[3] + (hmd_transform[2] * 2.0f);
+    m_shader_globals.model.r[3] = DirectX::XMVECTOR{model_pos2.x, model_pos2.y, model_pos2.z, 1.0f};
+
+    D3D11_SUBRESOURCE_DATA init_data{};
+    init_data.pSysMem = &m_shader_globals;
+    init_data.SysMemPitch = 0;
+    init_data.SysMemSlicePitch = 0;
+
+    if (FAILED(device->CreateBuffer(&constant_buffer_desc, &init_data, &m_constant_buffer))) {
+        spdlog::error("[VR] Failed to create constant buffer.");
+        return false;
+    };
+
+    if (m_constant_buffer == nullptr) {
+        spdlog::error("[VR] Failed to create constant buffer (nullptr).");
+        return false;
+    }
+
+    // Create the vertex buffer.
+    D3D11_BUFFER_DESC vertex_buffer_desc{};
+    vertex_buffer_desc.ByteWidth = sizeof(D3D11Component::Vertex) * 4;
+    vertex_buffer_desc.Usage = D3D11_USAGE_DEFAULT;
+    vertex_buffer_desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    vertex_buffer_desc.CPUAccessFlags = 0;
+
+    Vertex vertices[] =
+    {
+        { { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 0.0f, 1.0f } },
+        { { -1.0f,  1.0f, 0.0f }, { 0.0f, 0.0f, 0.0f, 1.0f } },
+        { {  1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 0.0f, 1.0f } },
+        { {  1.0f,  1.0f, 0.0f }, { 0.0f, 0.0f, 0.0f, 1.0f } }
+    };
+
+    D3D11_SUBRESOURCE_DATA vertex_buffer_data{};
+    ZeroMemory(&vertex_buffer_data, sizeof(D3D11_SUBRESOURCE_DATA));
+    vertex_buffer_data.pSysMem = vertices;
+
+    if (FAILED(device->CreateBuffer(&vertex_buffer_desc, &vertex_buffer_data, &m_vertex_buffer))) {
+        spdlog::error("[VR] Failed to create vertex buffer.");
+        return false;
+    }
+
+    // Create the index buffer.
+    D3D11_BUFFER_DESC index_buffer_desc{};
+    index_buffer_desc.ByteWidth = sizeof(uint32_t) * 6;
+    index_buffer_desc.Usage = D3D11_USAGE_DEFAULT;
+    index_buffer_desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+    index_buffer_desc.CPUAccessFlags = 0;
+    index_buffer_desc.MiscFlags = 0;
+
+    // Quad (2 triangles)
+    uint32_t indices[] = { 
+        0, 1, 2, 
+        2, 1, 3
+    };
+
+    D3D11_SUBRESOURCE_DATA index_buffer_data{};
+    ZeroMemory(&index_buffer_data, sizeof(D3D11_SUBRESOURCE_DATA));
+    index_buffer_data.pSysMem = indices;
+    index_buffer_data.SysMemPitch = 0;
+    index_buffer_data.SysMemSlicePitch = 0;
+
+    if (FAILED(device->CreateBuffer(&index_buffer_desc, &index_buffer_data, &m_index_buffer))) {
+        spdlog::error("[VR] Failed to create index buffer.");
+        return false;
+    }
+
+    spdlog::info("[VR] D3D11 shaders initialized.");
+
+    return true;
+}
+
+void D3D11Component::invoke_shader(uint32_t frame_count, uint32_t eye, uint32_t width, uint32_t height) {
+    if (m_constant_buffer == nullptr) {
+        spdlog::error("[VR] Constant buffer is null. Cannot invoke shader.");
+        return;
+    }
+
+    if (m_vertex_buffer == nullptr) {
+        spdlog::error("[VR] Vertex buffer is null. Cannot invoke shader.");
+        return;
+    }
+
+    auto& hook = g_framework->get_d3d11_hook();
+    auto& vr = VR::get();
+    auto runtime = vr->get_runtime();
+
+    auto device = hook->get_device();
+    ComPtr<ID3D11DeviceContext> context{};
+
+    device->GetImmediateContext(&context);
+
+    // Backup DX state that will be modified to restore it afterwards (unfortunately this is very ugly looking and verbose. Close your eyes!)
+    struct BACKUP_DX11_STATE {
+        UINT                        ScissorRectsCount, ViewportsCount;
+        D3D11_RECT                  ScissorRects[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+        D3D11_VIEWPORT              Viewports[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+        ID3D11RasterizerState*      RS;
+        ID3D11BlendState*           BlendState;
+        FLOAT                       BlendFactor[4];
+        UINT                        SampleMask;
+        UINT                        StencilRef;
+        ID3D11DepthStencilState*    DepthStencilState;
+        ID3D11ShaderResourceView*   PSShaderResource;
+        ID3D11SamplerState*         PSSampler;
+        ID3D11PixelShader*          PS;
+        ID3D11VertexShader*         VS;
+        ID3D11GeometryShader*       GS;
+        UINT                        PSInstancesCount, VSInstancesCount, GSInstancesCount;
+        ID3D11ClassInstance         *PSInstances[256], *VSInstances[256], *GSInstances[256];   // 256 is max according to PSSetShader documentation
+        D3D11_PRIMITIVE_TOPOLOGY    PrimitiveTopology;
+        ID3D11Buffer*               IndexBuffer, *VertexBuffer, *VSConstantBuffer;
+        UINT                        IndexBufferOffset, VertexBufferStride, VertexBufferOffset;
+        DXGI_FORMAT                 IndexBufferFormat;
+        ID3D11InputLayout*          InputLayout;
+    };
+    BACKUP_DX11_STATE old = {};
+    old.ScissorRectsCount = old.ViewportsCount = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+    context->RSGetScissorRects(&old.ScissorRectsCount, old.ScissorRects);
+    context->RSGetViewports(&old.ViewportsCount, old.Viewports);
+    context->RSGetState(&old.RS);
+    context->OMGetBlendState(&old.BlendState, old.BlendFactor, &old.SampleMask);
+    context->OMGetDepthStencilState(&old.DepthStencilState, &old.StencilRef);
+    context->PSGetShaderResources(0, 1, &old.PSShaderResource);
+    context->PSGetSamplers(0, 1, &old.PSSampler);
+    old.PSInstancesCount = old.VSInstancesCount = old.GSInstancesCount = 256;
+    context->PSGetShader(&old.PS, old.PSInstances, &old.PSInstancesCount);
+    context->VSGetShader(&old.VS, old.VSInstances, &old.VSInstancesCount);
+    context->VSGetConstantBuffers(0, 1, &old.VSConstantBuffer);
+    context->GSGetShader(&old.GS, old.GSInstances, &old.GSInstancesCount);
+
+    context->IAGetPrimitiveTopology(&old.PrimitiveTopology);
+    context->IAGetIndexBuffer(&old.IndexBuffer, &old.IndexBufferFormat, &old.IndexBufferOffset);
+    context->IAGetVertexBuffers(0, 1, &old.VertexBuffer, &old.VertexBufferStride, &old.VertexBufferOffset);
+    context->IAGetInputLayout(&old.InputLayout);
+
+    // Update the constant buffer.
+    const auto glm_eye_transform_offset = vr->get_eye_transform(eye);
+    auto glm_proj = vr->get_projection_matrix((VRRuntime::Eye)eye);
+
+    const auto hmd_transform = vr->get_hmd_transform(frame_count);
+    auto glm_view = hmd_transform * glm_eye_transform_offset;
+
+    if (GetAsyncKeyState(VK_SPACE)) {
+        const auto model_pos = hmd_transform[3] + (hmd_transform[2] * 5.0f);
+
+        DirectX::XMVECTOR loc = DirectX::XMVectorSet(model_pos.x, model_pos.y, model_pos.z, 0);
+        DirectX::XMVECTOR target = DirectX::XMVectorSet(hmd_transform[3].x, hmd_transform[3].y, hmd_transform[3].z, 0);
+        DirectX::XMVECTOR up = DirectX::XMVectorSet(0, 1, 0, 0);
+        m_shader_globals.model = DirectX::XMMatrixLookAtLH(loc, target, up);
+
+    }
+
+    //m_shader_globals.view = DirectX::XMMatrixTranspose(glm_view); // we can do this later, right now the shader transposes it
+    m_shader_globals.view.r[0] = DirectX::XMVECTOR{glm_view[0].x, glm_view[0].y, glm_view[0].z, glm_view[0].w};
+    m_shader_globals.view.r[1] = DirectX::XMVECTOR{glm_view[1].x, glm_view[1].y, glm_view[1].z, glm_view[1].w};
+    m_shader_globals.view.r[2] = DirectX::XMVECTOR{glm_view[2].x, glm_view[2].y, glm_view[2].z, glm_view[2].w};
+    m_shader_globals.view.r[3] = DirectX::XMVECTOR{glm_view[3].x, glm_view[3].y, glm_view[3].z, glm_view[3].w};
+    //m_shader_globals.view = DirectX::XMMatrixTranspose(m_shader_globals.view);
+
+    m_shader_globals.proj.r[0] = DirectX::XMVECTOR{glm_proj[0].x, glm_proj[0].y, glm_proj[0].z, glm_proj[0].w};
+    m_shader_globals.proj.r[1] = DirectX::XMVECTOR{glm_proj[1].x, glm_proj[1].y, glm_proj[1].z, glm_proj[1].w};
+    m_shader_globals.proj.r[2] = DirectX::XMVECTOR{glm_proj[2].x, glm_proj[2].y, glm_proj[2].z, glm_proj[2].w};
+    m_shader_globals.proj.r[3] = DirectX::XMVECTOR{glm_proj[3].x, glm_proj[3].y, glm_proj[3].z, glm_proj[3].w};
+
+    // Set everything to default values for now to make sure everything is working correctly.
+    /*{
+        DirectX::XMVECTOR loc = DirectX::XMVectorSet(0, 0, -5, 0);
+        DirectX::XMVECTOR negloc = DirectX::XMVectorSet(0, 0, 5, 0);
+		DirectX::XMVECTOR target = DirectX::XMVectorSet(0, 0, 0, 0);
+		DirectX::XMVECTOR up = DirectX::XMVectorSet(0, 1, 0, 0);
+		m_shader_globals.view = DirectX::XMMatrixLookAtLH(loc, target, up);
+
+		DirectX::XMVECTOR model_pos = DirectX::XMVectorSet(0, 0, 0, 0);
+
+		m_shader_globals.model = DirectX::XMMatrixLookAtLH(model_pos, negloc, up);
+		m_shader_globals.proj = DirectX::XMMatrixPerspectiveFovLH(DirectX::XM_PIDIV4, (float)width / (float)height, 0.01f, 100.0f);
+    }*/
+
+    m_shader_globals.resolution = DirectX::XMFLOAT4((float)width, (float)height, 0.0f, (float)width / (float)height);
+    m_shader_globals.time += 0.01f;
+
+    D3D11_MAPPED_SUBRESOURCE mapped_resource{};
+    if (FAILED(context->Map(m_constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_resource))) {
+        spdlog::error("[VR] Failed to map constant buffer.");
+        return;
+    }
+    
+    memcpy(mapped_resource.pData, &m_shader_globals, sizeof(D3D11Component::ShaderGlobals));
+    context->Unmap(m_constant_buffer.Get(), 0);
+
+    // Set the vertex input layout.
+    context->IASetInputLayout(m_input_layout.Get());
+    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    const UINT stride = sizeof(D3D11Component::Vertex);
+    const UINT offset = 0;
+
+    ID3D11Buffer* vertex_buffers[] = {m_vertex_buffer.Get()};
+    context->IASetVertexBuffers(0, 1, vertex_buffers, &stride, &offset);
+    
+    ID3D11Buffer* index_buffers[] = {m_index_buffer.Get()};
+    context->IASetIndexBuffer(m_index_buffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+
+    // Set the vertex and pixel shaders that will be used to render this triangle.
+    context->VSSetShader(m_vs_shader.Get(), nullptr, 0);
+    context->PSSetShader(m_ps_shader.Get(), nullptr, 0);
+
+    // Set the constant buffer in the vertex shader with the updated values.
+    ID3D11Buffer* constant_buffers[] = {m_constant_buffer.Get()};
+    context->VSSetConstantBuffers(0, 1, constant_buffers);
+
+    // Set the constant buffer in the pixel shader with the updated values.
+    constant_buffers[0] = m_constant_buffer.Get();
+    context->PSSetConstantBuffers(0, 1, constant_buffers);
+
+    // Set the sampler state in the pixel shader.
+    //context->PSSetSamplers(0, 1, &m_sampler_state);
+
+    // Set the texture in the pixel shader.
+    //ID3D11ShaderResourceView* srvs[] = {m_right_eye_srv.Get()};
+    //context->PSSetShaderResources(0, 1, srvs);
+
+    // Render the quad.
+    context->DrawIndexed(6, 0, 0);
+
+    // Restore modified DX state
+    context->RSSetScissorRects(old.ScissorRectsCount, old.ScissorRects);
+    context->RSSetViewports(old.ViewportsCount, old.Viewports);
+    context->RSSetState(old.RS); if (old.RS) old.RS->Release();
+    context->OMSetBlendState(old.BlendState, old.BlendFactor, old.SampleMask); if (old.BlendState) old.BlendState->Release();
+    context->OMSetDepthStencilState(old.DepthStencilState, old.StencilRef); if (old.DepthStencilState) old.DepthStencilState->Release();
+    context->PSSetShaderResources(0, 1, &old.PSShaderResource); if (old.PSShaderResource) old.PSShaderResource->Release();
+    context->PSSetSamplers(0, 1, &old.PSSampler); if (old.PSSampler) old.PSSampler->Release();
+    context->PSSetShader(old.PS, old.PSInstances, old.PSInstancesCount); if (old.PS) old.PS->Release();
+    for (UINT i = 0; i < old.PSInstancesCount; i++) if (old.PSInstances[i]) old.PSInstances[i]->Release();
+    context->VSSetShader(old.VS, old.VSInstances, old.VSInstancesCount); if (old.VS) old.VS->Release();
+    context->VSSetConstantBuffers(0, 1, &old.VSConstantBuffer); if (old.VSConstantBuffer) old.VSConstantBuffer->Release();
+    context->GSSetShader(old.GS, old.GSInstances, old.GSInstancesCount); if (old.GS) old.GS->Release();
+    for (UINT i = 0; i < old.VSInstancesCount; i++) if (old.VSInstances[i]) old.VSInstances[i]->Release();
+    context->IASetPrimitiveTopology(old.PrimitiveTopology);
+    context->IASetIndexBuffer(old.IndexBuffer, old.IndexBufferFormat, old.IndexBufferOffset); if (old.IndexBuffer) old.IndexBuffer->Release();
+    context->IASetVertexBuffers(0, 1, &old.VertexBuffer, &old.VertexBufferStride, &old.VertexBufferOffset); if (old.VertexBuffer) old.VertexBuffer->Release();
+    context->IASetInputLayout(old.InputLayout); if (old.InputLayout) old.InputLayout->Release();
 }
 
 void D3D11Component::OpenXR::initialize(XrSessionCreateInfo& session_info) {

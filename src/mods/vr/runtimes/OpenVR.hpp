@@ -42,11 +42,11 @@ struct OpenVR final : public VRRuntime {
     void enqueue_render_poses(uint32_t frame_count) override;
     void enqueue_render_poses_unsafe(uint32_t frame_count);
 
-    vr::HmdMatrix34_t get_hmd_pose(uint32_t frame_count) {
+    vr::HmdMatrix34_t get_hmd_pose(uint32_t frame_count) const {
         return this->pose_queue[frame_count % this->pose_queue.size()];
     }
 
-    vr::HmdMatrix34_t get_current_hmd_pose() {
+    vr::HmdMatrix34_t get_current_hmd_pose() const {
         return this->pose_queue[internal_frame_count % this->pose_queue.size()];
     }
 

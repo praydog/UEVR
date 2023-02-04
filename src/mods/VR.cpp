@@ -1359,6 +1359,31 @@ Vector4f VR::get_angular_velocity_unsafe(uint32_t index) const {
     return Vector4f{};
 }
 
+Matrix4x4f VR::get_hmd_rotation(uint32_t frame_count) const {
+    return glm::extractMatrixRotation(get_hmd_transform(frame_count));
+}
+
+Matrix4x4f VR::get_hmd_transform(uint32_t frame_count) const {
+    if (get_runtime()->is_openvr()) {
+        std::shared_lock _{ get_runtime()->pose_mtx };
+
+        const auto pose = m_openvr->get_hmd_pose(frame_count);
+        const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&pose };
+        return glm::rowMajor4(matrix);
+    } else if (get_runtime()->is_openxr()) {
+        std::shared_lock _{ get_runtime()->pose_mtx };
+        std::shared_lock __{ get_runtime()->eyes_mtx };
+
+        const auto& vspl = m_openxr->get_view_space_location(frame_count);
+        auto mat = Matrix4x4f{runtimes::OpenXR::to_glm(vspl.pose.orientation)};
+        mat[3] = Vector4f{*(Vector3f*)&vspl.pose.position, 1.0f};
+
+        return mat;
+    }
+
+    return glm::identity<Matrix4x4f>();
+}
+
 Matrix4x4f VR::get_rotation(uint32_t index) const {
     if (get_runtime()->is_openvr()) {
         if (index >= vr::k_unMaxTrackedDeviceCount) {

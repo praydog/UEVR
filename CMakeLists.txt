@@ -526,6 +526,8 @@ list(APPEND ue4poc_SOURCES
 	"src/mods/vr/runtimes/OpenVR.hpp"
 	"src/mods/vr/runtimes/OpenXR.hpp"
 	"src/mods/vr/runtimes/VRRuntime.hpp"
+	"src/mods/vr/shaders/ps.hpp"
+	"src/mods/vr/shaders/vs.hpp"
 	"src/ue4poc-imgui/font_robotomedium.hpp"
 	"src/ue4poc-imgui/ue4poc_imconfig.hpp"
 	"src/ue4poc-imgui/imgui_impl_dx11.h"

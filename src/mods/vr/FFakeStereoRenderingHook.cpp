@@ -1405,6 +1405,11 @@ struct SceneViewExtensionAnalyzer {
                 return;
             }
 
+            if (!g_hook->has_engine_tick_hook()) {
+                // Alternative place of running game thread work.
+                GameThreadWorker::get().execute();
+            }
+
             auto& vr = VR::get();
 
             if (!vr->is_hmd_active()) {
@@ -1617,7 +1622,7 @@ struct SceneViewExtensionAnalyzer {
         auto& vr = VR::get();
         auto runtime = vr->get_runtime();
 
-        auto call_orig = [&]() {
+        auto call_orig = [=]() {
             const auto result = func(cmd, cmd_list, debug_context);
 
             if (N == 0) {
@@ -2341,7 +2346,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     }*/
 
     // if we were unable to hook UGameEngine::Tick, we can run our game thread jobs here instead.
-    if (g_hook->m_attempted_hook_game_engine_tick && !g_hook->m_hooked_game_engine_tick) {
+    if (!g_hook->m_has_view_extension_hook && g_hook->m_attempted_hook_game_engine_tick && !g_hook->m_hooked_game_engine_tick) {
         GameThreadWorker::get().execute();
     }
 

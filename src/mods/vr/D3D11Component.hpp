@@ -11,6 +11,8 @@
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
+#include <DirectXMath.h>
+
 class VR;
 
 namespace vrmod {
@@ -38,12 +40,44 @@ public:
 private:
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
+    struct ShaderGlobals {
+		DirectX::XMMATRIX model{};
+		DirectX::XMMATRIX view{};
+		DirectX::XMMATRIX proj{};
+		DirectX::XMFLOAT4 resolution{};
+        float time{};
+    } m_shader_globals{};
+
+    struct Vertex {
+        DirectX::XMFLOAT3 position{};
+        DirectX::XMFLOAT4 color{};
+        DirectX::XMFLOAT2 texuv0{};
+        DirectX::XMFLOAT2 texuv1{};
+        DirectX::XMFLOAT3 normal{};
+        DirectX::XMFLOAT3 tangent{};
+        DirectX::XMFLOAT3 bitangent{};
+	};
+
     ComPtr<ID3D11Texture2D> m_ui_tex{};
     ComPtr<ID3D11Texture2D> m_blank_tex{};
     ComPtr<ID3D11Texture2D> m_left_eye_tex{};
     ComPtr<ID3D11Texture2D> m_right_eye_tex{};
     ComPtr<ID3D11Texture2D> m_left_eye_depthstencil{};
     ComPtr<ID3D11Texture2D> m_right_eye_depthstencil{};
+    ComPtr<ID3DBlob> m_vs_shader_blob{};
+    ComPtr<ID3DBlob> m_ps_shader_blob{};
+
+    ComPtr<ID3D11VertexShader> m_vs_shader{};
+    ComPtr<ID3D11PixelShader> m_ps_shader{};
+    ComPtr<ID3D11InputLayout> m_input_layout{};
+    ComPtr<ID3D11Buffer> m_constant_buffer{};
+    ComPtr<ID3D11Buffer> m_vertex_buffer{};
+    ComPtr<ID3D11Buffer> m_index_buffer{};
+    ComPtr<ID3D11RenderTargetView> m_left_eye_rtv{};
+    ComPtr<ID3D11RenderTargetView> m_right_eye_rtv{};
+    ComPtr<ID3D11ShaderResourceView> m_left_eye_srv{};
+    ComPtr<ID3D11ShaderResourceView> m_right_eye_srv{};
+
     vr::HmdMatrix44_t m_left_eye_proj{};
     vr::HmdMatrix44_t m_right_eye_proj{};
 
@@ -53,6 +87,7 @@ private:
     uint32_t m_last_rendered_frame{0};
     bool m_force_reset{false};
     bool m_submitted_left_eye{false};
+    bool m_is_shader_setup{false};
 
     struct OpenXR {
         OpenXR(D3D11Component* p) : parent(p) {}
@@ -78,5 +113,7 @@ private:
     } m_openxr;
 
     bool setup();
+    bool setup_shader();
+    void invoke_shader(uint32_t frame_count, uint32_t eye, uint32_t width, uint32_t height);
 };
 } // namespace vrmod
