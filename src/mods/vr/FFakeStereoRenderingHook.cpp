@@ -1783,6 +1783,7 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
     constexpr auto weak_ptr_size = sizeof(TWeakPtr<void*>);
     uintptr_t potential_view_extensions = (uintptr_t)engine + s_stereo_rendering_device_offset + (weak_ptr_size * 2); // 2 to skip over the XRSystem
 
+    // The TWeakPtr version is for >= 4.11 UE versions
     TWeakPtr<FSceneViewExtensions>& view_extensions_tweakptr = 
         *(TWeakPtr<FSceneViewExtensions>*)potential_view_extensions;
 
@@ -1797,7 +1798,83 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
     FSceneViewExtensions& view_extensions = m_rendertarget_manager_embedded_in_stereo_device ?  
                                             *(FSceneViewExtensions*)potential_view_extensions : *view_extensions_tweakptr.reference;
 
+    spdlog::info("Current ext ptr: {:x}", (uintptr_t)view_extensions.extensions.data);
+    spdlog::info("Current ext count: {}", view_extensions.extensions.count);
+    spdlog::info("Current ext capacity: {}", view_extensions.extensions.capacity);
+
+    // Verifications on the current memory of the FSceneViewExtensions, because pre-4.10 (?) the view extensions array did not actually exist
+    if (m_rendertarget_manager_embedded_in_stereo_device) {
+        spdlog::info("Performing verifications on the current memory of the FSceneViewExtensions...");
+
+        const auto& current_view_extensions_ptr_value = view_extensions.extensions;
+
+        // Check if current value is non zero and points to invalid memory
+        if (current_view_extensions_ptr_value.data != nullptr && IsBadReadPtr((void*)current_view_extensions_ptr_value.data, sizeof(void*))) {
+            spdlog::error("Usual view extensions pointer is non-zero but points to invalid memory! Cannot set up view extensions!");
+            spdlog::error("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+            return false;
+        }
+
+        // Check if count is greater than capacity, which is not possible
+        if ((uint32_t)current_view_extensions_ptr_value.count > (uint32_t)current_view_extensions_ptr_value.capacity) {
+            spdlog::error("Usual view extensions count is greater than capacity! Cannot set up view extensions!");
+            spdlog::error("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+            return false;
+        }
+
+        // Check if count or capacity is negative, which is not possible
+        if ((int32_t)current_view_extensions_ptr_value.count < 0 || (int32_t)current_view_extensions_ptr_value.capacity < 0) {
+            spdlog::error("Usual view extensions count or capacity is negative! Cannot set up view extensions!");
+            spdlog::error("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+            return false;
+        }
+        
+        // Check if the memory at count treated as a pointer points to valid memory, which is not possible
+        const auto count_as_ptr = *(void**)&current_view_extensions_ptr_value.count;
+        if (count_as_ptr != nullptr && !IsBadReadPtr(count_as_ptr, sizeof(void*))) {
+            spdlog::error("Usual view extensions count is actually a pointer to valid memory! Cannot set up view extensions!");
+            spdlog::error("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+            return false;
+        }
+
+        // Check if the data pointer is null but capacity is greater than 0, which is not possible
+        if (current_view_extensions_ptr_value.data == nullptr && current_view_extensions_ptr_value.capacity > 0) {
+            spdlog::info("Usual view extensions data pointer is null but capacity is greater than 0! Cannot set up view extensions!");
+            spdlog::info("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+        }
+
+        // Check if the data pointer is non-null but the capacity is 0, which is not possible
+        if (current_view_extensions_ptr_value.data != nullptr && current_view_extensions_ptr_value.capacity == 0) {
+            spdlog::error("Usual view extensions data pointer is non-null but capacity is 0! Cannot set up view extensions!");
+            spdlog::error("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+            return false;
+        }
+
+        // Check if any current entries in the array within the count are invalid, which is not possible
+        if (current_view_extensions_ptr_value.data != nullptr) {
+            for (auto i = 0; i < current_view_extensions_ptr_value.count; ++i) {
+                const auto ext = current_view_extensions_ptr_value.data[i].reference;
+
+                if (IsBadReadPtr((void*)ext, sizeof(void*))) {
+                    spdlog::error("Usual view extensions array contains an invalid entry! Cannot set up view extensions!");
+                    spdlog::error("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+                    return false;
+                }
+
+                const auto ext_vtable = *(void**)ext;
+
+                if (IsBadReadPtr((void*)ext_vtable, sizeof(void*))) {
+                    spdlog::error("Usual view extensions array contains an entry with an invalid vtable! Cannot set up view extensions!");
+                    spdlog::error("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+                    return false;
+                }
+            }
+        }
+    }
+
     if (view_extensions.extensions.data == nullptr || view_extensions.extensions.data[0].reference == nullptr || view_extensions.extensions.count == 0) {
+        spdlog::info("Allocating new view extensions array...");
+
         auto ext_ptr = new TWeakPtr<ISceneViewExtension>();
         ext_ptr->allocate_naive();
 
@@ -1816,11 +1893,6 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
         }
 
         auto& vtable = *(uintptr_t**)entry.reference;
-
-        if (vtable == nullptr) {
-            // just set it to vtable_copy
-            vtable = g_view_extension_vtable.data();
-        }
 
         g_hook->m_analyze_view_extensions_start_time = std::chrono::high_resolution_clock::now();
         g_hook->m_analyzing_view_extensions = true;
