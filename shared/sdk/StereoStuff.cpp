@@ -13,21 +13,21 @@
 void* FRHITexture::get_native_resource() const {
     static std::optional<uintptr_t> offset_to_resource{}; // this is some shit that happens on D3D12 on old UE versions
     static auto vtable_index = [](const FRHITexture* tex) -> size_t {
-        spdlog::info("Attempting to get vtable index for FRHITexture::GetNativeResource");
+        SPDLOG_INFO("Attempting to get vtable index for FRHITexture::GetNativeResource");
 
         auto vtable = *(void* (***)(const FRHITexture*, void*))tex;
 
         if (vtable == 0) {
-            spdlog::error("FRHITexture vtable is null");
+            SPDLOG_ERROR("FRHITexture vtable is null");
             return 0;
         }
 
         const auto vtable_module = utility::get_module_within(vtable);
 
         if (vtable_module) {
-            spdlog::info(" Vtable: {:x} (rel {:x})", (uintptr_t)vtable, (uintptr_t)vtable - (uintptr_t)*vtable_module);
+            SPDLOG_INFO(" Vtable: {:x} (rel {:x})", (uintptr_t)vtable, (uintptr_t)vtable - (uintptr_t)*vtable_module);
         } else {
-            spdlog::info(" Vtable: {:x} (could not detect module)", (uintptr_t)vtable);
+            SPDLOG_INFO(" Vtable: {:x} (could not detect module)", (uintptr_t)vtable);
         }
 
         std::optional<int> first_index_that_wasnt_self{};
@@ -36,18 +36,18 @@ void* FRHITexture::get_native_resource() const {
         // Start at 1 to skip over the destructor.
         // Start at 2 to skip over some weird function that also calls the destructor.
         for (auto i = 2; i < 15; ++i) {
-            spdlog::info(" Examining index {}", i);
+            SPDLOG_INFO(" Examining index {}", i);
 
             const auto addr_of_func = (uintptr_t)&vtable[i];
             const auto func = vtable[i];
 
             if (seen_vtables.contains(addr_of_func) || func == nullptr) {
-                spdlog::info("Reached the end of the vtable, falling back to first index that wasn't self: {}", *first_index_that_wasnt_self);
+                SPDLOG_INFO("Reached the end of the vtable, falling back to first index that wasn't self: {}", *first_index_that_wasnt_self);
                 return *first_index_that_wasnt_self;
             }
 
             if (func == nullptr || IsBadReadPtr(func, 1)) {
-                spdlog::error("Encountered bad function pointer at index {} before finding GetNativeResource", i);
+                SPDLOG_ERROR("Encountered bad function pointer at index {} before finding GetNativeResource", i);
                 throw std::runtime_error("Encountered bad function pointer before finding GetNativeResource");
                 return 0;
             }
@@ -61,7 +61,7 @@ void* FRHITexture::get_native_resource() const {
             try {
                 potential_resource = func(tex, &filler_data);
             } catch(...) {
-                spdlog::error("Encountered exception when calling function at index {}", i);
+                SPDLOG_ERROR("Encountered exception when calling function at index {}", i);
                 continue;
             }
 
@@ -91,11 +91,11 @@ void* FRHITexture::get_native_resource() const {
             
             if (potential_vtable != vtable && !first_index_that_wasnt_self) {
                 first_index_that_wasnt_self = i;
-                spdlog::info(" First index that wasn't self: {}", i);
+                SPDLOG_INFO(" First index that wasn't self: {}", i);
             }
 
             if (potential_vtable == vtable) {
-                spdlog::info(" Index {} returned a pointer with the same vtable as the FRHITexture", i);
+                SPDLOG_INFO(" Index {} returned a pointer with the same vtable as the FRHITexture", i);
                 continue;
             }
 
@@ -103,8 +103,8 @@ void* FRHITexture::get_native_resource() const {
             auto module_path_lower = std::string(*module_path);
             std::transform(module_path_lower.begin(), module_path_lower.end(), module_path_lower.begin(), ::tolower);
 
-            spdlog::info(" Function at {} returned a pointer with a vtable in {}", i, *module_path);
-            spdlog::info(" vtable: {:x} (rel {:x})", (uintptr_t)potential_vtable, (uintptr_t)potential_vtable - (uintptr_t)*module_within);
+            SPDLOG_INFO(" Function at {} returned a pointer with a vtable in {}", i, *module_path);
+            SPDLOG_INFO(" vtable: {:x} (rel {:x})", (uintptr_t)potential_vtable, (uintptr_t)potential_vtable - (uintptr_t)*module_within);
 
             auto is_vtable_d3d = [](std::string_view module_path_lower) {
                 return module_path_lower.ends_with("d3d11.dll") || 
@@ -120,7 +120,7 @@ void* FRHITexture::get_native_resource() const {
 
             // Standard path for semi-newer UE versions
             if (is_vtable_d3d(module_path_lower)) {
-                spdlog::info(" Found vtable index {} for FRHITexture::GetNativeResource", i);
+                SPDLOG_INFO(" Found vtable index {} for FRHITexture::GetNativeResource", i);
                 return i;
             }
 
@@ -157,12 +157,12 @@ void* FRHITexture::get_native_resource() const {
                 auto module_path_lower = std::string(*module_path);
                 std::transform(module_path_lower.begin(), module_path_lower.end(), module_path_lower.begin(), ::tolower);
 
-                spdlog::info(" Offset {} contains a pointer to a vtable in {}", offset, *module_path);
-                spdlog::info(" vtable: {:x} (rel {:x})", (uintptr_t)potential_vtable, (uintptr_t)potential_vtable - (uintptr_t)*module_within);
+                SPDLOG_INFO(" Offset {} contains a pointer to a vtable in {}", offset, *module_path);
+                SPDLOG_INFO(" vtable: {:x} (rel {:x})", (uintptr_t)potential_vtable, (uintptr_t)potential_vtable - (uintptr_t)*module_within);
 
                 if (is_vtable_d3d(module_path_lower)) {
-                    spdlog::info(" Found vtable index {} for FRHITexture::GetNativeResource", i);
-                    spdlog::info(" Old UE detected, offset to resource within wrapper: {}", offset);
+                    SPDLOG_INFO(" Found vtable index {} for FRHITexture::GetNativeResource", i);
+                    SPDLOG_INFO(" Old UE detected, offset to resource within wrapper: {}", offset);
                     offset_to_resource = offset;
                     return i;
                 }
@@ -170,7 +170,7 @@ void* FRHITexture::get_native_resource() const {
         }
 
         
-        spdlog::error("Failed to find vtable index for FRHITexture::GetNativeResource");
+        SPDLOG_ERROR("Failed to find vtable index for FRHITexture::GetNativeResource");
         throw std::runtime_error("Could not find vtable index for FRHITexture::GetNativeResource");
         return 0;
     }(this);

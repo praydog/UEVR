@@ -10,28 +10,28 @@
 namespace sdk {
 FDynamicRHI* FDynamicRHI::get() {
     static FDynamicRHI** instance = []() -> FDynamicRHI** {
-        spdlog::info("Searching for FDynamicRHI instance...");
+        SPDLOG_INFO("Searching for FDynamicRHI instance...");
 
         // Scans for a string reference inside InitNullRHI
         const auto module = sdk::get_ue_module(L"RHI");
         const auto str = utility::scan_string(module, L"NullDrvFailure");
 
         if (!str) {
-            spdlog::error("Failed to find FDynamicRHI instance (no string)");
+            SPDLOG_ERROR("Failed to find FDynamicRHI instance (no string)");
             return nullptr;
         }
 
         const auto ref = utility::scan_displacement_reference(module, *str);
 
         if (!ref) {
-            spdlog::error("Failed to find FDynamicRHI instance (no string reference)");
+            SPDLOG_ERROR("Failed to find FDynamicRHI instance (no string reference)");
             return nullptr;
         }
 
         const auto resolved = utility::resolve_instruction(*ref);
 
         if (!resolved) {
-            spdlog::error("Failed to find FDynamicRHI instance (cannot resolve instruction)");
+            SPDLOG_ERROR("Failed to find FDynamicRHI instance (cannot resolve instruction)");
             return nullptr;
         }
 
@@ -41,7 +41,7 @@ FDynamicRHI* FDynamicRHI::get() {
             const auto ix = utility::decode_one(ip);
 
             if (!ix) {
-                spdlog::error("Failed to find FDynamicRHI instance (failed to decode instruction @ {:x})", (uintptr_t)ip);
+                SPDLOG_ERROR("Failed to find FDynamicRHI instance (failed to decode instruction @ {:x})", (uintptr_t)ip);
                 return nullptr;
             }
 
@@ -53,11 +53,11 @@ FDynamicRHI* FDynamicRHI::get() {
             {
                 const auto result = utility::resolve_displacement((uintptr_t)ip);
                 if (result) {
-                    spdlog::info("Found FDynamicRHI instance at {:x} (referenced at {:x})", *result, (uintptr_t)ip);
+                    SPDLOG_INFO("Found FDynamicRHI instance at {:x} (referenced at {:x})", *result, (uintptr_t)ip);
                     return (FDynamicRHI**)*result;
                 }
 
-                spdlog::error("Failed to find FDynamicRHI instance @ {:x}", (uintptr_t)ip);
+                SPDLOG_ERROR("Failed to find FDynamicRHI instance @ {:x}", (uintptr_t)ip);
             }
 
             ip += ix->Length;

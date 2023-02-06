@@ -18,41 +18,41 @@ IViewportRenderTargetProvider* FViewportInfo::get_rt_provider(FRHITexture2D* kno
             return 0;
         }
 
-        spdlog::info("Searching for FViewportInfo::GetRenderTargetProvider offset...");
+        SPDLOG_INFO("Searching for FViewportInfo::GetRenderTargetProvider offset...");
 
         for (auto i = 0; i < 0x500; i += sizeof(void*)) {
-            spdlog::info(" Examining offset 0x{:x}", i);
+            SPDLOG_INFO(" Examining offset 0x{:x}", i);
 
             const auto ptr = *(uintptr_t*)((uintptr_t)this + i);
 
             if (ptr == 0 || IsBadReadPtr((void*)ptr, sizeof(void*))) {
-                spdlog::info("  Invalid pointer at offset 0x{:x}", i);
+                SPDLOG_INFO("  Invalid pointer at offset 0x{:x}", i);
                 continue;
             }
 
             const auto vtable = *(uintptr_t*)ptr;
 
             if (vtable == 0 || IsBadReadPtr((void*)vtable, sizeof(void*))) {
-                spdlog::info("  Invalid vtable at offset 0x{:x}", i);
+                SPDLOG_INFO("  Invalid vtable at offset 0x{:x}", i);
                 continue;
             }
 
             const auto first_func = *(uintptr_t*)vtable;
 
             if (first_func == 0 || IsBadReadPtr((void*)first_func, sizeof(void*))) {
-                spdlog::info("  Invalid first function at offset 0x{:x}", i);
+                SPDLOG_INFO("  Invalid first function at offset 0x{:x}", i);
                 continue;
             }
             
             const auto module = utility::get_module_within(first_func);
 
             if (!module) {
-                spdlog::info("  Invalid module at offset 0x{:x}", i);
+                SPDLOG_INFO("  Invalid module at offset 0x{:x}", i);
                 continue;
             }
 
             const auto rel = first_func - (uintptr_t)*module;
-            spdlog::info("  About to emulate 0x{:x}", rel);
+            SPDLOG_INFO("  About to emulate 0x{:x}", rel);
             
             utility::ShemuContext emu{*module};
 
@@ -74,14 +74,14 @@ IViewportRenderTargetProvider* FViewportInfo::get_rt_provider(FRHITexture2D* kno
                 }
 
                 if (std::string_view{ix->Mnemonic}.starts_with("CALL")) {
-                    spdlog::info("  Found call at 0x{:x}, skipping it", emu.ctx->Registers.RegRip);
+                    SPDLOG_INFO("  Found call at 0x{:x}, skipping it", emu.ctx->Registers.RegRip);
                     emu.ctx->Registers.RegRip += ix->Length;
                     emu.ctx->Registers.RegRax = 1;
                     continue;
                 }
             }
 
-            spdlog::info("  Emu status: {}", emu.status);
+            SPDLOG_INFO("  Emu status: {}", emu.status);
 
             const auto rax = emu.ctx->Registers.RegRax;
 
@@ -90,16 +90,16 @@ IViewportRenderTargetProvider* FViewportInfo::get_rt_provider(FRHITexture2D* kno
 
                 if (auto result = utility::scan_ptr((uintptr_t)resource + sizeof(void*), 0x20, (uintptr_t)known_tex)) {
                     FSlateResource::resource_offset = *result - (uintptr_t)resource;
-                    spdlog::info("  Found FViewportInfo::GetRenderTargetProvider offset: 0x{:x}", i);
-                    spdlog::info("  Found FSlateResource::Resource offset: 0x{:x}", FSlateResource::resource_offset);
+                    SPDLOG_INFO("  Found FViewportInfo::GetRenderTargetProvider offset: 0x{:x}", i);
+                    SPDLOG_INFO("  Found FSlateResource::Resource offset: 0x{:x}", FSlateResource::resource_offset);
                     return i;
                 }
             } else {
-                spdlog::info("  Invalid return value at offset 0x{:x} ({:x})", i, rax);
+                SPDLOG_INFO("  Invalid return value at offset 0x{:x} ({:x})", i, rax);
             }
         }
         
-        spdlog::info("Failed to find FViewportInfo::GetRenderTargetProvider offset!");
+        SPDLOG_INFO("Failed to find FViewportInfo::GetRenderTargetProvider offset!");
 
         return 0x0; // PLACEHOLDER
     };
@@ -111,7 +111,7 @@ IViewportRenderTargetProvider* FViewportInfo::get_rt_provider(FRHITexture2D* kno
         offset = resolve_offset(known_tex);
 
         if (offset == 0) {
-            spdlog::error("Failed to resolve FViewportInfo::GetRenderTargetProvider offset!");
+            SPDLOG_ERROR("Failed to resolve FViewportInfo::GetRenderTargetProvider offset!");
             return nullptr;
         }
     }

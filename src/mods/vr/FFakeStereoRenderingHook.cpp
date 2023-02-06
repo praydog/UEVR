@@ -44,7 +44,7 @@ uint32_t g_frame_count{};
 // Scan through function instructions to detect usage of double
 // floating point precision instructions.
 bool is_using_double_precision(uintptr_t addr) {
-    spdlog::info("Scanning function at {:x} for double precision usage", addr);
+    SPDLOG_INFO("Scanning function at {:x} for double precision usage", addr);
 
     bool result = false;
 
@@ -54,13 +54,13 @@ bool is_using_double_precision(uintptr_t addr) {
         }
 
         if (ix.Instruction == ND_INS_MOVSD && ix.Operands[0].Type == ND_OP_MEM && ix.Operands[1].Type == ND_OP_REG) {
-            spdlog::info("[UE5 Detected] Detected Double precision MOVSD at {:x}", (uintptr_t)ip);
+            SPDLOG_INFO("[UE5 Detected] Detected Double precision MOVSD at {:x}", (uintptr_t)ip);
             result = true;
             return utility::ExhaustionResult::BREAK;
         }
 
         if (ix.Instruction == ND_INS_ADDSD) {
-            spdlog::info("[UE5 Detected] Detected Double precision ADDSD at {:x}", (uintptr_t)ip);
+            SPDLOG_INFO("[UE5 Detected] Detected Double precision ADDSD at {:x}", (uintptr_t)ip);
             result = true;
             return utility::ExhaustionResult::BREAK;
         }
@@ -106,7 +106,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
         return;
     }
     
-    spdlog::info("Attempting to hook UGameEngine::Tick!");
+    SPDLOG_INFO("Attempting to hook UGameEngine::Tick!");
 
     m_attempted_hook_game_engine_tick = true;
 
@@ -114,7 +114,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
 
     if (!func) {
         if (return_address == 0) {
-            spdlog::error("Cannot hook UGameEngine::Tick");
+            SPDLOG_ERROR("Cannot hook UGameEngine::Tick");
             return;
         }
 
@@ -123,7 +123,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
             utility::scan_strings(engine_module, L"Negative delta time!");
         
         if (negative_delta_time_strings.empty()) {
-            spdlog::error("Cannot hook UGameEngine::Tick (Negative delta time! not found)");
+            SPDLOG_ERROR("Cannot hook UGameEngine::Tick (Negative delta time! not found)");
             return;
         }
 
@@ -143,7 +143,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
                     continue;
                 }
 
-                spdlog::info("Negative delta time string function @ {:x}", *func_start);
+                SPDLOG_INFO("Negative delta time string function @ {:x}", *func_start);
 
                 out.push_back(*func_start);
             }
@@ -154,7 +154,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
         const auto return_address_func = utility::find_virtual_function_start(return_address);
 
         if (!return_address_func) {
-            spdlog::error("Return address is not within a valid function!");
+            SPDLOG_ERROR("Return address is not within a valid function!");
             return;
         }
 
@@ -162,14 +162,14 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
         // If it is, then it's UGameEngine::Tick. Set func to the return_address_func.
         for (auto potential : negative_delta_time_funcs) {
             if (potential == *return_address_func) {
-                spdlog::info("Found UGameEngine::Tick @ {:x}", *return_address_func);
+                SPDLOG_INFO("Found UGameEngine::Tick @ {:x}", *return_address_func);
                 func = *return_address_func;
                 break;
             }
         }
 
         if (!func) {
-            spdlog::error("Return address is not the correct function!");
+            SPDLOG_ERROR("Return address is not the correct function!");
             return;
         }
     }
@@ -189,7 +189,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
         static bool once = true;
 
         if (once) {
-            spdlog::info("First time calling UGameEngine::Tick!");
+            SPDLOG_INFO("First time calling UGameEngine::Tick!");
             once = false;
         }
 
@@ -227,7 +227,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
 
     m_hooked_game_engine_tick = true;
 
-    spdlog::info("Hooked UGameEngine::Tick!");
+    SPDLOG_INFO("Hooked UGameEngine::Tick!");
 }
 
 void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_address) {
@@ -239,13 +239,13 @@ void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_addres
         return;
     }
 
-    spdlog::info("Attempting to hook FSlateRHIRenderer::DrawWindow_RenderThread!");
+    SPDLOG_INFO("Attempting to hook FSlateRHIRenderer::DrawWindow_RenderThread!");
     m_attempted_hook_slate_thread = true;
 
     auto func = sdk::slate::locate_draw_window_renderthread_fn();
 
     if (!func && return_address == 0) {
-        spdlog::error("Cannot hook FSlateRHIRenderer::DrawWindow_RenderThread");
+        SPDLOG_ERROR("Cannot hook FSlateRHIRenderer::DrawWindow_RenderThread");
         return;
     }
 
@@ -253,12 +253,12 @@ void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_addres
         func = utility::find_function_start_with_call(return_address);
 
         if (!func) {
-            spdlog::error("Cannot hook FSlateRHIRenderer::DrawWindow_RenderThread with alternative return address method");
+            SPDLOG_ERROR("Cannot hook FSlateRHIRenderer::DrawWindow_RenderThread with alternative return address method");
             m_hooked_slate_thread = true; // not actually true but just to stop spamming the scans
             return;
         }
 
-        spdlog::info("Found FSlateRHIRenderer::DrawWindow_RenderThread with alternative return address method: {:x}", *func);
+        SPDLOG_INFO("Found FSlateRHIRenderer::DrawWindow_RenderThread with alternative return address method: {:x}", *func);
     }
 
     auto factory = SafetyHookFactory::init();
@@ -267,11 +267,11 @@ void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_addres
     m_slate_thread_hook = builder.create_inline((void*)*func, &FFakeStereoRenderingHook::slate_draw_window_render_thread);
     m_hooked_slate_thread = true;
 
-    spdlog::info("Hooked FSlateRHIRenderer::DrawWindow_RenderThread!");
+    SPDLOG_INFO("Hooked FSlateRHIRenderer::DrawWindow_RenderThread!");
 }
 
 bool FFakeStereoRenderingHook::hook() {
-    spdlog::info("Entering FFakeStereoRenderingHook::hook");
+    SPDLOG_INFO("Entering FFakeStereoRenderingHook::hook");
 
     m_tried_hooking = true;
 
@@ -282,7 +282,7 @@ bool FFakeStereoRenderingHook::hook() {
     const auto vtable = locate_fake_stereo_rendering_vtable();
 
     if (!vtable) {
-        spdlog::error("Failed to locate Fake Stereo Rendering VTable, attempting to perform nonstandard hook");
+        SPDLOG_ERROR("Failed to locate Fake Stereo Rendering VTable, attempting to perform nonstandard hook");
         return nonstandard_create_stereo_device_hook();
     }
 
@@ -290,7 +290,7 @@ bool FFakeStereoRenderingHook::hook() {
 }
 
 bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
-    spdlog::info("Performing standard fake stereo hook");
+    SPDLOG_INFO("Performing standard fake stereo hook");
 
     const auto game = sdk::get_ue_module(L"Engine");
     std::array<uint8_t, 0x1000> og_vtable{};
@@ -302,12 +302,12 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     const auto is_stereo_enabled_index = sdk::is_vfunc_pattern(*(uintptr_t*)vtable, "B0 01") ? 0 : 1;
     const auto is_stereo_enabled_func_ptr = &((uintptr_t*)vtable)[is_stereo_enabled_index];
 
-    spdlog::info("IsStereoEnabled Index: {}", is_stereo_enabled_index);
+    SPDLOG_INFO("IsStereoEnabled Index: {}", is_stereo_enabled_index);
 
     const auto stereo_view_offset_index = get_stereo_view_offset_index(vtable);
 
     if (!stereo_view_offset_index) {
-        spdlog::error("Failed to locate Stereo View Offset Index");
+        SPDLOG_ERROR("Failed to locate Stereo View Offset Index");
         return false;
     }
 
@@ -323,7 +323,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     if (!render_texture_render_thread_func) {
         // Fallback scan to checking for the first non-default virtual function (<= 4.18)
-        spdlog::info("Failed to find RenderTexture_RenderThread, falling back to first non-default virtual function");
+        SPDLOG_INFO("Failed to find RenderTexture_RenderThread, falling back to first non-default virtual function");
 
         for (auto i = 2; i < 10; ++i) {
             const auto func = ((uintptr_t*)vtable)[stereo_projection_matrix_index + i];
@@ -339,23 +339,23 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         }
 
         if (!render_texture_render_thread_func) {
-            spdlog::error("Failed to find RenderTexture_RenderThread");
+            SPDLOG_ERROR("Failed to find RenderTexture_RenderThread");
             return false;
         }
     }
 
-    spdlog::info("RenderTexture_RenderThread: {:x}", (uintptr_t)*render_texture_render_thread_func);
+    SPDLOG_INFO("RenderTexture_RenderThread: {:x}", (uintptr_t)*render_texture_render_thread_func);
 
     // Scan for the function pointer, it should be in the middle of the vtable.
     auto rendertexture_fn_vtable_middle = utility::scan_ptr(vtable + ((stereo_projection_matrix_index + 2) * sizeof(void*)), 50 * sizeof(void*), *render_texture_render_thread_func);
 
     if (!rendertexture_fn_vtable_middle) {
-        spdlog::error("Failed to find RenderTexture_RenderThread VTable Middle");
+        SPDLOG_ERROR("Failed to find RenderTexture_RenderThread VTable Middle");
         return false;
     }
 
     auto rendertexture_fn_vtable_index = (*rendertexture_fn_vtable_middle - vtable) / sizeof(uintptr_t);
-    spdlog::info("RenderTexture_RenderThread VTable Middle: {} {:x}", rendertexture_fn_vtable_index, (uintptr_t)*rendertexture_fn_vtable_middle);
+    SPDLOG_INFO("RenderTexture_RenderThread VTable Middle: {} {:x}", rendertexture_fn_vtable_index, (uintptr_t)*rendertexture_fn_vtable_middle);
 
     auto render_target_manager_vtable_index = rendertexture_fn_vtable_index + 1 + (2 * (size_t)is_4_18_or_lower);
 
@@ -366,13 +366,13 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     bool is_4_11 = false;
 
     //if (!sdk::is_vfunc_pattern(*(uintptr_t*)get_render_target_manager_func_ptr, "33 C0")) {
-        //spdlog::info("Expected GetRenderTargetManager function at index {} does not return null, scanning forward for return nullptr.", render_target_manager_vtable_index);
+        //SPDLOG_INFO("Expected GetRenderTargetManager function at index {} does not return null, scanning forward for return nullptr.", render_target_manager_vtable_index);
 
         for (;;++render_target_manager_vtable_index) {
             get_render_target_manager_func_ptr = &((uintptr_t*)vtable)[render_target_manager_vtable_index];
 
             if (IsBadReadPtr(*(void**)get_render_target_manager_func_ptr, 1)) {
-                spdlog::error("Failed to find GetRenderTargetManager vtable index, a crash is imminent");
+                SPDLOG_ERROR("Failed to find GetRenderTargetManager vtable index, a crash is imminent");
                 return false;
             }
 
@@ -383,14 +383,14 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 if (distance_from_rendertexture_fn == 10 || distance_from_rendertexture_fn == 11 || distance_from_rendertexture_fn == 12) {
                     is_4_11 = distance_from_rendertexture_fn == 12;
                     m_rendertarget_manager_embedded_in_stereo_device = true;
-                    spdlog::info("Render target manager appears to be directly embedded in the stereo device vtable");
+                    SPDLOG_INFO("Render target manager appears to be directly embedded in the stereo device vtable");
                 } else {
                     // Now this may potentially be the correct index, but we're not quite done yet.
                     // On 4.19 (and possibly others), the index is 1 higher than it should be.
                     // We can tell by checking how many functions in front of this index return null.
                     // if there are two functions in front of this index that return null, we need to add 1 to the index.
-                    spdlog::info("Found potential GetRenderTargetManager function at index {}", render_target_manager_vtable_index);
-                    spdlog::info("Double checking GetRenderTargetManager index...");
+                    SPDLOG_INFO("Found potential GetRenderTargetManager function at index {}", render_target_manager_vtable_index);
+                    SPDLOG_INFO("Double checking GetRenderTargetManager index...");
 
                     int32_t count = 0;
                     for (auto i = render_target_manager_vtable_index + 1; i < render_target_manager_vtable_index + 5; ++i) {
@@ -405,13 +405,13 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                         const auto module_within = utility::get_module_within(addr_of_func);
 
                         if (module_within && utility::scan_displacement_reference(*module_within, addr_of_func)) {
-                            spdlog::info("Crossed over into another vtable's boundaries, aborting double check");
-                            spdlog::info("Reached end of double check at index {}, {} appears to be the correct index.", i, render_target_manager_vtable_index);
+                            SPDLOG_INFO("Crossed over into another vtable's boundaries, aborting double check");
+                            SPDLOG_INFO("Reached end of double check at index {}, {} appears to be the correct index.", i, render_target_manager_vtable_index);
                             break;
                         }
 
                         if (!sdk::is_vfunc_pattern(func, "33 C0")) {
-                            spdlog::info("Reached end of double check at index {}, {} appears to be the correct index.", i, render_target_manager_vtable_index);
+                            SPDLOG_INFO("Reached end of double check at index {}, {} appears to be the correct index.", i, render_target_manager_vtable_index);
                             break;
                         }
 
@@ -419,40 +419,40 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                             ++render_target_manager_vtable_index;
                             get_render_target_manager_func_ptr = &((uintptr_t*)vtable)[render_target_manager_vtable_index];
 
-                            spdlog::info("Adjusted GetRenderTargetManager index to {}", render_target_manager_vtable_index);
+                            SPDLOG_INFO("Adjusted GetRenderTargetManager index to {}", render_target_manager_vtable_index);
                             break;
                         }
                     }
 
-                    spdlog::info("Distance: {}", distance_from_rendertexture_fn);
+                    SPDLOG_INFO("Distance: {}", distance_from_rendertexture_fn);
                 }
 
                 break;
             }
         }
     //} else {
-        //spdlog::info("GetRenderTargetManager function at index {} appears to be valid.", render_target_manager_vtable_index);
+        //SPDLOG_INFO("GetRenderTargetManager function at index {} appears to be valid.", render_target_manager_vtable_index);
     //}
     
     const auto get_stereo_layers_func_ptr = (uintptr_t)(get_render_target_manager_func_ptr + sizeof(void*));
 
     if (get_render_target_manager_func_ptr == 0) {
-        spdlog::error("Failed to find GetRenderTargetManager");
+        SPDLOG_ERROR("Failed to find GetRenderTargetManager");
         return false;
     }
 
     if (get_stereo_layers_func_ptr == 0) {
-        spdlog::error("Failed to find GetStereoLayers");
+        SPDLOG_ERROR("Failed to find GetStereoLayers");
         return false;
     }
 
-    spdlog::info("GetRenderTargetManagerptr: {:x}", (uintptr_t)get_render_target_manager_func_ptr);
-    spdlog::info("GetStereoLayersptr: {:x}", (uintptr_t)get_stereo_layers_func_ptr);
+    SPDLOG_INFO("GetRenderTargetManagerptr: {:x}", (uintptr_t)get_render_target_manager_func_ptr);
+    SPDLOG_INFO("GetStereoLayersptr: {:x}", (uintptr_t)get_stereo_layers_func_ptr);
 
     const auto adjust_view_rect_distance = is_4_18_or_lower ? 2 : 3;
     const auto adjust_view_rect_index = *stereo_view_offset_index - adjust_view_rect_distance;
 
-    spdlog::info("AdjustViewRect Index: {}", adjust_view_rect_index);
+    SPDLOG_INFO("AdjustViewRect Index: {}", adjust_view_rect_index);
     
     auto calculate_stereo_projection_matrix_index = *stereo_view_offset_index + 1;
 
@@ -467,7 +467,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         auto ip = (uint8_t*)potential_func;
         bool found = false;
 
-        spdlog::info("Scanning {:x}...", (uintptr_t)ip);
+        SPDLOG_INFO("Scanning {:x}...", (uintptr_t)ip);
 
         for (auto j = 0; j < 50; ++j) {
             INSTRUX ix{};
@@ -475,12 +475,12 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
             const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
 
             if (!ND_SUCCESS(status)) {
-                spdlog::info("Decoding failed with error {:x}!", (uint32_t)status);
+                SPDLOG_INFO("Decoding failed with error {:x}!", (uint32_t)status);
                 break;
             }
 
             if (ix.Category == ND_CAT_RET || ix.InstructionBytes[0] == 0xE9) {
-                spdlog::info("Encountered RET or JMP at {:x}, aborting scan", (uintptr_t)ip);
+                SPDLOG_INFO("Encountered RET or JMP at {:x}, aborting scan", (uintptr_t)ip);
                 break;
             }
 
@@ -488,7 +488,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 auto called_func = (uintptr_t)(ip + ix.Length + (int32_t)ix.RelativeOffset);
                 auto inner_ins = utility::decode_one((uint8_t*)called_func);
 
-                spdlog::info("called {:x}", (uintptr_t)called_func);
+                SPDLOG_INFO("called {:x}", (uintptr_t)called_func);
                 uintptr_t final_func = 0;
 
                 // Fully resolve the pointer jmps until we reach another module.
@@ -496,7 +496,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                     const auto called_func_ptr = (uintptr_t*)(called_func + inner_ins->Length + (int32_t)inner_ins->Displacement);
                     const auto called_func_ptr_val = *called_func_ptr;
 
-                    spdlog::info("called ptr {:x}", (uintptr_t)called_func_ptr_val);
+                    SPDLOG_INFO("called ptr {:x}", (uintptr_t)called_func_ptr_val);
 
                     inner_ins = utility::decode_one((uint8_t*)called_func_ptr_val);
                     final_func = called_func_ptr_val;
@@ -511,15 +511,15 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                         (final_func == (uintptr_t)GetProcAddress(*module_within, "tanf") ||
                         final_func == (uintptr_t)GetProcAddress(*module_within, "tan"))) 
                     {
-                        spdlog::info("Found CalculateStereoProjectionMatrix: {} {:x}", calculate_stereo_projection_matrix_index + i, potential_func);
+                        SPDLOG_INFO("Found CalculateStereoProjectionMatrix: {} {:x}", calculate_stereo_projection_matrix_index + i, potential_func);
                         calculate_stereo_projection_matrix_index += i;
                         found = true;
                         break;
                     } else {
-                        spdlog::info("Function did not call tanf, skipping");
+                        SPDLOG_INFO("Function did not call tanf, skipping");
                     }
                 } else {
-                    spdlog::info("Failed to resolve inner pointer");
+                    SPDLOG_INFO("Failed to resolve inner pointer");
                 }
             }
 
@@ -541,9 +541,9 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     auto factory = SafetyHookFactory::init();
     auto builder = factory->acquire();
 
-    spdlog::info("AdjustViewRect: {:x}", (uintptr_t)adjust_view_rect_func);
-    spdlog::info("CalculateStereoProjectionMatrix: {:x}", (uintptr_t)calculate_stereo_projection_matrix_func);
-    spdlog::info("IsStereoEnabled: {:x}", (uintptr_t)*is_stereo_enabled_func_ptr);
+    SPDLOG_INFO("AdjustViewRect: {:x}", (uintptr_t)adjust_view_rect_func);
+    SPDLOG_INFO("CalculateStereoProjectionMatrix: {:x}", (uintptr_t)calculate_stereo_projection_matrix_func);
+    SPDLOG_INFO("IsStereoEnabled: {:x}", (uintptr_t)*is_stereo_enabled_func_ptr);
 
     m_has_double_precision = is_using_double_precision(stereo_view_offset_func) || is_using_double_precision(calculate_stereo_projection_matrix_func);
 
@@ -564,7 +564,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         // that all of the virtuals are now part of FFakeStereoRendering
         // instead of being a part of IStereoRenderTargetManager and being returned via GetRenderTargetManager.
         // Only seen in 4.17 and below.
-        spdlog::info("Performing hooks on embedded RenderTargetManager");
+        SPDLOG_INFO("Performing hooks on embedded RenderTargetManager");
 
         // Scan forward from the alleged RenderTexture_RenderThread function to find the
         // real RenderTexture_RenderThread function, because it is different when the
@@ -577,7 +577,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
             const auto func = ((uintptr_t*)og_vtable.data())[i];
 
             if (func == 0 || IsBadReadPtr((void*)func, 3)) {
-                spdlog::error("Failed to find real RenderTexture_RenderThread");
+                SPDLOG_ERROR("Failed to find real RenderTexture_RenderThread");
                 return false;
             }
             
@@ -588,7 +588,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                     render_texture_render_thread_func = func;
                     rendertexture_fn_vtable_index = i;
                     m_render_texture_render_thread_hook = builder.create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
-                    spdlog::info("Real RenderTexture_RenderThread: {} {:x}", rendertexture_fn_vtable_index, (uintptr_t)*render_texture_render_thread_func);
+                    SPDLOG_INFO("Real RenderTexture_RenderThread: {} {:x}", rendertexture_fn_vtable_index, (uintptr_t)*render_texture_render_thread_func);
                     break;
                 }
 
@@ -603,20 +603,20 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
             const auto func = ((uintptr_t*)og_vtable.data())[i];
 
             if (func == 0 || IsBadReadPtr((void*)func, 3)) {
-                spdlog::error("Failed to find calculate render target size index, falling back to hardcoded index");
+                SPDLOG_ERROR("Failed to find calculate render target size index, falling back to hardcoded index");
                 calculate_render_target_size_index = rendertexture_fn_vtable_index - 3;
                 break;
             }
 
             if (sdk::is_vfunc_pattern(func, "C3") || sdk::is_vfunc_pattern(func, "C2 00 00")) {
-                spdlog::info("Dynamically found CalculateRenderTargetSize index: {}", i);
+                SPDLOG_INFO("Dynamically found CalculateRenderTargetSize index: {}", i);
                 calculate_render_target_size_index = i;
                 break;
             }
         }
 
         const auto calculate_render_target_size_func_ptr = &((uintptr_t*)vtable)[calculate_render_target_size_index];
-        spdlog::info("CalculateRenderTargetSize index: {}", calculate_render_target_size_index);
+        SPDLOG_INFO("CalculateRenderTargetSize index: {}", calculate_render_target_size_index);
 
         // To be seen if this one needs automated analysis
         const auto need_reallocate_viewport_render_target_index = calculate_render_target_size_index + 1;
@@ -641,8 +641,8 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
             should_use_separate_render_target_is_bad = true;
         }
 
-        spdlog::info("NeedReallocateViewportRenderTarget index: {}", need_reallocate_viewport_render_target_index);
-        spdlog::info("ShouldUseSeparateRenderTarget index: {}", should_use_separate_render_target_index);
+        SPDLOG_INFO("NeedReallocateViewportRenderTarget index: {}", need_reallocate_viewport_render_target_index);
+        SPDLOG_INFO("ShouldUseSeparateRenderTarget index: {}", should_use_separate_render_target_index);
 
         // Scan forward from RenderTexture_RenderThread for the first virtual that returns false
         int32_t allocate_render_target_index = 0;
@@ -651,25 +651,25 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
             const auto func = ((uintptr_t*)og_vtable.data())[i];
 
             if (func == 0 || IsBadReadPtr((void*)func, 3)) {
-                spdlog::error("Failed to find allocate render target index, falling back to hardcoded index");
+                SPDLOG_ERROR("Failed to find allocate render target index, falling back to hardcoded index");
                 allocate_render_target_index = render_target_manager_vtable_index + 3;
                 break;
             }
 
             if (sdk::is_vfunc_pattern(func, "32 C0")) {
-                spdlog::info("Dynamically found AllocateRenderTarget index: {}", i);
+                SPDLOG_INFO("Dynamically found AllocateRenderTarget index: {}", i);
                 allocate_render_target_index = i;
                 break;
             }
         }
 
         const auto allocate_render_target_func_ptr = &((uintptr_t*)vtable)[allocate_render_target_index];
-        spdlog::info("AllocateRenderTarget index: {}", allocate_render_target_index);
+        SPDLOG_INFO("AllocateRenderTarget index: {}", allocate_render_target_index);
 
         m_embedded_rtm.calculate_render_target_size_hook = 
             std::make_unique<PointerHook>((void**)calculate_render_target_size_func_ptr, +[](void* self, const FViewport& viewport, uint32_t& x, uint32_t& y) {
             #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-                spdlog::info("CalculateRenderTargetSize (embedded)");
+                SPDLOG_INFO("CalculateRenderTargetSize (embedded)");
             #endif
 
                 return g_hook->get_render_target_manager()->calculate_render_target_size(viewport, x, y);
@@ -682,7 +682,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 ETextureCreateFlags lags, ETextureCreateFlags targetable_texture_flags, FTexture2DRHIRef& out_texture,
                 FTexture2DRHIRef& out_shader_resource, uint32_t num_samples) -> bool {
             #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-                spdlog::info("AllocateRenderTargetTexture (embedded)");
+                SPDLOG_INFO("AllocateRenderTargetTexture (embedded)");
             #endif
 
                 return g_hook->get_render_target_manager()->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &out_texture, &out_shader_resource);
@@ -692,7 +692,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         m_embedded_rtm.should_use_separate_render_target_hook = 
             std::make_unique<PointerHook>((void**)should_use_separate_render_target_func_ptr, +[](void* self) -> bool {
             #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-                spdlog::info("ShouldUseSeparateRenderTarget (embedded)");
+                SPDLOG_INFO("ShouldUseSeparateRenderTarget (embedded)");
             #endif
 
                 auto vr = VR::get();
@@ -705,7 +705,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
             m_embedded_rtm.need_reallocate_viewport_render_target_hook = 
                 std::make_unique<PointerHook>((void**)need_reallocate_viewport_render_target_func_ptr, +[](void* self, FViewport* viewport) -> bool {
                 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-                    spdlog::info("NeedReallocateViewportRenderTarget (embedded)");
+                    SPDLOG_INFO("NeedReallocateViewportRenderTarget (embedded)");
                 #endif
 
                     return g_hook->get_render_target_manager()->need_reallocate_view_target(*viewport);
@@ -717,13 +717,13 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     m_is_stereo_enabled_hook = std::make_unique<PointerHook>((void**)is_stereo_enabled_func_ptr, (void*)&is_stereo_enabled);
 
     // scan for GetDesiredNumberOfViews function, we use this function to perform AFR if needed
-    spdlog::info("Searching for GetDesiredNumberOfViews function...");
+    SPDLOG_INFO("Searching for GetDesiredNumberOfViews function...");
 
     for (auto i = 1; i < 20; ++i) {
         auto func_ptr = &((uintptr_t*)vtable)[i];
 
         if (IsBadReadPtr((void*)*func_ptr, 8)) {
-            spdlog::info("Could not locate GetDesiredNumberOfViews function, this is okay, not really needed");
+            SPDLOG_INFO("Could not locate GetDesiredNumberOfViews function, this is okay, not really needed");
             break;
         }
 
@@ -731,13 +731,13 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         if (sdk::is_vfunc_pattern(*func_ptr, "0F B6 C2 FF C0 C3") ||
             sdk::is_vfunc_pattern(*func_ptr, "84 D2 74 04 8B 41 14 C3 B8 01")) 
         {
-            spdlog::info("Found GetDesiredNumberOfViews function at index: {}", i);
+            SPDLOG_INFO("Found GetDesiredNumberOfViews function at index: {}", i);
             m_get_desired_number_of_views_hook = std::make_unique<PointerHook>((void**)func_ptr, (void*)&get_desired_number_of_views_hook);
             break;
         }
     }
 
-    spdlog::info("Leaving FFakeStereoRenderingHook::hook");
+    SPDLOG_INFO("Leaving FFakeStereoRenderingHook::hook");
 
     const auto renderer_module = sdk::get_ue_module(L"Renderer");
     const auto backbuffer_format_cvar = sdk::find_cvar_by_description(L"Defines the default back buffer pixel format.", L"r.DefaultBackBufferPixelFormat", 4, renderer_module);
@@ -745,11 +745,11 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     // In 4.18 this doesn't exist. Not much we can do about that.
     if (backbuffer_format_cvar) {
-        spdlog::info("Backbuffer Format CVar: {:x}", (uintptr_t)*backbuffer_format_cvar);
+        SPDLOG_INFO("Backbuffer Format CVar: {:x}", (uintptr_t)*backbuffer_format_cvar);
         *(int32_t*)(*(uintptr_t*)*backbuffer_format_cvar + 0) = 0;   // 8bit RGBA, which is what VR headsets support
         *(int32_t*)(*(uintptr_t*)*backbuffer_format_cvar + 0x4) = 0; // 8bit RGBA, which is what VR headsets support
     } else {
-        spdlog::error("Failed to find backbuffer format cvar, continuing anyways...");
+        SPDLOG_ERROR("Failed to find backbuffer format cvar, continuing anyways...");
     }
 
     // make a shadow copy of FFakeStereoRendering's vtable to get past weird compiler optimizations
@@ -759,8 +759,8 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     auto active_stereo_device = locate_active_stereo_rendering_device();
 
     if (active_stereo_device) {
-        spdlog::info("Found active stereo device: {:x}", (uintptr_t)*active_stereo_device);
-        spdlog::info("Overwriting vtable...");
+        SPDLOG_INFO("Found active stereo device: {:x}", (uintptr_t)*active_stereo_device);
+        SPDLOG_INFO("Overwriting vtable...");
 
         static std::vector<uintptr_t> shadow_vtable{};
         auto& vtable = *(uintptr_t**)*active_stereo_device;
@@ -771,7 +771,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
         vtable = shadow_vtable.data();
     } else {
-        spdlog::info("Current stereo device is null, cannot overwrite vtable");
+        SPDLOG_INFO("Current stereo device is null, cannot overwrite vtable");
         patch_vtable_checks(); // fallback to patching vtable checks
     }
 
@@ -780,7 +780,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     m_finished_hooking = true;
 
-    spdlog::info("Finished hooking FFakeStereoRendering!");
+    SPDLOG_INFO("Finished hooking FFakeStereoRendering!");
 
     return true;
 }
@@ -801,7 +801,7 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
     // the downside is it will be much more difficult to figure out the 
     // proper vtable indices for the functions we need to hook
     // and we will need to actually implement some of the functions
-    spdlog::info("Attempting to create a stereo device for the game using nonstandard method");
+    SPDLOG_INFO("Attempting to create a stereo device for the game using nonstandard method");
     m_fallback_vtable.resize(30);
 
     // Give all of the functions placeholders.
@@ -813,10 +813,10 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
 
     // Actually implement the ones we care about now.
     auto idx = 0;
-    //m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo) -> void { spdlog::info("Destructor called?");  }; // destructor.
+    //m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo) -> void { SPDLOG_INFO("Destructor called?");  }; // destructor.
     m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo) -> bool { 
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-        spdlog::info("IsStereoEnabled called: {:x}", (uintptr_t)_ReturnAddress());
+        SPDLOG_INFO("IsStereoEnabled called: {:x}", (uintptr_t)_ReturnAddress());
 #endif
 
         return g_hook->is_stereo_enabled(stereo); 
@@ -834,7 +834,7 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
     // in this version the index is passed...?
     /*m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo, uint32_t index, Vector2f* bounds) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-        spdlog::info("GetTextSafeRegionBounds called");
+        SPDLOG_INFO("GetTextSafeRegionBounds called");
 #endif
 
         bounds->x = 0.75f;
@@ -853,7 +853,7 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
 
     m_fallback_vtable[idx++] = +[](FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-        spdlog::info("CalculateStereoProjectionMatrix called: {:x} {} {:x}", (uintptr_t)_ReturnAddress(), view_index, (uintptr_t)out);
+        SPDLOG_INFO("CalculateStereoProjectionMatrix called: {:x} {} {:x}", (uintptr_t)_ReturnAddress(), view_index, (uintptr_t)out);
 #endif
 
         if (!g_hook->m_has_double_precision) {
@@ -885,7 +885,7 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
     auto engine = sdk::UEngine::get();
 
     if (engine == nullptr) {
-        spdlog::error("Failed to get engine pointer! Cannot create stereo device!");
+        SPDLOG_ERROR("Failed to get engine pointer! Cannot create stereo device!");
         return false;
     }
 
@@ -900,7 +900,7 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
     hook_game_viewport_client();
     setup_view_extensions();
 
-    spdlog::info("Finished creating stereo device for the game using nonstandard method");
+    SPDLOG_INFO("Finished creating stereo device for the game using nonstandard method");
 
     m_finished_hooking = true;
 
@@ -908,13 +908,13 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
 }
 
 bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
-    spdlog::info("Attempting to hook UGameViewportClient::Draw...");
+    SPDLOG_INFO("Attempting to hook UGameViewportClient::Draw...");
 
     const auto engine_module = sdk::get_ue_module(L"Engine");
     const auto canvas_object_strings = utility::scan_strings(engine_module, L"CanvasObject", true);
 
     if (canvas_object_strings.empty()) {
-        spdlog::error("Failed to find CanvasObject string!");
+        SPDLOG_ERROR("Failed to find CanvasObject string!");
         m_has_game_viewport_client_draw_hook = false;
         return false;
     }
@@ -922,12 +922,12 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
     std::optional<uintptr_t> game_viewport_client_draw{};
 
     for (const auto canvas_object_string : canvas_object_strings) {
-        spdlog::info("Analyzing CanvasObject string at {:x}", (uintptr_t)canvas_object_string);
+        SPDLOG_INFO("Analyzing CanvasObject string at {:x}", (uintptr_t)canvas_object_string);
 
         const auto string_ref = utility::scan_displacement_reference(engine_module, canvas_object_string);
 
         if (!string_ref) {
-            spdlog::info(" No string reference, continuing on to next string...");
+            SPDLOG_INFO(" No string reference, continuing on to next string...");
             continue;
         }
 
@@ -941,12 +941,12 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
 
     // Luckily this function is the only one with a CanvasObject string.
     if (!game_viewport_client_draw) {
-        spdlog::error("Failed to find UGameViewportClient::Draw function!");
+        SPDLOG_ERROR("Failed to find UGameViewportClient::Draw function!");
         m_has_game_viewport_client_draw_hook = false;
         return false;
     }
 
-    spdlog::info("Found UGameViewportClient::Draw function at {:x}", (uintptr_t)*game_viewport_client_draw);
+    SPDLOG_INFO("Found UGameViewportClient::Draw function at {:x}", (uintptr_t)*game_viewport_client_draw);
 
     auto factory = SafetyHookFactory::init();
     auto builder = factory->acquire();
@@ -956,7 +956,7 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
 
     return true;
 } catch(...) {
-    spdlog::error("Failed to hook UGameViewportClient!");
+    SPDLOG_ERROR("Failed to hook UGameViewportClient!");
     return false;
 }
 
@@ -985,7 +985,7 @@ void FFakeStereoRenderingHook::viewport_draw_hook(void* viewport, bool should_pr
     static bool once = true;
 
     if (once) {
-        spdlog::info("FViewport::Draw called for the first time.");
+        SPDLOG_INFO("FViewport::Draw called for the first time.");
         once = false;
     }
 
@@ -1022,7 +1022,7 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_cli
     static bool once = true;
 
     if (once) {
-        spdlog::info("UGameViewportClient::Draw called for the first time.");
+        SPDLOG_INFO("UGameViewportClient::Draw called for the first time.");
         once = false;
     }
 
@@ -1030,7 +1030,7 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_cli
     static bool run_anyways = false;
 
     if (hook_attempts < 100 && !g_hook->m_hooked_game_engine_tick && g_hook->m_attempted_hook_game_engine_tick) {
-        spdlog::info("Performing alternative UGameEngine::Tick hook for synced AFR.");
+        SPDLOG_INFO("Performing alternative UGameEngine::Tick hook for synced AFR.");
 
         ++hook_attempts;
 
@@ -1041,7 +1041,7 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_cli
         const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
 
         for (auto i = 0; i < depth; ++i) {
-            spdlog::info("Stack[{}]: {:x}", i, stack[i]);
+            SPDLOG_INFO("Stack[{}]: {:x}", i, stack[i]);
         }
 
         for (auto i = 3; i < depth; ++i) {
@@ -1050,7 +1050,7 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_cli
             g_hook->attempt_hook_game_engine_tick(ret);
 
             if (g_hook->m_hooked_game_engine_tick) {
-                spdlog::info("Successfully hooked UGameEngine::Tick for synced AFR.");
+                SPDLOG_INFO("Successfully hooked UGameEngine::Tick for synced AFR.");
                 break;
             }
         }
@@ -1093,21 +1093,21 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_cli
             if (depth >= 2) {
                 // Log the stack functions
                 for (auto i = 0; i < depth; ++i) {
-                    spdlog::info("(Stack[{}]: {:x}", i, stack[i]);
+                    SPDLOG_INFO("(Stack[{}]: {:x}", i, stack[i]);
                 }
 
                 auto try_hook_index = [&](uint32_t index) -> bool {
-                    spdlog::info("Attempting to locate FViewport::Draw function @ stack[{}]", index);
+                    SPDLOG_INFO("Attempting to locate FViewport::Draw function @ stack[{}]", index);
 
                     const auto viewport_draw_middle = stack[index];
                     const auto viewport_draw = utility::find_function_start_with_call(viewport_draw_middle);
 
                     if (!viewport_draw) {
-                        spdlog::error("Failed to find viewport draw function @ {}", index);
+                        SPDLOG_ERROR("Failed to find viewport draw function @ {}", index);
                         return false;
                     }
 
-                    spdlog::info("Found FViewport::Draw function at {:x}", (uintptr_t)*viewport_draw);
+                    SPDLOG_INFO("Found FViewport::Draw function at {:x}", (uintptr_t)*viewport_draw);
 
                     auto factory = SafetyHookFactory::init();
                     auto builder = factory->acquire();
@@ -1119,7 +1119,7 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_cli
                 if (!try_hook_index(1)) {
                     // Fallback to index 3, on some UE4 games the viewport draw function is called from a different stack index.
                     if (!try_hook_index(2)) {
-                        spdlog::error("Failed to find viewport draw function! Cannot perform synced AFR!");
+                        SPDLOG_ERROR("Failed to find viewport draw function! Cannot perform synced AFR!");
                     }
                 }
             }
@@ -1230,7 +1230,7 @@ struct SceneViewExtensionAnalyzer {
                 }
             }
 
-            spdlog::info("[Stage 1] Found most called index to be {} with {} calls", max_index, max_count);
+            SPDLOG_INFO("[Stage 1] Found most called index to be {} with {} calls", max_index, max_count);
 
             functions.clear();
             FillVtable<g_view_extension_vtable.size() - 1>::fill2(g_view_extension_vtable);
@@ -1244,7 +1244,7 @@ struct SceneViewExtensionAnalyzer {
             is_active_this_frame_index = max_index;
         } else {
             if (functions[N].call_count == 1) {
-                spdlog::info("[Stage 1] ISceneViewExtension Index {} called for the first time!", N);
+                SPDLOG_INFO("[Stage 1] ISceneViewExtension Index {} called for the first time!", N);
             }
         }
 
@@ -1267,7 +1267,7 @@ struct SceneViewExtensionAnalyzer {
             auto& func = functions[N];
 
             if (func.call_count++ == 0) {
-                spdlog::info("[Stage 2] SceneViewExtension Index {} called for the first time!", N);
+                SPDLOG_INFO("[Stage 2] SceneViewExtension Index {} called for the first time!", N);
             }
 
             const auto& last_view_family_data_a2 = func.a2_data;
@@ -1280,7 +1280,7 @@ struct SceneViewExtensionAnalyzer {
 
                     if (b == a + 1 && a >= 10) { // rule out really low frame counts (this could be something else)
                         if (func.frame_count_a2 + 1 == b) {
-                            spdlog::info("[A2] Function index {} Found frame count offset at {:x}, ({})", N, i, b);
+                            SPDLOG_INFO("[A2] Function index {} Found frame count offset at {:x}, ({})", N, i, b);
 
                             func.frame_count_offset_a2 = i;
                             ++func.times_frame_count_correct_a2;
@@ -1306,9 +1306,9 @@ struct SceneViewExtensionAnalyzer {
                                     func_next->times_frame_count_correct_a3 >= 50 && 
                                     func.frame_count_offset_a2 == func_next->frame_count_offset_a3) 
                                 {
-                                    spdlog::info("Found final frame count offset at {:x}", i);
-                                    spdlog::info("Found BeginRenderViewFamily at index {}", N);
-                                    spdlog::info("Found PreRenderViewFamily_RenderThread at index {}", next_index);
+                                    SPDLOG_INFO("Found final frame count offset at {:x}", i);
+                                    SPDLOG_INFO("Found BeginRenderViewFamily at index {}", N);
+                                    SPDLOG_INFO("Found PreRenderViewFamily_RenderThread at index {}", next_index);
                                     has_found_begin_render_viewfamily = true;
                                     begin_render_viewfamily_index = N;
                                     pre_render_viewfamily_renderthread_index = next_index;
@@ -1337,7 +1337,7 @@ struct SceneViewExtensionAnalyzer {
 
                     if (b == a + 1 && a >= 10) { // rule out really low frame counts (this could be something else)
                         if (func.frame_count_a3 + 1 == b) {
-                            spdlog::info("[A3] Function index {} Found frame count offset at {:x} ({})", N, i, b);
+                            SPDLOG_INFO("[A3] Function index {} Found frame count offset at {:x} ({})", N, i, b);
                             ++func.times_frame_count_correct_a3;
                         }
 
@@ -1368,7 +1368,7 @@ struct SceneViewExtensionAnalyzer {
     static void setup_view_extension_hook() {
         std::scoped_lock _{dummy_mutex};
 
-        spdlog::info("Setting up BeginRenderViewFamily hook...");
+        SPDLOG_INFO("Setting up BeginRenderViewFamily hook...");
 
         const auto setup_view_family_index = index_0_called ? 0 : 1;
 
@@ -1376,7 +1376,7 @@ struct SceneViewExtensionAnalyzer {
             static bool once = true;
 
             if (once) {
-                spdlog::info("Called SetupViewFamily for the first time");
+                SPDLOG_INFO("Called SetupViewFamily for the first time");
                 once = false;
             }
 
@@ -1397,7 +1397,7 @@ struct SceneViewExtensionAnalyzer {
             static bool once = true;
 
             if (once) {
-                spdlog::info("Called BeginRenderViewFamily for the first time");
+                SPDLOG_INFO("Called BeginRenderViewFamily for the first time");
                 once = false;
             }
 
@@ -1437,7 +1437,7 @@ struct SceneViewExtensionAnalyzer {
             static bool once = true;
 
             if (once) {
-                spdlog::info("Called PreRenderViewFamily_RenderThread for the first time");
+                SPDLOG_INFO("Called PreRenderViewFamily_RenderThread for the first time");
                 once = false;
             }
             
@@ -1480,7 +1480,7 @@ struct SceneViewExtensionAnalyzer {
                     static bool once_slate = true;
 
                     if (once_slate) {
-                        spdlog::info("Called enqueued function on the Slate thread for the first time! Frame count: {}", frame_count);
+                        SPDLOG_INFO("Called enqueued function on the Slate thread for the first time! Frame count: {}", frame_count);
                         once_slate = false;
                     }
 
@@ -1489,15 +1489,15 @@ struct SceneViewExtensionAnalyzer {
                     if (l->root != nullptr) {
                         if (!analyzed_root_already) try {
                             if (utility::get_module_within(*(void**)l->root).value_or(nullptr) == nullptr) {
-                                spdlog::info("Old FRHICommandBase detected");
+                                SPDLOG_INFO("Old FRHICommandBase detected");
                                 is_old_command_base = true;
                             } else {
-                                spdlog::info("New FRHICommandBase detected");
+                                SPDLOG_INFO("New FRHICommandBase detected");
                             }
 
                             analyzed_root_already = true;
                         } catch(...) {
-                            spdlog::error("Failed to analyze FRHICommandBase");
+                            SPDLOG_ERROR("Failed to analyze FRHICommandBase");
                             analyzed_root_already = true;
                         }
 
@@ -1554,7 +1554,7 @@ struct SceneViewExtensionAnalyzer {
                                 continue;
                             }
 
-                            spdlog::info("Possible UE5 command list found at offset 0x{:x}", i);
+                            SPDLOG_INFO("Possible UE5 command list found at offset 0x{:x}", i);
                             ue5_command_offset = i;
                             cmd_list = (sdk::FRHICommandListBase*)value;
                             break;
@@ -1568,16 +1568,16 @@ struct SceneViewExtensionAnalyzer {
                         if (g_hook->has_double_precision()) {
                             analyze_for_ue5();
                         } else {
-                            spdlog::info("Old FRHICommandBase detected");
+                            SPDLOG_INFO("Old FRHICommandBase detected");
                             is_old_command_base = true;
                         }
                     } else {
-                        spdlog::info("New FRHICommandBase detected");
+                        SPDLOG_INFO("New FRHICommandBase detected");
                     }
 
                     analyzed_root_already = true;
                 } catch(...) {
-                    spdlog::error("Failed to analyze root command");
+                    SPDLOG_ERROR("Failed to analyze root command");
                     analyzed_root_already = true;
                 }
 
@@ -1598,7 +1598,7 @@ struct SceneViewExtensionAnalyzer {
             }
         };
 
-        spdlog::info("Done setting up BeginRenderViewFamily hook!");
+        SPDLOG_INFO("Done setting up BeginRenderViewFamily hook!");
     }
 
     template<int N>
@@ -1609,7 +1609,7 @@ struct SceneViewExtensionAnalyzer {
         static bool once = true;
 
         if (once) {
-            spdlog::info("[ISceneViewExtension] Successfully hijacked command list! {}", N);
+            SPDLOG_INFO("[ISceneViewExtension] Successfully hijacked command list! {}", N);
             once = false;
         }
 
@@ -1700,7 +1700,7 @@ struct SceneViewExtensionAnalyzer {
             static bool once = true;
 
             if (once) {
-                spdlog::info("[ISceneViewExtension] Successfully hijacked command list!");
+                SPDLOG_INFO("[ISceneViewExtension] Successfully hijacked command list!");
                 once = false;
             }
 
@@ -1761,19 +1761,19 @@ void SceneViewExtensionAnalyzer::FillVtable<N>::fill2(std::array<uintptr_t, 50>&
 }
 
 bool FFakeStereoRenderingHook::setup_view_extensions() try {
-    spdlog::info("Attempting to set up view extensions...");
+    SPDLOG_INFO("Attempting to set up view extensions...");
 
     auto engine = sdk::UEngine::get();
 
     if (engine == nullptr) {
-        spdlog::error("Failed to get engine pointer! Cannot set up view extensions!");
+        SPDLOG_ERROR("Failed to get engine pointer! Cannot set up view extensions!");
         return false;
     }
 
     const auto active_stereo_device = locate_active_stereo_rendering_device();
 
     if (!active_stereo_device || !s_stereo_rendering_device_offset) {
-        spdlog::error("Failed to locate active stereo rendering device!");
+        SPDLOG_ERROR("Failed to locate active stereo rendering device!");
         return false;
     }
 
@@ -1798,55 +1798,55 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
     FSceneViewExtensions& view_extensions = m_rendertarget_manager_embedded_in_stereo_device ?  
                                             *(FSceneViewExtensions*)potential_view_extensions : *view_extensions_tweakptr.reference;
 
-    spdlog::info("Current ext ptr: {:x}", (uintptr_t)view_extensions.extensions.data);
-    spdlog::info("Current ext count: {}", view_extensions.extensions.count);
-    spdlog::info("Current ext capacity: {}", view_extensions.extensions.capacity);
+    SPDLOG_INFO("Current ext ptr: {:x}", (uintptr_t)view_extensions.extensions.data);
+    SPDLOG_INFO("Current ext count: {}", view_extensions.extensions.count);
+    SPDLOG_INFO("Current ext capacity: {}", view_extensions.extensions.capacity);
 
     // Verifications on the current memory of the FSceneViewExtensions, because pre-4.10 (?) the view extensions array did not actually exist
     if (m_rendertarget_manager_embedded_in_stereo_device) {
-        spdlog::info("Performing verifications on the current memory of the FSceneViewExtensions...");
+        SPDLOG_INFO("Performing verifications on the current memory of the FSceneViewExtensions...");
 
         const auto& current_view_extensions_ptr_value = view_extensions.extensions;
 
         // Check if current value is non zero and points to invalid memory
         if (current_view_extensions_ptr_value.data != nullptr && IsBadReadPtr((void*)current_view_extensions_ptr_value.data, sizeof(void*))) {
-            spdlog::error("Usual view extensions pointer is non-zero but points to invalid memory! Cannot set up view extensions!");
-            spdlog::error("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+            SPDLOG_ERROR("Usual view extensions pointer is non-zero but points to invalid memory! Cannot set up view extensions!");
+            SPDLOG_ERROR("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
             return false;
         }
 
         // Check if count is greater than capacity, which is not possible
         if ((uint32_t)current_view_extensions_ptr_value.count > (uint32_t)current_view_extensions_ptr_value.capacity) {
-            spdlog::error("Usual view extensions count is greater than capacity! Cannot set up view extensions!");
-            spdlog::error("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+            SPDLOG_ERROR("Usual view extensions count is greater than capacity! Cannot set up view extensions!");
+            SPDLOG_ERROR("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
             return false;
         }
 
         // Check if count or capacity is negative, which is not possible
         if ((int32_t)current_view_extensions_ptr_value.count < 0 || (int32_t)current_view_extensions_ptr_value.capacity < 0) {
-            spdlog::error("Usual view extensions count or capacity is negative! Cannot set up view extensions!");
-            spdlog::error("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+            SPDLOG_ERROR("Usual view extensions count or capacity is negative! Cannot set up view extensions!");
+            SPDLOG_ERROR("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
             return false;
         }
         
         // Check if the memory at count treated as a pointer points to valid memory, which is not possible
         const auto count_as_ptr = *(void**)&current_view_extensions_ptr_value.count;
         if (count_as_ptr != nullptr && !IsBadReadPtr(count_as_ptr, sizeof(void*))) {
-            spdlog::error("Usual view extensions count is actually a pointer to valid memory! Cannot set up view extensions!");
-            spdlog::error("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+            SPDLOG_ERROR("Usual view extensions count is actually a pointer to valid memory! Cannot set up view extensions!");
+            SPDLOG_ERROR("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
             return false;
         }
 
         // Check if the data pointer is null but capacity is greater than 0, which is not possible
         if (current_view_extensions_ptr_value.data == nullptr && current_view_extensions_ptr_value.capacity > 0) {
-            spdlog::info("Usual view extensions data pointer is null but capacity is greater than 0! Cannot set up view extensions!");
-            spdlog::info("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+            SPDLOG_INFO("Usual view extensions data pointer is null but capacity is greater than 0! Cannot set up view extensions!");
+            SPDLOG_INFO("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
         }
 
         // Check if the data pointer is non-null but the capacity is 0, which is not possible
         if (current_view_extensions_ptr_value.data != nullptr && current_view_extensions_ptr_value.capacity == 0) {
-            spdlog::error("Usual view extensions data pointer is non-null but capacity is 0! Cannot set up view extensions!");
-            spdlog::error("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+            SPDLOG_ERROR("Usual view extensions data pointer is non-null but capacity is 0! Cannot set up view extensions!");
+            SPDLOG_ERROR("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
             return false;
         }
 
@@ -1856,16 +1856,16 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
                 const auto ext = current_view_extensions_ptr_value.data[i].reference;
 
                 if (IsBadReadPtr((void*)ext, sizeof(void*))) {
-                    spdlog::error("Usual view extensions array contains an invalid entry! Cannot set up view extensions!");
-                    spdlog::error("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+                    SPDLOG_ERROR("Usual view extensions array contains an invalid entry! Cannot set up view extensions!");
+                    SPDLOG_ERROR("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
                     return false;
                 }
 
                 const auto ext_vtable = *(void**)ext;
 
                 if (IsBadReadPtr((void*)ext_vtable, sizeof(void*))) {
-                    spdlog::error("Usual view extensions array contains an entry with an invalid vtable! Cannot set up view extensions!");
-                    spdlog::error("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
+                    SPDLOG_ERROR("Usual view extensions array contains an entry with an invalid vtable! Cannot set up view extensions!");
+                    SPDLOG_ERROR("This may mean that the UE version is very old and this method of hooking the view extensions is not supported.");
                     return false;
                 }
             }
@@ -1873,7 +1873,7 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
     }
 
     if (view_extensions.extensions.data == nullptr || view_extensions.extensions.data[0].reference == nullptr || view_extensions.extensions.count == 0) {
-        spdlog::info("Allocating new view extensions array...");
+        SPDLOG_INFO("Allocating new view extensions array...");
 
         auto ext_ptr = new TWeakPtr<ISceneViewExtension>();
         ext_ptr->allocate_naive();
@@ -1888,7 +1888,7 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
         auto& entry = view_extensions.extensions.data[0];
 
         if (entry.reference == nullptr) {
-            spdlog::error("Failed to get first view extension entry!");
+            SPDLOG_ERROR("Failed to get first view extension entry!");
             return false;
         }
 
@@ -1901,7 +1901,7 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
             SceneViewExtensionAnalyzer::FillVtable<g_view_extension_vtable.size()-1>::fill(g_view_extension_vtable);
         } else {
             // Skip straight to stage 2.
-            spdlog::info("Skipping view extension stage 1...");
+            SPDLOG_INFO("Skipping view extension stage 1...");
             SceneViewExtensionAnalyzer::FillVtable<g_view_extension_vtable.size()-1>::fill2(g_view_extension_vtable);
         }
 
@@ -1917,12 +1917,12 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
         // TODO: Allocate a new one.
         m_has_view_extension_hook = false;
 
-        spdlog::info("Failed to set up view extensions! (not yet implemented to allocate a new one)");
+        SPDLOG_INFO("Failed to set up view extensions! (not yet implemented to allocate a new one)");
     }
 
     return true;
 } catch(...) {
-    spdlog::error("Unknown exception while setting up view extensions!");
+    SPDLOG_ERROR("Unknown exception while setting up view extensions!");
     return false;
 }
 
@@ -1941,17 +1941,17 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_
         fake_stereo_rendering_constructor = utility::find_function_from_string_ref(engine_dll, L"r.StereoEmulationFOV");
 
         if (!fake_stereo_rendering_constructor) {
-            spdlog::error("Failed to find FFakeStereoRendering constructor");
+            SPDLOG_ERROR("Failed to find FFakeStereoRendering constructor");
             return std::nullopt;
         }
     }
 
     if (!fake_stereo_rendering_constructor) {
-        spdlog::error("Failed to find FFakeStereoRendering constructor");
+        SPDLOG_ERROR("Failed to find FFakeStereoRendering constructor");
         return std::nullopt;
     }
 
-    spdlog::info("FFakeStereoRendering constructor: {:x}", (uintptr_t)*fake_stereo_rendering_constructor);
+    SPDLOG_INFO("FFakeStereoRendering constructor: {:x}", (uintptr_t)*fake_stereo_rendering_constructor);
     cached_result = *fake_stereo_rendering_constructor;
 
     return *fake_stereo_rendering_constructor;
@@ -1974,11 +1974,11 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_
     if (!fake_stereo_rendering_constructor) {
         // If this happened, then that's bad news, the UE version is probably extremely old
         // so we have to use this fallback method.
-        spdlog::info("Failed to locate FFakeStereoRendering constructor, using fallback method");
+        SPDLOG_INFO("Failed to locate FFakeStereoRendering constructor, using fallback method");
         const auto initialize_hmd_device = sdk::UEngine::get_initialize_hmd_device_address();
 
         if (!initialize_hmd_device) {
-            spdlog::error("Failed to find FFakeStereoRendering VTable via fallback method");
+            SPDLOG_ERROR("Failed to find FFakeStereoRendering VTable via fallback method");
             return std::nullopt;
         }
 
@@ -1987,18 +1987,18 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_
         const auto instruction = utility::scan_disasm(*initialize_hmd_device, 100, "48 8D 05 ? ? ? ?");
 
         if (!instruction) {
-            spdlog::error("Failed to find FFakeStereoRendering VTable via fallback method (2)");
+            SPDLOG_ERROR("Failed to find FFakeStereoRendering VTable via fallback method (2)");
             return std::nullopt;
         }
 
         const auto result = utility::calculate_absolute(*instruction + 3);
 
         if (!result) {
-            spdlog::error("Failed to find FFakeStereoRendering VTable via fallback method (3)");
+            SPDLOG_ERROR("Failed to find FFakeStereoRendering VTable via fallback method (3)");
             return std::nullopt;
         }
 
-        spdlog::info("FFakeStereoRendering VTable: {:x}", (uintptr_t)result);
+        SPDLOG_INFO("FFakeStereoRendering VTable: {:x}", (uintptr_t)result);
         cached_result = result;
 
         return result;
@@ -2007,18 +2007,18 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_
     const auto vtable_ref = utility::scan(*fake_stereo_rendering_constructor, 100, "48 8D 05 ? ? ? ?");
 
     if (!vtable_ref) {
-        spdlog::error("Failed to find FFakeStereoRendering VTable Reference");
+        SPDLOG_ERROR("Failed to find FFakeStereoRendering VTable Reference");
         return std::nullopt;
     }
 
     const auto vtable = utility::calculate_absolute(*vtable_ref + 3);
 
     if (!vtable) {
-        spdlog::error("Failed to find FFakeStereoRendering VTable");
+        SPDLOG_ERROR("Failed to find FFakeStereoRendering VTable");
         return std::nullopt;
     }
 
-    spdlog::info("FFakeStereoRendering VTable: {:x}", (uintptr_t)vtable);
+    SPDLOG_INFO("FFakeStereoRendering VTable: {:x}", (uintptr_t)vtable);
     cached_result = vtable;
 
     return vtable;
@@ -2028,15 +2028,15 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_active_stereo_renderin
     auto engine = (uintptr_t)sdk::UEngine::get();
 
     if (engine == 0) {
-        spdlog::error("GEngine does not appear to be instantiated, cannot verify stereo rendering device is setup.");
+        SPDLOG_ERROR("GEngine does not appear to be instantiated, cannot verify stereo rendering device is setup.");
         return std::nullopt;
     }
 
-    spdlog::info("Checking engine pointers for StereoRenderingDevice...");
+    SPDLOG_INFO("Checking engine pointers for StereoRenderingDevice...");
     auto fake_stereo_device_vtable = locate_fake_stereo_rendering_vtable();
 
     if (!fake_stereo_device_vtable) {
-        spdlog::error("Failed to locate fake stereo rendering device vtable, cannot verify stereo rendering device is setup.");
+        SPDLOG_ERROR("Failed to locate fake stereo rendering device vtable, cannot verify stereo rendering device is setup.");
         return std::nullopt;
     }
 
@@ -2054,7 +2054,7 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_active_stereo_renderin
         const auto addr_of_ptr = engine + i;
 
         if (IsBadReadPtr((void*)addr_of_ptr, sizeof(void*))) {
-            spdlog::info("Reached end of engine pointers at offset {:x}", i);
+            SPDLOG_INFO("Reached end of engine pointers at offset {:x}", i);
             break;
         }
 
@@ -2067,13 +2067,13 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_active_stereo_renderin
         auto potential_vtable = *(uintptr_t*)ptr;
 
         if (potential_vtable == *fake_stereo_device_vtable) {
-            spdlog::info("Found fake stereo rendering device at offset {:x} -> {:x}", i, ptr);
+            SPDLOG_INFO("Found fake stereo rendering device at offset {:x} -> {:x}", i, ptr);
             s_stereo_rendering_device_offset = i;
             return ptr;
         }
     }
 
-    spdlog::error("Failed to find stereo rendering device");
+    SPDLOG_ERROR("Failed to find stereo rendering device");
     return std::nullopt;
 }
 
@@ -2087,7 +2087,7 @@ std::optional<uint32_t> FFakeStereoRenderingHook::get_stereo_view_offset_index(u
 
         // Resolve jmps if needed.
         while (*(uint8_t*)func == 0xE9) {
-            spdlog::info("VFunc at index {} contains a jmp, resolving...", i);
+            SPDLOG_INFO("VFunc at index {} contains a jmp, resolving...", i);
             func = utility::calculate_absolute(func + 1);
         }
 
@@ -2118,7 +2118,7 @@ std::optional<uint32_t> FFakeStereoRenderingHook::get_stereo_view_offset_index(u
         });
 
         if (found) {
-            spdlog::info("Found Stereo View Offset Index: {}", i);
+            SPDLOG_INFO("Found Stereo View Offset Index: {}", i);
             return i;
         }
     }
@@ -2132,13 +2132,13 @@ std::optional<uint32_t> FFakeStereoRenderingHook::get_stereo_view_offset_index(u
 // if it matches, it just calls an inlined version of the function.
 // otherwise it actually calls the function within the vtable.
 bool FFakeStereoRenderingHook::patch_vtable_checks() {
-    spdlog::info("Attempting to patch inlined vtable checks...");
+    SPDLOG_INFO("Attempting to patch inlined vtable checks...");
 
     const auto fake_stereo_rendering_constructor = locate_fake_stereo_rendering_constructor();
     const auto fake_stereo_rendering_vtable = locate_fake_stereo_rendering_vtable();
 
     if (!fake_stereo_rendering_constructor || !fake_stereo_rendering_vtable) {
-        spdlog::error("Cannot patch vtables, constructor or vtable not found!");
+        SPDLOG_ERROR("Cannot patch vtables, constructor or vtable not found!");
         return false;
     }
 
@@ -2146,7 +2146,7 @@ bool FFakeStereoRenderingHook::patch_vtable_checks() {
     const auto module_size = utility::get_module_size(*vtable_module_within);
     const auto module_end = (uintptr_t)*vtable_module_within + *module_size;
 
-    spdlog::info("{:x} {:x} {:x}", *fake_stereo_rendering_vtable, (uintptr_t)*vtable_module_within, *module_size);
+    SPDLOG_INFO("{:x} {:x} {:x}", *fake_stereo_rendering_vtable, (uintptr_t)*vtable_module_within, *module_size);
 
     for (auto ref = utility::scan_displacement_reference(*vtable_module_within, *fake_stereo_rendering_vtable); 
         ref.has_value();
@@ -2156,7 +2156,7 @@ bool FFakeStereoRenderingHook::patch_vtable_checks() {
 
         // We don't want to mess with the one within the constructor.
         if (distance_from_constructor < 0x100) {
-            spdlog::info("Skipping vtable reference within constructor");
+            SPDLOG_INFO("Skipping vtable reference within constructor");
             continue;
         }
 
@@ -2166,10 +2166,10 @@ bool FFakeStereoRenderingHook::patch_vtable_checks() {
         VirtualProtect((void*)*ref, 4, PAGE_EXECUTE_READWRITE, &old);
         *(uint32_t*)*ref = 0x12345678;
         VirtualProtect((void*)*ref, 4, old, &old);
-        spdlog::info("Patched vtable check at {:x}", (uintptr_t)*ref);
+        SPDLOG_INFO("Patched vtable check at {:x}", (uintptr_t)*ref);
     }
 
-    spdlog::info("Finished patching inlined vtable checks.");
+    SPDLOG_INFO("Finished patching inlined vtable checks.");
     return true;
 }
 
@@ -2179,27 +2179,27 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
     auto engine = sdk::UEngine::get();
 
     if (engine == nullptr) {
-        spdlog::error("Failed to locate GEngine, cannot inject stereo rendering device at runtime.");
+        SPDLOG_ERROR("Failed to locate GEngine, cannot inject stereo rendering device at runtime.");
         return false;
     }
 
     static auto enable_stereo_emulation_cvar = sdk::vr::get_enable_stereo_emulation_cvar();
 
     if (!locate_active_stereo_rendering_device()) {
-        spdlog::info("Calling InitializeHMDDevice...");
+        SPDLOG_INFO("Calling InitializeHMDDevice...");
 
         //utility::ThreadSuspender _{};
 
         engine->initialize_hmd_device();
 
-        spdlog::info("Called InitializeHMDDevice.");
+        SPDLOG_INFO("Called InitializeHMDDevice.");
 
         if (!locate_active_stereo_rendering_device()) {
-            spdlog::info("Previous call to InitializeHMDDevice did not setup the stereo rendering device, attempting to call again...");
+            SPDLOG_INFO("Previous call to InitializeHMDDevice did not setup the stereo rendering device, attempting to call again...");
 
             auto patch_emulate_stereo_flag = []() {
-                //spdlog::error("Failed to locate r.EnableStereoEmulation cvar, next call may fail.");
-                spdlog::info("r.EnableStereoEmulation cvar not found, using fallback method of forcing -emulatestereo flag.");
+                //SPDLOG_ERROR("Failed to locate r.EnableStereoEmulation cvar, next call may fail.");
+                SPDLOG_INFO("r.EnableStereoEmulation cvar not found, using fallback method of forcing -emulatestereo flag.");
                 
                 const auto emulate_stereo_string_ref = sdk::UGameEngine::get_emulatestereo_string_ref_address();
 
@@ -2212,7 +2212,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
 
                         if (call) {
                             // Patch the instruction to mov al, 1
-                            spdlog::info("Patching instruction at {:x} to mov al, 1", (uintptr_t)*call);
+                            SPDLOG_INFO("Patching instruction at {:x} to mov al, 1", (uintptr_t)*call);
                             static auto patch = Patch::create(*call, { 0xB0, 0x01, 0x90, 0x90, 0x90 });
                         }
                     }
@@ -2225,29 +2225,29 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
                 try {
                     enable_stereo_emulation_cvar->set<int>(1);
                 } catch(...) {
-                    spdlog::error("Access violation occurred when writing to r.EnableStereoEmulation, the address may be incorrect!");
+                    SPDLOG_ERROR("Access violation occurred when writing to r.EnableStereoEmulation, the address may be incorrect!");
                     patch_emulate_stereo_flag();
                 }
             } else {
-                //spdlog::error("Failed to locate r.EnableStereoEmulation cvar, next call may fail.");
+                //SPDLOG_ERROR("Failed to locate r.EnableStereoEmulation cvar, next call may fail.");
                 patch_emulate_stereo_flag();
             }
 
-            spdlog::info("Calling InitializeHMDDevice... AGAIN");
+            SPDLOG_INFO("Calling InitializeHMDDevice... AGAIN");
 
             engine->initialize_hmd_device();
 
-            spdlog::info("Called InitializeHMDDevice again.");
+            SPDLOG_INFO("Called InitializeHMDDevice again.");
         }
 
         if (locate_active_stereo_rendering_device()) {
-            spdlog::info("Stereo rendering device setup successfully.");
+            SPDLOG_INFO("Stereo rendering device setup successfully.");
         } else {
-            spdlog::error("Failed to setup stereo rendering device.");
+            SPDLOG_ERROR("Failed to setup stereo rendering device.");
             return false;
         }
     } else {
-        spdlog::info("Not necessary to call InitializeHMDDevice, stereo rendering device is already setup.");
+        SPDLOG_INFO("Not necessary to call InitializeHMDDevice, stereo rendering device is already setup.");
         m_fixed_localplayer_view_count = true; // Everything was set up beforehand, we don't need to do anything, so just set it to true.
     }
 
@@ -2256,7 +2256,7 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
 
 bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("is stereo enabled called!");
+    SPDLOG_INFO("is stereo enabled called!");
 #endif
 
     // wait!!!
@@ -2268,7 +2268,7 @@ bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
         const auto now = std::chrono::high_resolution_clock::now();
 
         if (now - g_hook->m_analyze_view_extensions_start_time > std::chrono::seconds(15)) {
-            spdlog::info("Timed out waiting for view extensions to be analyzed.");
+            SPDLOG_INFO("Timed out waiting for view extensions to be analyzed.");
             g_hook->m_analyzing_view_extensions = false;
         }
 
@@ -2327,8 +2327,8 @@ bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
 
 void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("adjust view rect called! {}", index);
-    spdlog::info(" x: {}, y: {}, w: {}, h: {}", *x, *y, *w, *h);
+    SPDLOG_INFO("adjust view rect called! {}", index);
+    SPDLOG_INFO(" x: {}, y: {}, w: {}, h: {}", *x, *y, *w, *h);
 #endif
 
     if (!g_framework->is_game_data_intialized()) {
@@ -2362,7 +2362,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     const float world_to_meters, Vector3f* view_location)
 {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("calculate stereo view offset called! {}", view_index);
+    SPDLOG_INFO("calculate stereo view offset called! {}", view_index);
 #endif
 
     if (!g_framework->is_game_data_intialized()) {
@@ -2412,7 +2412,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
     /*if (view_index % 2 == 1 && VR::get()->get_runtime()->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
         std::scoped_lock _{ vr->get_runtime()->render_mtx };
-        spdlog::info("SYNCING!!!");
+        SPDLOG_INFO("SYNCING!!!");
         //vr->get_runtime()->synchronize_frame();
         vr->update_hmd_state();
     }*/
@@ -2528,19 +2528,19 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     }
 
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("Finished calculating stereo view offset!");
+    SPDLOG_INFO("Finished calculating stereo view offset!");
 #endif
 }
 
 __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("calculate stereo projection matrix called! {} from {:x}", view_index, (uintptr_t)_ReturnAddress() - (uintptr_t)utility::get_module_within((uintptr_t)_ReturnAddress()).value_or(nullptr));
+    SPDLOG_INFO("calculate stereo projection matrix called! {} from {:x}", view_index, (uintptr_t)_ReturnAddress() - (uintptr_t)utility::get_module_within((uintptr_t)_ReturnAddress()).value_or(nullptr));
 #endif
 
     if (!g_hook->m_fixed_localplayer_view_count) {
         if (g_hook->m_calculate_stereo_projection_matrix_post_hook == nullptr) {
             const auto return_address = (uintptr_t)_ReturnAddress();
-            spdlog::info("Inserting midhook after CalculateStereoProjectionMatrix... @ {:x}", return_address);
+            SPDLOG_INFO("Inserting midhook after CalculateStereoProjectionMatrix... @ {:x}", return_address);
 
             constexpr auto max_stack_depth = 100;
             uintptr_t stack[max_stack_depth]{};
@@ -2549,7 +2549,7 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
 
             for (int i = 0; i < depth; i++) {
                 g_hook->m_projection_matrix_stack.push_back(stack[i]);
-                spdlog::info(" {:x}", (uintptr_t)stack[i]);
+                SPDLOG_INFO(" {:x}", (uintptr_t)stack[i]);
             }
 
             auto factory = SafetyHookFactory::init();
@@ -2558,7 +2558,7 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
             g_hook->m_calculate_stereo_projection_matrix_post_hook = builder.create_mid((void*)return_address, &FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix);
         }
     } else if (g_hook->m_calculate_stereo_projection_matrix_post_hook != nullptr) {
-        spdlog::info("Removing midhook after CalculateStereoProjectionMatrix, job is done...");
+        SPDLOG_INFO("Removing midhook after CalculateStereoProjectionMatrix, job is done...");
         g_hook->m_calculate_stereo_projection_matrix_post_hook.reset();
         g_hook->m_get_projection_data_pre_hook.reset();
     }
@@ -2584,7 +2584,7 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
         g_hook->m_calculate_stereo_projection_matrix_hook->call<Matrix4x4f*>(stereo, out, view_index);
     }
 
-    // spdlog::info("NearZ: {}", old_znear);
+    // SPDLOG_INFO("NearZ: {}", old_znear);
 
     if (out != nullptr) {
         auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
@@ -2613,11 +2613,11 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
             double_matrix = fmat;
         }
     } else {
-        spdlog::error("CalculateStereoProjectionMatrix returned nullptr!");
+        SPDLOG_ERROR("CalculateStereoProjectionMatrix returned nullptr!");
     }
 
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("Finished calculating stereo projection matrix!");
+    SPDLOG_INFO("Finished calculating stereo projection matrix!");
 #endif
     
     return out;
@@ -2633,14 +2633,14 @@ __forceinline void FFakeStereoRenderingHook::render_texture_render_thread(FFakeS
     }
 
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("render texture render thread called!");
+    SPDLOG_INFO("render texture render thread called!");
 #endif
 
 
     if (!g_hook->is_slate_hooked() && g_hook->has_attempted_to_hook_slate()) {
-        spdlog::info("Attempting to hook SlateRHIRenderer::DrawWindow_RenderThread using RenderTexture_RenderThread return address...");
+        SPDLOG_INFO("Attempting to hook SlateRHIRenderer::DrawWindow_RenderThread using RenderTexture_RenderThread return address...");
         const auto return_address = (uintptr_t)_ReturnAddress();
-        spdlog::info(" Return address: {:x}", return_address);
+        SPDLOG_INFO(" Return address: {:x}", return_address);
         g_hook->attempt_hook_slate_thread(return_address);
     }
 
@@ -2651,7 +2651,7 @@ __forceinline void FFakeStereoRenderingHook::render_texture_render_thread(FFakeS
         const auto distance_from_usage = (intptr_t)(return_address - *slate_cvar_usage_location);
 
         if (distance_from_usage <= 0x200) {
-            //spdlog::info("Ret: {:x} Distance: {:x}", return_address, distance_from_usage);
+            //SPDLOG_INFO("Ret: {:x} Distance: {:x}", return_address, distance_from_usage);
 
             auto& d3d11_vr = VR::get()->m_d3d11;
             auto& hook = g_framework->get_d3d11_hook();
@@ -2670,7 +2670,7 @@ __forceinline void FFakeStereoRenderingHook::render_texture_render_thread(FFakeS
         g_hook->m_rtm.set_render_target(src_texture);
     }*/
 
-    // spdlog::info("{:x}", (uintptr_t)src_texture->GetNativeResource());
+    // SPDLOG_INFO("{:x}", (uintptr_t)src_texture->GetNativeResource());
 
     // maybe the window size is actually a pointer we will find out later.
     /*if (g_hook->m_render_texture_render_thread_hook) {
@@ -2680,7 +2680,7 @@ __forceinline void FFakeStereoRenderingHook::render_texture_render_thread(FFakeS
 
 void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneView* view, UCanvas* canvas) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("init canvas called!");
+    SPDLOG_INFO("init canvas called!");
 #endif
 
     if (!g_framework->is_game_data_intialized()) {
@@ -2696,20 +2696,20 @@ void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneV
     static uint32_t ucanvas_viewproj_offset = 0;
 
     if (fsceneview_viewproj_offset == 0 || ucanvas_viewproj_offset == 0) {
-        spdlog::info("Searching for FSceneView and UCanvas offsets...");
-        spdlog::info("Canvas: {:x}", (uintptr_t)canvas);
+        SPDLOG_INFO("Searching for FSceneView and UCanvas offsets...");
+        SPDLOG_INFO("Canvas: {:x}", (uintptr_t)canvas);
 
         const auto return_address = (uintptr_t)_ReturnAddress();
         const auto containing_function = utility::find_function_start(return_address);
 
-        spdlog::info("Found containing function at {:x}", *containing_function);
+        SPDLOG_INFO("Found containing function at {:x}", *containing_function);
 
         auto find_offsets = [](uintptr_t start, uintptr_t end) -> bool {
             for (auto ip = (uintptr_t)start; ip < end + 0x100;) {
                 const auto ix = utility::decode_one((uint8_t*)ip);
 
                 if (!ix) {
-                    spdlog::error("Failed to decode instruction at {:x}", ip);
+                    SPDLOG_ERROR("Failed to decode instruction at {:x}", ip);
                     break;
                 }
 
@@ -2726,9 +2726,9 @@ void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneV
                             fsceneview_viewproj_offset = ix->Operands[1].Info.Memory.Disp;
                             ucanvas_viewproj_offset = next->Operands[0].Info.Memory.Disp;
                             
-                            spdlog::info("Found at {:x}", ip);
-                            spdlog::info("Found FSceneView ViewProjectionMatrix offset: {:x}", fsceneview_viewproj_offset);
-                            spdlog::info("Found UCanvas ViewProjectionMatrix offset: {:x}", ucanvas_viewproj_offset);
+                            SPDLOG_INFO("Found at {:x}", ip);
+                            SPDLOG_INFO("Found FSceneView ViewProjectionMatrix offset: {:x}", fsceneview_viewproj_offset);
+                            SPDLOG_INFO("Found UCanvas ViewProjectionMatrix offset: {:x}", ucanvas_viewproj_offset);
                             return true;
                             break;
                         }
@@ -2745,7 +2745,7 @@ void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneV
             // If we still didn't find it at this stage, re-scan from the previous function from the previous function call instead.
             const auto potential_func = utility::calculate_absolute(return_address - 4);
             if (!find_offsets(potential_func, potential_func + 0x100)) {
-                spdlog::error("Failed to find offsets!");
+                SPDLOG_ERROR("Failed to find offsets!");
                 return;
             }
         }
@@ -2757,7 +2757,7 @@ void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneV
 
 uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoRendering* stereo, bool is_stereo_enabled) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("get desired number of views hook called!");
+    SPDLOG_INFO("get desired number of views hook called!");
 #endif
 
     if (!is_stereo_enabled || VR::get()->is_using_afr()) {
@@ -2769,7 +2769,7 @@ uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoR
 
 IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_hook(FFakeStereoRendering* stereo) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("get render target manager hook called!");
+    SPDLOG_INFO("get render target manager hook called!");
 #endif
 
     if (!g_framework->is_game_data_intialized()) {
@@ -2799,7 +2799,7 @@ IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_
 
 IStereoLayers* FFakeStereoRenderingHook::get_stereo_layers_hook(FFakeStereoRendering* stereo) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("get stereo layers hook called!");
+    SPDLOG_INFO("get stereo layers hook called!");
 #endif
 
     if (!g_framework->is_game_data_intialized()) {
@@ -2822,7 +2822,7 @@ IStereoLayers* FFakeStereoRenderingHook::get_stereo_layers_hook(FFakeStereoRende
 
 void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhook::Context& ctx) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("post calculate stereo projection matrix called!");
+    SPDLOG_INFO("post calculate stereo projection matrix called!");
 #endif
 
     if (g_hook->m_fixed_localplayer_view_count || g_hook->m_hooked_alternative_localplayer_scan) {
@@ -2833,7 +2833,7 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
 
     if (!vfunc) {
         // attempt to hook GetProjectionData instead to get the localplayer
-        spdlog::info("Failed to find virtual function start for CalculateStereoProjectionMatrix, attempting to hook GetProjectionData instead...");
+        SPDLOG_INFO("Failed to find virtual function start for CalculateStereoProjectionMatrix, attempting to hook GetProjectionData instead...");
 
         if (!g_hook->m_projection_matrix_stack.empty() && g_hook->m_projection_matrix_stack.size() >= 3) {
             const auto post_get_projection_data = g_hook->m_projection_matrix_stack[2];
@@ -2859,12 +2859,12 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
                 get_projection_data = get_projection_data_candidate_2;
             } else {
                 // emergency fallback
-                spdlog::info("Failed to find GetProjectionData, falling back to emergency fallback (this may not work)");
+                SPDLOG_INFO("Failed to find GetProjectionData, falling back to emergency fallback (this may not work)");
                 get_projection_data = utility::find_function_start(post_get_projection_data);
             }
 
             if (get_projection_data) {
-                spdlog::info("Successfully found GetProjectionData at {:x}", *get_projection_data);
+                SPDLOG_INFO("Successfully found GetProjectionData at {:x}", *get_projection_data);
 
                 g_hook->m_hooked_alternative_localplayer_scan = true;
 
@@ -2875,19 +2875,19 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
                 g_hook->m_projection_matrix_stack.clear();
 
                 if (g_hook->m_get_projection_data_pre_hook != nullptr) {
-                    spdlog::info("Successfully hooked GetProjectionData");
+                    SPDLOG_INFO("Successfully hooked GetProjectionData");
                     return;
                 } else {
-                    spdlog::error("Failed to hook GetProjectionData");
+                    SPDLOG_ERROR("Failed to hook GetProjectionData");
                 }
             } else {
-                spdlog::error("Failed to find GetProjectionData!");
+                SPDLOG_ERROR("Failed to find GetProjectionData!");
             }
         }
     }
 
     if (!vfunc) {
-        spdlog::info("Could not find function via normal means, scanning for int3s...");
+        SPDLOG_INFO("Could not find function via normal means, scanning for int3s...");
 
         const auto ref = utility::scan_reverse(g_hook->m_calculate_stereo_projection_matrix_post_hook->target(), 0x2000, "CC CC CC");
 
@@ -2897,7 +2897,7 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
 
         if (!vfunc) {
             g_hook->m_fixed_localplayer_view_count = true;
-            spdlog::error("Failed to find virtual function start for post calculate_stereo_projection_matrix!");
+            SPDLOG_ERROR("Failed to find virtual function start for post calculate_stereo_projection_matrix!");
             return;
         }
     }
@@ -2929,12 +2929,12 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
         const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
 
         if (!ND_SUCCESS(status)) {
-            spdlog::info("Decoding failed with error {:x}!", (uint32_t)status);
+            SPDLOG_INFO("Decoding failed with error {:x}!", (uint32_t)status);
             break;
         }
 
         if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_REG && ix.Operands[1].Type == ND_OP_REG && ix.Operands[1].Info.Register.Reg == NDR_RCX) {
-            spdlog::info("Found assignment of RCX to storage register at {:x} ({})!", (uintptr_t)ip, ix.Operands[0].Info.Register.Reg);
+            SPDLOG_INFO("Found assignment of RCX to storage register at {:x} ({})!", (uintptr_t)ip, ix.Operands[0].Info.Register.Reg);
             found_register = ix.Operands[0].Info.Register.Reg;
             break;
         }
@@ -2944,16 +2944,16 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
 
     if (!found_register) {
         g_hook->m_fixed_localplayer_view_count = true;
-        spdlog::error("Failed to find assignment of RCX to storage register!");
+        SPDLOG_ERROR("Failed to find assignment of RCX to storage register!");
         return;
     }
 
     const auto localplayer = *register_to_context[found_register.value_or(0)];
-    spdlog::info("Local player: {:x}", localplayer);
+    SPDLOG_INFO("Local player: {:x}", localplayer);
 
     if (localplayer == 0) {
         g_hook->m_fixed_localplayer_view_count = true;
-        spdlog::error("Failed to find local player, cannot call PostInitProperties!");
+        SPDLOG_ERROR("Failed to find local player, cannot call PostInitProperties!");
         return;
     }
 
@@ -2962,7 +2962,7 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
 
 void FFakeStereoRenderingHook::pre_get_projection_data(safetyhook::Context& ctx) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("pre get projection data called!");
+    SPDLOG_INFO("pre get projection data called!");
 #endif
 
     if (g_hook->m_fixed_localplayer_view_count) {
@@ -2970,11 +2970,11 @@ void FFakeStereoRenderingHook::pre_get_projection_data(safetyhook::Context& ctx)
     }
 
     const auto localplayer = ctx.rcx;
-    spdlog::info("Local player: {:x}", localplayer);
+    SPDLOG_INFO("Local player: {:x}", localplayer);
 
     if (localplayer == 0) {
         g_hook->m_fixed_localplayer_view_count = true;
-        spdlog::error("Failed to find local player, cannot call PostInitProperties!");
+        SPDLOG_ERROR("Failed to find local player, cannot call PostInitProperties!");
         return;
     }
 
@@ -2982,20 +2982,20 @@ void FFakeStereoRenderingHook::pre_get_projection_data(safetyhook::Context& ctx)
 }
 
 void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
-    spdlog::info("Searching for PostInitProperties virtual function...");
+    SPDLOG_INFO("Searching for PostInitProperties virtual function...");
 
     std::optional<uint32_t> idx{};
     const auto engine = sdk::UEngine::get_lvalue();
 
     if (engine == nullptr) {
-        spdlog::error("Cannot proceed without engine!");
+        SPDLOG_ERROR("Cannot proceed without engine!");
         return;
     }
 
     const auto vtable = *(uintptr_t**)localplayer;
 
     if (vtable == nullptr || IsBadReadPtr((void*)vtable, sizeof(void*))) {
-        spdlog::error("Cannot proceed, vtable for so-called \"local player\" is invalid!");
+        SPDLOG_ERROR("Cannot proceed, vtable for so-called \"local player\" is invalid!");
         return;
     }
 
@@ -3006,16 +3006,16 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
             break;
         }
 
-        spdlog::info("Analyzing index {}...", i);
+        SPDLOG_INFO("Analyzing index {}...", i);
 
         const auto vfunc = vtable[i];
 
         if (vfunc == 0 || IsBadReadPtr((void*)vfunc, 1)) {
-            spdlog::error("Encountered invalid vfunc at index {}!", i);
+            SPDLOG_ERROR("Encountered invalid vfunc at index {}!", i);
             break;
         }
 
-        spdlog::info("Scanning vfunc at index {} ({:x})...", i, vfunc);
+        SPDLOG_INFO("Scanning vfunc at index {} ({:x})...", i, vfunc);
 
         utility::exhaustive_decode((uint8_t*)vfunc, 25, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
             if (idx) {
@@ -3027,7 +3027,7 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
                 if (*disp == (uintptr_t)engine || 
                     (!IsBadReadPtr((void*)*disp, sizeof(void*)) && *(uintptr_t*)*disp == (uintptr_t)*engine)) 
                 {
-                    spdlog::info("Found PostInitProperties at {} {:x}!", i, (uintptr_t)vfunc);
+                    SPDLOG_INFO("Found PostInitProperties at {} {:x}!", i, (uintptr_t)vfunc);
                     idx = i;
                     return utility::ExhaustionResult::BREAK;
                 }
@@ -3038,7 +3038,7 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
     }
 
     if (!idx) {
-        spdlog::error("Failed to find PostInitProperties virtual function! A crash may occur!");
+        SPDLOG_ERROR("Failed to find PostInitProperties virtual function! A crash may occur!");
     }
 
     // Now call PostInitProperties.
@@ -3046,7 +3046,7 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
     // Just creating the StereoRenderingDevice does not automatically do it, so we have to do it manually.
     // Usually the game just calls this function near startup after calling InitializeHMDDevice.
     if (idx) {
-        spdlog::info("Calling PostInitProperties on local player!");
+        SPDLOG_INFO("Calling PostInitProperties on local player!");
 
         // Get PEB and set debugger present
         auto peb = (PEB*)__readgsqword(0x60);
@@ -3058,7 +3058,7 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
         // we do this because debug builds assert when the views are already setup.
         const auto seh_handler = [](PEXCEPTION_POINTERS info) -> LONG {
             if (info->ExceptionRecord->ExceptionCode == EXCEPTION_BREAKPOINT) {
-                spdlog::info("Skipping int3 breakpoint at {:x}!", info->ContextRecord->Rip);
+                SPDLOG_INFO("Skipping int3 breakpoint at {:x}!", info->ContextRecord->Rip);
                 const auto insn = utility::decode_one((uint8_t*)info->ContextRecord->Rip);
 
                 if (insn) {
@@ -3080,7 +3080,7 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
 
-            spdlog::info("Encountered exception {:x} at {:x}!", info->ExceptionRecord->ExceptionCode, info->ContextRecord->Rip);
+            SPDLOG_INFO("Encountered exception {:x} at {:x}!", info->ExceptionRecord->ExceptionCode, info->ContextRecord->Rip);
 
             // yolo? idk xd
             return EXCEPTION_CONTINUE_EXECUTION;
@@ -3091,7 +3091,7 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
         const void (*post_init_properties)(uintptr_t) = (*(decltype(post_init_properties)**)localplayer)[*idx];
         post_init_properties(localplayer);
 
-        spdlog::info("PostInitProperties called!");
+        SPDLOG_INFO("PostInitProperties called!");
 
         // remove the handler
         RemoveVectoredExceptionHandler(exception_handler);
@@ -3105,14 +3105,14 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
                                                                 void* elements, void* params, void* unk1, void* unk2) 
 {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("SlateRHIRenderer::DrawWindow_RenderThread called!");
+    SPDLOG_INFO("SlateRHIRenderer::DrawWindow_RenderThread called!");
 #endif
 
     static bool once = true;
 
     if (once) {
         once = false;
-        spdlog::info("SlateRHIRenderer::DrawWindow_RenderThread called for the first time!");
+        SPDLOG_INFO("SlateRHIRenderer::DrawWindow_RenderThread called for the first time!");
     }
 
     if (!g_framework->is_game_data_intialized()) {
@@ -3147,21 +3147,21 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
     const auto ui_target = g_hook->get_render_target_manager()->get_ui_target();
 
     if (ui_target == nullptr) {
-        spdlog::info("No UI target, skipping!");
+        SPDLOG_INFO("No UI target, skipping!");
         return call_orig();
     }
 
     const auto viewport_rt_provider = viewport_info->get_rt_provider(g_hook->get_render_target_manager()->get_render_target());
 
     if (viewport_rt_provider == nullptr) {
-        spdlog::info("No viewport RT provider, skipping!");
+        SPDLOG_INFO("No viewport RT provider, skipping!");
         return call_orig();
     }
 
     const auto slate_resource = viewport_rt_provider->get_viewport_render_target_texture();
 
     if (slate_resource == nullptr) {
-        spdlog::info("No slate resource, skipping!");
+        SPDLOG_INFO("No slate resource, skipping!");
         return call_orig();
     }
     
@@ -3207,7 +3207,7 @@ __declspec(noinline) bool VRRenderTargetManager::NeedReAllocateShadingRateTextur
         // We need to switch the FFakeStereoRenderingHook's render target manager
         // to the old one NOW or we will crash. Reason being what was actually called
         // is the GetNumberOfBufferedFrames function, not NeedReAllocateShadingRateTexture.
-        spdlog::info("Switching to old render target manager! Incorrect function called!");
+        SPDLOG_INFO("Switching to old render target manager! Incorrect function called!");
         //g_hook->switch_to_old_rendertarget_manager();
 
         // Do a switcharoo on the vtable of this object to the old one because we will crash if we don't.
@@ -3227,24 +3227,24 @@ void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const FVi
         return;
     }
 
-    //spdlog::info("Widget: {:x}", (uintptr_t)ViewportWidget);
+    //SPDLOG_INFO("Widget: {:x}", (uintptr_t)ViewportWidget);
 }
 
 void VRRenderTargetManager_Base::calculate_render_target_size(const FViewport& viewport, uint32_t& x, uint32_t& y) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-    spdlog::info("calculate render target size called!");
+    SPDLOG_INFO("calculate render target size called!");
 #endif
 
     if (!g_framework->is_game_data_intialized()) {
         return;
     }
 
-    spdlog::info("RenderTargetSize Before: {}x{}", x, y);
+    SPDLOG_INFO("RenderTargetSize Before: {}x{}", x, y);
 
     x = VR::get()->get_hmd_width() * 2;
     y = VR::get()->get_hmd_height();
 
-    spdlog::info("RenderTargetSize After: {}x{}", x, y);
+    SPDLOG_INFO("RenderTargetSize After: {}x{}", x, y);
 }
 
 bool VRRenderTargetManager_Base::need_reallocate_view_target(const FViewport& Viewport) {
@@ -3266,7 +3266,7 @@ bool VRRenderTargetManager_Base::need_reallocate_view_target(const FViewport& Vi
 }
 
 void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& ctx) {
-    spdlog::info("PreTextureHook called! {}", ctx.r8);
+    SPDLOG_INFO("PreTextureHook called! {}", ctx.r8);
 
     // maybe do some work later to bruteforce the registers/offsets for these
     // a la emulation or something more rudimentary
@@ -3294,12 +3294,12 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     using namespace asmjit;
     using namespace asmjit::x86;
 
-    spdlog::info("Attempting to JIT a function to call the original function!");
+    SPDLOG_INFO("Attempting to JIT a function to call the original function!");
 
     const auto ix = utility::decode_one(rtm->texture_create_insn_bytes.data(), rtm->texture_create_insn_bytes.size());
 
     if (!ix) {
-        spdlog::error("Failed to decode instruction!");
+        SPDLOG_ERROR("Failed to decode instruction!");
         return;
     }
     
@@ -3332,18 +3332,18 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         emu_ctx.ctx->MemThreshold = 1;
 
         if (emu_ctx.emulate((uintptr_t)rtm->texture_create_insn_bytes.data(), 1) != SHEMU_SUCCESS) {
-            spdlog::error("Failed to emulate instruction!: {} RIP: {:x}", emu_ctx.status, emu_ctx.ctx->Registers.RegRip);
+            SPDLOG_ERROR("Failed to emulate instruction!: {} RIP: {:x}", emu_ctx.status, emu_ctx.ctx->Registers.RegRip);
             return;
         }
     
-        spdlog::info("Emu landed at {:x}", emu_ctx.ctx->Registers.RegRip);
+        SPDLOG_INFO("Emu landed at {:x}", emu_ctx.ctx->Registers.RegRip);
         func_ptr = emu_ctx.ctx->Registers.RegRip;
     } else {
         const auto target = g_hook->get_render_target_manager()->pre_texture_hook->target();
         func_ptr = target + 5 + *(int32_t*)&rtm->texture_create_insn_bytes.data()[1];
     }
 
-    spdlog::info("Function pointer: {:x}", func_ptr);
+    SPDLOG_INFO("Function pointer: {:x}", func_ptr);
 
     /*CodeHolder code{};
     JitRuntime runtime{};
@@ -3420,14 +3420,14 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         auto stack_var_ptr = (uintptr_t*)(aligned_stack + stack_var);
 
         if (*stack_var_ptr >= ctx.rsp && *stack_var_ptr < ctx.rsp + 0x1000) {
-            spdlog::info("Correcting stack var at 0x{:x}", stack_var);
+            SPDLOG_INFO("Correcting stack var at 0x{:x}", stack_var);
             *stack_var_ptr = aligned_stack + (*stack_var_ptr - ctx.rsp);
         }
     }
 
     auto correct_register = [&](auto& reg) {
         if (reg >= ctx.rsp && reg < ctx.rsp + 0x1000) {
-            spdlog::info("Correcting Register");
+            SPDLOG_INFO("Correcting Register");
             reg = aligned_stack + (reg - ctx.rsp);
         }
 
@@ -3466,7 +3466,7 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     uintptr_t code_addr{};
     runtime.add(&code_addr, &code);
 
-    spdlog::info("JITed address: {:x}", code_addr);
+    SPDLOG_INFO("JITed address: {:x}", code_addr);
 
     //MessageBox(0, "debug now", "debug", 0);
 
@@ -3537,14 +3537,14 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     const auto size = g_framework->is_dx11() ? g_framework->get_d3d11_rt_size() : g_framework->get_d3d12_rt_size();
     const auto stack_args = (uintptr_t*)(ctx.rsp + 0x20);
 
-    spdlog::info("About to call the original!");
+    SPDLOG_INFO("About to call the original!");
     
     if (!rtm->is_pre_texture_call_e8) {
-        spdlog::info("Calling register version of texture create");
+        SPDLOG_INFO("Calling register version of texture create");
 
         if (rtm->is_using_texture_desc && rtm->is_version_greq_5_1) {
             if (ctx.r9 == 0 || IsBadReadPtr((void*)ctx.r9, sizeof(void*))) {
-                spdlog::info("Possible UE 5.0.3 detected, not 5.1 or above");
+                SPDLOG_INFO("Possible UE 5.0.3 detected, not 5.1 or above");
                 rtm->is_using_texture_desc = false;
                 rtm->is_version_5_0_3 = true;
                 rtm->is_version_greq_5_1;
@@ -3552,7 +3552,7 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         }
 
         if (rtm->is_using_texture_desc && rtm->is_version_greq_5_1) {
-            spdlog::info("Calling UE5 texture desc version of texture create");
+            SPDLOG_INFO("Calling UE5 texture desc version of texture create");
 
             void (*func)(
                 uintptr_t rhi,
@@ -3585,7 +3585,7 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
                 auto& y = *(int32_t*)(ctx.r9 + i + 4);
 
                 if (x == scan_x && y == scan_y) {
-                    spdlog::info("UE5: Found render target width and height at offset: {:x}", i);
+                    SPDLOG_INFO("UE5: Found render target width and height at offset: {:x}", i);
 
                     width_offset = i;
                     height_offset = i + 4;
@@ -3616,11 +3616,11 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
             }
 
             if (rtm->texture_hook_ref == nullptr || rtm->texture_hook_ref->texture == nullptr) {
-                spdlog::info("Had to set texture hook ref in pre texture hook!");
+                SPDLOG_INFO("Had to set texture hook ref in pre texture hook!");
                 rtm->texture_hook_ref = (FTexture2DRHIRef*)ctx.rdx;
             }
         } else if (rtm->is_using_texture_desc) { // extremely rare.
-            spdlog::info("Calling UE4 texture desc version of texture create");
+            SPDLOG_INFO("Calling UE4 texture desc version of texture create");
 
             void (*func)(
                 uintptr_t rhi,
@@ -3645,7 +3645,7 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
                 auto& y = *(int32_t*)(ctx.rdx + i + 4);
 
                 if (x == scan_x && y == scan_y) {
-                    spdlog::info("UE4: Found render target width and height at offset: {:x}", i);
+                    SPDLOG_INFO("UE4: Found render target width and height at offset: {:x}", i);
 
                     width_offset = i;
                     height_offset = i + 4;
@@ -3679,7 +3679,7 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
             }
 
             if (rtm->texture_hook_ref == nullptr || rtm->texture_hook_ref->texture == nullptr) {
-                spdlog::info("Had to set texture hook ref in pre texture hook!");
+                SPDLOG_INFO("Had to set texture hook ref in pre texture hook!");
                 rtm->texture_hook_ref = (FTexture2DRHIRef*)ctx.r8;
             }
         } else { // most common version.
@@ -3702,19 +3702,19 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
                 stack_args[5], stack_args[6], stack_args[7]);
 
             if (rtm->texture_hook_ref == nullptr || rtm->texture_hook_ref->texture == nullptr) {
-                spdlog::info("Had to set texture hook ref in pre texture hook!");
+                SPDLOG_INFO("Had to set texture hook ref in pre texture hook!");
                 rtm->texture_hook_ref = (FTexture2DRHIRef*)ctx.rdx;
             }
         }
 
         rtm->ui_target = out.texture;
     } else {
-        spdlog::info("Calling E8 version of texture create");
+        SPDLOG_INFO("Calling E8 version of texture create");
         
         // check if RCX is near the stack pointer
         // if it is then it's a different form of E8 call that takes the texture in the first parameter.
         if (ctx.rcx != 0 && std::abs((int64_t)ctx.rcx - (int64_t)ctx.rsp) <= 0x300) {
-            spdlog::info("Weird form of E8 call detected...");
+            SPDLOG_INFO("Weird form of E8 call detected...");
 
             // Format
             ctx.r9 = 2; // PF_B8G8R8A8
@@ -3756,19 +3756,19 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
                     }
 
                     previous_stack_found_index = i;
-                    spdlog::info("Stack pointer found at arg index {} ({} stack)", i + 4, i);
+                    SPDLOG_INFO("Stack pointer found at arg index {} ({} stack)", i + 4, i);
                 } else if (previous_stack_repeating_index && *previous_stack_repeating_index == i - 1) {
                     texture_argument_index = i - 2;
                     shader_argument_index = i - 1;
-                    spdlog::info("Texture argument may be at index {} ({} stack)", *texture_argument_index + 4, *texture_argument_index);
-                    spdlog::info("Shader argument may be at index {} ({} stack)", *shader_argument_index + 4, *shader_argument_index);
+                    SPDLOG_INFO("Texture argument may be at index {} ({} stack)", *texture_argument_index + 4, *texture_argument_index);
+                    SPDLOG_INFO("Shader argument may be at index {} ({} stack)", *shader_argument_index + 4, *shader_argument_index);
                     break;
                 }
             }
 
             if (!texture_argument_index && !shader_argument_index) {
                 // operate on a wild guess (hardcoded function signature)
-                spdlog::info("Calling E8 version of texture create with hardcoded function signature");
+                SPDLOG_INFO("Calling E8 version of texture create with hardcoded function signature");
 
                 void (*func)(
                     uint32_t w,
@@ -3793,7 +3793,7 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
                     stack_args[7], stack_args[8]);
             } else {
                 // dynamically generate the function call
-                spdlog::info("Calling E8 version of texture create with dynamically generated function signature");
+                SPDLOG_INFO("Calling E8 version of texture create with dynamically generated function signature");
 
                 void (*func)(
                     uint32_t w,
@@ -3826,7 +3826,7 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
                     cloned_stack[7], cloned_stack[8]);
 
                 if (rtm->texture_hook_ref == nullptr || rtm->texture_hook_ref->texture == nullptr) {
-                    spdlog::info("Had to set texture hook ref in pre texture hook!");
+                    SPDLOG_INFO("Had to set texture hook ref in pre texture hook!");
                     rtm->texture_hook_ref = (FTexture2DRHIRef*)stack_args[*texture_argument_index];
                 }
             }
@@ -3836,14 +3836,14 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     }
 
     if (out.texture == nullptr) {
-        spdlog::error("Failed to create UI texture!");
+        SPDLOG_ERROR("Failed to create UI texture!");
     } else {
-        spdlog::info("Created UI texture at {:x}", (uintptr_t)out.texture);
+        SPDLOG_INFO("Created UI texture at {:x}", (uintptr_t)out.texture);
     }
 
     //call_with_context((uintptr_t)func, out);
 
-    spdlog::info("Called the original function!");
+    SPDLOG_INFO("Called the original function!");
 
     // Cause stuff like the VR ui texture to get recreated.
     VR::get()->reinitialize_renderer();
@@ -3852,8 +3852,8 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
 void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx) {
     auto rtm = g_hook->get_render_target_manager();
 
-    spdlog::info("Post texture hook called!");
-    spdlog::info(" Ref: {:x}", (uintptr_t)rtm->texture_hook_ref);
+    SPDLOG_INFO("Post texture hook called!");
+    SPDLOG_INFO(" Ref: {:x}", (uintptr_t)rtm->texture_hook_ref);
 
     // very rare...
     if (rtm->is_using_texture_desc && !rtm->is_version_greq_5_1) {
@@ -3868,15 +3868,15 @@ void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx)
 
     // happens?
     if (rtm->texture_hook_ref->texture == nullptr) {
-        spdlog::info(" Texture is null, trying to get it from RAX...");
+        SPDLOG_INFO(" Texture is null, trying to get it from RAX...");
 
         const auto ref = (FTexture2DRHIRef*)ctx.rax;
         texture = ref->texture;
     }
 
-    spdlog::info(" last texture index: {}", rtm->last_texture_index);
-    spdlog::info(" Resulting texture: {:x}", (uintptr_t)texture);
-    spdlog::info(" Real resource: {:x}", (uintptr_t)texture->get_native_resource());
+    SPDLOG_INFO(" last texture index: {}", rtm->last_texture_index);
+    SPDLOG_INFO(" Resulting texture: {:x}", (uintptr_t)texture);
+    SPDLOG_INFO(" Real resource: {:x}", (uintptr_t)texture->get_native_resource());
 
     rtm->render_target = texture;
     //rtm->ui_target = texture;
@@ -3889,8 +3889,8 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
     this->shader_resource_hook_ref = shader_resource;
 
     if (!this->set_up_texture_hook) {
-        spdlog::info("AllocateRenderTargetTexture retaddr: {:x}", return_address);
-        spdlog::info("Scanning for call instr...");
+        SPDLOG_INFO("AllocateRenderTargetTexture retaddr: {:x}", return_address);
+        SPDLOG_INFO("Scanning for call instr...");
 
         bool next_call_is_not_the_right_one = false;
 
@@ -3914,8 +3914,8 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                     const auto string_ref_func_start = utility::find_function_start((uintptr_t)*string_ref);
                     const auto return_addr_func_start = utility::find_function_start(addr);
 
-                    spdlog::info("String ref func start: {:x}", (uintptr_t)*string_ref_func_start);
-                    spdlog::info("Return addr func start: {:x}", (uintptr_t)*return_addr_func_start);
+                    SPDLOG_INFO("String ref func start: {:x}", (uintptr_t)*string_ref_func_start);
+                    SPDLOG_INFO("Return addr func start: {:x}", (uintptr_t)*return_addr_func_start);
 
                     if (string_ref_func_start && return_addr_func_start && *string_ref_func_start == *return_addr_func_start) {
                         return true;
@@ -3929,7 +3929,7 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
         // This string is present in UE5 (>= 5.1) and used when using texture descriptors to create textures.
         // that means this is UE5 and the function will take a texture descriptor instead of a bunch of arguments.
         if (is_string_nearby(return_address, L"BufferedRT")) {
-            spdlog::info("Found string ref for BufferedRT, this is UE5!");
+            SPDLOG_INFO("Found string ref for BufferedRT, this is UE5!");
             this->is_using_texture_desc = true;
             this->is_version_greq_5_1 = true;
         }
@@ -3937,7 +3937,7 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
         // Present in a specific game or game(s), somewhere around 4.8-4.12 (?)
         // indicates that texture descriptors are being used.
         if (is_string_nearby(return_address, L"SceneViewBuffer")) {
-            spdlog::info("Found string ref for SceneViewBuffer, texture descriptors are being used!");
+            SPDLOG_INFO("Found string ref for SceneViewBuffer, texture descriptors are being used!");
             this->is_using_texture_desc = true;
             this->is_version_greq_5_1 = false;
 
@@ -3974,7 +3974,7 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
             if (ip != 0) {
                 for (const auto& pattern : bad_patterns_before_call) {
                     if (utility::scan(ip, 100, pattern).value_or(0) == ip) {
-                        spdlog::info("Found bad pattern before call, skipping next call: {:x} ({})", ip, pattern);
+                        SPDLOG_INFO("Found bad pattern before call, skipping next call: {:x} ({})", ip, pattern);
                         next_call_is_not_the_right_one = true;
                         break;
                     }
@@ -3988,7 +3988,7 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                     this->is_using_texture_desc = true;
                     this->is_version_greq_5_1 = true;
 
-                    spdlog::info("Found usage of string \"BufferedRT\" while analyzing AllocateRenderTargetTexture!");
+                    SPDLOG_INFO("Found usage of string \"BufferedRT\" while analyzing AllocateRenderTargetTexture!");
                 }
             } catch(...) {
 
@@ -4008,31 +4008,31 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                         // Analyze some of the instructions inside the call first
                         // If it has a mov eax, 0x800, then returns, we can skip this function
                         const auto fn = utility::calculate_absolute(ip + 1);
-                        spdlog::info("Analyzing call at {:x} to {:x}", ip, fn);
+                        SPDLOG_INFO("Analyzing call at {:x} to {:x}", ip, fn);
 
                         if (auto result = utility::scan(fn, 10, "41 B8 30 00 00 00"); result.has_value() && *result == fn) {
-                            spdlog::info("First instruction is a mov r8d, 30h, skipping this call!");
+                            SPDLOG_INFO("First instruction is a mov r8d, 30h, skipping this call!");
                             next_call_is_not_the_right_one = true;
                         } else if (auto result = utility::scan(fn, 50, "B8 00 08 00 00 C3"); result.has_value()) {
-                            spdlog::info("First few instructions are a mov eax, 800h, ret, skipping this call!");
+                            SPDLOG_INFO("First few instructions are a mov eax, 800h, ret, skipping this call!");
                             next_call_is_not_the_right_one = true;
                         }
                     } catch(...) {
-                        spdlog::info("Failed to analyze call at {:x}", ip);
+                        SPDLOG_INFO("Failed to analyze call at {:x}", ip);
                     }
 
                     if (is_call && !next_call_is_not_the_right_one) {
                         const auto post_call = (uintptr_t)ip + decoded->Length;
-                        spdlog::info("AllocateRenderTargetTexture post_call: {:x}", post_call - (uintptr_t)*utility::get_module_within((void*)post_call));
+                        SPDLOG_INFO("AllocateRenderTargetTexture post_call: {:x}", post_call - (uintptr_t)*utility::get_module_within((void*)post_call));
 
                         auto factory = SafetyHookFactory::init();
                         auto builder = factory->acquire();
 
                         if (*(uint8_t*)ip == 0xE8) {
-                            spdlog::info("E8 call found!");
+                            SPDLOG_INFO("E8 call found!");
                             this->is_pre_texture_call_e8 = true;
                         } else {
-                            spdlog::info("E8 call not found, assuming register call!");
+                            SPDLOG_INFO("E8 call not found, assuming register call!");
                         }
 
                         // So we can call the original texture create function again.
@@ -4046,7 +4046,7 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                         return false;
                     }
 
-                    spdlog::info("Skipping write to memory instruction at {:x} ({:x} bytes, landing at {:x})", ip, decoded->Length, ip + decoded->Length);
+                    SPDLOG_INFO("Skipping write to memory instruction at {:x} ({:x} bytes, landing at {:x})", ip, decoded->Length, ip + decoded->Length);
                     emu.ctx->Registers.RegRip += decoded->Length;
                     emu.ctx->Instruction = *decoded; // pseudo-emulate the instruction
                     ++emu.ctx->InstructionsCount;
@@ -4055,7 +4055,7 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                         next_call_is_not_the_right_one = false;
                     }
                 } else if (emu.emulate() != SHEMU_SUCCESS) { // only emulate the non-memory write instructions
-                    spdlog::info("Emulation failed at {:x} ({:x} bytes, landing at {:x})", ip, decoded->Length, ip + decoded->Length);
+                    SPDLOG_INFO("Emulation failed at {:x} ({:x} bytes, landing at {:x})", ip, decoded->Length, ip + decoded->Length);
                     // instead of just adding it onto the RegRip, we need to use the ip we had previously from the decode
                     // because the emulator can move the instruction pointer after emulate() is called
                     emu.ctx->Registers.RegRip = ip + decoded->Length;
@@ -4066,7 +4066,7 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
             }
         }
 
-        spdlog::error("Failed to find call instruction!");
+        SPDLOG_ERROR("Failed to find call instruction!");
     }
 
     return false;
@@ -4126,7 +4126,7 @@ bool VRRenderTargetManager::AllocateRenderTargetTexture(uint32_t Index, uint32_t
     OutShaderResourceTexture.texture = OutTargetableTexture.texture;*/
 
     m_last_allocate_render_target_return_address = (uintptr_t)_ReturnAddress();
-    spdlog::info("AllocateRenderTargetTexture called from: {:x}", m_last_allocate_render_target_return_address - (uintptr_t)*utility::get_module_within((void*)m_last_allocate_render_target_return_address));
+    SPDLOG_INFO("AllocateRenderTargetTexture called from: {:x}", m_last_allocate_render_target_return_address - (uintptr_t)*utility::get_module_within((void*)m_last_allocate_render_target_return_address));
 
     // So, if CalculateRenderTargetSize was *never* called before this function
     // that means we have the virtual index of this function wrong, and we must swap the vtable out.
@@ -4138,8 +4138,8 @@ bool VRRenderTargetManager::AllocateRenderTargetTexture(uint32_t Index, uint32_t
 
     if (is_incorrect_vtable) {
         // oh no this is the wrong vtable!!!! we need to fix it  nOW!!!
-        spdlog::info("AllocateRenderTargetTexture called instead of AllocateDepthTexture! Fixing...");
-        spdlog::info("Switching to old render target manager! Incorrect function called!");
+        SPDLOG_INFO("AllocateRenderTargetTexture called instead of AllocateDepthTexture! Fixing...");
+        SPDLOG_INFO("Switching to old render target manager! Incorrect function called!");
         //g_hook->switch_to_old_rendertarget_manager();
 
         // Do a switcharoo on the vtable of this object to the old one because we will crash if we don't.

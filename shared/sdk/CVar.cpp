@@ -18,12 +18,12 @@
 
 namespace sdk {
 std::optional<uintptr_t> find_alternate_cvar_ref(std::wstring_view str, uint32_t known_default, HMODULE module) {
-    spdlog::info("Performing alternate scan for cvar \"{}\"", utility::narrow(str));
+    SPDLOG_INFO("Performing alternate scan for cvar \"{}\"", utility::narrow(str));
 
     const auto str_data = utility::scan_string(module, str.data());
 
     if (!str_data) {
-        spdlog::error("Failed to find string for cvar \"{}\"", utility::narrow(str.data()));
+        SPDLOG_ERROR("Failed to find string for cvar \"{}\"", utility::narrow(str.data()));
         return std::nullopt;
     }
 
@@ -50,7 +50,7 @@ std::optional<uintptr_t> find_alternate_cvar_ref(std::wstring_view str, uint32_t
         result = utility::scan_data_reverse(*str_ref, 50, mov_r8d_mov_rsp.data(), mov_r8d_mov_rsp.size());
 
         if (result) {
-            spdlog::info("Found alternate cvar reference at {:x}", *result);
+            SPDLOG_INFO("Found alternate cvar reference at {:x}", *result);
             break;
         }
 
@@ -59,7 +59,7 @@ std::optional<uintptr_t> find_alternate_cvar_ref(std::wstring_view str, uint32_t
     }
 
     if (!result) {
-        spdlog::error("Failed to find alternate cvar reference for \"{}\"", utility::narrow(str.data()));
+        SPDLOG_ERROR("Failed to find alternate cvar reference for \"{}\"", utility::narrow(str.data()));
         return std::nullopt;
     }
     
@@ -70,7 +70,7 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
     const auto cvar_creation_ref = utility::scan_mnemonic(start, 100, "CALL");
 
     if (!cvar_creation_ref) {
-        spdlog::error("Failed to find cvar creation reference for {}", utility::narrow(str.data()));
+        SPDLOG_ERROR("Failed to find cvar creation reference for {}", utility::narrow(str.data()));
         return std::nullopt;
     }
 
@@ -79,10 +79,10 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
     const auto is_ff_call = *(uint8_t*)*cvar_creation_ref == 0xFF;
 
     if (!is_e8_call) {
-        spdlog::info("Not E8 call");
+        SPDLOG_INFO("Not E8 call");
 
         if (is_ff_call) {
-            spdlog::info("FF call");
+            SPDLOG_INFO("FF call");
 
             // This is the call to the cvar interface so it should be easier
             // we can emulate forward from the call and track the rax register
@@ -113,7 +113,7 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
                     const auto is_call = std::string_view{decoded->Mnemonic}.starts_with("CALL");
 
                     if (decoded->MemoryAccess & ND_ACCESS_ANY_WRITE || is_call) {
-                        spdlog::info("Skipping write to memory instruction at {:x}", ip);
+                        SPDLOG_INFO("Skipping write to memory instruction at {:x}", ip);
                         emu.ctx->Registers.RegRip += decoded->Length;
                         emu.ctx->Instruction = *decoded; // pseudo-emulate the instruction
                         ++emu.ctx->InstructionsCount;
@@ -149,47 +149,47 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
                             result += sizeof(void*);
                         }
 
-                        spdlog::info("Found cvar for \"{}\" at {:x} (referenced at {:x})", utility::narrow(str.data()), result, emu.ctx->Registers.RegRip);
+                        SPDLOG_INFO("Found cvar for \"{}\" at {:x} (referenced at {:x})", utility::narrow(str.data()), result, emu.ctx->Registers.RegRip);
                         return result;
                     }
                 }
             }
 
-            spdlog::error("Failed to find cvar reference for {}", utility::narrow(str.data()));
+            SPDLOG_ERROR("Failed to find cvar reference for {}", utility::narrow(str.data()));
         } else {
             auto raw_cvar_ref = !stop_at_first_mov ? 
                                 utility::scan_mnemonic(*cvar_creation_ref + utility::get_insn_size(*cvar_creation_ref), 100, "CALL") : cvar_creation_ref;
 
             if (!raw_cvar_ref) {
-                spdlog::error("Failed to find raw cvar reference for {}", utility::narrow(str.data()));
+                SPDLOG_ERROR("Failed to find raw cvar reference for {}", utility::narrow(str.data()));
                 return std::nullopt;
             }
 
-            spdlog::info("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
+            SPDLOG_INFO("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
             const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
 
             // we need to check that the reference uses a register in its operand
             // otherwise it's the wrong call. find the next call if it is.
             if (decoded_ref && !stop_at_first_mov) {
                 for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
-                    spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
+                    SPDLOG_INFO(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
                 }
 
                 if (decoded_ref->OperandsCount == 0 || 
                     decoded_ref->Operands[0].Type != ND_OP_MEM || 
                     decoded_ref->Operands[0].Info.Memory.Base == ND_REG_NOT_PRESENT)
                 {
-                    spdlog::info("Scanning again, instruction at {:x} doesn't use a register", *raw_cvar_ref);
+                    SPDLOG_INFO("Scanning again, instruction at {:x} doesn't use a register", *raw_cvar_ref);
                     raw_cvar_ref = utility::scan_mnemonic(*raw_cvar_ref + utility::get_insn_size(*raw_cvar_ref), 100, "CALL");
 
                     if (raw_cvar_ref) {
                         const auto decoded_ref = utility::decode_one((uint8_t*)*raw_cvar_ref);
 
                         for (auto i = 0; i < decoded_ref->OperandsCount; ++i) {
-                            spdlog::info(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
+                            SPDLOG_INFO(" Operand type {}: {}", i, decoded_ref->Operands[i].Type);
                         }
 
-                        spdlog::info("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
+                        SPDLOG_INFO("Found raw cvar reference for \"{}\" at {:x}", utility::narrow(str.data()), *raw_cvar_ref);
                     }
                 }
             }
@@ -204,7 +204,7 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
                 const auto status = NdDecodeEx(&ix, (ND_UINT8*)ip, 1000, ND_CODE_64, ND_DATA_64);
 
                 if (!ND_SUCCESS(status)) {
-                    spdlog::error("Failed to decode instruction for {}", utility::narrow(str.data()));
+                    SPDLOG_ERROR("Failed to decode instruction for {}", utility::narrow(str.data()));
                     return std::nullopt;
                 }
 
@@ -217,10 +217,10 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
                 ip += ix.Length;
             }
 
-            spdlog::error("Failed to find cvar for {}", utility::narrow(str.data()));
+            SPDLOG_ERROR("Failed to find cvar for {}", utility::narrow(str.data()));
         }
     } else {
-        spdlog::info("Cvar creation is not inlined, performing alternative search...");
+        SPDLOG_INFO("Cvar creation is not inlined, performing alternative search...");
 
         auto lea_rcx_ref = utility::scan_mnemonic(start, 100, "LEA");
 
@@ -231,19 +231,19 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
         auto decoded = utility::decode_one((uint8_t*)*lea_rcx_ref);
 
         if (!decoded) {
-            spdlog::error("Failed to decode instruction for {}", utility::narrow(str.data()));
+            SPDLOG_ERROR("Failed to decode instruction for {}", utility::narrow(str.data()));
             return std::nullopt;
         }
 
         if (decoded->Operands[0].Type != ND_OP_REG || decoded->Operands[0].Info.Register.Reg != NDR_RCX) {
-            spdlog::error("Failed to find lea rcx for {}", utility::narrow(str.data()));
+            SPDLOG_ERROR("Failed to find lea rcx for {}", utility::narrow(str.data()));
             return std::nullopt;
         }
 
         const auto cvar = utility::resolve_displacement(*lea_rcx_ref);
 
         if (!cvar) {
-            spdlog::error("Failed to resolve displacement for {}", utility::narrow(str.data()));
+            SPDLOG_ERROR("Failed to resolve displacement for {}", utility::narrow(str.data()));
             return std::nullopt;
         }
 
@@ -268,7 +268,7 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::ws
     }
 
     if (!str_data && !str_ref) {
-        spdlog::error("Failed to find string for {}", utility::narrow(str.data()));
+        SPDLOG_ERROR("Failed to find string for {}", utility::narrow(str.data()));
         return std::nullopt;
     }
 
@@ -277,58 +277,58 @@ std::optional<uintptr_t> find_cvar_by_description(std::wstring_view str, std::ws
         str_ref = utility::scan_displacement_reference(module, *str_data);
 
         if (!str_ref) {
-            spdlog::error("Failed to find reference to string for {}", utility::narrow(str.data()));
+            SPDLOG_ERROR("Failed to find reference to string for {}", utility::narrow(str.data()));
             return std::nullopt;
         }
 
-        spdlog::info("Found string ref for \"{}\" at {:x}", utility::narrow(str.data()), *str_ref);
+        SPDLOG_INFO("Found string ref for \"{}\" at {:x}", utility::narrow(str.data()), *str_ref);
     }
 
     return resolve_cvar_from_address(*str_ref + 4, cvar_name, stop_at_first_mov);
 }
 
 std::optional<ConsoleVariableDataWrapper> find_cvar_data(std::wstring_view module_name, std::wstring_view name, bool stop_at_first_mov) {
-    spdlog::info("Attempting to locate {} {} cvar", utility::narrow(module_name.data()), utility::narrow(name.data()));
+    SPDLOG_INFO("Attempting to locate {} {} cvar", utility::narrow(module_name.data()), utility::narrow(name.data()));
 
     const auto module = sdk::get_ue_module(module_name.data());
     const auto str = utility::scan_string(module, name.data());
 
     if (!str) {
-        spdlog::error("Failed to find {} string!", utility::narrow(name.data()));
+        SPDLOG_ERROR("Failed to find {} string!", utility::narrow(name.data()));
         return std::nullopt;
     }
 
     const auto str_ref = utility::scan_displacement_reference(module, *str);
 
     if (!str_ref) {
-        spdlog::error("Failed to find {} string reference!");
+        SPDLOG_ERROR("Failed to find {} string reference!");
         return std::nullopt;
     }
 
     const auto result = sdk::resolve_cvar_from_address(*str_ref + 4, name.data(), stop_at_first_mov);
 
     if (result) {
-        spdlog::info("Found {} at {:x}", utility::narrow(name.data()), (uintptr_t)*result);
+        SPDLOG_INFO("Found {} at {:x}", utility::narrow(name.data()), (uintptr_t)*result);
     }
 
     return result;
 }
 
 IConsoleVariable** find_cvar(std::wstring_view module_name, std::wstring_view name, bool stop_at_first_mov) {
-    spdlog::info("Attempting to locate {} {} cvar", utility::narrow(module_name.data()), utility::narrow(name.data()));
+    SPDLOG_INFO("Attempting to locate {} {} cvar", utility::narrow(module_name.data()), utility::narrow(name.data()));
 
     const auto module = sdk::get_ue_module(module_name.data());
     const auto str = utility::scan_string(module, name.data());
 
     if (!str) {
-        spdlog::error("Failed to find {} string!", utility::narrow(name.data()));
+        SPDLOG_ERROR("Failed to find {} string!", utility::narrow(name.data()));
         return nullptr;
     }
 
     const auto str_ref = utility::scan_displacement_reference(module, *str);
 
     if (!str_ref) {
-        spdlog::error("Failed to find {} string reference!");
+        SPDLOG_ERROR("Failed to find {} string reference!");
         return nullptr;
     }
 
@@ -336,7 +336,7 @@ IConsoleVariable** find_cvar(std::wstring_view module_name, std::wstring_view na
 
     if (result) {
         *result -= sizeof(void*);
-        spdlog::info("Found {} at {:x}", utility::narrow(name.data()), (uintptr_t)*result);
+        SPDLOG_INFO("Found {} at {:x}", utility::narrow(name.data()), (uintptr_t)*result);
     }
 
     return (IConsoleVariable**)*result;
@@ -482,7 +482,7 @@ std::optional<ConsoleVariableDataWrapper> vr::get_slate_draw_to_vr_render_target
 
 std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_usage_location() {
     static auto result = []() -> std::optional<uintptr_t> {
-        spdlog::info("Scanning for Slate.DrawToVRRenderTarget usage...");
+        SPDLOG_INFO("Scanning for Slate.DrawToVRRenderTarget usage...");
 
         const auto cvar = get_slate_draw_to_vr_render_target_real_cvar();
 
@@ -501,16 +501,16 @@ std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_usage_location()
                 ref; 
                 ref = utility::scan_displacement_reference(*ref + 1, (module_end - (*ref + 1)), cvar_addr)) 
             {
-                spdlog::info("Checking if Slate.DrawToVRRenderTarget is used at {:x}", *ref);
+                SPDLOG_INFO("Checking if Slate.DrawToVRRenderTarget is used at {:x}", *ref);
 
                 const auto resolved = utility::resolve_instruction(*ref);
                 if (!resolved) {
-                    spdlog::error("Failed to resolve instruction at {:x}", *ref);
+                    SPDLOG_ERROR("Failed to resolve instruction at {:x}", *ref);
                     continue;
                 }
 
                 if (resolved->instrux.Operands[0].Type == ND_OP_MEM && resolved->instrux.Operands[1].Type == ND_OP_REG) {
-                    spdlog::info("Instruction at {:x} is not a usage of Slate.DrawToVRRenderTarget", *ref);
+                    SPDLOG_INFO("Instruction at {:x} is not a usage of Slate.DrawToVRRenderTarget", *ref);
                     continue; // this is NOT what we want
                 }
 
@@ -522,26 +522,26 @@ std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_usage_location()
 
                 for (auto ip = (uint8_t*)resolved->addr; ix = utility::decode_one(ip); ip += ix->Length) {
                     if (std::string_view{ix->Mnemonic}.starts_with("RET") || std::string_view{ix->Mnemonic}.starts_with("INT3")) {
-                        spdlog::info("Found RET at {:x}", (uintptr_t)ip);
+                        SPDLOG_INFO("Found RET at {:x}", (uintptr_t)ip);
                         break;
                     }
 
                     if (ix->Instruction == ND_INS_JMPFI || ix->Instruction == ND_INS_JMPFD) {
-                        spdlog::info("Found JMPFI/JMPFD at {:x}", (uintptr_t)ip);
+                        SPDLOG_INFO("Found JMPFI/JMPFD at {:x}", (uintptr_t)ip);
                         break;
                     }
 
                     ++count;
 
                     if (count >= 50) {
-                        spdlog::info("Located Slate.DrawToVRRenderTarget usage at {:x}", (uintptr_t)resolved->addr);
+                        SPDLOG_INFO("Located Slate.DrawToVRRenderTarget usage at {:x}", (uintptr_t)resolved->addr);
                         return resolved->addr;
                     }
                 }
             }
         }
 
-        spdlog::error("Failed to locate Slate.DrawToVRRenderTarget usage!");
+        SPDLOG_ERROR("Failed to locate Slate.DrawToVRRenderTarget usage!");
 
         return std::nullopt;
     }();
@@ -598,7 +598,7 @@ void IConsoleVariable::locate_vtable_indices() {
         // in most cases the +2 function will be the Set function (the +1 function is Release)
         // from there, GetInt, GetFloat, etc will be the next subsequent functions
         // THIS MUST BE CALLED FROM AN ACTUAL IConsoleVariable INSTANCE, NOT A CONSOLE COMMAND!!!
-        spdlog::info("Locating IConsoleVariable vtable indices...");
+        SPDLOG_INFO("Locating IConsoleVariable vtable indices...");
 
         const auto vtable = *(uintptr_t**)this;
         std::optional<uint32_t> previous_nullptr_index{};
@@ -607,7 +607,7 @@ void IConsoleVariable::locate_vtable_indices() {
             const auto func = vtable[i];
 
             if (func == 0 || IsBadReadPtr((void*)func, 1)) {
-                spdlog::error("Reached end of IConsoleVariable vtable at index {}", i);
+                SPDLOG_ERROR("Reached end of IConsoleVariable vtable at index {}", i);
                 break;
             }
 
@@ -619,22 +619,22 @@ void IConsoleVariable::locate_vtable_indices() {
 
                 // means this function is GetBool or something like that.
                 if (is_vfunc_pattern(vtable[potential_get_int_index], "83 79")) {
-                    spdlog::info("GetBool detected, skipping ahead...");
+                    SPDLOG_INFO("GetBool detected, skipping ahead...");
                     potential_get_int_index += 1;
                 }
 
                 s_get_int_vtable_index = potential_get_int_index;
                 s_get_float_vtable_index = *s_get_int_vtable_index + 1;
-                spdlog::info("Encountered final nullptr at index {}", *previous_nullptr_index);
-                spdlog::info("IConsoleVariable::Set vtable index: {}", *s_set_vtable_index);
-                spdlog::info("IConsoleVariable::GetInt vtable index: {}", *s_get_int_vtable_index);
-                spdlog::info("IConsoleVariable::GetFloat vtable index: {}", *s_get_float_vtable_index);
+                SPDLOG_INFO("Encountered final nullptr at index {}", *previous_nullptr_index);
+                SPDLOG_INFO("IConsoleVariable::Set vtable index: {}", *s_set_vtable_index);
+                SPDLOG_INFO("IConsoleVariable::GetInt vtable index: {}", *s_get_int_vtable_index);
+                SPDLOG_INFO("IConsoleVariable::GetFloat vtable index: {}", *s_get_float_vtable_index);
                 break;
             }
         }
 
         if (!s_set_vtable_index) {
-            spdlog::error("Failed to locate IConsoleVariable::Set vtable index!");
+            SPDLOG_ERROR("Failed to locate IConsoleVariable::Set vtable index!");
         }
 
         // TODO: verify that the destructor

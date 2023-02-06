@@ -307,8 +307,6 @@ if(sdk_SOURCES)
 	target_sources(sdk PRIVATE ${sdk_SOURCES})
 endif()
 
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${sdk_SOURCES})
-
 target_compile_features(sdk PUBLIC
 	cxx_std_20
 )
@@ -324,11 +322,84 @@ target_include_directories(sdk PUBLIC
 
 target_link_libraries(sdk PUBLIC
 	spdlog
-	kananlib
 	bddisasm
 	bdshemu
 	glm_static
 	asmjit
+)
+
+target_link_libraries(sdk PUBLIC
+	kananlib
+)
+
+unset(CMKR_TARGET)
+unset(CMKR_SOURCES)
+
+# Target sdk-nolog
+set(CMKR_TARGET sdk-nolog)
+set(sdk-nolog_SOURCES "")
+
+list(APPEND sdk-nolog_SOURCES
+	"shared/sdk/CVar.cpp"
+	"shared/sdk/DynamicRHI.cpp"
+	"shared/sdk/EngineModule.cpp"
+	"shared/sdk/FViewportInfo.cpp"
+	"shared/sdk/Slate.cpp"
+	"shared/sdk/StereoStuff.cpp"
+	"shared/sdk/UEngine.cpp"
+	"shared/sdk/UGameEngine.cpp"
+	"shared/sdk/Utility.cpp"
+	"shared/sdk/CVar.hpp"
+	"shared/sdk/DynamicRHI.hpp"
+	"shared/sdk/EngineModule.hpp"
+	"shared/sdk/FViewportInfo.hpp"
+	"shared/sdk/Math.hpp"
+	"shared/sdk/RHICommandList.hpp"
+	"shared/sdk/Slate.hpp"
+	"shared/sdk/StereoStuff.hpp"
+	"shared/sdk/UEngine.hpp"
+	"shared/sdk/UGameEngine.hpp"
+	"shared/sdk/Utility.hpp"
+	"shared/sdk/threading/GameThreadWorker.hpp"
+	"shared/sdk/threading/RHIThreadWorker.hpp"
+	"shared/sdk/threading/RenderThreadWorker.hpp"
+	"shared/sdk/threading/ThreadWorker.hpp"
+)
+
+list(APPEND sdk-nolog_SOURCES
+	cmake.toml
+)
+
+set(CMKR_SOURCES ${sdk-nolog_SOURCES})
+add_library(sdk-nolog STATIC)
+
+if(sdk-nolog_SOURCES)
+	target_sources(sdk-nolog PRIVATE ${sdk-nolog_SOURCES})
+endif()
+
+target_compile_features(sdk-nolog PUBLIC
+	cxx_std_20
+)
+
+target_compile_options(sdk-nolog PUBLIC
+	"/EHa"
+	"/MP"
+)
+
+target_include_directories(sdk-nolog PUBLIC
+	"shared/"
+)
+
+target_link_libraries(sdk-nolog PUBLIC
+	spdlog
+	bddisasm
+	bdshemu
+	glm_static
+	asmjit
+)
+
+target_link_libraries(sdk-nolog PUBLIC
+	kananlib-nolog
 )
 
 unset(CMKR_TARGET)
@@ -546,8 +617,6 @@ if(ue4poc_SOURCES)
 	target_sources(ue4poc PRIVATE ${ue4poc_SOURCES})
 endif()
 
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${ue4poc_SOURCES})
-
 
 target_compile_features(ue4poc PUBLIC
 	cxx_std_20
@@ -568,8 +637,6 @@ target_include_directories(ue4poc PUBLIC
 )
 
 target_link_libraries(ue4poc PUBLIC
-	kananlib
-	sdk
 	shlwapi
 	d3d11
 	d3d12
@@ -579,6 +646,11 @@ target_link_libraries(ue4poc PUBLIC
 	openvr_api
 	openxr_loader
 	nlohmann_json
+)
+
+target_link_libraries(ue4poc PUBLIC
+	kananlib
+	sdk
 )
 
 set_target_properties(ue4poc PROPERTIES
@@ -603,6 +675,138 @@ set_target_properties(ue4poc PROPERTIES
 add_custom_command(
     TARGET ue4poc POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openvr> $<TARGET_FILE_DIR:ue4poc>)
+
+unset(CMKR_TARGET)
+unset(CMKR_SOURCES)
+
+# Target ue4poc-nolog
+set(CMKR_TARGET ue4poc-nolog)
+set(ue4poc-nolog_SOURCES "")
+
+list(APPEND ue4poc-nolog_SOURCES
+	"src/ExceptionHandler.cpp"
+	"src/Framework.cpp"
+	"src/Main.cpp"
+	"src/Mods.cpp"
+	"src/hooks/D3D11Hook.cpp"
+	"src/hooks/D3D12Hook.cpp"
+	"src/hooks/WindowsMessageHook.cpp"
+	"src/hooks/XInputHook.cpp"
+	"src/mods/FrameworkConfig.cpp"
+	"src/mods/PluginLoader.cpp"
+	"src/mods/VR.cpp"
+	"src/mods/vr/Bindings.cpp"
+	"src/mods/vr/D3D11Component.cpp"
+	"src/mods/vr/D3D12Component.cpp"
+	"src/mods/vr/FFakeStereoRenderingHook.cpp"
+	"src/mods/vr/OverlayComponent.cpp"
+	"src/mods/vr/runtimes/OpenVR.cpp"
+	"src/mods/vr/runtimes/OpenXR.cpp"
+	"src/ue4poc-imgui/imgui_impl_dx11.cpp"
+	"src/ue4poc-imgui/imgui_impl_dx12.cpp"
+	"src/ue4poc-imgui/imgui_impl_win32.cpp"
+	"src/ExceptionHandler.hpp"
+	"src/Framework.hpp"
+	"src/LicenseStrings.hpp"
+	"src/Mod.hpp"
+	"src/Mods.hpp"
+	"src/WindowFilter.hpp"
+	"src/hooks/D3D11Hook.hpp"
+	"src/hooks/D3D12Hook.hpp"
+	"src/hooks/WindowsMessageHook.hpp"
+	"src/hooks/XInputHook.hpp"
+	"src/mods/FrameworkConfig.hpp"
+	"src/mods/PluginLoader.hpp"
+	"src/mods/VR.hpp"
+	"src/mods/vr/D3D11Component.hpp"
+	"src/mods/vr/D3D12Component.hpp"
+	"src/mods/vr/FFakeStereoRenderingHook.hpp"
+	"src/mods/vr/OverlayComponent.hpp"
+	"src/mods/vr/runtimes/OpenVR.hpp"
+	"src/mods/vr/runtimes/OpenXR.hpp"
+	"src/mods/vr/runtimes/VRRuntime.hpp"
+	"src/mods/vr/shaders/ps.hpp"
+	"src/mods/vr/shaders/vs.hpp"
+	"src/ue4poc-imgui/font_robotomedium.hpp"
+	"src/ue4poc-imgui/ue4poc_imconfig.hpp"
+	"src/ue4poc-imgui/imgui_impl_dx11.h"
+	"src/ue4poc-imgui/imgui_impl_dx12.h"
+	"src/ue4poc-imgui/imgui_impl_win32.h"
+)
+
+list(APPEND ue4poc-nolog_SOURCES
+	cmake.toml
+)
+
+set(CMKR_SOURCES ${ue4poc-nolog_SOURCES})
+add_library(ue4poc-nolog SHARED)
+
+if(ue4poc-nolog_SOURCES)
+	target_sources(ue4poc-nolog PRIVATE ${ue4poc-nolog_SOURCES})
+endif()
+
+
+target_compile_features(ue4poc-nolog PUBLIC
+	cxx_std_20
+)
+
+target_compile_options(ue4poc-nolog PUBLIC
+	"/GS-"
+	"/bigobj"
+	"/EHa"
+	"/MP"
+)
+
+target_include_directories(ue4poc-nolog PUBLIC
+	"shared/"
+	"src/"
+	"include/"
+	"${OPENXR_SOURCE_DIR}/src"
+)
+
+target_link_libraries(ue4poc-nolog PUBLIC
+	shlwapi
+	d3d11
+	d3d12
+	safetyhook
+	glm_static
+	imgui
+	openvr_api
+	openxr_loader
+	nlohmann_json
+)
+
+target_compile_definitions(ue4poc-nolog PUBLIC
+	SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_OFF
+)
+
+target_link_libraries(ue4poc-nolog PUBLIC
+	kananlib-nolog
+	sdk-nolog
+)
+
+set_target_properties(ue4poc-nolog PROPERTIES
+	OUTPUT_NAME
+		UnrealVRBackend
+	LINK_FLAGS
+		"/DELAYLOAD:openvr_api.dll /DELAYLOAD:openxr_loader.dll"
+	RUNTIME_OUTPUT_DIRECTORY_RELEASE
+		"${CMAKE_BINARY_DIR}/bin/${CMKR_TARGET}"
+	RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO
+		"${CMAKE_BINARY_DIR}/bin/${CMKR_TARGET}"
+	LIBRARY_OUTPUT_DIRECTORY_RELEASE
+		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+	LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO
+		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+	ARCHIVE_OUTPUT_DIRECTORY_RELEASE
+		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+	ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO
+		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+)
+
+add_custom_command(
+    TARGET ue4poc-nolog POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openvr> $<TARGET_FILE_DIR:ue4poc-nolog>)
 
 unset(CMKR_TARGET)
 unset(CMKR_SOURCES)

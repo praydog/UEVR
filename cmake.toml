@@ -82,7 +82,7 @@ compile-definitions = [
     "IMGUI_USER_CONFIG=\"${CMAKE_CURRENT_SOURCE_DIR}/src/ue4poc-imgui/ue4poc_imconfig.hpp\"",
 ]
 
-[target.sdk]
+[template.sdk-template]
 type = "static"
 sources = ["shared/sdk/**.cpp", "shared/sdk/**.c"]
 headers = ["shared/sdk/**.hpp", "shared/sdk/**.h"]
@@ -91,11 +91,22 @@ compile-options = ["/EHa", "/MP"]
 compile-features = ["cxx_std_20"]
 link-libraries = [
     "spdlog",
-    "kananlib",
     "bddisasm",
     "bdshemu",
     "glm_static",
     "asmjit"
+]
+
+[target.sdk]
+type = "sdk-template"
+link-libraries = [
+    "kananlib",
+]
+
+[target.sdk-nolog]
+type = "sdk-template"
+link-libraries = [
+    "kananlib-nolog",
 ]
 
 [target.plugin_renderlib]
@@ -140,7 +151,7 @@ LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET
 ARCHIVE_OUTPUT_DIRECTORY_RELEASE = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
 ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
 
-[target.ue4poc]
+[template.ue4template]
 type = "shared"
 sources = ["src/**.cpp", "src/**.c"]
 headers = ["src/**.hpp", "src/**.h"]
@@ -154,8 +165,6 @@ compile-options = ["/GS-", "/bigobj", "/EHa", "/MP"]
 compile-features = ["cxx_std_20"]
 compile-definitions = []
 link-libraries = [
-    "kananlib",
-    "sdk",
     "shlwapi",
     "d3d11",
     "d3d12",
@@ -166,13 +175,8 @@ link-libraries = [
     "openxr_loader",
     "nlohmann_json"
 ]
-cmake-after="""
-add_custom_command(
-    TARGET ue4poc POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openvr> $<TARGET_FILE_DIR:ue4poc>)
-"""
 
-[target.ue4poc.properties]
+[template.ue4template.properties]
 OUTPUT_NAME = "UnrealVRBackend"
 LINK_FLAGS = "/DELAYLOAD:openvr_api.dll /DELAYLOAD:openxr_loader.dll"
 RUNTIME_OUTPUT_DIRECTORY_RELEASE = "${CMAKE_BINARY_DIR}/bin/${CMKR_TARGET}"
@@ -182,3 +186,27 @@ LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET
 ARCHIVE_OUTPUT_DIRECTORY_RELEASE = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
 ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
 
+[target.ue4poc]
+type="ue4template"
+link-libraries = [
+    "kananlib",
+    "sdk"
+]
+cmake-after="""
+add_custom_command(
+    TARGET ue4poc POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openvr> $<TARGET_FILE_DIR:ue4poc>)
+"""
+
+[target.ue4poc-nolog]
+type="ue4template"
+compile-definitions = ["SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_OFF"]
+link-libraries = [
+    "kananlib-nolog",
+    "sdk-nolog"
+]
+cmake-after="""
+add_custom_command(
+    TARGET ue4poc-nolog POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openvr> $<TARGET_FILE_DIR:ue4poc-nolog>)
+"""
