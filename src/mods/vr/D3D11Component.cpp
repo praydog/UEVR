@@ -146,6 +146,13 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
             context->CopySubresourceRegion(m_left_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
 
+            if (m_is_shader_setup) {
+                ID3D11RenderTargetView* views[] = { m_left_eye_rtv.Get() };
+                context->OMSetRenderTargets(1, views, nullptr);
+                //context->ClearRenderTargetView(m_right_eye_rtv.Get(), clear_color);
+                invoke_shader(vr->m_frame_count, 0, m_backbuffer_size[0] / 2, m_backbuffer_size[1]);
+            }
+
             vr::VRTextureWithPose_t left_eye{
                 (void*)m_left_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto,
                 submit_pose
@@ -231,9 +238,9 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
                 if (m_is_shader_setup) {
                     ID3D11RenderTargetView* views[] = { m_left_eye_rtv.Get() };
-                    //context->OMSetRenderTargets(1, views, nullptr);
+                    context->OMSetRenderTargets(1, views, nullptr);
                     //context->ClearRenderTargetView(m_right_eye_rtv.Get(), clear_color);
-                    //invoke_shader(vr->m_render_frame_count, 0, m_backbuffer_size[0] / 2, m_backbuffer_size[1]);
+                    invoke_shader(vr->m_frame_count, 0, m_backbuffer_size[0] / 2, m_backbuffer_size[1]);
                 }
 
                 vr::VRTextureWithPose_t left_eye{
@@ -272,8 +279,8 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
             if (m_is_shader_setup) {
                 ID3D11RenderTargetView* views[] = { m_right_eye_rtv.Get() };
-                //context->OMSetRenderTargets(1, views, nullptr);
-                //invoke_shader(vr->m_render_frame_count, 1, m_backbuffer_size[0] / 2, m_backbuffer_size[1]);
+                context->OMSetRenderTargets(1, views, nullptr);
+                invoke_shader(vr->m_frame_count, 1, m_backbuffer_size[0] / 2, m_backbuffer_size[1]);
                 //context->OMSetRenderTargets(1, &prev_rtv, prev_depth_rtv.Get());     
             }
 
@@ -558,26 +565,12 @@ bool D3D11Component::setup_shader() {
     constant_buffer_desc.MiscFlags = 0;
     constant_buffer_desc.StructureByteStride = 0;
 
-    m_shader_globals.model = DirectX::XMMatrixIdentity();
-    m_shader_globals.view = DirectX::XMMatrixIdentity();
-    m_shader_globals.proj = DirectX::XMMatrixIdentity();
     m_shader_globals.resolution = DirectX::XMFLOAT4(1920.0f, 1080.0f, 0.0f, 1920.0f / 1080.0f);
     m_shader_globals.time = 1.0f;
 
-    DirectX::XMVECTOR loc = DirectX::XMVectorSet(0, 0, -5, 0);
-    DirectX::XMVECTOR negloc = DirectX::XMVectorSet(0, 0, 5, 0);
-    DirectX::XMVECTOR target = DirectX::XMVectorSet(0, 0, 0, 0);
-    DirectX::XMVECTOR up = DirectX::XMVectorSet(0, 1, 0, 0);
-    m_shader_globals.view = DirectX::XMMatrixLookAtLH(loc, target, up);
-
-    DirectX::XMVECTOR model_pos = DirectX::XMVectorSet(0, 0, 0, 0);
-
-    m_shader_globals.model = DirectX::XMMatrixLookAtLH(model_pos, negloc, up);
-
     const auto hmd_transform = VR::get()->get_hmd_transform(0);
 
-    const auto model_pos2 = hmd_transform[3] + (hmd_transform[2] * 2.0f);
-    m_shader_globals.model.r[3] = DirectX::XMVECTOR{model_pos2.x, model_pos2.y, model_pos2.z, 1.0f};
+    m_model_mat[3] = hmd_transform[3] + (hmd_transform[2] * 2.0f);
 
     D3D11_SUBRESOURCE_DATA init_data{};
     init_data.pSysMem = &m_shader_globals;
@@ -642,6 +635,7 @@ bool D3D11Component::setup_shader() {
         spdlog::error("[VR] Failed to create index buffer.");
         return false;
     }
+
 
     spdlog::info("[VR] D3D11 shaders initialized.");
 
@@ -719,42 +713,27 @@ void D3D11Component::invoke_shader(uint32_t frame_count, uint32_t eye, uint32_t 
     const auto hmd_transform = vr->get_hmd_transform(frame_count);
     auto glm_view = hmd_transform * glm_eye_transform_offset;
 
+    const auto conv = glm::mat4 {
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, -1, 0,
+        0, 0, 0, 1
+    };
+
     if (GetAsyncKeyState(VK_SPACE)) {
-        const auto model_pos = hmd_transform[3] + (hmd_transform[2] * 5.0f);
-
-        DirectX::XMVECTOR loc = DirectX::XMVectorSet(model_pos.x, model_pos.y, model_pos.z, 0);
-        DirectX::XMVECTOR target = DirectX::XMVectorSet(hmd_transform[3].x, hmd_transform[3].y, hmd_transform[3].z, 0);
-        DirectX::XMVECTOR up = DirectX::XMVectorSet(0, 1, 0, 0);
-        m_shader_globals.model = DirectX::XMMatrixLookAtLH(loc, target, up);
-
+        m_model_mat = hmd_transform * conv;
+        m_model_mat[3] += m_model_mat[2] * 5.0f;
+        // flip the rotation around the y axis
+        //m_shader_globals.model *= DirectX::XMMatrixRotationY(DirectX::XM_PI / 2.0f);
     }
 
-    //m_shader_globals.view = DirectX::XMMatrixTranspose(glm_view); // we can do this later, right now the shader transposes it
-    m_shader_globals.view.r[0] = DirectX::XMVECTOR{glm_view[0].x, glm_view[0].y, glm_view[0].z, glm_view[0].w};
-    m_shader_globals.view.r[1] = DirectX::XMVECTOR{glm_view[1].x, glm_view[1].y, glm_view[1].z, glm_view[1].w};
-    m_shader_globals.view.r[2] = DirectX::XMVECTOR{glm_view[2].x, glm_view[2].y, glm_view[2].z, glm_view[2].w};
-    m_shader_globals.view.r[3] = DirectX::XMVECTOR{glm_view[3].x, glm_view[3].y, glm_view[3].z, glm_view[3].w};
-    //m_shader_globals.view = DirectX::XMMatrixTranspose(m_shader_globals.view);
+    glm_view = conv * glm::inverse(glm_view);
 
-    m_shader_globals.proj.r[0] = DirectX::XMVECTOR{glm_proj[0].x, glm_proj[0].y, glm_proj[0].z, glm_proj[0].w};
-    m_shader_globals.proj.r[1] = DirectX::XMVECTOR{glm_proj[1].x, glm_proj[1].y, glm_proj[1].z, glm_proj[1].w};
-    m_shader_globals.proj.r[2] = DirectX::XMVECTOR{glm_proj[2].x, glm_proj[2].y, glm_proj[2].z, glm_proj[2].w};
-    m_shader_globals.proj.r[3] = DirectX::XMVECTOR{glm_proj[3].x, glm_proj[3].y, glm_proj[3].z, glm_proj[3].w};
+    const auto& dx_proj = *(DirectX::XMMATRIX*)&glm_proj;
+    const auto dx_view = *(DirectX::XMMATRIX*)&glm_view;
+    const auto& dx_model = *(DirectX::XMMATRIX*)&m_model_mat;
 
-    // Set everything to default values for now to make sure everything is working correctly.
-    /*{
-        DirectX::XMVECTOR loc = DirectX::XMVectorSet(0, 0, -5, 0);
-        DirectX::XMVECTOR negloc = DirectX::XMVectorSet(0, 0, 5, 0);
-		DirectX::XMVECTOR target = DirectX::XMVectorSet(0, 0, 0, 0);
-		DirectX::XMVECTOR up = DirectX::XMVectorSet(0, 1, 0, 0);
-		m_shader_globals.view = DirectX::XMMatrixLookAtLH(loc, target, up);
-
-		DirectX::XMVECTOR model_pos = DirectX::XMVectorSet(0, 0, 0, 0);
-
-		m_shader_globals.model = DirectX::XMMatrixLookAtLH(model_pos, negloc, up);
-		m_shader_globals.proj = DirectX::XMMatrixPerspectiveFovLH(DirectX::XM_PIDIV4, (float)width / (float)height, 0.01f, 100.0f);
-    }*/
-
+    m_shader_globals.mvp = dx_model * dx_view * dx_proj;
     m_shader_globals.resolution = DirectX::XMFLOAT4((float)width, (float)height, 0.0f, (float)width / (float)height);
     m_shader_globals.time += 0.01f;
 
@@ -797,6 +776,45 @@ void D3D11Component::invoke_shader(uint32_t frame_count, uint32_t eye, uint32_t 
     // Set the texture in the pixel shader.
     //ID3D11ShaderResourceView* srvs[] = {m_right_eye_srv.Get()};
     //context->PSSetShaderResources(0, 1, srvs);
+
+    D3D11_VIEWPORT vp{};
+    vp.Width = (float)width;
+    vp.Height = (float)height;
+    vp.MinDepth = 0.0f;
+    vp.MaxDepth = 1.0f;
+    vp.TopLeftX = 0;
+    vp.TopLeftY = 0;
+    context->RSSetViewports(1, &vp);
+
+    // Set scissors to cover the whole screen
+    D3D11_RECT r;
+    r.left = 0;
+    r.top = 0;
+    r.right = width;
+    r.bottom = height;
+    context->RSSetScissorRects(1, &r);
+
+    // Set blend state
+    context->OMSetBlendState(nullptr, nullptr, 0xffffffff);
+
+    // Set depth stencil state
+    context->OMSetDepthStencilState(nullptr, 0);
+    
+    // Null out other shader stages
+    context->DSSetShader(nullptr, nullptr, 0);
+    context->HSSetShader(nullptr, nullptr, 0);
+    context->GSSetShader(nullptr, nullptr, 0);
+    context->CSSetShader(nullptr, nullptr, 0);
+
+    context->PSSetShaderResources(0, 0, nullptr);
+    context->PSSetSamplers(0, 0, nullptr);
+    context->VSSetShaderResources(0, 0, nullptr);
+    context->VSSetSamplers(0, 0, nullptr);
+    context->CSSetShaderResources(0, 0, nullptr);
+    context->CSSetSamplers(0, 0, nullptr);
+
+    // Set rasterizer state
+    context->RSSetState(nullptr);
 
     // Render the quad.
     context->DrawIndexed(6, 0, 0);

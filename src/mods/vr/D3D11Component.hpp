@@ -41,12 +41,12 @@ private:
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
     struct ShaderGlobals {
-		DirectX::XMMATRIX model{};
-		DirectX::XMMATRIX view{};
-		DirectX::XMMATRIX proj{};
+        DirectX::XMMATRIX mvp{};
 		DirectX::XMFLOAT4 resolution{};
         float time{};
     } m_shader_globals{};
+
+    glm::mat4 m_model_mat{glm::identity<glm::mat4>()};
 
     struct Vertex {
         DirectX::XMFLOAT3 position{};
