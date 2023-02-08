@@ -281,8 +281,57 @@ bool FFakeStereoRenderingHook::hook() {
 
     const auto vtable = locate_fake_stereo_rendering_vtable();
 
+    // This happens if games have intentionally removed the stereo initialization functions and stereo emulation classes.
+    // So we need to manually create the stereo device.
     if (!vtable) {
         SPDLOG_ERROR("Failed to locate Fake Stereo Rendering VTable, attempting to perform nonstandard hook");
+
+        auto check_file_version = [](uint32_t ms, uint32_t ls) {
+            try {
+                const auto full_path = utility::get_module_path(utility::get_executable());
+
+                if (!full_path) {
+                    SPDLOG_ERROR("Failed to get executable path, falling back");
+                    return false;
+                }
+
+                const auto file_version_size = GetFileVersionInfoSizeA(full_path->c_str(), nullptr);
+
+                if (file_version_size == 0) {
+                    SPDLOG_ERROR("Failed to get file version info size, falling back");
+                    return false;
+                }
+
+                std::vector<uint8_t> file_version_data(file_version_size);
+                GetFileVersionInfoA(full_path->c_str(), 0, file_version_size, file_version_data.data());
+
+                UINT size{};
+                VS_FIXEDFILEINFO* fixed_file_info{};
+
+                if (VerQueryValueA(file_version_data.data(), "\\", (LPVOID*)&fixed_file_info, &size) && fixed_file_info != nullptr) {
+                    SPDLOG_INFO("MS: {:x}, LS: {:x}", fixed_file_info->dwFileVersionMS, fixed_file_info->dwFileVersionLS);
+
+                    if (fixed_file_info->dwFileVersionMS == 0x4001B && fixed_file_info->dwFileVersionLS == 0x20000) {
+                        SPDLOG_INFO("Found matching executable, attempting to perform nonstandard hook");
+                        return true;
+                    } else {
+                        SPDLOG_INFO("File does not match requested version, falling back");
+                    }
+                } else {
+                    SPDLOG_ERROR("Failed to get file version info, falling back");
+                }
+            } catch(...) {
+                SPDLOG_ERROR("Failed to get file version info, falling back");
+            }
+
+            return false;
+        };
+
+        // Check for version 4.27.2.0
+        if (check_file_version(0x4001B, 0x20000)) {
+            return nonstandard_create_stereo_device_hook_4_27_chaos();
+        }
+
         return nonstandard_create_stereo_device_hook();
     }
 
@@ -632,12 +681,12 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         bool should_use_separate_render_target_is_bad = false;
 
         if (!sdk::is_vfunc_pattern(*need_reallocate_viewport_render_target_func_ptr, "32 C0")) {
-            spdlog::warn("NeedReallocateViewportRenderTarget is not a function that returns false");
+            SPDLOG_WARN("NeedReallocateViewportRenderTarget is not a function that returns false");
             need_reallocate_viewport_render_target_is_bad = true;
         }
 
         if (!sdk::is_vfunc_pattern(*should_use_separate_render_target_func_ptr, "32 C0")) {
-            spdlog::warn("ShouldUseSeparateRenderTarget is not a function that returns false");
+            SPDLOG_WARN("ShouldUseSeparateRenderTarget is not a function that returns false");
             should_use_separate_render_target_is_bad = true;
         }
 
@@ -891,11 +940,213 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
 
     //m_418_detected = true;
     m_special_detected = true;
+    m_manually_constructed = true;
     m_fallback_device.vtable = m_fallback_vtable.data();
     *(uintptr_t*)((uintptr_t)engine + 0xAC8) = (uintptr_t)&m_fallback_device; // TODO: Automatically find this offset.
 
     // So the view extension hook will work.
     s_stereo_rendering_device_offset = 0xAC8;
+
+    hook_game_viewport_client();
+    setup_view_extensions();
+
+    SPDLOG_INFO("Finished creating stereo device for the game using nonstandard method");
+
+    m_finished_hooking = true;
+
+    return true;
+}
+
+bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_27_chaos() {
+    SPDLOG_INFO("Attempting to create a stereo device for the game using nonstandard method (4.27 Chaos)");
+
+    auto engine = sdk::UEngine::get();
+
+    if (engine == nullptr) {
+        SPDLOG_ERROR("Failed to get engine pointer! Cannot create stereo device!");
+        return false;
+    }
+
+    m_fallback_vtable.resize(30);
+
+    // Give all of the functions placeholders.
+    for (auto i = 0; i < m_fallback_vtable.size(); ++i) {
+        m_fallback_vtable[i] = +[](FFakeStereoRendering* stereo) -> void* {
+            return nullptr;
+        };
+    }
+
+    constexpr auto DESTRUCTOR_INDEX = 0;
+    constexpr auto IS_STEREO_ENABLED_INDEX = 1;
+    constexpr auto IS_STEREO_ENABLED_ON_NEXT_FRAME_INDEX = 2;
+    constexpr auto ENABLE_STEREO_INDEX = 3;
+
+    constexpr auto GET_DESIRED_NUMBER_OF_VIEWS_INDEX = 4;
+    constexpr auto GET_VIEW_PASS_FOR_INDEX_INDEX = 5;
+    constexpr auto GET_VIEW_INDEX_FOR_PASS_INDEX = 6;
+
+    constexpr auto DEVICE_IS_STEREO_EYE_PASS_INDEX = 7;
+    constexpr auto DEVICE_IS_STEREO_EYE_VIEW_INDEX = 8;
+    constexpr auto DEVICE_IS_A_PRIMARY_PASS_INDEX = 9;
+    constexpr auto DEVICE_IS_A_PRIMARY_VIEW_INDEX = 10;
+    constexpr auto DEVICE_IS_A_SECONDARY_PASS_INDEX = 11;
+    constexpr auto DEVICE_IS_A_SECONDARY_VIEW_INDEX = 12;
+    constexpr auto DEVICE_IS_AN_ADDITIONAL_PASS_INDEX = 13; // not necessary...?
+    constexpr auto DEVICE_IS_AN_ADDITIONAL_VIEW_INDEX = 14; // not necessary...?
+    constexpr auto DEVICE_GET_LOD_VIEW_INDEX_INDEX = 15; // not necessary...?
+
+    constexpr auto ADJUST_VIEW_RECT_INDEX = 16;
+    constexpr auto CALCULATE_STEREO_VIEW_OFFSET_INDEX = 19;
+    constexpr auto CALCULATE_STEREO_PROJECTION_MATRIX_INDEX = 20;
+    constexpr auto RENDER_TEXTURE_RENDER_THREAD_INDEX = 22;
+    constexpr auto GET_RENDER_TARGET_MANAGER_INDEX = 23;
+
+    constexpr auto ENGINE_STEREO_RENDERING_DEVICE_OFFSET = 0xB18;
+    static constexpr auto FSCENEVIEW_STEREO_PASS_OFFSET = 0xAF0;
+    static auto get_stereo_pass = [](const FSceneView& view) -> EStereoscopicPass {
+        return *(EStereoscopicPass*)((uintptr_t)&view + FSCENEVIEW_STEREO_PASS_OFFSET);
+    };
+
+    // Actually implement the ones we care about now.
+    m_fallback_vtable[DESTRUCTOR_INDEX] = +[](FFakeStereoRendering* stereo) -> void { SPDLOG_INFO("Destructor called?");  }; // destructor.
+    m_fallback_vtable[IS_STEREO_ENABLED_INDEX] = +[](FFakeStereoRendering* stereo) -> bool { 
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("IsStereoEnabled called: {:x}", (uintptr_t)_ReturnAddress());
+#endif
+
+        return g_hook->is_stereo_enabled(stereo); 
+    }; // IsStereoEnabled
+
+    m_fallback_vtable[IS_STEREO_ENABLED_ON_NEXT_FRAME_INDEX] = +[](FFakeStereoRendering* stereo) -> bool { return g_hook->is_stereo_enabled(stereo); }; // IsStereoEnabledOnNextFrame
+    m_fallback_vtable[ENABLE_STEREO_INDEX] = +[](FFakeStereoRendering* stereo) -> bool { return g_hook->is_stereo_enabled(stereo); }; // EnableStereo
+
+    m_fallback_vtable[ADJUST_VIEW_RECT_INDEX] = +[](FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h) { 
+        return g_hook->adjust_view_rect(stereo, index, x, y, w, h);
+    }; // AdjustViewRect
+
+    m_fallback_vtable[CALCULATE_STEREO_VIEW_OFFSET_INDEX] = 
+    +[](FFakeStereoRendering* stereo, const int32_t view_index, Rotator<float>* view_rotation, const float world_to_meters, Vector3f* view_location) {
+        return g_hook->calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location);
+    }; // CalculateStereoViewOffset
+
+    m_fallback_vtable[CALCULATE_STEREO_PROJECTION_MATRIX_INDEX] = +[](FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("CalculateStereoProjectionMatrix called: {:x} {} {:x}", (uintptr_t)_ReturnAddress(), view_index, (uintptr_t)out);
+#endif
+
+        if (!g_hook->m_has_double_precision) {
+            (*out)[3][2] = 0.1f; // Need to pre-set the Z value to something, otherwise it will be 0.0f & probably break something.
+        } else {
+            auto dmat = (Matrix4x4d*)out;
+            (*dmat)[3][2] = 0.1;
+        }
+
+        return g_hook->calculate_stereo_projection_matrix(stereo, out, view_index);
+    }; // CalculateStereoProjectionMatrix
+
+    m_fallback_vtable[RENDER_TEXTURE_RENDER_THREAD_INDEX] = 
+    +[](FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list, FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size) {
+        return g_hook->render_texture_render_thread(stereo, rhi_command_list, backbuffer, src_texture, window_size);
+    };
+
+    m_fallback_vtable[GET_RENDER_TARGET_MANAGER_INDEX] = +[](FFakeStereoRendering* stereo) { return g_hook->get_render_target_manager_hook(stereo); }; // GetRenderTargetManager
+
+    m_fallback_vtable[GET_DESIRED_NUMBER_OF_VIEWS_INDEX] = +[](FFakeStereoRendering* stereo, bool stereo_enabled) -> int32_t { 
+        return g_hook->get_desired_number_of_views_hook(stereo, stereo_enabled); 
+    }; // GetDesiredNumberOfViews
+
+    m_fallback_vtable[GET_VIEW_PASS_FOR_INDEX_INDEX] = +[](FFakeStereoRendering* stereo, const uint32_t view_index) -> EStereoscopicPass {
+    #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("GetViewPassForIndex called: {:x} {} ", (uintptr_t)_ReturnAddress(), view_index);
+    #endif
+        if (!g_hook->is_stereo_enabled(stereo)) {
+            return EStereoscopicPass::eSSP_FULL;
+        }
+
+        if (view_index == 0 || VR::get()->is_using_afr()) {
+            return EStereoscopicPass::eSSP_PRIMARY;
+        } 
+
+        return EStereoscopicPass::eSSP_SECONDARY;
+    }; // GetViewPassForIndex
+
+    m_fallback_vtable[GET_VIEW_INDEX_FOR_PASS_INDEX] = +[](FFakeStereoRendering* stereo, const EStereoscopicPass pass) -> int32_t {
+    #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("GetViewIndexForPass called: {:x} {} ", (uintptr_t)_ReturnAddress(), (uint32_t)pass);
+    #endif
+
+        switch (pass) {
+            case EStereoscopicPass::eSSP_FULL:
+            case EStereoscopicPass::eSSP_PRIMARY:
+                return 0;
+            
+            case EStereoscopicPass::eSSP_SECONDARY:
+                return 1;
+            
+            default:
+                SPDLOG_ERROR("Unknown pass: {}", (uint32_t)pass);
+                return -1;
+        };
+    };
+
+    m_fallback_vtable[DEVICE_IS_STEREO_EYE_PASS_INDEX] = +[](FFakeStereoRendering* stereo, const EStereoscopicPass pass) -> bool {
+    #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("DeviceIsStereoEyePass called: {:x} {} ", (uintptr_t)_ReturnAddress(), (uint32_t)pass);
+    #endif
+
+        return pass != EStereoscopicPass::eSSP_FULL;
+    }; // DeviceIsStereoEyePass
+
+    m_fallback_vtable[DEVICE_IS_STEREO_EYE_VIEW_INDEX] = +[](FFakeStereoRendering* stereo, const FSceneView& view) -> bool {
+    #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("DeviceIsStereoEyeView called: {:x} {} ", (uintptr_t)_ReturnAddress(), (uint32_t)get_stereo_pass(view));
+    #endif
+
+        return get_stereo_pass(view) != EStereoscopicPass::eSSP_FULL;
+    }; // DeviceIsStereoEyePass
+
+    m_fallback_vtable[DEVICE_IS_A_PRIMARY_PASS_INDEX] = +[](FFakeStereoRendering* stereo, const EStereoscopicPass pass) -> bool {
+    #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("DeviceIsAPrimaryPass called: {:x} {} ", (uintptr_t)_ReturnAddress(), (uint32_t)pass);
+    #endif
+
+        return pass == EStereoscopicPass::eSSP_FULL || pass == EStereoscopicPass::eSSP_PRIMARY;
+    }; // DeviceIsAPrimaryPass
+
+    m_fallback_vtable[DEVICE_IS_A_PRIMARY_VIEW_INDEX] = +[](FFakeStereoRendering* stereo, const FSceneView& view) -> bool {
+    #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("DeviceIsAPrimaryView called: {:x} {} ", (uintptr_t)_ReturnAddress(), (uint32_t)get_stereo_pass(view));
+    #endif
+
+        return get_stereo_pass(view) == EStereoscopicPass::eSSP_FULL || get_stereo_pass(view) == EStereoscopicPass::eSSP_PRIMARY;
+    }; // DeviceIsAPrimaryPass
+
+    m_fallback_vtable[DEVICE_IS_A_SECONDARY_PASS_INDEX] = +[](FFakeStereoRendering* stereo, const EStereoscopicPass pass) -> bool {
+    #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("DeviceIsASecondaryPass called: {:x} {} ", (uintptr_t)_ReturnAddress(), (uint32_t)pass);
+    #endif
+
+        return !(pass == EStereoscopicPass::eSSP_FULL || pass == EStereoscopicPass::eSSP_PRIMARY);
+    }; // DeviceIsASecondaryPass
+
+    m_fallback_vtable[DEVICE_IS_A_SECONDARY_VIEW_INDEX] = +[](FFakeStereoRendering* stereo, const FSceneView& view) -> bool {
+    #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("DeviceIsASecondaryView called: {:x} {} ", (uintptr_t)_ReturnAddress(), (uint32_t)get_stereo_pass(view));
+    #endif
+
+        return !(get_stereo_pass(view) == EStereoscopicPass::eSSP_FULL || get_stereo_pass(view) == EStereoscopicPass::eSSP_PRIMARY);
+    }; // DeviceIsASecondaryPass
+
+    m_special_detected_4_27_chaos = true;
+    m_manually_constructed = true;
+    m_fallback_device.vtable = m_fallback_vtable.data();
+
+    auto& current_device = *(uintptr_t*)((uintptr_t)engine + ENGINE_STEREO_RENDERING_DEVICE_OFFSET);
+    SPDLOG_INFO("Current device: {:x}", current_device);
+    current_device = (uintptr_t)&m_fallback_device; // TODO: Automatically find this offset.
+
+    // So the view extension hook will work.
+    s_stereo_rendering_device_offset = ENGINE_STEREO_RENDERING_DEVICE_OFFSET;
 
     hook_game_viewport_client();
     setup_view_extensions();
@@ -1964,7 +2215,7 @@ std::optional<uintptr_t> FFakeStereoRenderingHook::locate_fake_stereo_rendering_
         return cached_result;
     }
 
-    if (g_hook->m_special_detected) {
+    if (g_hook->m_manually_constructed) {
         cached_result = *(uintptr_t*)((uintptr_t)sdk::UGameEngine::get() + s_stereo_rendering_device_offset);
         return cached_result;
     }
@@ -2387,17 +2638,19 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     if (vr->is_using_afr()) {
         true_index = g_frame_count % 2;
 
-        if (g_hook->m_has_double_precision) {
-            if (true_index == 1) {
-                *rot_d = g_hook->m_last_afr_rotation_double;
+        if (!vr->is_using_synchronized_afr()) {
+            if (g_hook->m_has_double_precision) {
+                if (true_index == 1) {
+                    *rot_d = g_hook->m_last_afr_rotation_double;
+                } else {
+                    g_hook->m_last_afr_rotation_double = *rot_d;
+                }
             } else {
-                g_hook->m_last_afr_rotation_double = *rot_d;
-            }
-        } else {
-            if (true_index == 1) {
-                *view_rotation = g_hook->m_last_afr_rotation;
-            } else {
-                g_hook->m_last_afr_rotation = *view_rotation;
+                if (true_index == 1) {
+                    *view_rotation = g_hook->m_last_afr_rotation;
+                } else {
+                    g_hook->m_last_afr_rotation = *view_rotation;
+                }
             }
         }
     }
