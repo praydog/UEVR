@@ -3307,14 +3307,22 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
         const auto old = peb->BeingDebugged;
         peb->BeingDebugged = true;
 
+        // If the exception count exceeds a certain amount, we need to un-nop the function call because it was supposed to return a pointer.
+        static auto exception_count = 0;
+        static std::vector<Patch::Ptr> patches{};
+        static std::vector<uintptr_t> patch_locations{};
+
         // set up a handler to skip int3 assertions
         // we do this because debug builds assert when the views are already setup.
         const auto seh_handler = [](PEXCEPTION_POINTERS info) -> LONG {
+            ++exception_count;
+
             if (info->ExceptionRecord->ExceptionCode == EXCEPTION_BREAKPOINT) {
                 SPDLOG_INFO("Skipping int3 breakpoint at {:x}!", info->ContextRecord->Rip);
                 const auto insn = utility::decode_one((uint8_t*)info->ContextRecord->Rip);
 
                 if (insn) {
+                    spdlog::info("Skipping {} bytes!", insn->Length);
                     info->ContextRecord->Rip += insn->Length;
 
                     // Nop out the next function call.
@@ -3323,17 +3331,35 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
                     const auto call = utility::scan_disasm((uintptr_t)info->ContextRecord->Rip, 20, "E8 ? ? ? ?");
 
                     if (call) {
-                        new Patch{*call, {0x90, 0x90, 0x90, 0x90, 0x90}};
+                        patch_locations.push_back(*call);
+                        patches.emplace_back(Patch::create(*call, {0x90, 0x90, 0x90, 0x90, 0x90}));
                     }
 
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
                 
-                info->ContextRecord->Rip += 1;
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
 
             SPDLOG_INFO("Encountered exception {:x} at {:x}!", info->ExceptionRecord->ExceptionCode, info->ContextRecord->Rip);
+
+            // This happens if we removed a call that shouldn't have been removed.
+            if (info->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && !patches.empty()) {
+                SPDLOG_WARN("Access violation at {:x}! Removing patch at {:x}!", info->ContextRecord->Rip, patch_locations.back());
+
+                exception_count = 0;
+                info->ContextRecord->Rip = patch_locations.back();
+                patches.pop_back();
+                patch_locations.pop_back();
+            } else {
+                const auto insn = utility::decode_one((uint8_t*)info->ContextRecord->Rip);
+
+                if (insn) {
+                    info->ContextRecord->Rip += insn->Length;
+                } else {
+                    info->ContextRecord->Rip += 1;
+                }
+            }
 
             // yolo? idk xd
             return EXCEPTION_CONTINUE_EXECUTION;
