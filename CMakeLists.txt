@@ -646,6 +646,7 @@ target_link_libraries(ue4poc PUBLIC
 	openvr_api
 	openxr_loader
 	nlohmann_json
+	Version
 )
 
 target_link_libraries(ue4poc PUBLIC
@@ -774,6 +775,7 @@ target_link_libraries(ue4poc-nolog PUBLIC
 	openvr_api
 	openxr_loader
 	nlohmann_json
+	Version
 )
 
 target_compile_definitions(ue4poc-nolog PUBLIC
