@@ -1004,7 +1004,7 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_27_chaos(
     constexpr auto ENGINE_STEREO_RENDERING_DEVICE_OFFSET = 0xB18;
     static constexpr auto FSCENEVIEW_STEREO_PASS_OFFSET = 0xAF0;
     static auto get_stereo_pass = [](const FSceneView& view) -> EStereoscopicPass {
-        return *(EStereoscopicPass*)((uintptr_t)&view + FSCENEVIEW_STEREO_PASS_OFFSET);
+        return (EStereoscopicPass)*(uint8_t*)((uintptr_t)&view + FSCENEVIEW_STEREO_PASS_OFFSET);
     };
 
     // Actually implement the ones we care about now.
@@ -1055,7 +1055,7 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_27_chaos(
         return g_hook->get_desired_number_of_views_hook(stereo, stereo_enabled); 
     }; // GetDesiredNumberOfViews
 
-    m_fallback_vtable[GET_VIEW_PASS_FOR_INDEX_INDEX] = +[](FFakeStereoRendering* stereo, const uint32_t view_index) -> EStereoscopicPass {
+    m_fallback_vtable[GET_VIEW_PASS_FOR_INDEX_INDEX] = +[](FFakeStereoRendering* stereo, bool stereo_requested, const uint32_t view_index) -> EStereoscopicPass {
     #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
         SPDLOG_INFO("GetViewPassForIndex called: {:x} {} ", (uintptr_t)_ReturnAddress(), view_index);
     #endif
@@ -1134,8 +1134,8 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_27_chaos(
         SPDLOG_INFO("DeviceIsASecondaryView called: {:x} {} ", (uintptr_t)_ReturnAddress(), (uint32_t)get_stereo_pass(view));
     #endif
 
-        return !(get_stereo_pass(view) == EStereoscopicPass::eSSP_FULL || get_stereo_pass(view) == EStereoscopicPass::eSSP_PRIMARY);
-    }; // DeviceIsASecondaryPass
+        return get_stereo_pass(view) > EStereoscopicPass::eSSP_PRIMARY;
+    }; // DeviceIsASecondaryView
 
     m_special_detected_4_27_chaos = true;
     m_manually_constructed = true;
