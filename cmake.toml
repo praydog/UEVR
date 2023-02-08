@@ -173,7 +173,8 @@ link-libraries = [
     "imgui",
     "openvr_api",
     "openxr_loader",
-    "nlohmann_json"
+    "nlohmann_json",
+    "Version"
 ]
 
 [template.ue4template.properties]
