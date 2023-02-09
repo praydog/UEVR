@@ -395,6 +395,7 @@ private:
 
     std::chrono::steady_clock::time_point m_last_controller_update{};
     std::chrono::steady_clock::time_point m_last_xinput_update{};
+    std::chrono::steady_clock::time_point m_last_xinput_spoof_sent{};
     std::chrono::steady_clock::time_point m_last_interaction_display{};
 
     std::chrono::nanoseconds m_last_input_delay{};

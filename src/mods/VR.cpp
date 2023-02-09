@@ -553,9 +553,13 @@ bool VR::is_any_action_down() {
 }
 
 bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
-    if (message != DBT_DEVICEARRIVAL && message != WM_DEVICECHANGE && !m_spoofed_gamepad_connection) {
-        SendMessage(wnd, WM_DEVICECHANGE, 0, 0); // this seems to actually be the one that works
-        SendMessage(wnd, DBT_DEVICEARRIVAL, 0, 0); // didn't seem to do anything? leaving it here just in case
+    if (message != WM_DEVICECHANGE && !m_spoofed_gamepad_connection) {
+        const auto now = std::chrono::steady_clock::now();
+
+        if (now - m_last_xinput_spoof_sent >= std::chrono::milliseconds(1000)) {
+            PostMessage(wnd, WM_DEVICECHANGE, 0, 0);
+            m_last_xinput_spoof_sent = now;
+        }
     }
 
     return true;
@@ -741,10 +745,6 @@ void VR::update_action_states() {
         return;
     }
 
-    if (m_spoofed_gamepad_connection && std::chrono::steady_clock::now() - m_last_xinput_update >= std::chrono::seconds(2)) {
-        m_spoofed_gamepad_connection = false;
-    }
-
     if (runtime->is_openvr()) {
         const auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -774,8 +774,17 @@ void VR::update_action_states() {
     const auto left_axis_len = glm::length(get_left_stick_axis());
     const auto right_axis_len = glm::length(get_right_stick_axis());
 
+    bool actively_using_controller = false;
+
     if (left_axis_len > deadzone || right_axis_len > deadzone || is_any_action_down()) {
         m_last_controller_update = std::chrono::steady_clock::now();
+        actively_using_controller = true;
+    }
+
+    const auto last_xinput_update_is_late = std::chrono::steady_clock::now() - m_last_xinput_update >= std::chrono::seconds(2);
+
+    if (m_spoofed_gamepad_connection && last_xinput_update_is_late && actively_using_controller) {
+        m_spoofed_gamepad_connection = false;
     }
 
     /*if (m_recenter_view_key->is_key_down_once()) {
