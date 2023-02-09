@@ -2129,12 +2129,14 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
 
         auto& exts = view_extensions.extensions;
 
-        auto ext_ptr = new TWeakPtr<ISceneViewExtension>();
+        // Allocate a bunch more than necessary to prevent crashes when reallocating
+        const auto new_capacity = 32;
 
-        exts.data = ext_ptr;
+        exts.data = new TWeakPtr<ISceneViewExtension>[new_capacity]{};
         exts.count = 0;
-        exts.capacity = 1;
+        exts.capacity = new_capacity;
 
+        ZeroMemory(exts.data, sizeof(TWeakPtr<ISceneViewExtension>) * new_capacity);
         exts.data[exts.count++].allocate_naive();
     } else if (view_extensions.extensions.data != nullptr && view_extensions.extensions.count <= view_extensions.extensions.capacity) {
         auto& exts = view_extensions.extensions;
@@ -2143,7 +2145,7 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
         if (exts.count == exts.capacity) {
             SPDLOG_INFO("Extending view extensions array...");
 
-            const auto new_capacity = exts.capacity * 2;
+            const auto new_capacity = exts.capacity * 4;
             const auto old_capacity = exts.capacity;
             auto new_exts = new TWeakPtr<ISceneViewExtension>[new_capacity];
 
