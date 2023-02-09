@@ -918,6 +918,7 @@ void Framework::draw_ui() {
     std::lock_guard _{m_input_mutex};
 
     ImGui::GetIO().MouseDrawCursor = m_draw_ui;
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange; // causes bugs with the cursor
 
     if (!m_draw_ui) {
         // remove SetCursorPos patch
@@ -1127,6 +1128,8 @@ void Framework::set_imgui_style() noexcept {
 
     // Font
     set_font_size(m_font_size);
+
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
 }
 
 bool Framework::initialize() {
