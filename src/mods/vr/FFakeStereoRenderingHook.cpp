@@ -330,7 +330,7 @@ bool FFakeStereoRenderingHook::hook() {
 
         // Check for version 4.27.2.0
         if (check_file_version(0x4001B, 0x20000)) {
-            return nonstandard_create_stereo_device_hook_4_27_chaos();
+            return nonstandard_create_stereo_device_hook_4_27();
         }
 
         return nonstandard_create_stereo_device_hook();
