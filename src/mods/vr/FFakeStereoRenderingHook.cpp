@@ -21,6 +21,7 @@
 #include <sdk/FViewportInfo.hpp>
 #include <sdk/Utility.hpp>
 #include <sdk/RHICommandList.hpp>
+#include <sdk/UGameViewportClient.hpp>
 
 #include "Framework.hpp"
 #include "Mods.hpp"
@@ -1161,43 +1162,13 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_27_chaos(
 bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
     SPDLOG_INFO("Attempting to hook UGameViewportClient::Draw...");
 
-    const auto engine_module = sdk::get_ue_module(L"Engine");
-    const auto canvas_object_strings = utility::scan_strings(engine_module, L"CanvasObject", true);
+    auto game_viewport_client_draw = sdk::UGameViewportClient::get_draw_function();
 
-    if (canvas_object_strings.empty()) {
-        SPDLOG_ERROR("Failed to find CanvasObject string!");
-        m_has_game_viewport_client_draw_hook = false;
-        return false;
-    }
-
-    std::optional<uintptr_t> game_viewport_client_draw{};
-
-    for (const auto canvas_object_string : canvas_object_strings) {
-        SPDLOG_INFO("Analyzing CanvasObject string at {:x}", (uintptr_t)canvas_object_string);
-
-        const auto string_ref = utility::scan_displacement_reference(engine_module, canvas_object_string);
-
-        if (!string_ref) {
-            SPDLOG_INFO(" No string reference, continuing on to next string...");
-            continue;
-        }
-
-        const auto func = utility::find_virtual_function_start(*string_ref);
-
-        if (func) {
-            game_viewport_client_draw = func;
-            break;
-        }
-    }
-
-    // Luckily this function is the only one with a CanvasObject string.
     if (!game_viewport_client_draw) {
-        SPDLOG_ERROR("Failed to find UGameViewportClient::Draw function!");
+        SPDLOG_ERROR("Failed to find UGameViewportClient::Draw!");
         m_has_game_viewport_client_draw_hook = false;
         return false;
     }
-
-    SPDLOG_INFO("Found UGameViewportClient::Draw function at {:x}", (uintptr_t)*game_viewport_client_draw);
 
     auto factory = SafetyHookFactory::init();
     auto builder = factory->acquire();
@@ -2129,7 +2100,7 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
 
         auto& exts = view_extensions.extensions;
 
-        // Allocate a bunch more than necessary to prevent crashes when reallocating
+        // Allocate a bunch more than necessary to prevent crashes when the engine tries to add new entries
         const auto new_capacity = 32;
 
         exts.data = new TWeakPtr<ISceneViewExtension>[new_capacity]{};
