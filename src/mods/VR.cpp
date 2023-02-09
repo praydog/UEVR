@@ -556,7 +556,8 @@ bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
     if (message != WM_DEVICECHANGE && !m_spoofed_gamepad_connection) {
         const auto now = std::chrono::steady_clock::now();
 
-        if (now - m_last_xinput_spoof_sent >= std::chrono::milliseconds(1000)) {
+        if (now - m_last_xinput_spoof_sent >= std::chrono::milliseconds(2000)) {
+            spdlog::info("[VR] Attempting to spoof gamepad connection");
             PostMessage(wnd, WM_DEVICECHANGE, 0, 0);
             m_last_xinput_spoof_sent = now;
         }
@@ -566,15 +567,30 @@ bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
 }
 
 void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {
-    if (user_index != 0) {
+    const auto now = std::chrono::steady_clock::now();
+
+    if (now - m_last_xinput_update > std::chrono::seconds(2)) {
+        m_lowest_xinput_user_index = user_index;
+    }
+
+    if (user_index < m_lowest_xinput_user_index) {
+        m_lowest_xinput_user_index = user_index;
+        spdlog::info("[VR] Changed lowest XInput user index to {}", user_index);
+    }
+
+    if (user_index != m_lowest_xinput_user_index) {
+        if (!m_spoofed_gamepad_connection && is_using_controllers()) {
+            spdlog::info("[VR] XInputGetState called, but user index is {}", user_index);
+        }
+
         return;
     }
 
     if (!m_spoofed_gamepad_connection) {
-        spdlog::info("[VR] Successfully spoofed gamepad connection");
+        spdlog::info("[VR] Successfully spoofed gamepad connection @ {}", user_index);
     }
 
-    m_last_xinput_update = std::chrono::steady_clock::now();
+    m_last_xinput_update = now;
     m_spoofed_gamepad_connection = true;
 
     if (!is_using_controllers()) {
@@ -670,6 +686,13 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
         return;
     }
 
+    static bool once = true;
+
+    if (once) {
+        spdlog::info("VR: Pre-engine tick");
+        once = false;
+    }
+
     //update_hmd_state();
     update_action_states();
 }
@@ -745,6 +768,14 @@ void VR::update_action_states() {
         return;
     }
 
+    static bool once = true;
+
+    if (once) {
+        spdlog::info("VR: Updating action states");
+        once = false;
+    }
+
+
     if (runtime->is_openvr()) {
         const auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -794,6 +825,13 @@ void VR::update_action_states() {
     if (m_set_standing_key->is_key_down_once()) {
         set_standing_origin(get_position(0));
     }*/
+
+    static bool once2 = true;
+
+    if (once2) {
+        spdlog::info("VR: Updated action states");
+        once2 = false;
+    }
 }
 
 void VR::on_config_load(const utility::Config& cfg) {

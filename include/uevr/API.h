@@ -262,6 +262,8 @@ typedef struct {
     void (*trigger_haptic_vibration)(float seconds_from_now, float duration, float frequency, float amplitude, UEVR_InputSourceHandle source);
     /* if any controller action is active or has been active within certain previous timeframe */
     bool (*is_using_controllers)();
+
+    unsigned int (*get_lowest_xinput_index)();
 } UEVR_VRData;
 
 typedef struct {

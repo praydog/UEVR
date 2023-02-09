@@ -339,6 +339,10 @@ void trigger_haptic_vibration(float seconds_from_now, float duration, float freq
 bool is_using_controllers() {
     return ::VR::get()->is_using_controllers();
 }
+
+unsigned int get_lowest_xinput_index() {
+    return VR::get()->get_lowest_xinput_index();
+}
 }
 }
 
@@ -365,6 +369,7 @@ UEVR_VRData g_vr_data {
     uevr::vr::get_joystick_axis,
     uevr::vr::trigger_haptic_vibration,
     uevr::vr::is_using_controllers,
+    uevr::vr::get_lowest_xinput_index
 };
 
 

@@ -162,7 +162,7 @@ public:
     }
 
     bool is_using_controllers() const {
-        return !m_controllers.empty() && (std::chrono::steady_clock::now() - m_last_controller_update) <= std::chrono::seconds((int32_t)m_motion_controls_inactivity_timer->value());
+        return is_hmd_active() && !m_controllers.empty() && (std::chrono::steady_clock::now() - m_last_controller_update) <= std::chrono::seconds((int32_t)m_motion_controls_inactivity_timer->value());
     }
 
     int get_hmd_index() const {
@@ -257,6 +257,10 @@ public:
 
     SyncedSequentialMethod get_synced_sequential_method() const {
         return (SyncedSequentialMethod)m_synced_afr_method->value();
+    }
+
+    uint32_t get_lowest_xinput_index() const {
+        return m_lowest_xinput_user_index;
     }
 
 private:
@@ -398,6 +402,8 @@ private:
     std::chrono::steady_clock::time_point m_last_xinput_spoof_sent{};
     std::chrono::steady_clock::time_point m_last_interaction_display{};
 
+    uint32_t m_lowest_xinput_user_index{};
+
     std::chrono::nanoseconds m_last_input_delay{};
     std::chrono::nanoseconds m_avg_input_delay{};
 
@@ -464,7 +470,7 @@ private:
     bool m_backbuffer_inconsistency{false};
     bool m_init_finished{false};
     bool m_has_hw_scheduling{false}; // hardware accelerated GPU scheduling
-    bool m_spoofed_gamepad_connection{true}; // true initially to allow some leeway if a real gamepad is connected
+    bool m_spoofed_gamepad_connection{false};
 
     bool m_disable_projection_matrix_override{ false };
     bool m_disable_view_matrix_override{false};
