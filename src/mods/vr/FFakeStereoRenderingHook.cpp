@@ -2123,20 +2123,50 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
         }
     }
 
+    // Allocate a completely new array if the current one is null or empty
     if (view_extensions.extensions.data == nullptr || view_extensions.extensions.data[0].reference == nullptr || view_extensions.extensions.count == 0) {
         SPDLOG_INFO("Allocating new view extensions array...");
 
-        auto ext_ptr = new TWeakPtr<ISceneViewExtension>();
-        ext_ptr->allocate_naive();
+        auto& exts = view_extensions.extensions;
 
-        view_extensions.extensions.data = ext_ptr;
-        view_extensions.extensions.count = 1;
-        view_extensions.extensions.capacity = 1;
+        auto ext_ptr = new TWeakPtr<ISceneViewExtension>();
+
+        exts.data = ext_ptr;
+        exts.count = 0;
+        exts.capacity = 1;
+
+        exts.data[exts.count++].allocate_naive();
+    } else if (view_extensions.extensions.data != nullptr && view_extensions.extensions.count <= view_extensions.extensions.capacity) {
+        auto& exts = view_extensions.extensions;
+
+        // TODO: Use FMemory::Realloc (or whatever its called) instead of new/delete cuz game crashes when reallocating/closing the game
+        if (exts.count == exts.capacity) {
+            SPDLOG_INFO("Extending view extensions array...");
+
+            const auto new_capacity = exts.capacity * 2;
+            const auto old_capacity = exts.capacity;
+            auto new_exts = new TWeakPtr<ISceneViewExtension>[new_capacity];
+
+            ZeroMemory(new_exts, sizeof(TWeakPtr<ISceneViewExtension>) * new_capacity);
+            memcpy(new_exts, exts.data, sizeof(TWeakPtr<ISceneViewExtension>) * old_capacity);
+
+            // dont delete it cuz its owned by the games allocator... for now
+            //delete[] exts.data;
+
+            exts.data = new_exts;
+            exts.capacity = new_capacity;
+        } else {
+            SPDLOG_INFO("Allocating new view extension entry onto existing array...");
+        }
+
+        exts.data[exts.count++].allocate_naive();
+    } else {
+        SPDLOG_INFO("None of the previous conditions were met, so we're not allocating a new view extensions array");
     }
 
     if (view_extensions.extensions.count > 0 && view_extensions.extensions.data != nullptr) {
         // Replace the vtable of the first entry
-        auto& entry = view_extensions.extensions.data[0];
+        auto& entry = view_extensions.extensions.data[view_extensions.extensions.count-1];
 
         if (entry.reference == nullptr) {
             SPDLOG_ERROR("Failed to get first view extension entry!");
