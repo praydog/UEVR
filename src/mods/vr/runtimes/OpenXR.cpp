@@ -1404,12 +1404,13 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
         layer.viewCount = (uint32_t)projection_layer_views.size();
         layer.views = projection_layer_views.data();
 
-        for (auto& layer : this->projection_layer_cache) {
-            layers.push_back((XrCompositionLayerBaseHeader*)&layer);
+        for (auto& l : this->projection_layer_cache) {
+            layers.push_back((XrCompositionLayerBaseHeader*)&l);
         }
 
-        for (auto& layer : quad_layers) {
-            layers.push_back((XrCompositionLayerBaseHeader*)&layer);
+        for (auto& l : quad_layers) {
+            
+            layers.push_back((XrCompositionLayerBaseHeader*)&l);
         }
     }
 

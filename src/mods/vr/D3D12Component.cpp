@@ -54,10 +54,10 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     const auto is_left_eye_frame = is_afr && vr->m_render_frame_count % 2 == vr->m_left_eye_interval;
     const auto is_right_eye_frame = !is_afr || vr->m_render_frame_count % 2 == vr->m_right_eye_interval;
 
-    if (runtime->is_openxr() && runtime->ready() && !is_afr) {
-        if (!vr->m_openxr->frame_began) {
-            vr->m_openxr->begin_frame();
-        }
+    // Sometimes this can happen if pipeline execution does not go exactly as planned
+    // so we need to resynchronized or begin the frame again.
+    if (runtime->ready()) {
+        runtime->fix_frame();
     }
 
     const auto& ffsr = VR::get()->m_fake_stereo_hook;
@@ -230,6 +230,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             };
 
             auto e = vr::VRCompositor()->Submit(vr::Eye_Right, &right_eye, &vr->m_right_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
+            runtime->frame_synced = false;
 
             if (e != vr::VRCompositorError_None) {
                 spdlog::error("[VR] VRCompositor failed to submit right eye: {}", (int)e);
