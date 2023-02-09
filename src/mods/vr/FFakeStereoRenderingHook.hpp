@@ -240,7 +240,7 @@ private:
     bool hook();
     bool standard_fake_stereo_hook(uintptr_t vtable);
     bool nonstandard_create_stereo_device_hook();
-    bool nonstandard_create_stereo_device_hook_4_27_chaos();
+    bool nonstandard_create_stereo_device_hook_4_27();
     
     bool hook_game_viewport_client();
     bool setup_view_extensions();
@@ -322,7 +322,7 @@ private:
     bool m_uses_old_rendertarget_manager{false};
     bool m_rendertarget_manager_embedded_in_stereo_device{false}; // 4.17 and below...?
     bool m_special_detected{false};
-    bool m_special_detected_4_27_chaos{false};
+    bool m_special_detected_4_27{false};
     bool m_manually_constructed{false};
     bool m_pixel_format_cvar_found{false};
     bool m_injected_stereo_at_runtime{false};

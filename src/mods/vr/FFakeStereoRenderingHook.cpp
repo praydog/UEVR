@@ -943,10 +943,16 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
     m_special_detected = true;
     m_manually_constructed = true;
     m_fallback_device.vtable = m_fallback_vtable.data();
-    *(uintptr_t*)((uintptr_t)engine + 0xAC8) = (uintptr_t)&m_fallback_device; // TODO: Automatically find this offset.
+
+    auto stereo_rendering_device_offset = sdk::UEngine::get_stereo_rendering_device_offset();
+    if (!stereo_rendering_device_offset) {
+        stereo_rendering_device_offset = 0xAC8; // fallback for the engine this was originally made for.
+    }
+
+    *(uintptr_t*)((uintptr_t)engine + *stereo_rendering_device_offset) = (uintptr_t)&m_fallback_device; // TODO: Automatically find this offset.
 
     // So the view extension hook will work.
-    s_stereo_rendering_device_offset = 0xAC8;
+    s_stereo_rendering_device_offset = *stereo_rendering_device_offset;
 
     hook_game_viewport_client();
     setup_view_extensions();
@@ -958,8 +964,8 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
     return true;
 }
 
-bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_27_chaos() {
-    SPDLOG_INFO("Attempting to create a stereo device for the game using nonstandard method (4.27 Chaos)");
+bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_27() {
+    SPDLOG_INFO("Attempting to create a stereo device for the game using nonstandard method (4.27)");
 
     auto engine = sdk::UEngine::get();
 
@@ -1002,7 +1008,11 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_27_chaos(
     constexpr auto RENDER_TEXTURE_RENDER_THREAD_INDEX = 22;
     constexpr auto GET_RENDER_TARGET_MANAGER_INDEX = 23;
 
-    constexpr auto ENGINE_STEREO_RENDERING_DEVICE_OFFSET = 0xB18;
+    auto stereo_rendering_device_offset = sdk::UEngine::get_stereo_rendering_device_offset();
+    if (!stereo_rendering_device_offset) {
+        stereo_rendering_device_offset = 0xB18; // fallback for the engine this was originally made for.
+    }
+
     static constexpr auto FSCENEVIEW_STEREO_PASS_OFFSET = 0xAF0;
     static auto get_stereo_pass = [](const FSceneView& view) -> EStereoscopicPass {
         return (EStereoscopicPass)*(uint8_t*)((uintptr_t)&view + FSCENEVIEW_STEREO_PASS_OFFSET);
@@ -1138,16 +1148,16 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_27_chaos(
         return get_stereo_pass(view) > EStereoscopicPass::eSSP_PRIMARY;
     }; // DeviceIsASecondaryView
 
-    m_special_detected_4_27_chaos = true;
+    m_special_detected_4_27 = true;
     m_manually_constructed = true;
     m_fallback_device.vtable = m_fallback_vtable.data();
 
-    auto& current_device = *(uintptr_t*)((uintptr_t)engine + ENGINE_STEREO_RENDERING_DEVICE_OFFSET);
+    auto& current_device = *(uintptr_t*)((uintptr_t)engine + *stereo_rendering_device_offset);
     SPDLOG_INFO("Current device: {:x}", current_device);
     current_device = (uintptr_t)&m_fallback_device; // TODO: Automatically find this offset.
 
     // So the view extension hook will work.
-    s_stereo_rendering_device_offset = ENGINE_STEREO_RENDERING_DEVICE_OFFSET;
+    s_stereo_rendering_device_offset = *stereo_rendering_device_offset;
 
     hook_game_viewport_client();
     setup_view_extensions();
@@ -1888,6 +1898,12 @@ struct SceneViewExtensionAnalyzer {
 
     static void hook_new_rhi_command(sdk::FRHICommandBase_New* last_command, uint32_t frame_count) {
         std::scoped_lock __{vtable_mutex};
+
+        if (last_command == nullptr || *(void**)last_command == nullptr) {
+            SPDLOG_INFO("Cannot hook command with no vtable, falling back to passing current frame count to runtime");
+            VR::get()->get_runtime()->enqueue_render_poses(frame_count);
+            return;
+        }
 
         cmd_frame_counts[last_command] = frame_count;
 

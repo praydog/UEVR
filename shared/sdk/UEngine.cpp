@@ -1,13 +1,17 @@
 #include <spdlog/spdlog.h>
 #include <bddisasm.h>
+#include <bdshemu.h>
 
 #include <utility/Scan.hpp>
 #include <utility/Module.hpp>
+#include <utility/Emulation.hpp>
 
 #include "CVar.hpp"
 
 #include "EngineModule.hpp"
+#include "UGameViewportClient.hpp"
 #include "UEngine.hpp"
+#include "UGameEngine.hpp"
 
 namespace sdk {
 UEngine** UEngine::get_lvalue() {
@@ -96,6 +100,138 @@ std::optional<uintptr_t> UEngine::get_emulatestereo_string_ref_address() {
     }();
 
     return addr;
+}
+
+std::optional<uintptr_t> UEngine::get_stereo_rendering_device_offset() {
+    static const auto offset = []() -> std::optional<uintptr_t> {
+        SPDLOG_INFO("Searching for StereoRenderingDevice offset...");
+
+        const auto game_viewport_client_draw = UGameViewportClient::get_draw_function();
+
+        // We use UGameViewportClient::Draw to find the first function call that takes the GEngine in RCX.
+        // This function is GEngine->IsStereoscopic3D, which accesses the StereoRenderingDevice.
+        // Through some simple analysis, we can find the offset of StereoRenderingDevice via this function.
+        // The function is called near the very top of UGameViewportClient::Draw, so it should be reasonably easy to find.
+        if (!game_viewport_client_draw) {
+            SPDLOG_ERROR("Failed to find UGameViewportClient::Draw function!");
+            return std::nullopt;
+        }
+
+        const auto engine = sdk::UEngine::get_lvalue();
+
+        if (engine == nullptr || *engine == nullptr) {
+            SPDLOG_ERROR("Failed to find UGameEngine!");
+            return std::nullopt;
+        }
+
+        std::optional<uintptr_t> result{};
+        bool is_next_call_isstereoscopic3d = false;
+
+        // Linearly disassemble all instructions in UGameViewportClient::Draw.
+        // When we hit a function that takes GEngine in RCX, we know that the next function call is IsStereoscopic3D.
+        // We will then emulate that function to find accesses to any offsets within GEngine.
+        utility::exhaustive_decode((uint8_t*)*game_viewport_client_draw, 50, [&](INSTRUX& ix, uintptr_t ex_ip) -> utility::ExhaustionResult {
+            if (result) {
+                return utility::ExhaustionResult::BREAK;
+            }
+
+            // mov rcx, addr
+            if (const auto disp = utility::resolve_displacement(ex_ip); disp) {
+                // the second expression catches UE dynamic/debug builds
+                if (*disp == (uintptr_t)engine || 
+                    (!IsBadReadPtr((void*)*disp, sizeof(void*)) && *(uintptr_t*)*disp == (uintptr_t)*engine)) 
+                {
+                    SPDLOG_INFO("Found GEngine in RCX at {:x}", ex_ip);
+                    is_next_call_isstereoscopic3d = true;
+                    return utility::ExhaustionResult::CONTINUE;
+                }
+            }
+
+            if (ix.BranchInfo.IsBranch && !ix.BranchInfo.IsConditional && std::string_view{ix.Mnemonic}.starts_with("CALL")) {
+                // Skip this call if it's not IsStereoscopic3D (GEngine in RCX right before the call).
+                if (!is_next_call_isstereoscopic3d) {
+                    return utility::ExhaustionResult::STEP_OVER;
+                }
+
+                is_next_call_isstereoscopic3d = false;
+
+                // Emulate from this call now and find the first instruction that accesses the GEngine from any register
+                // Use the offset it accesses as the offset to StereoRenderingDevice.
+                const auto is_stereoscopic_3d_fn = utility::calculate_absolute(ex_ip + 1);
+                auto emu = utility::ShemuContext{*utility::get_module_within(is_stereoscopic_3d_fn)};
+
+                emu.ctx->Registers.RegRax = 0;
+                emu.ctx->Registers.RegRip = (ND_UINT64)is_stereoscopic_3d_fn;
+                emu.ctx->Registers.RegRcx = (ND_UINT64)*engine;
+                emu.ctx->Registers.RegRdx = 0; // Null viewport on purpose
+                emu.ctx->MemThreshold = 100;
+
+                while(true) try {
+                    if (emu.ctx->InstructionsCount > 200) {
+                        break;
+                    }
+
+                    const auto ip = emu.ctx->Registers.RegRip;
+                    const auto bytes = (uint8_t*)ip;
+                    const auto decoded = utility::decode_one((uint8_t*)ip);
+
+                    if (decoded) {
+                        const auto is_call = std::string_view{decoded->Mnemonic}.starts_with("CALL");
+
+                        if (decoded->MemoryAccess & ND_ACCESS_ANY_WRITE || is_call) {
+                            SPDLOG_INFO("Skipping write to memory instruction at {:x} ({:x} bytes, landing at {:x})", ip, decoded->Length, ip + decoded->Length);
+                            emu.ctx->Registers.RegRip += decoded->Length;
+                            emu.ctx->Instruction = *decoded; // pseudo-emulate the instruction
+                            ++emu.ctx->InstructionsCount;
+                            continue;
+                        } else if (emu.emulate() != SHEMU_SUCCESS) { // only emulate the non-memory write instructions
+                            SPDLOG_INFO("Emulation failed at {:x} ({:x} bytes, landing at {:x})", ip, decoded->Length, ip + decoded->Length);
+                            // instead of just adding it onto the RegRip, we need to use the ip we had previously from the decode
+                            // because the emulator can move the instruction pointer after emulate() is called
+                            emu.ctx->Registers.RegRip = ip + decoded->Length;
+                            ++emu.ctx->InstructionsCount;
+                            continue;
+                        }
+
+                        // Check if instruction is mov reg1, [reg2 + offset]
+                        // Check if reg2 is GEngine and grab the offset
+                        const auto& emu_ix = emu.ctx->Instruction;
+
+                        if (emu_ix.Instruction == ND_INS_MOV && 
+                            emu_ix.Operands[0].Type == ND_OP_REG && 
+                            emu_ix.Operands[1].Type == ND_OP_MEM &&
+                            emu_ix.Operands[1].Info.Memory.HasBase &&
+                            emu_ix.Operands[1].Info.Memory.HasDisp) 
+                        {
+                            const auto reg1 = emu_ix.Operands[0].Info.Register.Reg;
+                            const auto reg2 = emu_ix.Operands[1].Info.Memory.Base;
+                            const auto offset = emu_ix.Operands[1].Info.Memory.Disp;
+
+                            const auto regs = (uintptr_t*)&emu.ctx->Registers;
+                            const auto reg_value = regs[reg2];
+
+                            if (reg_value == (uintptr_t)*engine) {
+                                SPDLOG_INFO("Found GEngine->StereoRenderingDevice access at {:x} (offset: {:x})", ip, offset);
+                                result = offset;
+                                break;
+                            }
+                        }
+                    }
+                } catch(...) {
+                    SPDLOG_ERROR("Encountered exception while emulating IsStereoscopic3D!");
+                    return utility::ExhaustionResult::BREAK;
+                }
+
+                return utility::ExhaustionResult::BREAK;
+            }
+
+            return utility::ExhaustionResult::CONTINUE;
+        });
+
+        return result;
+    }();
+
+    return offset;
 }
 
 std::optional<uintptr_t> UEngine::get_initialize_hmd_device_address() {
