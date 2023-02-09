@@ -459,6 +459,11 @@ bool D3D12Component::setup() {
         return false;
     }
 
+    const float clear[4]{0.0f, 0.0f, 0.0f, 0.0f};
+    m_blank_tex.copier.clear_rtv(m_blank_tex.texture.Get(), m_blank_tex.get_rtv(), clear, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    m_blank_tex.copier.execute();
+    m_blank_tex.copier.wait(1);
+
     spdlog::info("[VR] d3d12 textures have been setup");
     m_force_reset = false;
 

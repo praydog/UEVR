@@ -26,6 +26,8 @@ namespace pixel_shader1 {
 #define LOG_VERBOSE 
 #endif
 
+#define SHADER_TEMP_DISABLED
+
 namespace vrmod {
 vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     if (m_left_eye_tex == nullptr || m_force_reset) {
@@ -374,6 +376,10 @@ bool D3D11Component::setup() {
     auto device = hook->get_device();
     auto swapchain = hook->get_swap_chain();
 
+    ComPtr<ID3D11DeviceContext> context{};
+
+    device->GetImmediateContext(&context);
+
     // Get back buffer.
     //ComPtr<ID3D11Texture2D> backbuffer{};
     // swapchain->GetBuffer(0, IID_PPV_ARGS(&backbuffer));
@@ -421,11 +427,36 @@ bool D3D11Component::setup() {
     device->CreateTexture2D(&backbuffer_desc, nullptr, &m_ui_tex);
     device->CreateTexture2D(&backbuffer_desc, nullptr, &m_blank_tex);
 
-    // copy backbuffer into right eye
-    // Get the context.
-    ComPtr<ID3D11DeviceContext> context{};
+    auto clear_tex_easy = [device, context](ID3D11Texture2D* tex) {
+        ComPtr<ID3D11RenderTargetView> temp_rtv{};
+        bool made_rtv = false;
 
-    device->GetImmediateContext(&context);
+        if (!FAILED(device->CreateRenderTargetView(tex, nullptr, &temp_rtv))) {
+            made_rtv = true;
+        }
+
+        if (!made_rtv) {
+            D3D11_RENDER_TARGET_VIEW_DESC rtv_desc{};
+            rtv_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+            rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+            rtv_desc.Texture2D.MipSlice = 0;
+
+            if (!FAILED(device->CreateRenderTargetView(tex, &rtv_desc, &temp_rtv))) {
+                made_rtv = true;
+            }
+        }
+
+        if (made_rtv) {
+            float color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+            context->ClearRenderTargetView(temp_rtv.Get(), color);
+            spdlog::info("Successfully cleared texture");
+        }
+    };
+
+    clear_tex_easy(m_ui_tex.Get());
+    clear_tex_easy(m_blank_tex.Get());
+
+    // copy backbuffer into right eye
     context->CopyResource(m_right_eye_tex.Get(), backbuffer.Get());
     context->CopyResource(m_left_eye_tex.Get(), backbuffer.Get());
 
@@ -484,6 +515,12 @@ bool D3D11Component::setup() {
 }
 
 bool D3D11Component::setup_shader() {
+    if (true) {
+#ifdef SHADER_TEMP_DISABLED
+        return false;
+#endif
+    }
+
     spdlog::info("[VR] Setting up D3D11 shader...");
 
     auto& hook = g_framework->get_d3d11_hook();
