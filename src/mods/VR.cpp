@@ -528,7 +528,7 @@ bool VR::detect_controllers() {
 }
 
 bool VR::is_any_action_down() {
-    if (!m_runtime->ready() || !is_using_controllers()) {
+    if (!m_runtime->ready()) {
         return false;
     }
 
