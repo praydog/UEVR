@@ -98,12 +98,17 @@ void OverlayComponent::on_draw_ui() {
         m_framework_distance->draw("Framework Distance");
         m_framework_size->draw("Framework Size");
         m_framework_ui_follows_view->draw("Framework Follows View");
+        m_framework_wrist_ui->draw("Framework Wrist UI");
         ImGui::TreePop();
     }
 }
 
 void OverlayComponent::update_input_openvr() {
     if (!VR::get()->get_runtime()->is_openvr()) {
+        return;
+    }
+
+    if (!m_framework_wrist_ui->value()) {
         return;
     }
 
@@ -236,12 +241,16 @@ void OverlayComponent::update_slate_openvr() {
     }
 }
 
-void OverlayComponent::update_overlay_openvr() {
+bool OverlayComponent::update_wrist_overlay_openvr() {
     if (!VR::get()->get_runtime()->is_openvr()) {
-        return;
+        return false;
     }
 
-    auto vr = VR::get();
+    auto& vr = VR::get();
+
+    if (!m_framework_wrist_ui->value()) {
+        return true;
+    }
 
     const auto is_d3d11 = g_framework->get_renderer_type() == Framework::RendererType::D3D11;
 
@@ -443,8 +452,97 @@ void OverlayComponent::update_overlay_openvr() {
         }
     }
 
-    if (should_show_overlay) {
-        // finally set the texture
+    return should_show_overlay;
+}
+
+void OverlayComponent::update_overlay_openvr() {
+    if (!VR::get()->get_runtime()->is_openvr()) {
+        return;
+    }
+
+    auto& vr = VR::get();
+
+    const auto is_d3d11 = g_framework->get_renderer_type() == Framework::RendererType::D3D11;
+
+    bool should_show_overlay = update_wrist_overlay_openvr();
+
+    if (m_framework_wrist_ui->value()) {
+        vr::VROverlay()->ShowOverlay(m_overlay_handle); // always show overlay idk look at it later
+
+        if (should_show_overlay) {
+            // finally set the texture
+            if (is_d3d11) {
+                vr::Texture_t imgui_tex{(void*)g_framework->get_rendertarget_d3d11().Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
+                vr::VROverlay()->SetOverlayTexture(m_overlay_handle, &imgui_tex);   
+            } else {
+                auto& hook = g_framework->get_d3d12_hook();
+
+                vr::D3D12TextureData_t texture_data {
+                    g_framework->get_rendertarget_d3d12().Get(),
+                    hook->get_command_queue(),
+                    0
+                };
+                
+                vr::Texture_t imgui_tex{(void*)&texture_data, vr::TextureType_DirectX12, vr::ColorSpace_Auto};
+                vr::VROverlay()->SetOverlayTexture(m_overlay_handle, &imgui_tex);
+            }
+        } else {
+            if (is_d3d11) {
+                // draw a blank texture (don't just call HideOverlay, we'll no longer be able to use intersection tests)
+                vr::Texture_t imgui_tex{(void*)g_framework->get_blank_rendertarget_d3d11().Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
+                vr::VROverlay()->SetOverlayTexture(m_overlay_handle, &imgui_tex);
+            } else {
+                auto& hook = g_framework->get_d3d12_hook();
+
+                vr::D3D12TextureData_t texture_data {
+                    g_framework->get_blank_rendertarget_d3d12().Get(),
+                    hook->get_command_queue(),
+                    0
+                };
+                
+                vr::Texture_t imgui_tex{(void*)&texture_data, vr::TextureType_DirectX12, vr::ColorSpace_Auto};
+                vr::VROverlay()->SetOverlayTexture(m_overlay_handle, &imgui_tex);
+            }
+        }
+
+        return;
+    }
+
+    // Draw the UI as a plane in front of the user instead
+    if (!m_framework_wrist_ui->value() && g_framework->is_drawing_ui()) {
+        vr::VROverlay()->ShowOverlay(m_overlay_handle);
+
+        // Show the entire texture
+        vr::VRTextureBounds_t bounds{};
+        bounds.uMin = 0.0f;
+        bounds.uMax = 1.0f;
+        bounds.vMin = 0.0f;
+        bounds.vMax = 1.0f;
+
+        vr::VROverlay()->SetOverlayTextureBounds(m_overlay_handle, &bounds);
+
+        vr::TrackedDevicePose_t pose{};
+        vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, &pose, 1);
+
+        //auto glm_matrix = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
+        auto glm_matrix = Matrix4x4f{glm::inverse(vr->get_rotation_offset())};
+
+        if (m_framework_ui_follows_view->value()) {
+            // todo
+        }
+
+        glm_matrix[3] += vr->get_standing_origin();
+        glm_matrix[3] -= glm_matrix[2] * m_framework_distance->value();
+        glm_matrix[3].w = 1.0f;
+        const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(glm_matrix)};
+        vr::VROverlay()->SetOverlayTransformAbsolute(m_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
+
+        const auto is_d3d12 = g_framework->get_renderer_type() == Framework::RendererType::D3D12;
+        const auto size = is_d3d12 ? g_framework->get_d3d12_rt_size() : g_framework->get_d3d11_rt_size();
+        const auto aspect = size.x / size.y;
+        const auto width_meters = m_framework_size->value() * aspect;
+        vr::VROverlay()->SetOverlayWidthInMeters(m_overlay_handle, width_meters);
+
         if (is_d3d11) {
             vr::Texture_t imgui_tex{(void*)g_framework->get_rendertarget_d3d11().Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
             vr::VROverlay()->SetOverlayTexture(m_overlay_handle, &imgui_tex);   
@@ -461,22 +559,8 @@ void OverlayComponent::update_overlay_openvr() {
             vr::VROverlay()->SetOverlayTexture(m_overlay_handle, &imgui_tex);
         }
     } else {
-        if (is_d3d11) {
-            // draw a blank texture (don't just call HideOverlay, we'll no longer be able to use intersection tests)
-            vr::Texture_t imgui_tex{(void*)g_framework->get_blank_rendertarget_d3d11().Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
-            vr::VROverlay()->SetOverlayTexture(m_overlay_handle, &imgui_tex);
-        } else {
-            auto& hook = g_framework->get_d3d12_hook();
-
-            vr::D3D12TextureData_t texture_data {
-                g_framework->get_blank_rendertarget_d3d12().Get(),
-                hook->get_command_queue(),
-                0
-            };
-            
-            vr::Texture_t imgui_tex{(void*)&texture_data, vr::TextureType_DirectX12, vr::ColorSpace_Auto};
-            vr::VROverlay()->SetOverlayTexture(m_overlay_handle, &imgui_tex);
-        }
+        vr::VROverlay()->ClearOverlayTexture(m_overlay_handle);
+        vr::VROverlay()->HideOverlay(m_overlay_handle);
     }
 }
 

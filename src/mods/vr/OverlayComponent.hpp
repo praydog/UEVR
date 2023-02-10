@@ -75,6 +75,7 @@ private:
     const ModSlider::Ptr m_framework_distance{ ModSlider::create("UI_Framework_Distance", 0.5f, 10.0f, 2.0f) };
     const ModSlider::Ptr m_framework_size{ ModSlider::create("UI_Framework_Size", 0.5f, 10.0f, 2.0f) };
     const ModToggle::Ptr m_framework_ui_follows_view{ ModToggle::create("UI_Framework_FollowView", false) };
+    const ModToggle::Ptr m_framework_wrist_ui{ ModToggle::create("UI_Framework_WristUI", false) };
 
     Mod::ValueList m_options{
         *m_slate_distance,
@@ -82,7 +83,8 @@ private:
         *m_ui_follows_view,
         *m_framework_distance,
         *m_framework_size,
-        *m_framework_ui_follows_view
+        *m_framework_ui_follows_view,
+        *m_framework_wrist_ui
     };
 
     // OpenXR
@@ -109,5 +111,6 @@ private:
 private:
     void update_input_openvr();
     void update_overlay_openvr();
+    bool update_wrist_overlay_openvr();
     void update_slate_openvr();
 };}
