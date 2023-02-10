@@ -530,7 +530,7 @@ UEVR_OpenXRData g_openxr_data {
     uevr::openxr::get_view_space
 };
 
-UEVR_PluginInitializeParam g_plugin_initialize_param{
+extern "C" __declspec(dllexport) UEVR_PluginInitializeParam g_plugin_initialize_param{
     nullptr, 
     &g_plugin_version, 
     &g_plugin_functions, 
