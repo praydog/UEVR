@@ -670,15 +670,24 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
 }
 
 void VR::on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) {
-    if (m_left_joystick == 0 || m_right_joystick == 0) {
+    if (user_index != m_lowest_xinput_user_index) {
+        return;
+    }
+
+    if (!is_using_controllers()) {
         return;
     }
 
     const auto left_amplitude = ((float)vibration->wLeftMotorSpeed / 65535.0f) * 5.0f;
     const auto right_amplitude = ((float)vibration->wRightMotorSpeed / 65535.0f) * 5.0f;
 
-    trigger_haptic_vibration(0.0f, 0.1f, 1.0f, left_amplitude, m_left_joystick);
-    trigger_haptic_vibration(0.0f, 0.1f, 1.0f, right_amplitude, m_right_joystick);
+    if (left_amplitude > 0.0f) {
+        trigger_haptic_vibration(0.0f, 0.1f, 1.0f, left_amplitude, m_left_joystick);
+    }
+
+    if (right_amplitude > 0.0f) {
+        trigger_haptic_vibration(0.0f, 0.1f, 1.0f, right_amplitude, m_right_joystick);
+    }
 }
 
 void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
@@ -801,13 +810,9 @@ void VR::update_action_states() {
         get_runtime()->update_input();
     }
 
-    const auto deadzone = m_joystick_deadzone->value();
-    const auto left_axis_len = glm::length(get_left_stick_axis());
-    const auto right_axis_len = glm::length(get_right_stick_axis());
-
     bool actively_using_controller = false;
 
-    if (left_axis_len > deadzone || right_axis_len > deadzone || is_any_action_down()) {
+    if (is_any_action_down()) {
         m_last_controller_update = std::chrono::steady_clock::now();
         actively_using_controller = true;
     }
@@ -1654,10 +1659,10 @@ Vector2f VR::get_joystick_axis(vr::VRInputValueHandle_t handle) const {
 
         return glm::length(out) > deadzone ? out : Vector2f{};
     } else if (get_runtime()->is_openxr()) {
-        if (handle == (vr::VRInputValueHandle_t)VRRuntime::Hand::LEFT) {
+        if (handle == m_left_joystick) {
             auto out = m_openxr->get_left_stick_axis();
             return glm::length(out) > m_joystick_deadzone->value() ? out : Vector2f{};
-        } else if (handle == (vr::VRInputValueHandle_t)VRRuntime::Hand::RIGHT) {
+        } else if (handle == m_right_joystick) {
             auto out = m_openxr->get_right_stick_axis();
             return glm::length(out) > m_joystick_deadzone->value() ? out : Vector2f{};
         }
