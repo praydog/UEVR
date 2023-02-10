@@ -23,6 +23,7 @@
 
 #include "Mods.hpp"
 #include "mods/PluginLoader.hpp"
+#include "mods/VR.hpp"
 
 #include "ExceptionHandler.hpp"
 #include "LicenseStrings.hpp"
@@ -974,14 +975,30 @@ void Framework::draw_ui() {
         //m_dinput_hook->acknowledge_input();
     }
 
-    // ImGui::GetIO().MouseDrawCursor = true;
-    if (!m_last_draw_ui || m_cursor_state_changed) {
-        m_cursor_state_changed = false;
-        m_windows_message_hook->window_toggle_cursor(true);
+    const auto is_vr_active = VR::get()->is_hmd_active();
+
+
+    // Center the window
+    const auto vp_w = ImGui::GetIO().DisplaySize.x;
+    const auto vp_h = ImGui::GetIO().DisplaySize.y;
+    constexpr auto window_w = 500.0f;
+    constexpr auto window_h = 500.0f;
+
+    const auto centered_x = (vp_w / 2) - (window_w / 2);
+    const auto centered_y = (vp_h / 2) - (window_h / 2);
+
+    // Always re-center the UI upon open if VR is active
+    if (is_vr_active && !m_last_draw_ui) {
+        ImGui::SetNextWindowPos(ImVec2(centered_x, centered_y), ImGuiCond_Always);
+    } else {
+        ImGui::SetNextWindowPos(ImVec2(centered_x, centered_y), ImGuiCond_Once);
     }
 
-    ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_::ImGuiCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(300, 500), ImGuiCond_::ImGuiCond_Once);
+    if (!m_last_draw_ui || m_cursor_state_changed) {
+        m_cursor_state_changed = false;
+    }
+
+    ImGui::SetNextWindowSize(ImVec2(window_w, window_h), ImGuiCond_::ImGuiCond_Once);
     ImGui::Begin("Framework", &m_draw_ui);
     ImGui::Text("Default Menu Key: Insert");
     ImGui::Checkbox("Transparency", &m_ui_option_transparent);
