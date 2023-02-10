@@ -94,6 +94,10 @@ void OverlayComponent::on_draw_ui() {
         m_slate_distance->draw("UI Distance");
         m_slate_size->draw("UI Size");
         m_ui_follows_view->draw("UI Follows View");
+
+        m_framework_distance->draw("Framework Distance");
+        m_framework_size->draw("Framework Size");
+        m_framework_ui_follows_view->draw("Framework Follows View");
         ImGui::TreePop();
     }
 }
@@ -511,6 +515,49 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
     layer.size = {meters_w, meters_h};
 
     glm_matrix[3] -= glm_matrix[2] * m_parent->m_slate_distance->value();
+    glm_matrix[3].w = 1.0f;
+
+    layer.pose.orientation = runtimes::OpenXR::to_openxr(glm::quat_cast(glm_matrix));
+    layer.pose.position = runtimes::OpenXR::to_openxr(glm_matrix[3]);
+
+    return layer;
+}
+
+std::optional<std::reference_wrapper<XrCompositionLayerQuad>>  OverlayComponent::OpenXR::generate_framework_ui_quad() {
+    if (!g_framework->is_drawing_ui()) {
+        return std::nullopt;
+    }
+
+    auto& vr = VR::get();
+
+    auto& layer = this->m_framework_ui_layer;
+
+    layer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
+    const auto& ui_swapchain = vr->m_openxr->swapchains[(uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI];
+    layer.subImage.swapchain = ui_swapchain.handle;
+    layer.subImage.imageRect.offset.x = 0;
+    layer.subImage.imageRect.offset.y = 0;
+    layer.subImage.imageRect.extent.width = ui_swapchain.width;
+    layer.subImage.imageRect.extent.height = ui_swapchain.height;
+    layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+    layer.eyeVisibility = XrEyeVisibility::XR_EYE_VISIBILITY_BOTH;
+
+    auto glm_matrix = glm::identity<glm::mat4>();
+
+    if (vr->m_overlay_component.m_framework_ui_follows_view->value()) {
+        layer.space = vr->m_openxr->view_space;
+    } else {
+        glm_matrix = Matrix4x4f{glm::inverse(vr->get_rotation_offset())};   
+        glm_matrix[3] += vr->get_standing_origin();
+        layer.space = vr->m_openxr->stage_space;
+    }
+
+    const auto size_meters = m_parent->m_framework_size->value();
+    const auto meters_w = (float)ui_swapchain.width / (float)ui_swapchain.height * size_meters;
+    const auto meters_h = size_meters;
+    layer.size = {meters_w, meters_h};
+
+    glm_matrix[3] -= glm_matrix[2] * m_parent->m_framework_distance->value();
     glm_matrix[3].w = 1.0f;
 
     layer.pose.orientation = runtimes::OpenXR::to_openxr(glm::quat_cast(glm_matrix));

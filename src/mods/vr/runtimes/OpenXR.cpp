@@ -1408,8 +1408,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
             layers.push_back((XrCompositionLayerBaseHeader*)&l);
         }
 
-        for (auto& l : quad_layers) {
-            
+        for (auto& l : quad_layers) {   
             layers.push_back((XrCompositionLayerBaseHeader*)&l);
         }
     }

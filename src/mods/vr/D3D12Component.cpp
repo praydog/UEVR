@@ -95,6 +95,12 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
             if (is_right_eye_frame) {
                 m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, (ID3D12Resource*)ui_target->get_native_resource(), clear_rt, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+                auto fw_rt = g_framework->get_rendertarget_d3d12();
+
+                if (fw_rt && g_framework->is_drawing_ui()) {
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, g_framework->get_rendertarget_d3d12().Get(), std::nullopt, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                }
             } else {
                 m_game_ui_tex.copier.wait(INFINITE);
                 clear_rt(m_game_ui_tex.copier);
@@ -262,11 +268,17 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
             std::vector<XrCompositionLayerQuad> quad_layers{};
 
-            const auto slate_quad = vr->get_overlay_component().get_openxr().generate_slate_quad();
+            auto& openxr_overlay = vr->get_overlay_component().get_openxr();
+            const auto slate_quad = openxr_overlay.generate_slate_quad();
             if (slate_quad) {
                 quad_layers.push_back(*slate_quad);
             }
             
+            const auto framework_quad = openxr_overlay.generate_framework_ui_quad();
+            if (framework_quad) {
+                quad_layers.push_back(*framework_quad);
+            }
+
             auto result = vr->m_openxr->end_frame(quad_layers);
 
             if (result == XR_ERROR_LAYER_INVALID) {
@@ -534,7 +546,7 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
     auto& openxr = vr->m_openxr;
 
     this->contexts.clear();
-    this->contexts.resize(openxr->views.size() + 1); // +1 for the UI texture
+    this->contexts.resize(openxr->views.size() + (uint32_t)runtimes::OpenXR::SwapchainIndex::EXTRA_COUNT); // +1 for the UI texture
 
     auto create_swapchain = [&](uint32_t i, uint32_t w, uint32_t h) -> std::optional<std::string> {
         const auto old_w = backbuffer_desc.Width;
@@ -624,6 +636,10 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
 
     // The UI texture
     if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, g_framework->get_d3d12_rt_size().x, g_framework->get_d3d12_rt_size().y)) {
+        return err;
+    }
+
+    if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, g_framework->get_d3d12_rt_size().x, g_framework->get_d3d12_rt_size().y)) {
         return err;
     }
 

@@ -72,10 +72,17 @@ private:
     const ModSlider::Ptr m_slate_size{ ModSlider::create("UI_Size", 0.5f, 10.0f, 2.0f) };
     const ModToggle::Ptr m_ui_follows_view{ ModToggle::create("UI_FollowView", false) };
 
+    const ModSlider::Ptr m_framework_distance{ ModSlider::create("UI_Framework_Distance", 0.5f, 10.0f, 2.0f) };
+    const ModSlider::Ptr m_framework_size{ ModSlider::create("UI_Framework_Size", 0.5f, 10.0f, 2.0f) };
+    const ModToggle::Ptr m_framework_ui_follows_view{ ModToggle::create("UI_Framework_FollowView", false) };
+
     Mod::ValueList m_options{
         *m_slate_distance,
         *m_slate_size,
-        *m_ui_follows_view
+        *m_ui_follows_view,
+        *m_framework_distance,
+        *m_framework_size,
+        *m_framework_ui_follows_view
     };
 
     // OpenXR
@@ -89,9 +96,11 @@ private:
         }
 
         std::optional<std::reference_wrapper<XrCompositionLayerQuad>> generate_slate_quad();
+        std::optional<std::reference_wrapper<XrCompositionLayerQuad>> generate_framework_ui_quad();
         
     private:
         XrCompositionLayerQuad m_slate_layer{};
+        XrCompositionLayerQuad m_framework_ui_layer{};
         OverlayComponent* m_parent{ nullptr };
         
         friend class OverlayComponent;

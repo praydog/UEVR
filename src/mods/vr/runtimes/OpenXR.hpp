@@ -210,9 +210,21 @@ public:
     };
 
     enum class SwapchainIndex {
+        START = 0,
+
         LEFT_EYE = 0,
         RIGHT_EYE = 1,
+
+        EXTRA_START = 2,
+
         UI = 2,
+        FRAMEWORK_UI = 3,
+
+        EXTRA_END,
+        END = EXTRA_END,
+
+        COUNT = END - START,
+        EXTRA_COUNT = EXTRA_END - EXTRA_START,
     };
 
     struct Action {
