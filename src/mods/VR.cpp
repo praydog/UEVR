@@ -593,6 +593,13 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
     m_last_xinput_update = now;
     m_spoofed_gamepad_connection = true;
 
+    if (get_runtime()->ready() && get_runtime()->handle_pause) {
+        // Spoof the start button being pressed
+        state->Gamepad.wButtons |= XINPUT_GAMEPAD_START;
+        *retval = ERROR_SUCCESS;
+        get_runtime()->handle_pause = false;
+    }
+
     if (!is_using_controllers()) {
         return;
     }
@@ -819,7 +826,7 @@ void VR::update_action_states() {
 
     const auto last_xinput_update_is_late = std::chrono::steady_clock::now() - m_last_xinput_update >= std::chrono::seconds(2);
 
-    if (m_spoofed_gamepad_connection && last_xinput_update_is_late && actively_using_controller) {
+    if (m_spoofed_gamepad_connection && last_xinput_update_is_late && (actively_using_controller || get_runtime()->handle_pause)) {
         m_spoofed_gamepad_connection = false;
     }
 
