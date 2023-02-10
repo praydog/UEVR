@@ -555,6 +555,137 @@ set_target_properties(vr-plugin-nullifier PROPERTIES
 unset(CMKR_TARGET)
 unset(CMKR_SOURCES)
 
+# Target lua
+set(CMKR_TARGET lua)
+set(lua_SOURCES "")
+
+list(APPEND lua_SOURCES
+	"dependencies/lua/src/lapi.c"
+	"dependencies/lua/src/lauxlib.c"
+	"dependencies/lua/src/lbaselib.c"
+	"dependencies/lua/src/lcode.c"
+	"dependencies/lua/src/lcorolib.c"
+	"dependencies/lua/src/lctype.c"
+	"dependencies/lua/src/ldblib.c"
+	"dependencies/lua/src/ldebug.c"
+	"dependencies/lua/src/ldo.c"
+	"dependencies/lua/src/ldump.c"
+	"dependencies/lua/src/lfunc.c"
+	"dependencies/lua/src/lgc.c"
+	"dependencies/lua/src/linit.c"
+	"dependencies/lua/src/liolib.c"
+	"dependencies/lua/src/llex.c"
+	"dependencies/lua/src/lmathlib.c"
+	"dependencies/lua/src/lmem.c"
+	"dependencies/lua/src/loadlib.c"
+	"dependencies/lua/src/lobject.c"
+	"dependencies/lua/src/lopcodes.c"
+	"dependencies/lua/src/loslib.c"
+	"dependencies/lua/src/lparser.c"
+	"dependencies/lua/src/lstate.c"
+	"dependencies/lua/src/lstring.c"
+	"dependencies/lua/src/lstrlib.c"
+	"dependencies/lua/src/ltable.c"
+	"dependencies/lua/src/ltablib.c"
+	"dependencies/lua/src/ltests.c"
+	"dependencies/lua/src/ltm.c"
+	"dependencies/lua/src/lua.c"
+	"dependencies/lua/src/lundump.c"
+	"dependencies/lua/src/lutf8lib.c"
+	"dependencies/lua/src/lvm.c"
+	"dependencies/lua/src/lzio.c"
+)
+
+list(APPEND lua_SOURCES
+	cmake.toml
+)
+
+set(CMKR_SOURCES ${lua_SOURCES})
+add_library(lua STATIC)
+
+if(lua_SOURCES)
+	target_sources(lua PRIVATE ${lua_SOURCES})
+endif()
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${lua_SOURCES})
+
+target_include_directories(lua PUBLIC
+	"dependencies/lua/src"
+)
+
+unset(CMKR_TARGET)
+unset(CMKR_SOURCES)
+
+# Target sol2
+set(CMKR_TARGET sol2)
+set(sol2_SOURCES "")
+
+set(CMKR_SOURCES ${sol2_SOURCES})
+add_library(sol2 INTERFACE)
+
+if(sol2_SOURCES)
+	target_sources(sol2 INTERFACE ${sol2_SOURCES})
+endif()
+
+target_include_directories(sol2 INTERFACE
+	"dependencies/sol2/single/single/include"
+)
+
+unset(CMKR_TARGET)
+unset(CMKR_SOURCES)
+
+# Target LuaVR
+set(CMKR_TARGET LuaVR)
+set(LuaVR_SOURCES "")
+
+list(APPEND LuaVR_SOURCES
+	"lua-api/Main.cpp"
+)
+
+list(APPEND LuaVR_SOURCES
+	cmake.toml
+)
+
+set(CMKR_SOURCES ${LuaVR_SOURCES})
+add_library(LuaVR SHARED)
+
+if(LuaVR_SOURCES)
+	target_sources(LuaVR PRIVATE ${LuaVR_SOURCES})
+endif()
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${LuaVR_SOURCES})
+
+target_compile_features(LuaVR PUBLIC
+	cxx_std_20
+)
+
+target_include_directories(LuaVR PUBLIC
+	"include/"
+)
+
+target_link_libraries(LuaVR PUBLIC
+	lua
+	sol2
+)
+
+set_target_properties(LuaVR PROPERTIES
+	RUNTIME_OUTPUT_DIRECTORY_RELEASE
+		"${CMAKE_BINARY_DIR}/bin/${CMKR_TARGET}"
+	RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO
+		"${CMAKE_BINARY_DIR}/bin/${CMKR_TARGET}"
+	LIBRARY_OUTPUT_DIRECTORY_RELEASE
+		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+	LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO
+		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+	ARCHIVE_OUTPUT_DIRECTORY_RELEASE
+		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+	ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO
+		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+)
+
+unset(CMKR_TARGET)
+unset(CMKR_SOURCES)
+
 # Target ue4poc
 set(CMKR_TARGET ue4poc)
 set(ue4poc_SOURCES "")

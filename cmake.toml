@@ -151,6 +151,34 @@ LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET
 ARCHIVE_OUTPUT_DIRECTORY_RELEASE = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
 ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
 
+[target.lua]
+type = "static"
+sources = ["dependencies/lua/src/*.c"]
+include-directories = ["dependencies/lua/src"]
+
+[target.sol2]
+type = "interface"
+include-directories = ["dependencies/sol2/single/single/include"]
+
+[target.LuaVR]
+type = "shared"
+compile-features = ["cxx_std_20"]
+include-directories = ["include/"]
+sources = ["lua-api/**.cpp", "lua-api/**.c"]
+headers = ["lua-api/**.hpp", "lua-api/**.h"]
+link-libraries = [
+    "lua",
+    "sol2",
+]
+
+[target.LuaVR.properties]
+RUNTIME_OUTPUT_DIRECTORY_RELEASE = "${CMAKE_BINARY_DIR}/bin/${CMKR_TARGET}"
+RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/bin/${CMKR_TARGET}"
+LIBRARY_OUTPUT_DIRECTORY_RELEASE = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+ARCHIVE_OUTPUT_DIRECTORY_RELEASE = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+
 [template.ue4template]
 type = "shared"
 sources = ["src/**.cpp", "src/**.c"]
