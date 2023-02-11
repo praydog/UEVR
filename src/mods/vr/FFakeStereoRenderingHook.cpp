@@ -276,9 +276,9 @@ bool FFakeStereoRenderingHook::hook() {
 
     m_tried_hooking = true;
 
-    //sdk::FDynamicRHI::get();
-
-    //experimental_patch_fix();
+    // Locking the hook monitor mutex stops our code from trying to re-hook DX11 and 12 after
+    // Long pauses in code execution, due to us doing massive scans for code in this function.
+    std::scoped_lock _{g_framework->get_hook_monitor_mutex()};
 
     const auto vtable = locate_fake_stereo_rendering_vtable();
 
