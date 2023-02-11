@@ -52,6 +52,16 @@ UEVRSharedMemory::UEVRSharedMemory() {
 }
 
 void Framework::hook_monitor() {
+    if (!m_hook_monitor_mutex.try_lock()) {
+        // If this happens then we can assume execution is going as planned
+        // so we can just reset the times so we dont break something
+        m_last_present_time = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        m_last_chance_time = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+        m_has_last_chance = true;
+    } else {
+        m_hook_monitor_mutex.unlock();
+    }
+
     std::scoped_lock _{ m_hook_monitor_mutex };
 
     if (g_framework == nullptr) {
@@ -233,13 +243,10 @@ Framework::Framework(HMODULE framework_module)
 
     m_last_present_time = std::chrono::steady_clock::time_point{}; // Instantly send the first message
     m_last_message_time = std::chrono::steady_clock::time_point{}; // Instantly send the first message
-    m_d3d_monitor_thread = std::make_unique<std::jthread>([this](std::stop_token s) {
-        while (!s.stop_requested() && !m_terminating) {
-            this->hook_monitor();
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        }
-    });
+    m_last_chance_time = std::chrono::steady_clock::time_point{}; // Instantly send the first message
+    m_has_last_chance = false;
 
+    m_uevr_shared_memory = std::make_unique<UEVRSharedMemory>();
     m_command_thread = std::make_unique<std::jthread>([this](std::stop_token s) {
         while (!s.stop_requested() && !m_terminating) {
             this->command_thread();
@@ -247,7 +254,14 @@ Framework::Framework(HMODULE framework_module)
         }
     });
 
-    m_uevr_shared_memory = std::make_unique<UEVRSharedMemory>();
+    m_d3d_monitor_thread = std::make_unique<std::jthread>([this](std::stop_token s) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(33));
+
+        while (!s.stop_requested() && !m_terminating) {
+            this->hook_monitor();
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+    });
 }
 
 bool Framework::hook_d3d11() {

@@ -21,5 +21,6 @@ private:
     std::unique_ptr<safetyhook::InlineHook> m_xinput_1_3_get_state_hook;
     std::unique_ptr<safetyhook::InlineHook> m_xinput_1_3_set_state_hook;
 
-    std::unique_ptr<std::jthread> m_hook_thread{};
+    std::unique_ptr<std::jthread> m_hook_thread_1_4{};
+    std::unique_ptr<std::jthread> m_hook_thread_1_3{};
 };

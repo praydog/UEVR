@@ -34,6 +34,7 @@
 #include <sdk/threading/RenderThreadWorker.hpp>
 #include <sdk/threading/RHIThreadWorker.hpp>
 #include "../VR.hpp"
+#include "../utility/SafetyHookSafeFactory.hpp"
 
 #include "FFakeStereoRenderingHook.hpp"
 
@@ -175,7 +176,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
         }
     }
 
-    auto factory = SafetyHookFactory::init();
+    auto factory = SafetyHookSafeFactory::init();
     auto builder = factory->acquire();
 
     m_tick_hook = builder.create_inline((void*)*func, +[](sdk::UGameEngine* engine, float delta, bool idle) -> void* {
@@ -262,7 +263,7 @@ void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_addres
         SPDLOG_INFO("Found FSlateRHIRenderer::DrawWindow_RenderThread with alternative return address method: {:x}", *func);
     }
 
-    auto factory = SafetyHookFactory::init();
+    auto factory = SafetyHookSafeFactory::init();
     auto builder = factory->acquire();
 
     m_slate_thread_hook = builder.create_inline((void*)*func, &FFakeStereoRenderingHook::slate_draw_window_render_thread);
@@ -588,7 +589,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     const auto init_canvas_func_ptr = &((uintptr_t*)vtable)[init_canvas_index];
     // const auto render_texture_render_thread_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index + 3];
 
-    auto factory = SafetyHookFactory::init();
+    auto factory = SafetyHookSafeFactory::init();
     auto builder = factory->acquire();
 
     SPDLOG_INFO("AdjustViewRect: {:x}", (uintptr_t)adjust_view_rect_func);
@@ -732,7 +733,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 ETextureCreateFlags lags, ETextureCreateFlags targetable_texture_flags, FTexture2DRHIRef& out_texture,
                 FTexture2DRHIRef& out_shader_resource, uint32_t num_samples) -> bool {
             #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-                SPDLOG_INFO("AllocateRenderTargetTexture (embedded)");
+                SPDLOG_INFO("AllocateRenderTargetTexture (embedded): {:x}", (uintptr_t)_ReturnAddress());
             #endif
 
                 return g_hook->get_render_target_manager()->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &out_texture, &out_shader_resource);
@@ -742,7 +743,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         m_embedded_rtm.should_use_separate_render_target_hook = 
             std::make_unique<PointerHook>((void**)should_use_separate_render_target_func_ptr, +[](void* self) -> bool {
             #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-                SPDLOG_INFO("ShouldUseSeparateRenderTarget (embedded)");
+                SPDLOG_INFO("ShouldUseSeparateRenderTarget (embedded): {:x}", (uintptr_t)_ReturnAddress());
             #endif
 
                 auto vr = VR::get();
@@ -755,7 +756,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
             m_embedded_rtm.need_reallocate_viewport_render_target_hook = 
                 std::make_unique<PointerHook>((void**)need_reallocate_viewport_render_target_func_ptr, +[](void* self, FViewport* viewport) -> bool {
                 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
-                    SPDLOG_INFO("NeedReallocateViewportRenderTarget (embedded)");
+                    SPDLOG_INFO("NeedReallocateViewportRenderTarget (embedded): {:x}", (uintptr_t)_ReturnAddress());
                 #endif
 
                     return g_hook->get_render_target_manager()->need_reallocate_view_target(*viewport);
@@ -1180,7 +1181,7 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
         return false;
     }
 
-    auto factory = SafetyHookFactory::init();
+    auto factory = SafetyHookSafeFactory::init();
     auto builder = factory->acquire();
 
     m_gameviewportclient_draw_hook = builder.create_inline((void*)*game_viewport_client_draw, &game_viewport_client_draw_hook);
@@ -1341,7 +1342,7 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_cli
 
                     SPDLOG_INFO("Found FViewport::Draw function at {:x}", (uintptr_t)*viewport_draw);
 
-                    auto factory = SafetyHookFactory::init();
+                    auto factory = SafetyHookSafeFactory::init();
                     auto builder = factory->acquire();
 
                     g_hook->m_viewport_draw_hook = builder.create_inline((void*)*viewport_draw, &viewport_draw_hook);
@@ -1656,6 +1657,12 @@ struct SceneViewExtensionAnalyzer {
             // TODO: Check if this can cause a memory leak, I don't know who is resonsible
             // for destroying the views in the array
             if (vr->is_using_afr() && (view_family.views.count == 2 || view_family.views.count == 3)) {
+                static bool once2 = true;
+
+                if (once2) {
+                    SPDLOG_INFO("Setting view count to 1");
+                    once2 = false;
+                }
                 view_family.views.count = 1;
             }
         };
@@ -2824,7 +2831,7 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
                 SPDLOG_INFO(" {:x}", (uintptr_t)stack[i]);
             }
 
-            auto factory = SafetyHookFactory::init();
+            auto factory = SafetyHookSafeFactory::init();
             auto builder = factory->acquire();
 
             g_hook->m_calculate_stereo_projection_matrix_post_hook = builder.create_mid((void*)return_address, &FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix);
@@ -3140,7 +3147,7 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
 
                 g_hook->m_hooked_alternative_localplayer_scan = true;
 
-                auto factory = SafetyHookFactory::init();
+                auto factory = SafetyHookSafeFactory::init();
                 auto builder = factory->acquire();
 
                 g_hook->m_get_projection_data_pre_hook = builder.create_mid((void*)*get_projection_data, &FFakeStereoRenderingHook::pre_get_projection_data);
@@ -4323,7 +4330,7 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                         const auto post_call = (uintptr_t)ip + decoded->Length;
                         SPDLOG_INFO("AllocateRenderTargetTexture post_call: {:x}", post_call - (uintptr_t)*utility::get_module_within((void*)post_call));
 
-                        auto factory = SafetyHookFactory::init();
+                        auto factory = SafetyHookSafeFactory::init();
                         auto builder = factory->acquire();
 
                         if (*(uint8_t*)ip == 0xE8) {
