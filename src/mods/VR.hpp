@@ -49,6 +49,12 @@ public:
         if (m_fake_stereo_hook != nullptr) {
             m_fake_stereo_hook->on_device_reset();
         }
+
+        if (m_is_d3d12) {
+            m_d3d12.on_reset(this);
+        } else {
+            m_d3d11.on_reset(this);
+        }
     }
 
     bool on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) override;

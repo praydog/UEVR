@@ -23,7 +23,7 @@ public:
     }
 
     vr::EVRCompositorError on_frame(VR* vr);
-
+    void on_post_present(VR* vr);
     void on_reset(VR* vr);
 
     void force_reset() { m_force_reset = true; }
@@ -38,6 +38,7 @@ public:
 
 private:
     bool setup();
+    void clear_backbuffer();
 
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
@@ -76,6 +77,7 @@ private:
         ResourceCopier copier{};
         ComPtr<ID3D12Resource> texture{};
         ComPtr<ID3D12DescriptorHeap> rtv_heap{};
+
         bool create_rtv(ID3D12Device* device, DXGI_FORMAT format) {
             rtv_heap.Reset();
 
@@ -85,7 +87,6 @@ private:
             rtv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
             rtv_heap_desc.NumDescriptors = 1;
             rtv_heap_desc.NodeMask = 1;
-            device->CreateDescriptorHeap(&rtv_heap_desc, IID_PPV_ARGS(&rtv_heap));
 
             if (!FAILED(device->CreateDescriptorHeap(&rtv_heap_desc, IID_PPV_ARGS(&rtv_heap))) && rtv_heap.Get() != nullptr) {
                 D3D12_RENDER_TARGET_VIEW_DESC rtv_desc{};
@@ -103,11 +104,18 @@ private:
         D3D12_CPU_DESCRIPTOR_HANDLE get_rtv() {
             return D3D12_CPU_DESCRIPTOR_HANDLE{rtv_heap->GetCPUDescriptorHandleForHeapStart().ptr};
         }
+
+        void reset() {
+            copier.reset();
+            rtv_heap.Reset();
+            texture.Reset();
+        }
     };
 
     TextureContext m_ui_tex{};
     TextureContext m_blank_tex{};
     TextureContext m_game_ui_tex{};
+    std::array<TextureContext, 3> m_backbuffer_textures{};
 
     // Mimicking what OpenXR does.
     struct OpenVR {

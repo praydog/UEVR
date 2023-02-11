@@ -322,6 +322,71 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     return e;
 }
 
+void D3D12Component::clear_backbuffer() {
+    auto& hook = g_framework->get_d3d12_hook();
+    auto device = hook->get_device();
+    auto swapchain = hook->get_swap_chain();
+
+    if (device == nullptr || swapchain == nullptr) {
+        return;
+    }
+
+    ComPtr<ID3D12Resource> backbuffer{};
+    const auto index = swapchain->GetCurrentBackBufferIndex();
+
+    if (FAILED(swapchain->GetBuffer(index, IID_PPV_ARGS(&backbuffer)))) {
+        return;
+    }
+
+    if (backbuffer == nullptr) {
+        return;
+    }
+
+    if (index >= m_backbuffer_textures.size()) {
+        // we don't support more than 3 backbuffers
+        return;
+    }
+
+    auto& backbuffer_ctx = m_backbuffer_textures[index];
+
+    if (backbuffer_ctx.texture.Get() != backbuffer.Get()) {
+        backbuffer_ctx.copier.reset();
+        backbuffer_ctx.copier.setup();
+
+        backbuffer_ctx.rtv_heap.Reset();
+        backbuffer_ctx.texture.Reset();
+        backbuffer_ctx.texture = backbuffer.Get();
+
+        // Get backbuffer desc
+        const auto desc = backbuffer->GetDesc();
+        
+        if (!backbuffer_ctx.create_rtv(device, desc.Format)) {
+            spdlog::error("[VR] Failed to create backbuffer RTV...");
+            return;
+        }
+
+        spdlog::info("[VR] Created backbuffer RTV (D3D12)");
+    }
+
+    // oh well
+    if (backbuffer_ctx.rtv_heap == nullptr) {
+        return;
+    }
+
+    // Clear the backbuffer
+    backbuffer_ctx.copier.wait(0);
+    const float clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    backbuffer_ctx.copier.clear_rtv(backbuffer_ctx.texture.Get(), backbuffer_ctx.get_rtv(), clear_color, D3D12_RESOURCE_STATE_PRESENT);
+    backbuffer_ctx.copier.execute();
+}
+
+void D3D12Component::on_post_present(VR* vr) {
+    // Clear the (real) backbuffer if VR is enabled. Otherwise it will flicker and all sorts of nasty things.
+    if (vr->is_hmd_active()) {
+        clear_backbuffer();
+    }
+}
+
 void D3D12Component::on_reset(VR* vr) {
     auto runtime = vr->get_runtime();
 
@@ -339,14 +404,13 @@ void D3D12Component::on_reset(VR* vr) {
         copier.reset();
     }
 
-    m_ui_tex.copier.reset();
-    m_ui_tex.texture.Reset();
-    m_blank_tex.copier.reset();
-    m_blank_tex.texture.Reset();
+    for (auto& backbuffer : m_backbuffer_textures) {
+        backbuffer.reset();
+    }
 
-    m_game_ui_tex.copier.reset();
-    m_game_ui_tex.texture.Reset();
-    m_game_ui_tex.rtv_heap.Reset();
+    m_ui_tex.reset();
+    m_blank_tex.reset();
+    m_game_ui_tex.reset();
 
     if (runtime->is_openxr() && runtime->loaded) {
         if (m_openxr.last_resolution[0] != vr->get_hmd_width() || m_openxr.last_resolution[1] != vr->get_hmd_height() ||

@@ -25,6 +25,7 @@ public:
     }
 
     vr::EVRCompositorError on_frame(VR* vr);
+    void on_post_present(VR* vr);
     void on_reset(VR* vr);
 
     auto& openxr() { return m_openxr; }
@@ -81,7 +82,8 @@ private:
     vr::HmdMatrix44_t m_left_eye_proj{};
     vr::HmdMatrix44_t m_right_eye_proj{};
 
-    std::array<ComPtr<ID3D11Texture2D>, 2> m_backbuffer_references{};
+    ComPtr<ID3D11Texture2D> m_backbuffer{};
+    ComPtr<ID3D11RenderTargetView> m_backbuffer_rtv{};
     std::array<uint32_t, 2> m_backbuffer_size{};
 
     uint32_t m_last_rendered_frame{0};

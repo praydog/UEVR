@@ -979,6 +979,7 @@ void VR::on_present() {
             update_hmd_state();
         }
     }
+
     if (renderer == Framework::RendererType::D3D11) {
         // if we don't do this then D3D11 OpenXR freezes for some reason.
         if (!runtime->got_first_sync) {
@@ -1032,6 +1033,12 @@ void VR::on_post_present() {
     }
 
     std::scoped_lock _{m_openvr_mtx};
+
+    if (!m_is_d3d12) {
+        m_d3d11.on_post_present(this);
+    } else {
+        m_d3d12.on_post_present(this);
+    }
 
     detect_controllers();
 

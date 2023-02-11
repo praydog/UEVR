@@ -329,7 +329,48 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     return vr::VRCompositorError_None;
 }
 
+void D3D11Component::on_post_present(VR* vr) {
+    // Clear the (real) backbuffer if VR is enabled. Otherwise it will flicker and all sorts of nasty things.
+    if (vr->is_hmd_active()) {
+        auto& hook = g_framework->get_d3d11_hook();
+        auto device = hook->get_device();
+        auto swapchain = hook->get_swap_chain();
+
+        if (device == nullptr || swapchain == nullptr) {
+            return;
+        }
+
+        ComPtr<ID3D11DeviceContext> context{};
+        device->GetImmediateContext(&context);
+
+        ComPtr<ID3D11Texture2D> backbuffer{};
+
+        swapchain->GetBuffer(0, IID_PPV_ARGS(&backbuffer));
+
+        if (backbuffer == nullptr) {
+            return;
+        }
+
+        if (backbuffer.Get() != m_backbuffer.Get()) {
+            m_backbuffer = backbuffer.Get();
+            m_backbuffer_rtv.Reset();
+
+            // Create new rtv
+            if (FAILED(device->CreateRenderTargetView(backbuffer.Get(), nullptr, &m_backbuffer_rtv))) {
+                m_backbuffer_rtv.Reset();
+            }
+        }
+
+        if (m_backbuffer_rtv != nullptr) {
+            float clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+            context->ClearRenderTargetView(m_backbuffer_rtv.Get(), clear_color);
+        }
+    }
+}
+
 void D3D11Component::on_reset(VR* vr) {
+    m_backbuffer_rtv.Reset();
+    m_backbuffer.Reset();
     m_left_eye_tex.Reset();
     m_right_eye_tex.Reset();
     m_left_eye_rtv.Reset();
