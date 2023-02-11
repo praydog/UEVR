@@ -22,7 +22,7 @@ public:
     void early_init();
 
     std::string_view get_name() const override { return "PluginLoader"; }
-    std::optional<std::string> on_initialize() override;
+    std::optional<std::string> on_initialize_d3d_thread() override;
     void on_draw_ui() override;
 
     void on_present();

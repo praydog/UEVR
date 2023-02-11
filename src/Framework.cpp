@@ -1307,6 +1307,9 @@ bool Framework::initialize() {
 
                     spdlog::error("Initialization of mods failed. Reason: {}", m_error);
                 }
+                
+                // Allow the window to initially render so the user knows we are loading.
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
                 m_game_data_initialized = true;
             } catch(...) {
@@ -1363,6 +1366,8 @@ bool Framework::first_frame_initialize() {
     if (!is_init_ok || !m_first_frame_d3d_initialize) {
         return is_init_ok;
     }
+
+    std::scoped_lock _{get_hook_monitor_mutex()};
 
     spdlog::info("Running first frame D3D initialization of mods...");
 

@@ -15,6 +15,8 @@ Mods::Mods() {
 }
 
 std::optional<std::string> Mods::on_initialize() const {
+    std::scoped_lock _{g_framework->get_hook_monitor_mutex()};
+
     for (auto& mod : m_mods) {
         spdlog::info("{:s}::on_initialize()", mod->get_name().data());
 
@@ -28,6 +30,8 @@ std::optional<std::string> Mods::on_initialize() const {
 }
 
 std::optional<std::string> Mods::on_initialize_d3d_thread() const {
+    std::scoped_lock _{g_framework->get_hook_monitor_mutex()};
+
     for (auto& mod : m_mods) {
         spdlog::info("{:s}::on_initialize_d3d_thread()", mod->get_name().data());
 

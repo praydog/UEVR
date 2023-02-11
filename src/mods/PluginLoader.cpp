@@ -608,7 +608,7 @@ void PluginLoader::early_init() try {
     spdlog::error("[PluginLoader] Unknown exception during early init");
 }
 
-std::optional<std::string> PluginLoader::on_initialize() {
+std::optional<std::string> PluginLoader::on_initialize_d3d_thread() {
     std::scoped_lock _{m_mux};
 
     // Call UEVR_plugin_required_version on any dlls that export it.

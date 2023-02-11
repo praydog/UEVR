@@ -51,6 +51,8 @@ XInputHook::XInputHook() {
         const auto xinput_1_4_dll = find_dll("xinput1_4.dll");
         const auto xinput_1_3_dll = find_dll("xinput1_3.dll");
 
+        std::scoped_lock _{g_framework->get_hook_monitor_mutex()};
+
         auto factory = safetyhook::Factory::init();
         auto builder = factory->acquire();
 
