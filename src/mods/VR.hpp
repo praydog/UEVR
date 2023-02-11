@@ -34,7 +34,7 @@ public:
 
     std::string_view get_name() const override { return "VR"; }
 
-    std::optional<std::string> on_initialize() override;
+    std::optional<std::string> on_initialize_d3d_thread() override;
     void on_config_load(const utility::Config& cfg) override;
     void on_config_save(utility::Config& cfg) override;
     

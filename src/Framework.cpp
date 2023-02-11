@@ -421,16 +421,7 @@ void Framework::on_frame_d3d11() {
         return;
     }
 
-    const bool is_init_ok = m_error.empty() && m_game_data_initialized;
-
-    if (is_init_ok) {
-        // Write default config once if it doesn't exist.
-        if (!std::exchange(m_created_default_cfg, true)) {
-            if (!fs::exists(utility::widen(get_persistent_dir("config.txt").string()))) {
-                save_config();
-            }
-        }
-    }
+    bool is_init_ok = first_frame_initialize();
 
     //if (!m_has_frame) {
         //if (!is_init_ok) {
@@ -526,16 +517,7 @@ void Framework::on_frame_d3d12() {
         return;
     }
 
-    const bool is_init_ok = m_error.empty() && m_game_data_initialized;
-
-    if (is_init_ok) {
-        // Write default config once if it doesn't exist.
-        if (!std::exchange(m_created_default_cfg, true)) {
-            if (!fs::exists(utility::widen(get_persistent_dir("config.txt").string()))) {
-                save_config();
-            }
-        }
-    }
+    bool is_init_ok = first_frame_initialize();
 
     //if (!m_has_frame) {
         //if (!is_init_ok) {
@@ -1308,7 +1290,7 @@ bool Framework::initialize() {
 
         spdlog::info("Starting game data initialization thread");
 
-        // Game specific initialization stuff
+        // Game specific initialization stuff. Code that runs any D3D must not run here (like VR code).
         std::thread init_thread([this]() {
             try {
                 //Framework::initialize_sdk(); // TODO
@@ -1324,9 +1306,6 @@ bool Framework::initialize() {
                     }
 
                     spdlog::error("Initialization of mods failed. Reason: {}", m_error);
-                } else {
-                    // Do an initial config save to set the default values for the frontend
-                    save_config();
                 }
 
                 m_game_data_initialized = true;
@@ -1370,6 +1349,39 @@ bool Framework::initialize_xinput_hook() {
     if (m_first_frame || m_xinput_hook == nullptr) {
         m_xinput_hook.reset();
         m_xinput_hook = std::make_unique<XInputHook>();
+    }
+
+    return true;
+}
+
+// Ran on the first valid frame after pre-initialization of mods has taken place and hasn't failed
+// This one allows mods to run any initialization code in the context of the D3D thread (like VR code)
+// It also is the one that actually loads any config files
+bool Framework::first_frame_initialize() {
+    const bool is_init_ok = m_error.empty() && m_game_data_initialized;
+
+    if (!is_init_ok || !m_first_frame_d3d_initialize) {
+        return is_init_ok;
+    }
+
+    spdlog::info("Running first frame D3D initialization of mods...");
+
+    m_first_frame_d3d_initialize = false;
+    auto e = m_mods->on_initialize_d3d_thread();
+
+    if (e) {
+        if (e->empty()) {
+            m_error = "An unknown error has occurred.";
+        } else {
+            m_error = *e;
+        }
+
+        spdlog::error("Initialization of mods failed. Reason: {}", m_error);
+        m_game_data_initialized = false;
+        return false;
+    } else {
+        // Do an initial config save to set the default values for the frontend
+        save_config();
     }
 
     return true;

@@ -391,13 +391,11 @@ void D3D12Component::on_reset(VR* vr) {
     auto runtime = vr->get_runtime();
 
     for (auto& ctx : m_openvr.left_eye_tex) {
-        ctx.copier.reset();
-        ctx.texture.Reset();
+        ctx.reset();
     }
 
     for (auto& ctx : m_openvr.right_eye_tex) {
-        ctx.copier.reset();
-        ctx.texture.Reset();
+        ctx.reset();
     }
 
     for (auto& copier : m_generic_copiers) {
@@ -427,7 +425,7 @@ void D3D12Component::on_reset(VR* vr) {
         //vr->m_openxr.end_frame();
     }
 
-    m_prev_backbuffer = nullptr;
+    m_prev_backbuffer.Reset();
     m_openvr.texture_counter = 0;
 }
 

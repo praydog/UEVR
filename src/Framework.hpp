@@ -164,11 +164,14 @@ private:
     bool initialize_windows_message_hook();
     bool initialize_xinput_hook();
 
+    bool first_frame_initialize();
+
     void call_on_frame();
 
     HMODULE m_framework_module{};
 
     bool m_first_frame{true};
+    bool m_first_frame_d3d_initialize{true};
     bool m_is_d3d12{false};
     bool m_is_d3d11{false};
     bool m_valid{false};

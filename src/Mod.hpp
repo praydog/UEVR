@@ -246,6 +246,7 @@ public:
     virtual std::string generate_name(std::string_view name) { return std::string{ get_name() } + "_" + name.data(); }
 
     virtual std::optional<std::string> on_initialize() { return std::nullopt; };
+    virtual std::optional<std::string> on_initialize_d3d_thread() { return std::nullopt; };
 
     // This gets called after updating stuff like keyboard/mouse input to imgui
     // can be used to override these inputs e.g. with a custom input system

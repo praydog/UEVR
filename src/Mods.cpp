@@ -24,6 +24,19 @@ std::optional<std::string> Mods::on_initialize() const {
         }
     }
 
+    return std::nullopt;
+}
+
+std::optional<std::string> Mods::on_initialize_d3d_thread() const {
+    for (auto& mod : m_mods) {
+        spdlog::info("{:s}::on_initialize_d3d_thread()", mod->get_name().data());
+
+        if (auto e = mod->on_initialize_d3d_thread(); e != std::nullopt) {
+            spdlog::info("{:s}::on_initialize_d3d_thread() has failed: {:s}", mod->get_name().data(), *e);
+            return e;
+        }
+    }
+
     reload_config();
 
     return std::nullopt;

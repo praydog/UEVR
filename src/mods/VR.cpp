@@ -21,7 +21,7 @@ std::shared_ptr<VR>& VR::get() {
 }
 
 // Called when the mod is initialized
-std::optional<std::string> VR::on_initialize() try {
+std::optional<std::string> VR::on_initialize_d3d_thread() try {
     auto openvr_error = initialize_openvr();
 
     if (openvr_error || !m_openvr->loaded) {
