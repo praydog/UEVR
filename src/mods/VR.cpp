@@ -553,14 +553,9 @@ bool VR::is_any_action_down() {
 }
 
 bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
-    if (message != WM_DEVICECHANGE && !m_spoofed_gamepad_connection) {
-        const auto now = std::chrono::steady_clock::now();
-
-        if (now - m_last_xinput_spoof_sent >= std::chrono::milliseconds(2000)) {
-            spdlog::info("[VR] Attempting to spoof gamepad connection");
-            PostMessage(wnd, WM_DEVICECHANGE, 0, 0);
-            m_last_xinput_spoof_sent = now;
-        }
+    if (message == WM_DEVICECHANGE && !m_spoofed_gamepad_connection) {
+        spdlog::info("[VR] Received WM_DEVICECHANGE");
+        m_last_xinput_spoof_sent = std::chrono::steady_clock::now();
     }
 
     return true;
@@ -589,7 +584,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
     if (!m_spoofed_gamepad_connection) {
         spdlog::info("[VR] Successfully spoofed gamepad connection @ {}", user_index);
     }
-
+    
     m_last_xinput_update = now;
     m_spoofed_gamepad_connection = true;
 
@@ -825,9 +820,18 @@ void VR::update_action_states() {
     }
 
     const auto last_xinput_update_is_late = std::chrono::steady_clock::now() - m_last_xinput_update >= std::chrono::seconds(2);
+    const auto should_be_spoofing = (actively_using_controller || get_runtime()->handle_pause);
 
-    if (m_spoofed_gamepad_connection && last_xinput_update_is_late && (actively_using_controller || get_runtime()->handle_pause)) {
+    if (m_spoofed_gamepad_connection && last_xinput_update_is_late && should_be_spoofing) {
         m_spoofed_gamepad_connection = false;
+    }
+
+    if (!m_spoofed_gamepad_connection && last_xinput_update_is_late && should_be_spoofing) {
+        spdlog::info("[VR] Attempting to spoof gamepad connection");
+        g_framework->post_message(WM_DEVICECHANGE, 0, 0);
+        g_framework->activate_window();
+
+        m_last_xinput_spoof_sent = std::chrono::steady_clock::now();
     }
 
     /*if (m_recenter_view_key->is_key_down_once()) {
@@ -1018,6 +1022,21 @@ void VR::on_present() {
 
         //runtime->needs_pose_update = true;
         m_submitted = false;
+
+        // On the first ever submit, we need to activate the window and set the mouse to the center
+        // so the user doesn't have to click on the window to get input.
+        if (m_first_submit) {
+            m_first_submit = false;
+
+            // for some reason this doesn't work if called directly from here
+            // so we have to do it in a separate thread
+            std::thread worker([]() {
+                g_framework->activate_window();
+                g_framework->set_mouse_to_center();
+                spdlog::info("Finished first submit from worker thread!");
+            });
+            worker.detach();
+        }
     }
 }
 

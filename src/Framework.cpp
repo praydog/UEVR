@@ -654,6 +654,70 @@ void Framework::on_reset(uint32_t w, uint32_t h) {
     m_initialized = false;
 }
 
+void Framework::activate_window() {
+    if (m_wnd == nullptr) {
+        return;
+    }
+
+    AllowSetForegroundWindow(GetCurrentProcessId());
+    SetForegroundWindow(m_wnd);
+    //BringWindowToTop(m_wnd);
+    //SetFocus(m_wnd);
+    //SetActiveWindow(m_wnd);
+}
+
+void Framework::patch_set_cursor_pos() {
+    std::scoped_lock _{ m_patch_mtx };
+
+    if (m_set_cursor_pos_patch.get() == nullptr) {
+        // Make SetCursorPos ret early
+        const auto set_cursor_pos_addr = (uintptr_t)GetProcAddress(GetModuleHandleA("user32.dll"), "SetCursorPos");
+
+        if (set_cursor_pos_addr != 0) {
+            spdlog::info("Patching SetCursorPos");
+            m_set_cursor_pos_patch = Patch::create(set_cursor_pos_addr, {0xC3});
+        }
+    }
+}
+
+void Framework::remove_set_cursor_pos_patch() {
+    std::scoped_lock _{ m_patch_mtx };
+
+    if (m_set_cursor_pos_patch.get() != nullptr) {
+        spdlog::info("Removing SetCursorPos patch");
+    }
+
+    m_set_cursor_pos_patch.reset();
+}
+
+void Framework::set_mouse_to_center() {
+    if (m_wnd == nullptr) {
+        return;
+    }
+
+    RECT rect{};
+    GetWindowRect(m_wnd, &rect);
+
+    int x = (rect.left + rect.right) / 2;
+    int y = (rect.top + rect.bottom) / 2;
+
+    if (m_set_cursor_pos_patch != nullptr) {
+        remove_set_cursor_pos_patch();
+        SetCursorPos(x, y);
+        patch_set_cursor_pos();
+    } else {
+        SetCursorPos(x, y);
+    }
+}
+
+void Framework::post_message(UINT message, WPARAM w_param, LPARAM l_param) {
+    if (m_wnd == nullptr) {
+        return;
+    }
+
+    PostMessage(m_wnd, message, w_param, l_param);
+}
+
 bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
     m_last_message_time = std::chrono::steady_clock::now();
 
@@ -933,11 +997,7 @@ void Framework::draw_ui() {
 
     if (!m_draw_ui) {
         // remove SetCursorPos patch
-        if (m_set_cursor_pos_patch.get() != nullptr) {
-            spdlog::info("Removing SetCursorPos patch");
-        }
-
-        m_set_cursor_pos_patch.reset();
+        remove_set_cursor_pos_patch();
 
         m_is_ui_focused = false;
         if (m_last_draw_ui) {
@@ -946,16 +1006,6 @@ void Framework::draw_ui() {
         //m_dinput_hook->acknowledge_input();
         // ImGui::GetIO().MouseDrawCursor = false;
         return;
-    }
-
-    if (m_set_cursor_pos_patch.get() == nullptr) {
-        // Make SetCursorPos ret early
-        const auto set_cursor_pos_addr = (uintptr_t)GetProcAddress(GetModuleHandleA("user32.dll"), "SetCursorPos");
-
-        if (set_cursor_pos_addr != 0) {
-            spdlog::info("Patching SetCursorPos");
-            m_set_cursor_pos_patch = Patch::create(set_cursor_pos_addr, {0xC3});
-        }
     }
     
     // UI Specific code:
@@ -1041,6 +1091,11 @@ void Framework::draw_ui() {
 
     // save the menu state in config
     if (m_draw_ui != m_last_draw_ui) {
+        if (m_draw_ui) {
+            set_mouse_to_center();
+            patch_set_cursor_pos();
+        }
+
         m_draw_ui = m_last_draw_ui;
         set_draw_ui(!m_draw_ui, true);
     }

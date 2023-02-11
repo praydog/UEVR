@@ -88,8 +88,16 @@ public:
     void on_post_present_d3d11();
     void on_frame_d3d12();
     void on_post_present_d3d12();
+    
     void on_reset(uint32_t w, uint32_t h);
+
+    void activate_window();
+    void set_mouse_to_center();
+    void patch_set_cursor_pos();
+    void remove_set_cursor_pos_patch();
+    void post_message(UINT message, WPARAM w_param, LPARAM l_param);
     bool on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param);
+
     void on_frontend_command(UEVRSharedMemory::Command command);
     void on_direct_input_keys(const std::array<uint8_t, 256>& keys);
 
@@ -205,9 +213,10 @@ private:
     int m_font_size{16};
     std::vector<AdditionalFont> m_additional_fonts{};
 
-    std::mutex m_input_mutex{};
+    std::recursive_mutex m_input_mutex{};
     std::recursive_mutex m_config_mtx{};
     std::recursive_mutex m_imgui_mtx{};
+    std::recursive_mutex m_patch_mtx{};
 
     HWND m_wnd{0};
     HMODULE m_game_module{0};
