@@ -536,8 +536,15 @@ void Framework::on_frame_d3d12() {
     //if (!m_has_frame) {
         //if (!is_init_ok) {
             update_fonts();
-            invalidate_device_objects();
 
+            ImGui::GetIO().BackendRendererUserData = m_d3d12.imgui_backend_datas[0];
+            const auto prev_cleanup = m_wants_device_object_cleanup;
+            invalidate_device_objects();
+            ImGui_ImplDX12_NewFrame();
+
+            ImGui::GetIO().BackendRendererUserData = m_d3d12.imgui_backend_datas[1];
+            m_wants_device_object_cleanup = prev_cleanup;
+            invalidate_device_objects();
             ImGui_ImplDX12_NewFrame();
             // hooks don't run until after initialization, so we just render the imgui window while initalizing.
             run_imgui_frame(false);
@@ -576,7 +583,10 @@ void Framework::on_frame_d3d12() {
     rts[0] = m_d3d12.get_cpu_rtv(device, D3D12::RTV::IMGUI);
     m_d3d12.cmd_list->OMSetRenderTargets(1, rts, FALSE, NULL);
     m_d3d12.cmd_list->SetDescriptorHeaps(1, m_d3d12.srv_desc_heap.GetAddressOf());
+
+    ImGui::GetIO().BackendRendererUserData = m_d3d12.imgui_backend_datas[1];
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_d3d12.cmd_list.Get());
+    
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     m_d3d12.cmd_list->ResourceBarrier(1, &barrier);
@@ -591,7 +601,10 @@ void Framework::on_frame_d3d12() {
     rts[0] = m_d3d12.get_cpu_rtv(device, (D3D12::RTV)bb_index);
     m_d3d12.cmd_list->OMSetRenderTargets(1, rts, FALSE, NULL);
     m_d3d12.cmd_list->SetDescriptorHeaps(1, m_d3d12.srv_desc_heap.GetAddressOf());
+
+    ImGui::GetIO().BackendRendererUserData = m_d3d12.imgui_backend_datas[0];
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_d3d12.cmd_list.Get());
+
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
     m_d3d12.cmd_list->ResourceBarrier(1, &barrier);
@@ -1697,7 +1710,7 @@ bool Framework::init_d3d12() {
         device->CreateRenderTargetView(m_d3d12.get_rt(D3D12::RTV::IMGUI).Get(), nullptr, m_d3d12.get_cpu_rtv(device, D3D12::RTV::IMGUI));
         device->CreateRenderTargetView(m_d3d12.get_rt(D3D12::RTV::BLANK).Get(), nullptr, m_d3d12.get_cpu_rtv(device, D3D12::RTV::BLANK));
         device->CreateShaderResourceView(
-            m_d3d12.get_rt(D3D12::RTV::IMGUI).Get(), nullptr, m_d3d12.get_cpu_srv(device, D3D12::SRV::IMGUI));
+            m_d3d12.get_rt(D3D12::RTV::IMGUI).Get(), nullptr, m_d3d12.get_cpu_srv(device, D3D12::SRV::IMGUI_VR));
         device->CreateShaderResourceView(m_d3d12.get_rt(D3D12::RTV::BLANK).Get(), nullptr, m_d3d12.get_cpu_srv(device, D3D12::SRV::BLANK));
 
         m_d3d12.rt_width = (uint32_t)desc.Width;
@@ -1710,15 +1723,38 @@ bool Framework::init_d3d12() {
     auto bb_desc = bb->GetDesc();
 
     if (!ImGui_ImplDX12_Init(device, 1, bb_desc.Format, m_d3d12.srv_desc_heap.Get(),
-            m_d3d12.get_cpu_srv(device, D3D12::SRV::IMGUI_FONT), m_d3d12.get_gpu_srv(device, D3D12::SRV::IMGUI_FONT))) {
+            m_d3d12.get_cpu_srv(device, D3D12::SRV::IMGUI_FONT_BACKBUFFER), m_d3d12.get_gpu_srv(device, D3D12::SRV::IMGUI_FONT_BACKBUFFER))) {
         spdlog::error("[D3D12] Failed to initialize ImGui.");
         return false;
     }
+
+    m_d3d12.imgui_backend_datas[0] = ImGui::GetIO().BackendRendererUserData;
+
+    ImGui::GetIO().BackendRendererUserData = nullptr;
+
+    // Now initialize another one for the VR texture.
+    auto& bb_vr = m_d3d12.get_rt(D3D12::RTV::IMGUI);
+    auto bb_vr_desc = bb_vr->GetDesc();
+
+    if (!ImGui_ImplDX12_Init(device, 1, bb_vr_desc.Format, m_d3d12.srv_desc_heap.Get(),
+            m_d3d12.get_cpu_srv(device, D3D12::SRV::IMGUI_FONT_VR), m_d3d12.get_gpu_srv(device, D3D12::SRV::IMGUI_FONT_VR))) {
+        spdlog::error("[D3D12] Failed to initialize ImGui.");
+        return false;
+    }
+
+    m_d3d12.imgui_backend_datas[1] = ImGui::GetIO().BackendRendererUserData;
 
     return true;
 }
 
 void Framework::deinit_d3d12() {
-    ImGui_ImplDX12_Shutdown();
+    for (auto userdata : m_d3d12.imgui_backend_datas) {
+        if (userdata != nullptr) {
+            ImGui::GetIO().BackendRendererUserData = userdata;
+            ImGui_ImplDX12_Shutdown();
+        }
+    }
+
+    ImGui::GetIO().BackendRendererUserData = nullptr;
     m_d3d12 = {};
 }
