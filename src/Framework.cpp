@@ -1073,7 +1073,8 @@ void Framework::draw_ui() {
 
     ImGui::SetNextWindowSize(ImVec2(window_w, window_h), ImGuiCond_::ImGuiCond_Once);
     ImGui::Begin("Framework", &m_draw_ui);
-    ImGui::Text("Default Menu Key: Insert");
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Keyboard Menu Key: Insert");
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Gamepad L3 + R3: Toggle Menu");
     ImGui::Checkbox("Transparency", &m_ui_option_transparent);
     ImGui::SameLine();
     ImGui::Text("(?)");

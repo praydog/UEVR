@@ -12,6 +12,7 @@
 
 #include "sdk/threading/GameThreadWorker.hpp"
 #include "Framework.hpp"
+#include "frameworkConfig.hpp"
 
 #include "VR.hpp"
 
@@ -562,6 +563,33 @@ bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
 }
 
 void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {
+    // Allow the framework menu to open if L3 + R3 are pressed together
+    auto do_l3_r3_menu_open = [&]() {
+        if (*retval != ERROR_SUCCESS) {
+            return;
+        }
+
+        if (state->Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB && state->Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) {
+            if (!FrameworkConfig::get()->is_enable_l3_r3_toggle()) {
+                return;
+            }
+
+            if (m_last_xinput_l3_r3_menu_open == std::chrono::steady_clock::time_point::min()) {
+                m_last_xinput_l3_r3_menu_open = std::chrono::steady_clock::now();
+            } else {
+                const auto now = std::chrono::steady_clock::now();
+
+                if (now - m_last_xinput_l3_r3_menu_open > std::chrono::seconds(1)) {
+                    m_last_xinput_l3_r3_menu_open = std::chrono::steady_clock::now();
+                    g_framework->set_draw_ui(!g_framework->is_drawing_ui());
+                }
+            }
+        }
+    };
+
+    // Once here for normal gamepads, and once for the spoofed gamepad at the end
+    do_l3_r3_menu_open();
+
     const auto now = std::chrono::steady_clock::now();
 
     if (now - m_last_xinput_update > std::chrono::seconds(2)) {
@@ -669,6 +697,9 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
 
     state->Gamepad.sThumbRX = (int16_t)(right_joystick_axis.x * 32767.0f);
     state->Gamepad.sThumbRY = (int16_t)(right_joystick_axis.y * 32767.0f);
+    
+    // Do it again after all the VR buttons have been spoofed
+    do_l3_r3_menu_open();
 }
 
 void VR::on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) {

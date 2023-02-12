@@ -20,6 +20,7 @@ void FrameworkConfig::on_draw_ui() {
 
     //m_menu_key->draw("Menu Key");
     m_remember_menu_state->draw("Remember Menu Open/Closed State");
+    m_enable_l3_r3_toggle->draw("Enable L3 + R3 Toggle");
 
     if (m_font_size->draw("Font Size")) {
         g_framework->set_font_size(m_font_size->value());

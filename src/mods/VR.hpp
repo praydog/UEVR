@@ -406,6 +406,7 @@ private:
     std::chrono::steady_clock::time_point m_last_controller_update{};
     std::chrono::steady_clock::time_point m_last_xinput_update{};
     std::chrono::steady_clock::time_point m_last_xinput_spoof_sent{};
+    std::chrono::steady_clock::time_point m_last_xinput_l3_r3_menu_open{};
     std::chrono::steady_clock::time_point m_last_interaction_display{};
 
     uint32_t m_lowest_xinput_user_index{};
