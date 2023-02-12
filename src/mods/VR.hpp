@@ -60,7 +60,7 @@ public:
     bool on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) override;
     void on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) override;
     void on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) override;
-
+    void update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_controller);
 
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
 
@@ -483,6 +483,60 @@ private:
     bool m_disable_projection_matrix_override{ false };
     bool m_disable_view_matrix_override{false};
     bool m_disable_backbuffer_size_override{false};
+
+    struct XInputContext {
+        std::optional<std::function<void()>> imgui_update{};
+        std::recursive_mutex mtx{};
+        XINPUT_STATE state{};
+
+        struct VRState {
+            class StickState {
+            public:
+                bool was_pressed(bool current_state) {
+                    if (!current_state) {
+                        is_pressed = false;
+                        return false;
+                    }
+
+                    const auto now = std::chrono::steady_clock::now();
+                    if (is_pressed && now - initial_press > std::chrono::milliseconds(500)) {
+                        return true;
+                    }
+
+                    if (!is_pressed) {
+                        initial_press = now;
+                        is_pressed = true;
+                        return true;
+                    }
+
+                    return false;
+                } 
+            
+            private:
+                std::chrono::steady_clock::time_point initial_press{};
+                bool is_pressed{false};
+            };
+
+            StickState left_stick_up{};
+            StickState left_stick_down{};
+            StickState left_stick_left{};
+            StickState left_stick_right{};
+        } vr;
+
+        void enqueue(const XINPUT_STATE& in_state, std::function<void()> func) {
+            std::scoped_lock _{mtx};
+            imgui_update = func;
+            state = in_state;
+        }
+
+        void update() {
+            std::scoped_lock _{mtx};
+            if (imgui_update) {
+                (*imgui_update)();
+                imgui_update.reset();
+            }
+        }
+    } m_xinput_context{};
 
     static std::string actions_json;
     static std::string binding_rift_json;

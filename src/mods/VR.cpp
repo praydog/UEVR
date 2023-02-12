@@ -563,32 +563,10 @@ bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
 }
 
 void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {
-    // Allow the framework menu to open if L3 + R3 are pressed together
-    auto do_l3_r3_menu_open = [&]() {
-        if (*retval != ERROR_SUCCESS) {
-            return;
-        }
-
-        if (state->Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB && state->Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) {
-            if (!FrameworkConfig::get()->is_enable_l3_r3_toggle()) {
-                return;
-            }
-
-            if (m_last_xinput_l3_r3_menu_open == std::chrono::steady_clock::time_point::min()) {
-                m_last_xinput_l3_r3_menu_open = std::chrono::steady_clock::now();
-            } else {
-                const auto now = std::chrono::steady_clock::now();
-
-                if (now - m_last_xinput_l3_r3_menu_open > std::chrono::seconds(1)) {
-                    m_last_xinput_l3_r3_menu_open = std::chrono::steady_clock::now();
-                    g_framework->set_draw_ui(!g_framework->is_drawing_ui());
-                }
-            }
-        }
-    };
-
-    // Once here for normal gamepads, and once for the spoofed gamepad at the end
-    do_l3_r3_menu_open();
+    if (*retval == ERROR_SUCCESS) {
+        // Once here for normal gamepads, and once for the spoofed gamepad at the end
+        update_imgui_state_from_xinput_state(*state, false);
+    }
 
     const auto now = std::chrono::steady_clock::now();
 
@@ -699,7 +677,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
     state->Gamepad.sThumbRY = (int16_t)(right_joystick_axis.y * 32767.0f);
     
     // Do it again after all the VR buttons have been spoofed
-    do_l3_r3_menu_open();
+    update_imgui_state_from_xinput_state(*state, true);
 }
 
 void VR::on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) {
@@ -721,6 +699,100 @@ void VR::on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRA
     if (right_amplitude > 0.0f) {
         trigger_haptic_vibration(0.0f, 0.1f, 1.0f, right_amplitude, m_right_joystick);
     }
+}
+
+// Allows imgui navigation to work with the controllers
+void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_controller) {
+    // L3 + R3 to open the menu
+    if (state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB && state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) {
+        if (!FrameworkConfig::get()->is_enable_l3_r3_toggle()) {
+            return;
+        }
+
+        if (m_last_xinput_l3_r3_menu_open == std::chrono::steady_clock::time_point::min()) {
+            m_last_xinput_l3_r3_menu_open = std::chrono::steady_clock::now();
+        } else {
+            const auto now = std::chrono::steady_clock::now();
+
+            if (now - m_last_xinput_l3_r3_menu_open > std::chrono::seconds(1)) {
+                m_last_xinput_l3_r3_menu_open = std::chrono::steady_clock::now();
+                g_framework->set_draw_ui(!g_framework->is_drawing_ui());
+            }
+        }
+    }
+
+    if (!g_framework->is_drawing_ui()) {
+        return;
+    }
+
+    // Gamepad navigation when the menu is open
+    m_xinput_context.enqueue(state, [this, is_vr_controller](){
+        const auto& state = m_xinput_context.state;
+
+        auto& io = ImGui::GetIO();
+        auto& gamepad = state.Gamepad;
+
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+        io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
+
+        // From imgui_impl_win32.cpp
+        #define IM_SATURATE(V)                      (V < 0.0f ? 0.0f : V > 1.0f ? 1.0f : V)
+        #define MAP_BUTTON(KEY_NO, BUTTON_ENUM)     { io.AddKeyEvent(KEY_NO, (gamepad.wButtons & BUTTON_ENUM) != 0); }
+        #define MAP_ANALOG(KEY_NO, VALUE, V0, V1)   { float vn = (float)(VALUE - V0) / (float)(V1 - V0); io.AddKeyAnalogEvent(KEY_NO, vn > 0.10f, IM_SATURATE(vn)); }
+
+        MAP_BUTTON(ImGuiKey_GamepadStart,           XINPUT_GAMEPAD_START);
+        MAP_BUTTON(ImGuiKey_GamepadBack,            XINPUT_GAMEPAD_BACK);
+        MAP_BUTTON(ImGuiKey_GamepadFaceLeft,        XINPUT_GAMEPAD_X);
+        MAP_BUTTON(ImGuiKey_GamepadFaceRight,       XINPUT_GAMEPAD_B);
+        MAP_BUTTON(ImGuiKey_GamepadFaceUp,          XINPUT_GAMEPAD_Y);
+        MAP_BUTTON(ImGuiKey_GamepadFaceDown,        XINPUT_GAMEPAD_A);
+        MAP_BUTTON(ImGuiKey_GamepadDpadLeft,        XINPUT_GAMEPAD_DPAD_LEFT);
+        MAP_BUTTON(ImGuiKey_GamepadDpadRight,       XINPUT_GAMEPAD_DPAD_RIGHT);
+        MAP_BUTTON(ImGuiKey_GamepadDpadUp,          XINPUT_GAMEPAD_DPAD_UP);
+        MAP_BUTTON(ImGuiKey_GamepadDpadDown,        XINPUT_GAMEPAD_DPAD_DOWN);
+        MAP_BUTTON(ImGuiKey_GamepadL1,              XINPUT_GAMEPAD_LEFT_SHOULDER);
+        MAP_BUTTON(ImGuiKey_GamepadR1,              XINPUT_GAMEPAD_RIGHT_SHOULDER);
+        MAP_ANALOG(ImGuiKey_GamepadL2,              gamepad.bLeftTrigger, XINPUT_GAMEPAD_TRIGGER_THRESHOLD, 255);
+        MAP_ANALOG(ImGuiKey_GamepadR2,              gamepad.bRightTrigger, XINPUT_GAMEPAD_TRIGGER_THRESHOLD, 255);
+        MAP_BUTTON(ImGuiKey_GamepadL3,              XINPUT_GAMEPAD_LEFT_THUMB);
+        MAP_BUTTON(ImGuiKey_GamepadR3,              XINPUT_GAMEPAD_RIGHT_THUMB);
+
+        if (!is_vr_controller) {
+            MAP_ANALOG(ImGuiKey_GamepadLStickLeft,      gamepad.sThumbLX, -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, -32768);
+            MAP_ANALOG(ImGuiKey_GamepadLStickRight,     gamepad.sThumbLX, +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, +32767);
+            MAP_ANALOG(ImGuiKey_GamepadLStickUp,        gamepad.sThumbLY, +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, +32767);
+            MAP_ANALOG(ImGuiKey_GamepadLStickDown,      gamepad.sThumbLY, -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, -32768);
+        } else {
+            // Map it to the dpad
+            const auto left_stick_left = gamepad.sThumbLX < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
+            if (m_xinput_context.vr.left_stick_left.was_pressed(left_stick_left)) {
+                io.AddKeyEvent(ImGuiKey_GamepadDpadLeft, true);
+            }
+
+            const auto left_stick_right = gamepad.sThumbLX > +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
+            if (m_xinput_context.vr.left_stick_right.was_pressed(left_stick_right)) {
+                io.AddKeyEvent(ImGuiKey_GamepadDpadRight, true);
+            }
+
+            const auto left_stick_up = gamepad.sThumbLY > +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
+            if (m_xinput_context.vr.left_stick_up.was_pressed(left_stick_up)) {
+                io.AddKeyEvent(ImGuiKey_GamepadDpadUp, true);
+            }
+
+            const auto left_stick_down = gamepad.sThumbLY < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
+            if (m_xinput_context.vr.left_stick_down.was_pressed(left_stick_down)) {
+                io.AddKeyEvent(ImGuiKey_GamepadDpadDown, true);
+            }
+        }
+
+        MAP_ANALOG(ImGuiKey_GamepadRStickLeft,      gamepad.sThumbRX, -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, -32768);
+        MAP_ANALOG(ImGuiKey_GamepadRStickRight,     gamepad.sThumbRX, +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, +32767);
+        MAP_ANALOG(ImGuiKey_GamepadRStickUp,        gamepad.sThumbRY, +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, +32767);
+        MAP_ANALOG(ImGuiKey_GamepadRStickDown,      gamepad.sThumbRY, -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, -32768);
+    });
+
+    // Zero out the state so we don't send input to the game.
+    ZeroMemory(&state.Gamepad, sizeof(XINPUT_GAMEPAD));
 }
 
 void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
@@ -928,6 +1000,8 @@ void VR::on_config_save(utility::Config& cfg) {
 }
 
 void VR::on_pre_imgui_frame() {
+    m_xinput_context.update();
+
     if (!get_runtime()->ready()) {
         return;
     }

@@ -8,7 +8,7 @@
 #include "Mods.hpp"
 
 Mods::Mods() {
-    m_mods.emplace_back(new FrameworkConfig());
+    m_mods.emplace_back(FrameworkConfig::get());
     m_mods.emplace_back(VR::get());
 
     m_mods.emplace_back(PluginLoader::get());
