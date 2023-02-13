@@ -796,11 +796,12 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     // scan for GetDesiredNumberOfViews function, we use this function to perform AFR if needed
     SPDLOG_INFO("Searching for GetDesiredNumberOfViews function...");
+    std::optional<uint32_t> get_desired_number_of_views_index{};
 
     for (auto i = 1; i < 20; ++i) {
         auto func_ptr = &((uintptr_t*)vtable)[i];
 
-        if (IsBadReadPtr((void*)*func_ptr, 8)) {
+        if (IsBadReadPtr((void*)*func_ptr, sizeof(void*))) {
             SPDLOG_INFO("Could not locate GetDesiredNumberOfViews function, this is okay, not really needed");
             break;
         }
