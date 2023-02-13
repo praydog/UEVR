@@ -171,6 +171,10 @@ public:
         return is_hmd_active() && !m_controllers.empty() && (std::chrono::steady_clock::now() - m_last_controller_update) <= std::chrono::seconds((int32_t)m_motion_controls_inactivity_timer->value());
     }
 
+    bool is_using_controllers_within(std::chrono::seconds seconds) const {
+        return is_hmd_active() && !m_controllers.empty() && (std::chrono::steady_clock::now() - m_last_controller_update) <= seconds;
+    }
+
     int get_hmd_index() const {
         return 0;
     }
@@ -485,10 +489,16 @@ private:
     bool m_disable_backbuffer_size_override{false};
 
     struct XInputContext {
-        // TODO: make update functions separate for gamepads and VR controllers
-        std::optional<std::function<void()>> imgui_update{};
+        struct PadContext {
+            using Func = std::function<void(const XINPUT_STATE&, bool is_vr_controller)>;
+            std::optional<Func> update{};
+            XINPUT_STATE state{};
+        };
+
+        PadContext gamepad{};
+        PadContext vr_controller{};
+        
         std::recursive_mutex mtx{};
-        XINPUT_STATE state{};
 
         struct VRState {
             class StickState {
@@ -524,17 +534,28 @@ private:
             StickState left_stick_right{};
         } vr;
 
-        void enqueue(const XINPUT_STATE& in_state, std::function<void()> func) {
+        void enqueue(bool is_vr_controller, const XINPUT_STATE& in_state, PadContext::Func func) {
             std::scoped_lock _{mtx};
-            imgui_update = func;
-            state = in_state;
+            if (is_vr_controller) {
+                vr_controller.update = func;
+                vr_controller.state = in_state;
+            } else {
+                gamepad.update = func;
+                gamepad.state = in_state;
+            }
         }
 
         void update() {
             std::scoped_lock _{mtx};
-            if (imgui_update) {
-                (*imgui_update)();
-                imgui_update.reset();
+
+            if (vr_controller.update) {
+                (*vr_controller.update)(vr_controller.state, true);
+                vr_controller.update.reset();
+            }
+
+            if (gamepad.update) {
+                (*gamepad.update)(gamepad.state, false);
+                gamepad.update.reset();
             }
         }
     } m_xinput_context{};

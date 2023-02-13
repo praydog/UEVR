@@ -721,10 +721,17 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
         return;
     }
 
-    // Gamepad navigation when the menu is open
-    m_xinput_context.enqueue(state, [this, is_vr_controller](){
-        const auto& state = m_xinput_context.state;
+    const auto is_using_vr_controller_recently = is_using_controllers_within(std::chrono::seconds(1));
+    const auto is_gamepad = !is_vr_controller;
 
+    if (is_vr_controller && !is_using_vr_controller_recently) {
+        return;
+    } else if (is_gamepad && is_using_vr_controller_recently) { // dont allow gamepad navigation if using vr controllers
+        return;
+    }
+
+    // Gamepad navigation when the menu is open
+    m_xinput_context.enqueue(is_vr_controller, state, [this](const XINPUT_STATE& state, bool is_vr_controller){
         auto& io = ImGui::GetIO();
         auto& gamepad = state.Gamepad;
 
