@@ -266,6 +266,7 @@ private:
         FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size);
     static void init_canvas(FFakeStereoRendering* stereo, FSceneView* view, UCanvas* canvas);
     static uint32_t get_desired_number_of_views_hook(FFakeStereoRendering* stereo, bool is_stereo_enabled);
+    static EStereoscopicPass get_view_pass_for_index_hook(FFakeStereoRendering* stereo, bool stereo_requested, int32_t view_index);
 
     static IStereoRenderTargetManager* get_render_target_manager_hook(FFakeStereoRendering* stereo);
     static IStereoLayers* get_stereo_layers_hook(FFakeStereoRendering* stereo);
@@ -301,6 +302,7 @@ private:
     std::unique_ptr<PointerHook> m_get_stereo_layers_hook{};
     std::unique_ptr<PointerHook> m_init_canvas_hook{};
     std::unique_ptr<PointerHook> m_get_desired_number_of_views_hook{};
+    std::unique_ptr<PointerHook> m_get_view_pass_for_index_hook{};
 
     VRRenderTargetManager m_rtm{};
     VRRenderTargetManager_418 m_rtm_418{};

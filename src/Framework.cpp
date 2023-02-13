@@ -172,7 +172,9 @@ void Framework::command_thread() {
 Framework::Framework(HMODULE framework_module)
     : m_framework_module{framework_module}
     , m_game_module{GetModuleHandle(0)},
-    m_logger{spdlog::basic_logger_mt("Framework", (get_persistent_dir() / "log.txt").string(), true)} {
+    m_logger{spdlog::basic_logger_mt("Framework", (get_persistent_dir() / "log.txt").string(), true)} 
+{
+    std::scoped_lock __{m_constructor_mutex};
 
     spdlog::set_default_logger(m_logger);
     spdlog::flush_on(spdlog::level::info);
@@ -238,7 +240,6 @@ Framework::Framework(HMODULE framework_module)
     }*/
 
     std::scoped_lock _{m_hook_monitor_mutex};
-
     PluginLoader::get()->early_init();
 
     m_last_present_time = std::chrono::steady_clock::time_point{}; // Instantly send the first message
@@ -248,6 +249,16 @@ Framework::Framework(HMODULE framework_module)
 
     m_uevr_shared_memory = std::make_unique<UEVRSharedMemory>();
     m_command_thread = std::make_unique<std::jthread>([this](std::stop_token s) {
+        spdlog::info("Command thread entry");
+
+        {
+            std::scoped_lock _{m_constructor_mutex};
+
+            while (g_framework == nullptr) {
+                std::this_thread::yield();
+            }
+        }
+
         while (!s.stop_requested() && !m_terminating) {
             this->command_thread();
             std::this_thread::sleep_for(std::chrono::milliseconds(33));
@@ -255,6 +266,16 @@ Framework::Framework(HMODULE framework_module)
     });
 
     m_d3d_monitor_thread = std::make_unique<std::jthread>([this](std::stop_token s) {
+        spdlog::info("D3D monitor thread entry");
+
+        {
+            std::scoped_lock _{m_constructor_mutex};
+
+            while (g_framework == nullptr) {
+                std::this_thread::yield();
+            }
+        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(33));
 
         while (!s.stop_requested() && !m_terminating) {
@@ -262,6 +283,8 @@ Framework::Framework(HMODULE framework_module)
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
     });
+
+    spdlog::info("Leaving Framework constructor");
 }
 
 bool Framework::hook_d3d11() {

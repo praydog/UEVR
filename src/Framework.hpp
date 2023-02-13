@@ -240,6 +240,7 @@ private:
     std::unique_ptr<Mods> m_mods;
 
     std::recursive_mutex m_hook_monitor_mutex{};
+    std::recursive_mutex m_constructor_mutex{};
     std::unique_ptr<std::jthread> m_d3d_monitor_thread{};
     std::unique_ptr<std::jthread> m_command_thread{};
     std::chrono::steady_clock::time_point m_last_present_time{};

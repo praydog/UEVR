@@ -810,9 +810,29 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
             sdk::is_vfunc_pattern(*func_ptr, "84 D2 74 04 8B 41 14 C3 B8 01")) 
         {
             SPDLOG_INFO("Found GetDesiredNumberOfViews function at index: {}", i);
+            get_desired_number_of_views_index = i;
             m_get_desired_number_of_views_hook = std::make_unique<PointerHook>((void**)func_ptr, (void*)&get_desired_number_of_views_hook);
             break;
         }
+    }
+
+    // If double precision detected, it means it's >= UE 5.0.3
+    if (m_has_double_precision && get_desired_number_of_views_index) {
+        SPDLOG_INFO("Searching for GetViewPassForIndex function...");
+
+        // Pretty simple, it's at +1, to be seen if this needs automation
+        const auto get_view_pass_for_index_index = *get_desired_number_of_views_index + 1;
+
+        auto func_ptr = &((uintptr_t*)vtable)[get_view_pass_for_index_index];
+
+        if (IsBadReadPtr((void*)*func_ptr, sizeof(void*))) {
+            SPDLOG_INFO("Could not locate GetViewPassForIndex function. A crash may occur.");
+        } else {
+            SPDLOG_INFO("Found GetViewPassForIndex function at index: {}", get_view_pass_for_index_index);
+            m_get_view_pass_for_index_hook = std::make_unique<PointerHook>((void**)func_ptr, (void*)&get_view_pass_for_index_hook);
+        }
+    } else if (m_has_double_precision) {
+        SPDLOG_INFO("Could not locate GetViewPassForIndex function because GetDesiredNumberOfViews function was not found. A crash may occur.");
     }
 
     SPDLOG_INFO("Leaving FFakeStereoRenderingHook::hook");
@@ -1260,9 +1280,16 @@ void FFakeStereoRenderingHook::viewport_draw_hook(void* viewport, bool should_pr
 }
 
 void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_client, void* viewport, void* canvas, void* a4) {
-    auto call_orig = [&]() {
+    auto call_orig = [=]() {
         g_hook->m_gameviewportclient_draw_hook->call(viewport_client, viewport, canvas, a4);
     };
+
+    static bool once = true;
+
+    if (once) {
+        SPDLOG_INFO("UGameViewportClient::Draw called for the first time.");
+        once = false;
+    }
 
     if (!g_framework->is_game_data_intialized()) {
         call_orig();
@@ -1284,13 +1311,6 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_cli
     if (!vr->is_hmd_active()) {
         call_orig();
         return;
-    }
-
-    static bool once = true;
-
-    if (once) {
-        SPDLOG_INFO("UGameViewportClient::Draw called for the first time.");
-        once = false;
     }
 
     static uint32_t hook_attempts = 0;
@@ -3088,6 +3108,23 @@ uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoR
     }
 
     return 2;
+}
+
+// Only really necessary for 5.0.3 because for some reason negative view index gets passed into it
+// but 5.0.3 doesn't account for this and thinks it's a secondary pass
+// so the purpose of the hook (mostly) is to make those return eSSP_FULL to fix a crash
+EStereoscopicPass FFakeStereoRenderingHook::get_view_pass_for_index_hook(FFakeStereoRendering* stereo, bool stereo_requested, int32_t view_index) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+    SPDLOG_INFO("get view pass for index hook called! {} {}", stereo_requested, view_index);
+#endif
+
+    // On 5.0.3 this check is not here, it was only added in 5.1
+    // So we need to imitate it here to prevent a crash
+    if (!stereo_requested || view_index < 0) {
+        return EStereoscopicPass::eSSP_FULL;
+    }
+
+    return view_index % 2 == 0 ? EStereoscopicPass::eSSP_PRIMARY : EStereoscopicPass::eSSP_SECONDARY;
 }
 
 IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_hook(FFakeStereoRendering* stereo) {
