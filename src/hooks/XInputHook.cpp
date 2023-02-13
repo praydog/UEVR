@@ -2,9 +2,7 @@
 #include <spdlog/spdlog.h>
 #include <utility/String.hpp>
 
-#include <safetyhook/Factory.hpp>
-
-#include "utility/SafetyHookSafeFactory.hpp"
+#include <SafetyHook.hpp>
 
 #include "Framework.hpp"
 #include "Mods.hpp"
@@ -57,20 +55,28 @@ XInputHook::XInputHook() {
         if (xinput_1_4_dll != nullptr) {
             std::scoped_lock _{g_framework->get_hook_monitor_mutex()};
 
-            auto factory = SafetyHookSafeFactory::init();
-            auto builder = factory->acquire();
+            auto builder = SafetyHookFactory::acquire();
+
 
             const auto get_state_fn = (void*)GetProcAddress(xinput_1_4_dll, "XInputGetState");
             const auto set_state_fn = (void*)GetProcAddress(xinput_1_4_dll, "XInputSetState");
 
             if (get_state_fn != nullptr) {
                 m_xinput_1_4_get_state_hook = builder.create_inline(get_state_fn, get_state_hook_1_4);
+
+                if (m_xinput_1_4_get_state_hook == nullptr) {
+                    spdlog::error("Failed to hook XInputGetState (1_4)");
+                }
             } else {
                 spdlog::error("[XInputHook] Failed to find XInputGetState");
             }
 
             if (set_state_fn != nullptr) {
                 m_xinput_1_4_set_state_hook = builder.create_inline(set_state_fn, set_state_hook_1_4);
+
+                if (m_xinput_1_4_set_state_hook == nullptr) {
+                    spdlog::error("Failed to hook XInputSetState (1_4)");
+                }
             } else {
                 spdlog::error("[XInputHook] Failed to find XInputSetState");
             }
@@ -85,20 +91,28 @@ XInputHook::XInputHook() {
         if (xinput_1_3_dll != nullptr) {
             std::scoped_lock _{g_framework->get_hook_monitor_mutex()};
 
-            auto factory = SafetyHookSafeFactory::init();
-            auto builder = factory->acquire();
+            auto builder = SafetyHookFactory::acquire();
+
 
             const auto get_state_fn = (void*)GetProcAddress(xinput_1_3_dll, "XInputGetState");
             const auto set_state_fn = (void*)GetProcAddress(xinput_1_3_dll, "XInputSetState");
 
             if (get_state_fn != nullptr) {
                 m_xinput_1_3_get_state_hook = builder.create_inline(get_state_fn, get_state_hook_1_3);
+
+                if (m_xinput_1_3_get_state_hook == nullptr) {
+                    spdlog::error("Failed to hook XInputGetState (1_3)");
+                }
             } else {
                 spdlog::error("[XInputHook] Failed to find XInputGetState");
             }
 
             if (set_state_fn != nullptr) {
                 m_xinput_1_3_set_state_hook = builder.create_inline(set_state_fn, set_state_hook_1_3);
+
+                if (m_xinput_1_3_set_state_hook == nullptr) {
+                    spdlog::error("Failed to hook XInputSetState (1_3)");
+                }
             } else {
                 spdlog::error("[XInputHook] Failed to find XInputSetState");
             }

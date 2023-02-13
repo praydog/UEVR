@@ -485,6 +485,7 @@ private:
     bool m_disable_backbuffer_size_override{false};
 
     struct XInputContext {
+        // TODO: make update functions separate for gamepads and VR controllers
         std::optional<std::function<void()>> imgui_update{};
         std::recursive_mutex mtx{};
         XINPUT_STATE state{};

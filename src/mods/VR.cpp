@@ -704,20 +704,16 @@ void VR::on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRA
 // Allows imgui navigation to work with the controllers
 void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_controller) {
     // L3 + R3 to open the menu
-    if (state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB && state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) {
+    if ((state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0 && (state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0) {
         if (!FrameworkConfig::get()->is_enable_l3_r3_toggle()) {
             return;
         }
 
-        if (m_last_xinput_l3_r3_menu_open == std::chrono::steady_clock::time_point::min()) {
-            m_last_xinput_l3_r3_menu_open = std::chrono::steady_clock::now();
-        } else {
-            const auto now = std::chrono::steady_clock::now();
+        const auto now = std::chrono::steady_clock::now();
 
-            if (now - m_last_xinput_l3_r3_menu_open > std::chrono::seconds(1)) {
-                m_last_xinput_l3_r3_menu_open = std::chrono::steady_clock::now();
-                g_framework->set_draw_ui(!g_framework->is_drawing_ui());
-            }
+        if (now - m_last_xinput_l3_r3_menu_open > std::chrono::seconds(1)) {
+            m_last_xinput_l3_r3_menu_open = std::chrono::steady_clock::now();
+            g_framework->set_draw_ui(!g_framework->is_drawing_ui());
         }
     }
 
@@ -1366,7 +1362,8 @@ void VR::on_draw_ui() {
     ImGui::Text("Runtime Information");
 
     ImGui::TextWrapped("VR Runtime: %s", get_runtime()->name().data());
-    ImGui::TextWrapped("Render Resolution: %d x %d", get_runtime()->get_width(), get_runtime()->get_height());
+    ImGui::TextWrapped("Render Resolution (per-eye): %d x %d", get_runtime()->get_width(), get_runtime()->get_height());
+    ImGui::TextWrapped("Total Render Resolution: %d x %d", get_runtime()->get_width() * 2, get_runtime()->get_height());
 
     if (get_runtime()->is_openvr()) {
         ImGui::TextWrapped("Resolution can be changed in SteamVR");

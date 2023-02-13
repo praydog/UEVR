@@ -71,12 +71,12 @@ FetchContent_Declare(kananlib
 )
 FetchContent_MakeAvailable(kananlib)
 
-message(STATUS "Fetching safetyhook (e175896c67abf49360acafe8879205a138fe6b2b)...")
+message(STATUS "Fetching safetyhook (92b0e61a1fb9051255e472979db95fd39ab866b4)...")
 FetchContent_Declare(safetyhook
 	GIT_REPOSITORY
 		"https://github.com/cursey/safetyhook"
 	GIT_TAG
-		e175896c67abf49360acafe8879205a138fe6b2b
+		92b0e61a1fb9051255e472979db95fd39ab866b4
 )
 FetchContent_MakeAvailable(safetyhook)
 
@@ -736,7 +736,6 @@ list(APPEND ue4poc_SOURCES
 	"src/mods/vr/shaders/vs.hpp"
 	"src/ue4poc-imgui/font_robotomedium.hpp"
 	"src/ue4poc-imgui/ue4poc_imconfig.hpp"
-	"src/utility/SafetyHookSafeFactory.hpp"
 	"src/ue4poc-imgui/imgui_impl_dx11.h"
 	"src/ue4poc-imgui/imgui_impl_dx12.h"
 	"src/ue4poc-imgui/imgui_impl_win32.h"
@@ -866,7 +865,6 @@ list(APPEND ue4poc-nolog_SOURCES
 	"src/mods/vr/shaders/vs.hpp"
 	"src/ue4poc-imgui/font_robotomedium.hpp"
 	"src/ue4poc-imgui/ue4poc_imconfig.hpp"
-	"src/utility/SafetyHookSafeFactory.hpp"
 	"src/ue4poc-imgui/imgui_impl_dx11.h"
 	"src/ue4poc-imgui/imgui_impl_dx12.h"
 	"src/ue4poc-imgui/imgui_impl_win32.h"
