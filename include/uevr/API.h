@@ -142,6 +142,7 @@ typedef struct {
     void (*log_warn)(const char* format, ...);
     void (*log_info)(const char* format, ...);
     bool (*is_drawing_ui)();
+    bool (*remove_callback)(void* cb);
 } UEVR_PluginFunctions;
 
 typedef struct {

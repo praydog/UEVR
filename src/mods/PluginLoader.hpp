@@ -73,6 +73,19 @@ public:
     bool add_on_pre_viewport_client_draw(UEVR_ViewportClient_DrawCb cb);
     bool add_on_post_viewport_client_draw(UEVR_ViewportClient_DrawCb cb);
 
+    bool remove_callback(void* cb) {
+        std::scoped_lock lock{m_api_cb_mtx};
+
+        for (auto& pcb_list : m_plugin_callback_lists) {
+            auto& cb_list = *pcb_list;
+            cb_list.erase(std::remove_if(cb_list.begin(), cb_list.end(), [cb](auto& cb_func) {
+                return cb_func == cb;
+            }));
+        }
+
+        return true;
+    }
+
 private:
     std::shared_mutex m_api_cb_mtx;
     std::vector<PluginLoader::UEVR_OnPresentCb> m_on_present_cbs{};

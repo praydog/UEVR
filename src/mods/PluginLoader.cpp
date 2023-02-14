@@ -52,6 +52,9 @@ void log_info(const char* format, ...) {
 bool is_drawing_ui() {
     return g_framework->is_drawing_ui();
 }
+bool remove_callback(void* cb) {
+    return PluginLoader::get()->remove_callback(cb);
+}
 }
 
 namespace uevr {
@@ -108,7 +111,8 @@ UEVR_PluginFunctions g_plugin_functions {
     uevr::log_error,
     uevr::log_warn,
     uevr::log_info,
-    uevr::is_drawing_ui
+    uevr::is_drawing_ui,
+    uevr::remove_callback
 };
 
 UEVR_SDKFunctions g_sdk_functions {
