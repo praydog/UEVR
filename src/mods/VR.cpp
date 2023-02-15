@@ -823,6 +823,11 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
         sdk::set_cvar_data_float(L"Engine", L"t.MaxFPS", 500.0f);
     }
 
+    // Allows games running in HDR mode to not have a black UI overlay
+    if (m_disable_hdr_compositing->value()) {
+        sdk::set_cvar_data_int(L"SlateRHIRenderer", L"r.HDR.UI.CompositeMode", 0);
+    }
+
     if (!is_using_afr()) {
         // Forcefully disable r.HZBOcclusion, it doesn't work with native stereo mode
         if (m_disable_hzbocclusion->value()) {
