@@ -1268,6 +1268,7 @@ void VR::on_draw_ui() {
     m_world_scale->draw("World Scale");
 
     m_disable_hzbocclusion->draw("Disable HZBOcclusion");
+    m_disable_hdr_compositing->draw("Disable HDR Composition");
     m_uncap_framerate->draw("Uncap Framerate");
     m_enable_gui->draw("Enable GUI");
 
