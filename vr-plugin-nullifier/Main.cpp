@@ -61,10 +61,12 @@ void nullify_openvr(HMODULE game) {
     std::cout << "[VR Plugin Nullifier] openvr_api.dll string patched" << std::endl;
 }
 
-void startup_thread() try {
+extern "C" __declspec(dllexport) bool g_finished = false;
+
+extern "C" __declspec(dllexport) void nullify() try {
     // Spawn debug console
-    AllocConsole();
-    freopen("CONOUT$", "w", stdout);
+    //AllocConsole();
+    //freopen("CONOUT$", "w", stdout);
 
     printf("Hello\n");
 
@@ -72,15 +74,17 @@ void startup_thread() try {
 
     nullify_openxr(game);
     nullify_openvr(game);
+
+    g_finished = true;
 } catch(...) {
     std::cout << "[VR Plugin Nullifier] Exception thrown" << std::endl;
+    g_finished = true;
 }
 
 // dllmain
 BOOL APIENTRY DllMain(HMODULE module, DWORD ul_reason_for_call, LPVOID reserved) {
     switch (ul_reason_for_call) {
     case DLL_PROCESS_ATTACH:
-        CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)startup_thread, NULL, 0, NULL);
         break;
     }
 
