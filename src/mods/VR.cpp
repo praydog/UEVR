@@ -22,7 +22,7 @@ std::shared_ptr<VR>& VR::get() {
 }
 
 // Called when the mod is initialized
-std::optional<std::string> VR::on_initialize_d3d_thread() try {
+std::optional<std::string> VR::clean_initialize() try {
     auto openvr_error = initialize_openvr();
 
     if (openvr_error || !m_openvr->loaded) {
@@ -973,10 +973,6 @@ void VR::on_config_load(const utility::Config& cfg) {
             spdlog::info("[VR] Finishing up OpenXR initialization");
             initialize_openxr_swapchains();
         }
-
-        if (get_runtime()->loaded) {
-            m_fake_stereo_hook = std::make_unique<FFakeStereoRenderingHook>();
-        }   
     }
 
     if (m_fake_stereo_hook != nullptr) {
@@ -1237,6 +1233,11 @@ void VR::on_draw_ui() {
 
     if (!get_runtime()->loaded) {
         ImGui::TextWrapped("No runtime loaded.");
+
+        if (ImGui::Button("Attempt to reinitialize")) {
+            clean_initialize();
+        }
+
         return;
     }
 

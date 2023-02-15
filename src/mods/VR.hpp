@@ -34,7 +34,11 @@ public:
 
     std::string_view get_name() const override { return "VR"; }
 
-    std::optional<std::string> on_initialize_d3d_thread() override;
+    std::optional<std::string> clean_initialize();
+    std::optional<std::string> on_initialize_d3d_thread() {
+        return clean_initialize();
+    }
+
     void on_config_load(const utility::Config& cfg) override;
     void on_config_save(utility::Config& cfg) override;
     
@@ -338,7 +342,7 @@ private:
     float m_nearz{ 0.1f };
     float m_farz{ 3000.0f };
 
-    std::unique_ptr<FFakeStereoRenderingHook> m_fake_stereo_hook{};
+    std::unique_ptr<FFakeStereoRenderingHook> m_fake_stereo_hook{ std::make_unique<FFakeStereoRenderingHook>() };
     
     std::shared_ptr<VRRuntime> m_runtime{std::make_shared<VRRuntime>()}; // will point to the real runtime if it exists
     std::shared_ptr<runtimes::OpenVR> m_openvr{std::make_shared<runtimes::OpenVR>()};
