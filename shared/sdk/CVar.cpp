@@ -396,6 +396,13 @@ bool set_cvar_data_int(std::wstring_view module, std::wstring_view name, int val
     cvar->set(value);
     return true;
 } catch (...) {
+    static std::unordered_map<std::wstring, bool> bad_cvars{};
+
+    if (auto it = bad_cvars.find(name.data()); it == bad_cvars.end()) {
+        bad_cvars[name.data()] = true;
+        SPDLOG_ERROR("Failed to set {} cvar (data) to {}!", utility::narrow(name.data()), value);
+    }
+
     // whatever.
     return false;
 }
@@ -416,6 +423,13 @@ bool set_cvar_data_float(std::wstring_view module, std::wstring_view name, float
     cvar->set(value);
     return true;
 } catch (...) {
+    static std::unordered_map<std::wstring, bool> bad_cvars{};
+
+    if (auto it = bad_cvars.find(name.data()); it == bad_cvars.end()) {
+        bad_cvars[name.data()] = true;
+        SPDLOG_ERROR("Failed to set {} cvar (data) to {}!", utility::narrow(name.data()), value);
+    }
+
     // whatever.
     return false;
 }
@@ -432,12 +446,25 @@ bool set_cvar_int(std::wstring_view module, std::wstring_view name, int value, b
         try {
             (*cvarpp)->Set(std::to_wstring(value).data());
         } catch (...) {
+            static std::unordered_map<std::wstring, bool> bad_cvars{};
+
+            if (auto it = bad_cvars.find(name.data()); it == bad_cvars.end()) {
+                bad_cvars[name.data()] = true;
+                SPDLOG_ERROR("Failed to set {} cvar to {}!", utility::narrow(name.data()), value);
+            }
         }
     });
 
     // we're so cool we don't even need to check if it worked
     return true;
 } catch (...) {
+    static std::unordered_map<std::wstring, bool> bad_cvars{};
+
+    if (auto it = bad_cvars.find(name.data()); it == bad_cvars.end()) {
+        bad_cvars[name.data()] = true;
+        SPDLOG_ERROR("Failed to set {} cvar to {}!", utility::narrow(name.data()), value);
+    }
+
     // whatever.
     return false;
 }
@@ -454,6 +481,12 @@ bool set_cvar_float(std::wstring_view module, std::wstring_view name, float valu
         try {
             (*cvarpp)->Set(std::to_wstring(value).data());
         } catch (...) {
+            static std::unordered_map<std::wstring, bool> bad_cvars{};
+
+            if (auto it = bad_cvars.find(name.data()); it == bad_cvars.end()) {
+                bad_cvars[name.data()] = true;
+                SPDLOG_ERROR("Failed to set {} cvar to {}!", utility::narrow(name.data()), value);
+            }
         }
     });
 
@@ -462,6 +495,47 @@ bool set_cvar_float(std::wstring_view module, std::wstring_view name, float valu
 } catch (...) {
     // whatever.
     return false;
+}
+
+
+std::optional<int> get_cvar_int(std::wstring_view module, std::wstring_view name, bool stop_at_first_mov) try {
+    auto cvarpp = find_cvar_cached(module, name, stop_at_first_mov);
+
+    if (cvarpp == nullptr || *cvarpp == nullptr) {
+        return std::nullopt;
+    }
+
+    return (*cvarpp)->GetInt();
+} catch(...) {
+    static std::unordered_map<std::wstring, bool> bad_cvars{};
+
+    if (auto it = bad_cvars.find(name.data()); it == bad_cvars.end()) {
+        bad_cvars[name.data()] = true;
+        SPDLOG_ERROR("Failed to read {} cvar!", utility::narrow(name.data()));
+    }
+
+    // whatever.
+    return std::nullopt;
+}
+
+std::optional<float> get_cvar_float(std::wstring_view module, std::wstring_view name, bool stop_at_first_mov) try {
+    auto cvarpp = find_cvar_cached(module, name, stop_at_first_mov);
+
+    if (cvarpp == nullptr || *cvarpp == nullptr) {
+        return std::nullopt;
+    }
+
+    return (*cvarpp)->GetFloat();
+} catch (...) {
+    static std::unordered_map<std::wstring, bool> bad_cvars{};
+
+    if (auto it = bad_cvars.find(name.data()); it == bad_cvars.end()) {
+        bad_cvars[name.data()] = true;
+        SPDLOG_ERROR("Failed to read {} cvar!", utility::narrow(name.data()));
+    }
+
+    // whatever.
+    return std::nullopt;
 }
 
 std::optional<ConsoleVariableDataWrapper> vr::get_enable_stereo_emulation_cvar() {

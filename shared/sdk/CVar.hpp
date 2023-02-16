@@ -116,6 +116,9 @@ bool set_cvar_data_float(std::wstring_view module, std::wstring_view name, float
 bool set_cvar_int(std::wstring_view module, std::wstring_view name, int value, bool stop_at_first_mov = false);
 bool set_cvar_float(std::wstring_view module, std::wstring_view name, float value, bool stop_at_first_mov = false);
 
+std::optional<int> get_cvar_int(std::wstring_view module, std::wstring_view name, bool stop_at_first_mov = false);
+std::optional<float> get_cvar_float(std::wstring_view module, std::wstring_view name, bool stop_at_first_mov = false);
+
 namespace rendering {
 std::optional<ConsoleVariableDataWrapper> get_one_frame_thread_lag_cvar();
 }
