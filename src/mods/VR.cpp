@@ -256,7 +256,30 @@ std::optional<std::string> VR::initialize_openxr() {
         instance_create_info.enabledExtensionCount = (uint32_t)extensions.size();
         instance_create_info.enabledExtensionNames = extensions.data();
 
-        strcpy(instance_create_info.applicationInfo.applicationName, "UE4VR");
+        std::string application_name{"UEVR"};
+
+        // Append the current executable name to the application base name
+        {
+            const auto exe = utility::get_executable();
+            const auto full_path = utility::get_module_path(exe);
+
+            if (full_path) {
+                const auto fs_path = std::filesystem::path(*full_path);
+                const auto filename = fs_path.stem().string();
+
+                application_name += "_" + filename;
+
+                // Trim the name to 127 characters
+                if (application_name.length() > 127) {
+                    application_name = application_name.substr(0, 127);
+                }
+            }
+        }
+
+        spdlog::info("[VR] Application name: {}", application_name);
+
+        strcpy(instance_create_info.applicationInfo.applicationName, application_name.c_str());
+        instance_create_info.applicationInfo.applicationName[XR_MAX_APPLICATION_NAME_SIZE - 1] = '\0';
         instance_create_info.applicationInfo.apiVersion = XR_CURRENT_API_VERSION;
         
         result = xrCreateInstance(&instance_create_info, &m_openxr->instance);
