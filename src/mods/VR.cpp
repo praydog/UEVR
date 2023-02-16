@@ -270,8 +270,8 @@ std::optional<std::string> VR::initialize_openxr() {
                 application_name += "_" + filename;
 
                 // Trim the name to 127 characters
-                if (application_name.length() > 127) {
-                    application_name = application_name.substr(0, 127);
+                if (application_name.length() >= XR_MAX_APPLICATION_NAME_SIZE) {
+                    application_name = application_name.substr(0, XR_MAX_APPLICATION_NAME_SIZE - 1);
                 }
             }
         }

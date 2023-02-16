@@ -38,12 +38,12 @@ XInputHook::XInputHook() {
 
             const auto elapsed_time = std::chrono::system_clock::now() - start_time;
 
-            if (elapsed_time > std::chrono::seconds(5)) {
-                spdlog::error("[XInputHook] Failed to find {} after 5 seconds", name);
+            if (elapsed_time > std::chrono::seconds(10)) {
+                spdlog::error("[XInputHook] Failed to find {} after 10 seconds", name);
                 return nullptr;
             }
 
-            std::this_thread::yield();
+            //std::this_thread::yield();
         }
 
         return found_dll;
@@ -64,7 +64,7 @@ XInputHook::XInputHook() {
             if (get_state_fn != nullptr) {
                 m_xinput_1_4_get_state_hook = builder.create_inline(get_state_fn, get_state_hook_1_4);
 
-                if (m_xinput_1_4_get_state_hook == nullptr) {
+                if (!m_xinput_1_4_get_state_hook) {
                     spdlog::error("Failed to hook XInputGetState (1_4)");
                 }
             } else {
@@ -74,7 +74,7 @@ XInputHook::XInputHook() {
             if (set_state_fn != nullptr) {
                 m_xinput_1_4_set_state_hook = builder.create_inline(set_state_fn, set_state_hook_1_4);
 
-                if (m_xinput_1_4_set_state_hook == nullptr) {
+                if (!m_xinput_1_4_set_state_hook) {
                     spdlog::error("Failed to hook XInputSetState (1_4)");
                 }
             } else {
@@ -100,7 +100,7 @@ XInputHook::XInputHook() {
             if (get_state_fn != nullptr) {
                 m_xinput_1_3_get_state_hook = builder.create_inline(get_state_fn, get_state_hook_1_3);
 
-                if (m_xinput_1_3_get_state_hook == nullptr) {
+                if (!m_xinput_1_3_get_state_hook) {
                     spdlog::error("Failed to hook XInputGetState (1_3)");
                 }
             } else {
@@ -110,7 +110,7 @@ XInputHook::XInputHook() {
             if (set_state_fn != nullptr) {
                 m_xinput_1_3_set_state_hook = builder.create_inline(set_state_fn, set_state_hook_1_3);
 
-                if (m_xinput_1_3_set_state_hook == nullptr) {
+                if (!m_xinput_1_3_set_state_hook) {
                     spdlog::error("Failed to hook XInputSetState (1_3)");
                 }
             } else {
@@ -131,10 +131,10 @@ XInputHook::XInputHook() {
 
 uint32_t XInputHook::get_state_hook_1_4(uint32_t user_index, XINPUT_STATE* state) {
     if (!g_framework->is_ready()) {
-        return g_hook->m_xinput_1_4_get_state_hook->call<uint32_t>(user_index, state);
+        return g_hook->m_xinput_1_4_get_state_hook.call<uint32_t>(user_index, state);
     }
 
-    auto ret = g_hook->m_xinput_1_4_get_state_hook->call<uint32_t>(user_index, state);
+    auto ret = g_hook->m_xinput_1_4_get_state_hook.call<uint32_t>(user_index, state);
 
     const auto& mods = g_framework->get_mods()->get_mods();
 
@@ -147,10 +147,10 @@ uint32_t XInputHook::get_state_hook_1_4(uint32_t user_index, XINPUT_STATE* state
 
 uint32_t XInputHook::set_state_hook_1_4(uint32_t user_index, XINPUT_VIBRATION* vibration) {
     if (!g_framework->is_ready()) {
-        return g_hook->m_xinput_1_4_set_state_hook->call<uint32_t>(user_index, vibration);
+        return g_hook->m_xinput_1_4_set_state_hook.call<uint32_t>(user_index, vibration);
     }
 
-    auto ret = g_hook->m_xinput_1_4_set_state_hook->call<uint32_t>(user_index, vibration);
+    auto ret = g_hook->m_xinput_1_4_set_state_hook.call<uint32_t>(user_index, vibration);
 
     const auto& mods = g_framework->get_mods()->get_mods();
 
@@ -163,10 +163,10 @@ uint32_t XInputHook::set_state_hook_1_4(uint32_t user_index, XINPUT_VIBRATION* v
 
 uint32_t XInputHook::get_state_hook_1_3(uint32_t user_index, XINPUT_STATE* state) {
     if (!g_framework->is_ready()) {
-        return g_hook->m_xinput_1_3_get_state_hook->call<uint32_t>(user_index, state);
+        return g_hook->m_xinput_1_3_get_state_hook.call<uint32_t>(user_index, state);
     }
 
-    auto ret = g_hook->m_xinput_1_3_get_state_hook->call<uint32_t>(user_index, state);
+    auto ret = g_hook->m_xinput_1_3_get_state_hook.call<uint32_t>(user_index, state);
 
     const auto& mods = g_framework->get_mods()->get_mods();
 
@@ -179,10 +179,10 @@ uint32_t XInputHook::get_state_hook_1_3(uint32_t user_index, XINPUT_STATE* state
 
 uint32_t XInputHook::set_state_hook_1_3(uint32_t user_index, XINPUT_VIBRATION* vibration) {
     if (!g_framework->is_ready()) {
-        return g_hook->m_xinput_1_3_set_state_hook->call<uint32_t>(user_index, vibration);
+        return g_hook->m_xinput_1_3_set_state_hook.call<uint32_t>(user_index, vibration);
     }
 
-    auto ret = g_hook->m_xinput_1_3_set_state_hook->call<uint32_t>(user_index, vibration);
+    auto ret = g_hook->m_xinput_1_3_set_state_hook.call<uint32_t>(user_index, vibration);
 
     const auto& mods = g_framework->get_mods()->get_mods();
 

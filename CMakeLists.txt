@@ -71,12 +71,12 @@ FetchContent_Declare(kananlib
 )
 FetchContent_MakeAvailable(kananlib)
 
-message(STATUS "Fetching safetyhook (92b0e61a1fb9051255e472979db95fd39ab866b4)...")
+message(STATUS "Fetching safetyhook (d4b220a270819b032858196da36cfe57d73eb604)...")
 FetchContent_Declare(safetyhook
 	GIT_REPOSITORY
 		"https://github.com/cursey/safetyhook"
 	GIT_TAG
-		92b0e61a1fb9051255e472979db95fd39ab866b4
+		d4b220a270819b032858196da36cfe57d73eb604
 )
 FetchContent_MakeAvailable(safetyhook)
 

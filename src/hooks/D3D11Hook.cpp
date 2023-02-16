@@ -3,6 +3,8 @@
 #include <utility/Thread.hpp>
 #include <utility/Module.hpp>
 
+#include <safetyhook/ThreadFreezer.hpp>
+
 #include "WindowFilter.hpp"
 #include "Framework.hpp"
 
@@ -74,9 +76,8 @@ bool D3D11Hook::hook() {
         }
     }
 
-    utility::ThreadSuspender suspender{};
-
     try {
+        safetyhook::ThreadFreezer suspender{};
         m_present_hook.reset();
         m_resize_buffers_hook.reset();
 
@@ -91,8 +92,6 @@ bool D3D11Hook::hook() {
         spdlog::error("Failed to hook D3D11: {}", e.what());
         m_hooked = false;
     }
-
-    suspender.resume();
 
     device->Release();
     context->Release();

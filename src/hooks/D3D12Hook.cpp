@@ -6,6 +6,8 @@
 #include <utility/Thread.hpp>
 #include <utility/Module.hpp>
 
+#include <safetyhook/ThreadFreezer.hpp>
+
 #include "WindowFilter.hpp"
 #include "Framework.hpp"
 
@@ -291,9 +293,8 @@ bool D3D12Hook::hook() {
         return false;
     }
 
-    utility::ThreadSuspender suspender{};
-
     try {
+        safetyhook::ThreadFreezer suspender{};
         spdlog::info("Initializing hooks");
 
         m_present_hook.reset();
@@ -315,8 +316,6 @@ bool D3D12Hook::hook() {
         spdlog::error("Failed to initialize hooks: {}", e.what());
         m_hooked = false;
     }
-
-    suspender.resume();
 
     device->Release();
     command_queue->Release();

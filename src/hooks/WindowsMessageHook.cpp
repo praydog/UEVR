@@ -2,6 +2,7 @@
 #include <vector>
 
 #include <spdlog/spdlog.h>
+#include <safetyhook/ThreadFreezer.hpp>
 
 #include "utility/Thread.hpp"
 
@@ -40,7 +41,7 @@ WindowsMessageHook::WindowsMessageHook(HWND wnd)
     std::lock_guard _{ g_proc_mutex };
     spdlog::info("Initializing WindowsMessageHook");
 
-    utility::ThreadSuspender suspender{};
+    safetyhook::ThreadFreezer suspender{};
 
     g_windows_message_hook = this;
 
@@ -57,7 +58,7 @@ WindowsMessageHook::~WindowsMessageHook() {
     std::lock_guard _{ g_proc_mutex };
     spdlog::info("Destroying WindowsMessageHook");
 
-    utility::ThreadSuspender suspender{};
+    safetyhook::ThreadFreezer suspender{};
 
     remove();
     g_windows_message_hook = nullptr;

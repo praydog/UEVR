@@ -50,8 +50,8 @@ protected:
 
     FTexture2DRHIRef* texture_hook_ref{nullptr};
     FTexture2DRHIRef* shader_resource_hook_ref{nullptr};
-    std::unique_ptr<safetyhook::MidHook> pre_texture_hook{}; // only used if pixel format cvar is missing
-    std::unique_ptr<safetyhook::MidHook> texture_hook{};
+    safetyhook::MidHook pre_texture_hook{}; // only used if pixel format cvar is missing
+    safetyhook::MidHook texture_hook{};
     uint32_t last_texture_index{0};
     bool allocated_views{false};
     bool set_up_texture_hook{false};
@@ -229,7 +229,7 @@ public:
     }
 
     bool has_slate_hook() {
-        return m_slate_thread_hook != nullptr;
+        return m_slate_thread_hook == true;
     }
 
     bool has_engine_tick_hook() {
@@ -282,20 +282,20 @@ private:
 
     std::unique_ptr<ThreadWorker<FRHICommandListImmediate*>> m_slate_thread_worker{std::make_unique<ThreadWorker<FRHICommandListImmediate*>>()};
 
-    std::unique_ptr<safetyhook::InlineHook> m_tick_hook{};
-    std::unique_ptr<safetyhook::InlineHook> m_adjust_view_rect_hook{};
-    std::unique_ptr<safetyhook::InlineHook> m_calculate_stereo_view_offset_hook{};
-    std::unique_ptr<safetyhook::InlineHook> m_calculate_stereo_projection_matrix_hook{};
-    std::unique_ptr<safetyhook::InlineHook> m_render_texture_render_thread_hook{};
-    std::unique_ptr<safetyhook::InlineHook> m_slate_thread_hook{};
-    std::unique_ptr<safetyhook::InlineHook> m_gameviewportclient_draw_hook{};
-    std::unique_ptr<safetyhook::InlineHook> m_viewport_draw_hook{}; // for AFR
+    safetyhook::InlineHook m_tick_hook{};
+    safetyhook::InlineHook m_adjust_view_rect_hook{};
+    safetyhook::InlineHook m_calculate_stereo_view_offset_hook{};
+    safetyhook::InlineHook m_calculate_stereo_projection_matrix_hook{};
+    safetyhook::InlineHook m_render_texture_render_thread_hook{};
+    safetyhook::InlineHook m_slate_thread_hook{};
+    safetyhook::InlineHook m_gameviewportclient_draw_hook{};
+    safetyhook::InlineHook m_viewport_draw_hook{}; // for AFR
 
     // both of these are used to figure out where the localplayer is, they aren't actively
     // used for anything else, the second one is an alternative hook if the first one
     // deems fruitless.
-    std::unique_ptr<safetyhook::MidHook> m_calculate_stereo_projection_matrix_post_hook{};
-    std::unique_ptr<safetyhook::MidHook> m_get_projection_data_pre_hook{};
+    safetyhook::MidHook m_calculate_stereo_projection_matrix_post_hook{};
+    safetyhook::MidHook m_get_projection_data_pre_hook{};
 
     std::unique_ptr<PointerHook> m_is_stereo_enabled_hook{};
     std::unique_ptr<PointerHook> m_get_render_target_manager_hook{};
