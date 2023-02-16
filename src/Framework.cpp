@@ -185,6 +185,9 @@ Framework::Framework(HMODULE framework_module)
     spdlog::info("Game Module Addr: {:x}", (uintptr_t)m_game_module);
     spdlog::info("Game Module Size: {:x}", module_size);
 
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+
 #ifdef DEBUG
     spdlog::set_level(spdlog::level::debug);
 #endif
