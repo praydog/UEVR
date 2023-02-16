@@ -854,11 +854,11 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
     if (!is_using_afr()) {
         // Forcefully disable r.HZBOcclusion, it doesn't work with native stereo mode
         if (m_disable_hzbocclusion->value()) {
-            const auto r_hzb_occlusion_value = sdk::get_cvar_int(L"Engine", L"r.HZBOcclusion");
+            const auto r_hzb_occlusion_value = sdk::get_cvar_int(L"Renderer", L"r.HZBOcclusion");
 
             // Only set it once, otherwise we'll be spamming a Set call every frame
             if (r_hzb_occlusion_value && *r_hzb_occlusion_value != 0) {
-                sdk::set_cvar_int(L"Engine", L"r.HZBOcclusion", 0);
+                sdk::set_cvar_int(L"Renderer", L"r.HZBOcclusion", 0);
             }
         }
     }
@@ -1378,7 +1378,7 @@ void VR::on_draw_ui() {
         // r.OneFrameThreadLag
         DISPLAY_CVAR_DATA_BOOL(one_frame_thread_lag, L"Engine", L"r.OneFrameThreadLag", "One Frame Thread Lag");
         DISPLAY_CVAR_DATA_BOOL(r_allow_occlusion_queries, L"Engine", L"r.AllowOcclusionQueries", "Allow Occlusion Queries");
-        DISPLAY_CVAR_REF_BOOL(r_hzbo_cvar, L"Engine", L"r.HZBOcclusion", "HZBOcclusion");
+        DISPLAY_CVAR_REF_BOOL(r_hzbo_cvar, L"Renderer", L"r.HZBOcclusion", "HZBOcclusion");
         DISPLAY_CVAR_DATA_BOOL(r_volumetric_cloud, L"Engine", L"r.VolumetricCloud", "Volumetric Cloud");
 
         // Sliders (int values)
