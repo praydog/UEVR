@@ -854,7 +854,12 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
     if (!is_using_afr()) {
         // Forcefully disable r.HZBOcclusion, it doesn't work with native stereo mode
         if (m_disable_hzbocclusion->value()) {
-            sdk::set_cvar_data_int(L"Engine", L"r.HZBOcclusion", 0);
+            const auto r_hzb_occlusion_value = sdk::get_cvar_int(L"Engine", L"r.HZBOcclusion");
+
+            // Only set it once, otherwise we'll be spamming a Set call every frame
+            if (r_hzb_occlusion_value && *r_hzb_occlusion_value != 0) {
+                sdk::set_cvar_int(L"Engine", L"r.HZBOcclusion", 0);
+            }
         }
     }
 
