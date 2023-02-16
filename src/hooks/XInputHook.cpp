@@ -43,7 +43,7 @@ XInputHook::XInputHook() {
                 return nullptr;
             }
 
-            //std::this_thread::yield();
+            std::this_thread::yield();
         }
 
         return found_dll;
