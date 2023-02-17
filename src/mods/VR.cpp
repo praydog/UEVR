@@ -743,6 +743,7 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
     }
 
     if (!g_framework->is_drawing_ui()) {
+        m_draw_rt_modifier_window = false;
         return;
     }
 
@@ -754,7 +755,6 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
     } else if (is_gamepad && is_using_vr_controller_recently) { // dont allow gamepad navigation if using vr controllers
         return;
     }
-
 
     // Gamepad navigation when the menu is open
     m_xinput_context.enqueue(is_vr_controller, state, [this](const XINPUT_STATE& state, bool is_vr_controller){
@@ -771,31 +771,49 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
 
         // Now that we're drawing the UI, check for special button combos the user can use as shortcuts
         // like recenter view, set standing origin, camera offset modification, etc.
+        m_draw_rt_modifier_window = gamepad.bRightTrigger >= 128;
 
         // If user holding down RT with menu open...
-        bool ignore_left_stick = false;
-        if (gamepad.bRightTrigger >= 128) {
-            ignore_left_stick = true;
-
+        if (m_draw_rt_modifier_window) {
             // Camera offset modification
             const auto right_ratio = (float)gamepad.sThumbLX / 32767.0f;
             const auto forward_ratio = (float)gamepad.sThumbLY / 32767.0f;
             const auto up_ratio = (float)gamepad.sThumbRY / 32767.0f;
 
             if (right_ratio <= -0.25f || right_ratio >= 0.25f) {
-                const auto right_offset = right_ratio * delta * 100.0f;
+                const auto right_offset = right_ratio * delta * 150.0f;
                 m_camera_right_offset->value() += right_offset;
             }
 
             if (forward_ratio <= -0.25f || forward_ratio >= 0.25f) {
-                const auto forward_offset = forward_ratio * delta * 100.0f;
+                const auto forward_offset = forward_ratio * delta * 150.0f;
                 m_camera_forward_offset->value() += forward_offset;
             }
 
             if (up_ratio <= -0.25f || up_ratio >= 0.25f) {
-                const auto up_offset = up_ratio * delta * 100.0f;
+                const auto up_offset = up_ratio * delta * 150.0f;
                 m_camera_up_offset->value() += up_offset;
             }
+
+            // Reset camera offset
+            if (gamepad.wButtons & XINPUT_GAMEPAD_B) {
+                m_camera_right_offset->value() = 0.0f;
+                m_camera_forward_offset->value() = 0.0f;
+                m_camera_up_offset->value() = 0.0f;
+            }
+
+            // Recenter
+            if (gamepad.wButtons & XINPUT_GAMEPAD_Y) {
+                this->recenter_view();
+            }
+
+            // Reset standing origin
+            if (gamepad.wButtons & XINPUT_GAMEPAD_X) {
+                this->set_standing_origin(this->get_position(0));
+            }
+
+            // ignore everything else
+            return;
         }
 
         // From imgui_impl_win32.cpp
@@ -820,33 +838,31 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
         MAP_BUTTON(ImGuiKey_GamepadL3,              XINPUT_GAMEPAD_LEFT_THUMB);
         MAP_BUTTON(ImGuiKey_GamepadR3,              XINPUT_GAMEPAD_RIGHT_THUMB);
 
-        if (!ignore_left_stick) {
-            if (!is_vr_controller) {
-                MAP_ANALOG(ImGuiKey_GamepadLStickLeft,      gamepad.sThumbLX, -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, -32768);
-                MAP_ANALOG(ImGuiKey_GamepadLStickRight,     gamepad.sThumbLX, +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, +32767);
-                MAP_ANALOG(ImGuiKey_GamepadLStickUp,        gamepad.sThumbLY, +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, +32767);
-                MAP_ANALOG(ImGuiKey_GamepadLStickDown,      gamepad.sThumbLY, -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, -32768);
-            } else {
-                // Map it to the dpad
-                const auto left_stick_left = gamepad.sThumbLX < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
-                if (m_xinput_context.vr.left_stick_left.was_pressed(left_stick_left)) {
-                    io.AddKeyEvent(ImGuiKey_GamepadDpadLeft, true);
-                }
+        if (!is_vr_controller) {
+            MAP_ANALOG(ImGuiKey_GamepadLStickLeft,      gamepad.sThumbLX, -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, -32768);
+            MAP_ANALOG(ImGuiKey_GamepadLStickRight,     gamepad.sThumbLX, +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, +32767);
+            MAP_ANALOG(ImGuiKey_GamepadLStickUp,        gamepad.sThumbLY, +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, +32767);
+            MAP_ANALOG(ImGuiKey_GamepadLStickDown,      gamepad.sThumbLY, -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, -32768);
+        } else {
+            // Map it to the dpad
+            const auto left_stick_left = gamepad.sThumbLX < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
+            if (m_xinput_context.vr.left_stick_left.was_pressed(left_stick_left)) {
+                io.AddKeyEvent(ImGuiKey_GamepadDpadLeft, true);
+            }
 
-                const auto left_stick_right = gamepad.sThumbLX > +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
-                if (m_xinput_context.vr.left_stick_right.was_pressed(left_stick_right)) {
-                    io.AddKeyEvent(ImGuiKey_GamepadDpadRight, true);
-                }
+            const auto left_stick_right = gamepad.sThumbLX > +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
+            if (m_xinput_context.vr.left_stick_right.was_pressed(left_stick_right)) {
+                io.AddKeyEvent(ImGuiKey_GamepadDpadRight, true);
+            }
 
-                const auto left_stick_up = gamepad.sThumbLY > +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
-                if (m_xinput_context.vr.left_stick_up.was_pressed(left_stick_up)) {
-                    io.AddKeyEvent(ImGuiKey_GamepadDpadUp, true);
-                }
+            const auto left_stick_up = gamepad.sThumbLY > +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
+            if (m_xinput_context.vr.left_stick_up.was_pressed(left_stick_up)) {
+                io.AddKeyEvent(ImGuiKey_GamepadDpadUp, true);
+            }
 
-                const auto left_stick_down = gamepad.sThumbLY < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
-                if (m_xinput_context.vr.left_stick_down.was_pressed(left_stick_down)) {
-                    io.AddKeyEvent(ImGuiKey_GamepadDpadDown, true);
-                }
+            const auto left_stick_down = gamepad.sThumbLY < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
+            if (m_xinput_context.vr.left_stick_down.was_pressed(left_stick_down)) {
+                io.AddKeyEvent(ImGuiKey_GamepadDpadDown, true);
             }
         }
 
@@ -1079,6 +1095,37 @@ void VR::on_pre_imgui_frame() {
 
     if (!m_disable_overlay) {
         m_overlay_component.on_pre_imgui_frame();
+    }
+}
+
+void VR::on_frame() {
+    if (!get_runtime()->ready()) {
+        return;
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    const auto is_allowed_draw_window = now - m_last_xinput_update < std::chrono::seconds(2);
+
+    if (!is_allowed_draw_window) {
+        m_draw_rt_modifier_window = false;
+    }
+
+    if (m_draw_rt_modifier_window) {
+        const auto rt_size = g_framework->get_rt_size();
+
+        ImGui::Begin("RT Modifier Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav);
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + Left Stick: Camera left/right/forward/back");
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + Left Right: Camera up/down");
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + B: Reset camera offset");
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + Y: Recenter view");
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + X: Reset standing origin");
+
+        const auto window_size = ImGui::GetWindowSize();
+
+        const auto centered_x = (rt_size.x / 2) - (window_size.x / 2);
+        const auto centered_y = (rt_size.y / 2) - (window_size.y / 2);
+        ImGui::SetWindowPos(ImVec2(centered_x, centered_y), ImGuiCond_Always);
+        ImGui::End();
     }
 }
 

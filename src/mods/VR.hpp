@@ -44,6 +44,7 @@ public:
     
     void on_draw_ui() override;
     void on_pre_imgui_frame() override;
+    void on_frame() override;
     void on_present() override;
     void on_post_present() override;
 
@@ -489,6 +490,7 @@ private:
     bool m_init_finished{false};
     bool m_has_hw_scheduling{false}; // hardware accelerated GPU scheduling
     bool m_spoofed_gamepad_connection{false};
+    bool m_draw_rt_modifier_window{false};
 
     bool m_disable_projection_matrix_override{ false };
     bool m_disable_view_matrix_override{false};

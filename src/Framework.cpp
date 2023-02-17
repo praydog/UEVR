@@ -1108,8 +1108,11 @@ void Framework::draw_ui() {
 
     ImGui::SetNextWindowSize(ImVec2(window_w, window_h), ImGuiCond_::ImGuiCond_Once);
     ImGui::Begin("Framework", &m_draw_ui);
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Keyboard Menu Key: Insert");
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Gamepad L3 + R3: Toggle Menu");
+
+    ImGui::BeginGroup();
+    ImGui::Columns(2);
+    ImGui::BeginGroup();
+
     ImGui::Checkbox("Transparency", &m_ui_option_transparent);
     ImGui::SameLine();
     ImGui::Text("(?)");
@@ -1126,6 +1129,19 @@ void Framework::draw_ui() {
             reset_config();
         }
     }
+
+    ImGui::EndGroup();
+    ImGui::NextColumn();
+
+    ImGui::BeginGroup();
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Keyboard Menu Key: Insert");
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Gamepad L3 + R3: Toggle Menu");
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Gamepad RT: Shortcuts");
+
+    ImGui::EndGroup();
+    ImGui::EndGroup();
+
+    ImGui::Columns(1);
 
     // Mods:
     draw_about();
@@ -1533,7 +1549,7 @@ bool Framework::first_frame_initialize() {
 }
 
 void Framework::call_on_frame() {
-    const bool is_init_ok = m_error.empty() && m_game_data_initialized;
+    const bool is_init_ok = m_error.empty() && m_game_data_initialized && m_mods_fully_initialized;
 
     if (is_init_ok) {
         // Run mod frame callbacks.

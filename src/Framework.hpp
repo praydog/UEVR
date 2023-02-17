@@ -167,6 +167,10 @@ public:
         return get_d3d12_rt_size();
     }
 
+    auto& get_frame_worker() {
+        return m_frame_worker;
+    }
+
 private:
     void consume_input();
     void update_fonts();
