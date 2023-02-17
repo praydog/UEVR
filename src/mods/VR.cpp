@@ -989,13 +989,13 @@ void VR::update_action_states() {
     }
 }
 
-void VR::on_config_load(const utility::Config& cfg) {
+void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
     for (IModValue& option : m_options) {
-        option.config_load(cfg);
+        option.config_load(cfg, set_defaults);
     }
 
     if (get_runtime()->loaded) {
-        get_runtime()->on_config_load(cfg);
+        get_runtime()->on_config_load(cfg, set_defaults);
     }
 
     // Run the rest of OpenXR initialization code here that depends on config values
@@ -1009,10 +1009,10 @@ void VR::on_config_load(const utility::Config& cfg) {
     }
 
     if (m_fake_stereo_hook != nullptr) {
-        m_fake_stereo_hook->on_config_load(cfg);
+        m_fake_stereo_hook->on_config_load(cfg, set_defaults);
     }
 
-    m_overlay_component.on_config_load(cfg);
+    m_overlay_component.on_config_load(cfg, set_defaults);
 }
 
 void VR::on_config_save(utility::Config& cfg) {
@@ -1281,26 +1281,29 @@ void VR::on_draw_ui() {
         ImGui::TextWrapped("WARNING: Hardware-accelerated GPU scheduling is enabled. This may cause the game to run slower.");
         ImGui::TextWrapped("Go into your Windows Graphics settings and disable \"Hardware-accelerated GPU scheduling\"");
         ImGui::PopStyleColor();
+        ImGui::TextWrapped("Note: This is only necessary if you are experiencing performance issues.");
     }
 
     ImGui::Separator();
 
-    if (ImGui::Button("Set Standing Height")) {
-        m_standing_origin.y = get_position(0).y;
-    }
+    {
+        if (ImGui::Button("Set Standing Height")) {
+            m_standing_origin.y = get_position(0).y;
+        }
 
-    ImGui::SameLine();
+        ImGui::SameLine();
 
-    if (ImGui::Button("Set Standing Origin")) {
-        m_standing_origin = get_position(0);
-    }
+        if (ImGui::Button("Set Standing Origin")) {
+            m_standing_origin = get_position(0);
+        }
 
-    if (ImGui::Button("Recenter View")) {
-        recenter_view();
-    }
+        if (ImGui::Button("Recenter View")) {
+            recenter_view();
+        }
 
-    if (ImGui::Button("Reinitialize Runtime")) {
-        get_runtime()->wants_reinitialize = true;
+        if (ImGui::Button("Reinitialize Runtime")) {
+            get_runtime()->wants_reinitialize = true;
+        }
     }
 
     ImGui::Text("Unreal Options");

@@ -19,7 +19,6 @@ void OpenXR::on_draw_ui() {
     ImGui::SetNextItemOpen(true, ImGuiCond_Once);
     if (ImGui::TreeNode("OpenXR Options")) {
         this->resolution_scale->draw("Resolution Scale");
-        this->use_pose_queue->draw("Use Pose Queue");
 
         if (ImGui::TreeNode("Bindings")) {
             display_bindings_editor();
@@ -30,9 +29,9 @@ void OpenXR::on_draw_ui() {
     }
 }
 
-void OpenXR::on_config_load(const utility::Config& cfg) {
+void OpenXR::on_config_load(const utility::Config& cfg, bool set_defaults) {
     for (IModValue& option : this->options) {
-        option.config_load(cfg);
+        option.config_load(cfg, set_defaults);
     }
 }
 

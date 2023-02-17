@@ -943,6 +943,16 @@ void Framework::save_config() {
     spdlog::info("Saved config");
 }
 
+void Framework::reset_config() try {
+    std::scoped_lock _{m_config_mtx};
+
+    m_mods->reload_config(true);
+
+    spdlog::info("Removed config");
+} catch (const std::exception& e) {
+    spdlog::error("Failed to reset config: {}", e.what());
+}
+
 void Framework::set_draw_ui(bool state, bool should_save) {
     std::scoped_lock _{m_config_mtx};
 
@@ -1110,6 +1120,12 @@ void Framework::draw_ui() {
     ImGui::Text("(?)");
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Allows mouse and keyboard inputs to register to the game while the UI is focused.");
+
+    if (m_mods_fully_initialized) {
+        if (ImGui::Button("Reset to Default Settings")) {
+            reset_config();
+        }
+    }
 
     // Mods:
     draw_about();
@@ -1505,10 +1521,12 @@ bool Framework::first_frame_initialize() {
 
         spdlog::error("Initialization of mods failed. Reason: {}", m_error);
         m_game_data_initialized = false;
+        m_mods_fully_initialized = false;
         return false;
     } else {
         // Do an initial config save to set the default values for the frontend
         save_config();
+        m_mods_fully_initialized = true;
     }
 
     return true;

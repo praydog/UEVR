@@ -21,7 +21,7 @@ public:
     virtual ~IModValue() {};
     virtual bool draw(std::string_view name) = 0;
     virtual void draw_value(std::string_view name) = 0;
-    virtual void config_load(const utility::Config& cfg) = 0;
+    virtual void config_load(const utility::Config& cfg, bool set_defaults) = 0;
     virtual void config_save(utility::Config& cfg) = 0;
 };
 
@@ -44,7 +44,12 @@ public:
 
     virtual ~ModValue() override {};
 
-    virtual void config_load(const utility::Config& cfg) override {
+    virtual void config_load(const utility::Config& cfg, bool set_defaults) override {
+        if (set_defaults) {
+            m_value = m_default_value;
+            return;
+        }
+
         auto v = cfg.get<T>(m_config_name);
 
         if (v) {
@@ -262,7 +267,7 @@ public:
     virtual void on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {};
     virtual void on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) {};
 
-    virtual void on_config_load(const utility::Config& cfg) {};
+    virtual void on_config_load(const utility::Config& cfg, bool set_defaults) {};
     virtual void on_config_save(utility::Config& cfg) {};
 
     // game specific

@@ -9,7 +9,7 @@ public:
 
     std::optional<std::string> on_initialize() const;
     std::optional<std::string> on_initialize_d3d_thread() const;
-    void reload_config() const;
+    void reload_config(bool set_defaults = false) const;
 
     void on_pre_imgui_frame() const;
     void on_frame() const;

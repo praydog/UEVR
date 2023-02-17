@@ -105,7 +105,9 @@ public:
     static std::filesystem::path get_persistent_dir(const std::string& dir) {
         return get_persistent_dir() / dir;
     }
+
     void save_config();
+    void reset_config();
 
     enum class RendererType : uint8_t {
         D3D11,
@@ -161,7 +163,7 @@ public:
         if (get_renderer_type() == RendererType::D3D11) {
             return get_d3d11_rt_size();
         }
-        
+
         return get_d3d12_rt_size();
     }
 
@@ -195,6 +197,7 @@ private:
     bool m_created_default_cfg{false};
     std::atomic<bool> m_terminating{false};
     std::atomic<bool> m_game_data_initialized{false};
+    std::atomic<bool> m_mods_fully_initialized{false};
     
     // UI
     bool m_has_frame{false};

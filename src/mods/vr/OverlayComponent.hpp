@@ -27,7 +27,7 @@ public:
     void on_post_compositor_submit();
 
     void on_config_save(utility::Config& cfg) override;
-    void on_config_load(const utility::Config& cfg)  override;
+    void on_config_load(const utility::Config& cfg, bool set_defaults)  override;
     void on_draw_ui() override;
 
     auto& get_openxr() {

@@ -46,12 +46,12 @@ std::optional<std::string> Mods::on_initialize_d3d_thread() const {
     return std::nullopt;
 }
 
-void Mods::reload_config() const {
+void Mods::reload_config(bool set_defaults) const {
     utility::Config cfg{ Framework::get_persistent_dir("config.txt").string() };
 
     for (auto& mod : m_mods) {
         spdlog::info("{:s}::on_config_load()", mod->get_name().data());
-        mod->on_config_load(cfg);
+        mod->on_config_load(cfg, set_defaults);
     }
 }
 
