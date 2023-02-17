@@ -737,6 +737,8 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
         if (now - m_last_xinput_l3_r3_menu_open > std::chrono::seconds(1)) {
             m_last_xinput_l3_r3_menu_open = std::chrono::steady_clock::now();
             g_framework->set_draw_ui(!g_framework->is_drawing_ui());
+
+            state.Gamepad.wButtons &= ~(XINPUT_GAMEPAD_LEFT_THUMB | XINPUT_GAMEPAD_RIGHT_THUMB); // so input doesn't go through to the game
         }
     }
 
@@ -753,13 +755,48 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
         return;
     }
 
+
     // Gamepad navigation when the menu is open
     m_xinput_context.enqueue(is_vr_controller, state, [this](const XINPUT_STATE& state, bool is_vr_controller){
+        static auto last_time = std::chrono::high_resolution_clock::now();
+
+        const auto delta = std::chrono::duration<float>((std::chrono::high_resolution_clock::now() - last_time)).count();
+        last_time = std::chrono::high_resolution_clock::now();
+
         auto& io = ImGui::GetIO();
         auto& gamepad = state.Gamepad;
 
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
         io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
+
+        // Now that we're drawing the UI, check for special button combos the user can use as shortcuts
+        // like recenter view, set standing origin, camera offset modification, etc.
+
+        // If user holding down RT with menu open...
+        bool ignore_left_stick = false;
+        if (gamepad.bRightTrigger >= 128) {
+            ignore_left_stick = true;
+
+            // Camera offset modification
+            const auto right_ratio = (float)gamepad.sThumbLX / 32767.0f;
+            const auto forward_ratio = (float)gamepad.sThumbLY / 32767.0f;
+            const auto up_ratio = (float)gamepad.sThumbRY / 32767.0f;
+
+            if (right_ratio <= -0.25f || right_ratio >= 0.25f) {
+                const auto right_offset = right_ratio * delta * 100.0f;
+                m_camera_right_offset->value() += right_offset;
+            }
+
+            if (forward_ratio <= -0.25f || forward_ratio >= 0.25f) {
+                const auto forward_offset = forward_ratio * delta * 100.0f;
+                m_camera_forward_offset->value() += forward_offset;
+            }
+
+            if (up_ratio <= -0.25f || up_ratio >= 0.25f) {
+                const auto up_offset = up_ratio * delta * 100.0f;
+                m_camera_up_offset->value() += up_offset;
+            }
+        }
 
         // From imgui_impl_win32.cpp
         #define IM_SATURATE(V)                      (V < 0.0f ? 0.0f : V > 1.0f ? 1.0f : V)
@@ -783,31 +820,33 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
         MAP_BUTTON(ImGuiKey_GamepadL3,              XINPUT_GAMEPAD_LEFT_THUMB);
         MAP_BUTTON(ImGuiKey_GamepadR3,              XINPUT_GAMEPAD_RIGHT_THUMB);
 
-        if (!is_vr_controller) {
-            MAP_ANALOG(ImGuiKey_GamepadLStickLeft,      gamepad.sThumbLX, -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, -32768);
-            MAP_ANALOG(ImGuiKey_GamepadLStickRight,     gamepad.sThumbLX, +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, +32767);
-            MAP_ANALOG(ImGuiKey_GamepadLStickUp,        gamepad.sThumbLY, +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, +32767);
-            MAP_ANALOG(ImGuiKey_GamepadLStickDown,      gamepad.sThumbLY, -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, -32768);
-        } else {
-            // Map it to the dpad
-            const auto left_stick_left = gamepad.sThumbLX < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
-            if (m_xinput_context.vr.left_stick_left.was_pressed(left_stick_left)) {
-                io.AddKeyEvent(ImGuiKey_GamepadDpadLeft, true);
-            }
+        if (!ignore_left_stick) {
+            if (!is_vr_controller) {
+                MAP_ANALOG(ImGuiKey_GamepadLStickLeft,      gamepad.sThumbLX, -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, -32768);
+                MAP_ANALOG(ImGuiKey_GamepadLStickRight,     gamepad.sThumbLX, +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, +32767);
+                MAP_ANALOG(ImGuiKey_GamepadLStickUp,        gamepad.sThumbLY, +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, +32767);
+                MAP_ANALOG(ImGuiKey_GamepadLStickDown,      gamepad.sThumbLY, -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, -32768);
+            } else {
+                // Map it to the dpad
+                const auto left_stick_left = gamepad.sThumbLX < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
+                if (m_xinput_context.vr.left_stick_left.was_pressed(left_stick_left)) {
+                    io.AddKeyEvent(ImGuiKey_GamepadDpadLeft, true);
+                }
 
-            const auto left_stick_right = gamepad.sThumbLX > +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
-            if (m_xinput_context.vr.left_stick_right.was_pressed(left_stick_right)) {
-                io.AddKeyEvent(ImGuiKey_GamepadDpadRight, true);
-            }
+                const auto left_stick_right = gamepad.sThumbLX > +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
+                if (m_xinput_context.vr.left_stick_right.was_pressed(left_stick_right)) {
+                    io.AddKeyEvent(ImGuiKey_GamepadDpadRight, true);
+                }
 
-            const auto left_stick_up = gamepad.sThumbLY > +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
-            if (m_xinput_context.vr.left_stick_up.was_pressed(left_stick_up)) {
-                io.AddKeyEvent(ImGuiKey_GamepadDpadUp, true);
-            }
+                const auto left_stick_up = gamepad.sThumbLY > +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
+                if (m_xinput_context.vr.left_stick_up.was_pressed(left_stick_up)) {
+                    io.AddKeyEvent(ImGuiKey_GamepadDpadUp, true);
+                }
 
-            const auto left_stick_down = gamepad.sThumbLY < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
-            if (m_xinput_context.vr.left_stick_down.was_pressed(left_stick_down)) {
-                io.AddKeyEvent(ImGuiKey_GamepadDpadDown, true);
+                const auto left_stick_down = gamepad.sThumbLY < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
+                if (m_xinput_context.vr.left_stick_down.was_pressed(left_stick_down)) {
+                    io.AddKeyEvent(ImGuiKey_GamepadDpadDown, true);
+                }
             }
         }
 
