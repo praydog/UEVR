@@ -157,6 +157,14 @@ public:
         return Vector2f{(float)m_d3d12.rt_width, (float)m_d3d12.rt_height};
     }
 
+    Vector2f get_rt_size() const {
+        if (get_renderer_type() == RendererType::D3D11) {
+            return get_d3d11_rt_size();
+        }
+        
+        return get_d3d12_rt_size();
+    }
+
 private:
     void consume_input();
     void update_fonts();
