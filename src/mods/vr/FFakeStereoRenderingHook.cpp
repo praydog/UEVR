@@ -596,8 +596,6 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     const auto calculate_stereo_projection_matrix_func = ((uintptr_t*)vtable)[calculate_stereo_projection_matrix_index];
     const auto init_canvas_func_ptr = &((uintptr_t*)vtable)[init_canvas_index];
     // const auto render_texture_render_thread_func = ((uintptr_t*)*vtable)[*stereo_view_offset_index + 3];
-
-    auto builder = SafetyHookFactory::acquire();
     
 
     SPDLOG_INFO("AdjustViewRect: {:x}", (uintptr_t)adjust_view_rect_func);
@@ -606,10 +604,13 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     m_has_double_precision = is_using_double_precision(stereo_view_offset_func) || is_using_double_precision(calculate_stereo_projection_matrix_func);
 
-    m_adjust_view_rect_hook = builder.create_inline((void*)adjust_view_rect_func, adjust_view_rect);
-    m_calculate_stereo_view_offset_hook = builder.create_inline((void*)stereo_view_offset_func, calculate_stereo_view_offset);
-    m_calculate_stereo_projection_matrix_hook = builder.create_inline((void*)calculate_stereo_projection_matrix_func, calculate_stereo_projection_matrix);
-
+    {
+        auto builder = SafetyHookFactory::acquire();
+        m_adjust_view_rect_hook = builder.create_inline((void*)adjust_view_rect_func, adjust_view_rect);
+        m_calculate_stereo_view_offset_hook = builder.create_inline((void*)stereo_view_offset_func, calculate_stereo_view_offset);
+        m_calculate_stereo_projection_matrix_hook = builder.create_inline((void*)calculate_stereo_projection_matrix_func, calculate_stereo_projection_matrix);
+    }
+    
     if (!m_adjust_view_rect_hook) {
         SPDLOG_ERROR("Failed to create AdjustViewRect hook");
     }
@@ -626,6 +627,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     // compiler optimization makes that function get re-used in a lot of places
     // so it's not feasible to just detour it, we need to replace the pointer in the vtable.
     if (!m_rendertarget_manager_embedded_in_stereo_device) {
+        auto builder = SafetyHookFactory::acquire();
         m_render_texture_render_thread_hook = builder.create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
 
         if (!m_render_texture_render_thread_hook) {
@@ -662,6 +664,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 if (prev_function_returned_false) {
                     render_texture_render_thread_func = func;
                     rendertexture_fn_vtable_index = i;
+                    auto builder = SafetyHookFactory::acquire();
                     m_render_texture_render_thread_hook = builder.create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
                     if (!m_render_texture_render_thread_hook) {
                         SPDLOG_ERROR("Failed to create RenderTexture_RenderThread hook");
