@@ -1285,6 +1285,24 @@ void VR::on_draw_ui() {
 
     ImGui::Separator();
 
+    if (ImGui::Button("Set Standing Height")) {
+        m_standing_origin.y = get_position(0).y;
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Set Standing Origin")) {
+        m_standing_origin = get_position(0);
+    }
+
+    if (ImGui::Button("Recenter View")) {
+        recenter_view();
+    }
+
+    if (ImGui::Button("Reinitialize Runtime")) {
+        get_runtime()->wants_reinitialize = true;
+    }
+
     ImGui::Text("Unreal Options");
 
     m_rendering_method->draw("Rendering Method");
@@ -1420,24 +1438,6 @@ void VR::on_draw_ui() {
     m_overlay_component.on_draw_ui();
 
     ImGui::Separator();
-
-    if (ImGui::Button("Set Standing Height")) {
-        m_standing_origin.y = get_position(0).y;
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Set Standing Origin")) {
-        m_standing_origin = get_position(0);
-    }
-
-    if (ImGui::Button("Recenter View")) {
-        recenter_view();
-    }
-
-    if (ImGui::Button("Reinitialize Runtime")) {
-        get_runtime()->wants_reinitialize = true;
-    }
 
     ImGui::Text("Graphical Options");
 
