@@ -1068,6 +1068,9 @@ void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
     }
 
     m_overlay_component.on_config_load(cfg, set_defaults);
+
+    // Load camera offsets
+    load_cameras();
 }
 
 void VR::on_config_save(utility::Config& cfg) {
@@ -1084,7 +1087,59 @@ void VR::on_config_save(utility::Config& cfg) {
     }
 
     m_overlay_component.on_config_save(cfg);
+
+    // Save camera offsets
+    save_cameras();
 }
+
+void VR::load_cameras() try {
+    const auto cameras_txt = Framework::get_persistent_dir("cameras.txt");
+
+    if (std::filesystem::exists(cameras_txt)) {
+        spdlog::info("[VR] Loading camera offsets from {}", cameras_txt.string());
+
+        utility::Config cfg{cameras_txt.string()};
+
+        for (auto i = 0; i < m_camera_datas.size(); i++) {
+            auto& data = m_camera_datas[i];
+
+            if (auto offs = cfg.get<float>(std::format("camera_right_offset{}", i))) {
+                data.offset.x = *offs;
+            }
+
+            if (auto offs = cfg.get<float>(std::format("camera_up_offset{}", i))) {
+                data.offset.y = *offs;
+            }
+
+            if (auto offs = cfg.get<float>(std::format("camera_forward_offset{}", i))) {
+                data.offset.z = *offs;
+            }
+        }
+    }
+} catch(...) {
+    spdlog::error("[VR] Failed to load camera offsets");
+}
+
+void VR::save_cameras() try {
+    const auto cameras_txt = Framework::get_persistent_dir("cameras.txt");
+
+    spdlog::info("[VR] Saving camera offsets to {}", cameras_txt.string());
+
+    utility::Config cfg{cameras_txt.string()};
+
+    for (auto i = 0; i < m_camera_datas.size(); i++) {
+        const auto& data = m_camera_datas[i];
+        cfg.set<float>(std::format("camera_right_offset{}", i), data.offset.x);
+        cfg.set<float>(std::format("camera_up_offset{}", i), data.offset.y);
+        cfg.set<float>(std::format("camera_forward_offset{}", i), data.offset.z);
+        cfg.set<float>(std::format("world_scale{}", i), m_camera_datas[i].world_scale);
+    }
+
+    cfg.save(cameras_txt.string());
+} catch(...) {
+    spdlog::error("[VR] Failed to save camera offsets");
+}
+
 
 void VR::on_pre_imgui_frame() {
     m_xinput_context.update();
@@ -1402,10 +1457,48 @@ void VR::on_draw_ui() {
     m_camera_up_offset->draw("Camera Up Offset");
     m_world_scale->draw("World Scale");
 
+    ImGui::BeginGroup();
+    ImGui::Columns(2);
+
+    ImGui::BeginGroup();
     m_disable_hzbocclusion->draw("Disable HZBOcclusion");
     m_disable_hdr_compositing->draw("Disable HDR Composition");
     m_uncap_framerate->draw("Uncap Framerate");
     m_enable_gui->draw("Enable GUI");
+    ImGui::EndGroup();
+
+    ImGui::NextColumn();
+    ImGui::BeginGroup();
+
+    for (auto i = 0; i < m_camera_datas.size(); ++i) {
+        auto& data = m_camera_datas[i];
+
+        if (ImGui::Button(std::format("Save Camera {}", i).data())) {
+            data.offset = {
+                m_camera_right_offset->value(),
+                m_camera_up_offset->value(),
+                m_camera_forward_offset->value()
+            };
+
+            data.world_scale = m_world_scale->value();
+
+            save_cameras();
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button(std::format("Load Camera {}", i).data())) {
+            m_camera_right_offset->value() = data.offset.x;
+            m_camera_up_offset->value() = data.offset.y;
+            m_camera_forward_offset->value() = data.offset.z;
+            m_world_scale->value() = data.world_scale;
+        }
+    }
+
+    ImGui::EndGroup();
+    ImGui::EndGroup();
+
+    ImGui::Columns(1);
 
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_FirstUseEver);
 

@@ -450,6 +450,14 @@ private:
     const ModSlider::Ptr m_camera_fov_distance_multiplier{ ModSlider::create(generate_name("CameraFOVDistanceMultiplier"), 0.00f, 1000.0f, 0.0f) };
     const ModSlider::Ptr m_world_scale{ ModSlider::create(generate_name("WorldScale"), 0.01f, 10.0f, 1.0f) };
 
+    struct CameraData {
+        glm::vec3 offset{};
+        float world_scale{1.0f};
+    };
+    std::array<CameraData, 3> m_camera_datas{};
+    void save_cameras();
+    void load_cameras();
+
     bool m_stereo_emulation_mode{false}; // not a good config option, just for debugging
     bool m_wait_for_present{true};
 
@@ -469,6 +477,7 @@ private:
         *m_camera_up_offset,
         *m_world_scale,
     };
+    
 
     int m_game_frame_count{};
     int m_frame_count{};
