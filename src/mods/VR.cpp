@@ -1455,9 +1455,13 @@ void VR::on_draw_ui() {
     m_rendering_method->draw("Rendering Method");
     m_synced_afr_method->draw("Synced Sequential Method");
 
-    m_camera_forward_offset->draw("Camera Forward Offset");
-    m_camera_right_offset->draw("Camera Right Offset");
-    m_camera_up_offset->draw("Camera Up Offset");
+    float camera_offset[] = {m_camera_forward_offset->value(), m_camera_right_offset->value(), m_camera_up_offset->value()};
+    if (ImGui::SliderFloat3("Camera Offset", camera_offset, -4000.0f, 4000.0f)) {
+        m_camera_forward_offset->value() = camera_offset[0];
+        m_camera_right_offset->value() = camera_offset[1];
+        m_camera_up_offset->value() = camera_offset[2];
+    }
+
     m_world_scale->draw("World Scale");
 
     ImGui::BeginGroup();
