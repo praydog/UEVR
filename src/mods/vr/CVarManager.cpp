@@ -247,8 +247,12 @@ void CVarManager::CVarStandard::draw_ui() try {
 
         if (ImGui::Checkbox(narrow_name.c_str(), &value)) {
             GameThreadWorker::get().enqueue([sft = shared_from_this(), cvar, value]() {
-                cvar->Set(std::to_wstring(value).c_str());
-                sft->save();
+                try {
+                    cvar->Set(std::to_wstring(value).c_str());
+                    sft->save();
+                } catch (...) {
+                    spdlog::error("Failed to set cvar: {}", utility::narrow(sft->get_name()));
+                }
             });
         }
         break;
@@ -258,8 +262,12 @@ void CVarManager::CVarStandard::draw_ui() try {
 
         if (ImGui::SliderInt(narrow_name.c_str(), &value, m_min_int_value, m_max_int_value)) {
             GameThreadWorker::get().enqueue([sft = shared_from_this(), cvar, value]() {
-                cvar->Set(std::to_wstring(value).c_str());
-                sft->save();
+                try {
+                    cvar->Set(std::to_wstring(value).c_str());
+                    sft->save();
+                } catch(...) {
+                    spdlog::error("Failed to set cvar: {}", utility::narrow(sft->get_name()));
+                }
             });
         }
         break;
@@ -269,8 +277,12 @@ void CVarManager::CVarStandard::draw_ui() try {
 
         if (ImGui::SliderFloat(narrow_name.c_str(), &value, m_min_float_value, m_max_float_value)) {
             GameThreadWorker::get().enqueue([sft = shared_from_this(), cvar, value]() {
-                cvar->Set(std::to_wstring(value).c_str());
-                sft->save();
+                try {
+                    cvar->Set(std::to_wstring(value).c_str());
+                    sft->save();
+                } catch(...) {
+                    spdlog::error("Failed to set cvar: {}", utility::narrow(sft->get_name()));
+                }
             });
         }
         break;
