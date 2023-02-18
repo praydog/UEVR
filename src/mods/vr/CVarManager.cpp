@@ -119,20 +119,26 @@ void CVarManager::CVar::load_internal(const std::string& filename, bool set_defa
         // No need to freeze.
         return;
     }
-
-    m_frozen = true;
     
     switch (m_type) {
     case Type::BOOL:
-        m_frozen_int_value = *cfg.get<int>(get_key_name());
-        break;
     case Type::INT:
-        m_frozen_int_value = *cfg.get<int>(get_key_name());
+        try {
+            m_frozen_int_value = *cfg.get<int>(get_key_name());
+        } catch(...) {
+            m_frozen_int_value = (int)*cfg.get<float>(get_key_name());
+        }
         break;
     case Type::FLOAT:
-        m_frozen_float_value = *cfg.get<float>(get_key_name());
+        try {
+            m_frozen_float_value = *cfg.get<float>(get_key_name());
+        } catch(...) {
+            m_frozen_float_value = (float)*cfg.get<int>(get_key_name());
+        }
         break;
     }
+
+    m_frozen = true;
 } catch(const std::exception& e) {
     spdlog::error("Failed to load {}: {}", filename, e.what());
 }
@@ -146,8 +152,6 @@ void CVarManager::CVar::save_internal(const std::string& filename) try {
 
     switch (m_type) {
     case Type::BOOL:
-        cfg.set<bool>(get_key_name(), (bool)m_frozen_int_value);
-        break;
     case Type::INT:
         cfg.set<int>(get_key_name(), m_frozen_int_value);
         break;
