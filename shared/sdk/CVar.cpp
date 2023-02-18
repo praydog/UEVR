@@ -638,6 +638,17 @@ namespace sdk {
 void IConsoleVariable::Set(const wchar_t* value, uint32_t set_by_flags) {
     locate_vtable_indices();
 
+    if (!s_set_vtable_index) {
+        static bool once = true;
+
+        if (once) {
+            SPDLOG_ERROR("s_set_vtable_index is not initialized! Cannot call IConsoleVariable::Set()!");
+            once = false;
+        }
+
+        return;
+    }
+
     using SetFn = void(__thiscall*)(IConsoleVariable*, const wchar_t*, uint32_t);
     const auto func = (*(SetFn**)this)[*s_set_vtable_index];
 
@@ -647,6 +658,17 @@ void IConsoleVariable::Set(const wchar_t* value, uint32_t set_by_flags) {
 int32_t IConsoleVariable::GetInt() {
     locate_vtable_indices();
 
+    if (!s_get_int_vtable_index) {
+        static bool once = true;
+
+        if (once) {
+            SPDLOG_ERROR("s_get_int_vtable_index is not initialized! Cannot call IConsoleVariable::GetInt()!");
+            once = false;
+        }
+
+        return 0;
+    }
+
     using GetIntFn = int32_t(__thiscall*)(IConsoleVariable*);
     const auto func = (*(GetIntFn**)this)[*s_get_int_vtable_index];
 
@@ -655,6 +677,17 @@ int32_t IConsoleVariable::GetInt() {
 
 float IConsoleVariable::GetFloat() {
     locate_vtable_indices();
+
+    if (!s_get_float_vtable_index) {
+        static bool once = true;
+
+        if (once) {
+            SPDLOG_ERROR("s_get_float_vtable_index is not initialized! Cannot call IConsoleVariable::GetFloat()!");
+            once = false;
+        }
+
+        return 0.0f;
+    }
 
     using GetFloatFn = float(__thiscall*)(IConsoleVariable*);
     const auto func = (*(GetFloatFn**)this)[*s_get_float_vtable_index];
