@@ -16,9 +16,10 @@ public:
 
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
     void on_draw_ui() override;
+    void on_config_load(const utility::Config& cfg, bool set_defaults) override;
 
 public:
-    class CVar {
+    class CVar : public std::enable_shared_from_this<CVar> {
     public:
         enum class Type {
             BOOL,
@@ -47,11 +48,19 @@ public:
 
         virtual ~CVar() = default;
 
-        virtual void load();
-        virtual void save();
+        virtual void load(bool set_defaults) = 0;
+        virtual void save() = 0;
         virtual void freeze() = 0;
         virtual void update() = 0;
         virtual void draw_ui() = 0;
+
+        void unfreeze() {
+            m_frozen = false;
+        }
+
+        bool is_frozen() const {
+            return m_frozen;
+        }
 
         std::string get_key_name();
 
@@ -68,6 +77,9 @@ public:
         }
 
     protected:
+        void load_internal(const std::string& filename, bool set_defaults);
+        void save_internal(const std::string& filename);
+
         std::wstring m_module{};
         std::wstring m_name{};
         Type m_type{};
@@ -102,7 +114,7 @@ public:
         {
         }
 
-        void load() override;
+        void load(bool set_defaults) override;
         void save() override;
         void freeze() override;
         void update() override;
@@ -124,7 +136,7 @@ public:
         {
         }
 
-        void load() override;
+        void load(bool set_defaults) override;
         void save() override;
         void freeze() override;
         void update() override;

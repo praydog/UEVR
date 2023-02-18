@@ -1070,6 +1070,7 @@ void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
     }
 
     m_overlay_component.on_config_load(cfg, set_defaults);
+    m_cvar_manager->on_config_load(cfg, set_defaults);
 
     // Load camera offsets
     load_cameras();
