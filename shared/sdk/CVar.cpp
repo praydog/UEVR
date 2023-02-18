@@ -685,7 +685,9 @@ void IConsoleVariable::locate_vtable_indices() {
                 break;
             }
 
-            if (is_vfunc_pattern(func, "33 C0")) {
+            if (is_vfunc_pattern(func, "33 C0") ||
+                is_vfunc_pattern(func, "48 89 4C 24 08 33 C0")) // Weird variant that moves rcx into rsp+8 for... reasons?
+            {
                 previous_nullptr_index = i;
             } else if (previous_nullptr_index) {
                 s_set_vtable_index = *previous_nullptr_index + 2;
