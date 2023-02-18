@@ -13,6 +13,7 @@
 #include "vr/OverlayComponent.hpp"
 
 #include "vr/FFakeStereoRenderingHook.hpp"
+#include "vr/CVarManager.hpp"
 
 #include "Mod.hpp"
 
@@ -345,6 +346,8 @@ private:
 
     std::unique_ptr<FFakeStereoRenderingHook> m_fake_stereo_hook{ std::make_unique<FFakeStereoRenderingHook>() };
     
+    std::unique_ptr<CVarManager> m_cvar_manager{ std::make_unique<CVarManager>() };
+
     std::shared_ptr<VRRuntime> m_runtime{std::make_shared<VRRuntime>()}; // will point to the real runtime if it exists
     std::shared_ptr<runtimes::OpenVR> m_openvr{std::make_shared<runtimes::OpenVR>()};
     std::shared_ptr<runtimes::OpenXR> m_openxr{std::make_shared<runtimes::OpenXR>()};

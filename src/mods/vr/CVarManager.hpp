@@ -1,0 +1,169 @@
+#pragma once
+
+#include <optional>
+#include <memory>
+#include <string>
+
+#include <sdk/CVar.hpp>
+
+#include "../../Mod.hpp"
+
+// For UE cvars.
+class CVarManager final : public ModComponent {
+public:
+    CVarManager();
+    virtual ~CVarManager();
+
+    void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
+    void on_draw_ui() override;
+
+public:
+    class CVar {
+    public:
+        enum class Type {
+            BOOL,
+            INT,
+            FLOAT
+        };
+
+    public:
+        CVar(const std::wstring& module, const std::wstring& name, Type type, int min_value, int max_value) 
+            : m_module{module}
+            , m_name{name}
+            , m_type{type}
+            , m_min_int_value{min_value}
+            , m_max_int_value{max_value}
+        {
+        }
+
+        CVar(const std::wstring& module, const std::wstring& name, Type type, float min_value, float max_value) 
+            : m_module{module}
+            , m_name{name}
+            , m_type{type}
+            , m_min_float_value{min_value}
+            , m_max_float_value{max_value}
+        {
+        }
+
+        virtual ~CVar() = default;
+
+        virtual void load();
+        virtual void save();
+        virtual void freeze() = 0;
+        virtual void update() = 0;
+        virtual void draw_ui() = 0;
+
+        std::string get_key_name();
+
+        const auto& get_name() {
+            return m_name;
+        }
+
+        const auto& get_module() {
+            return m_module;
+        }
+
+        auto get_type() const {
+            return m_type;
+        }
+
+    protected:
+        std::wstring m_module{};
+        std::wstring m_name{};
+        Type m_type{};
+
+        union {
+            int m_frozen_int_value{};
+            float m_frozen_float_value;
+        };
+
+        union {
+            int m_min_int_value{};
+            float m_min_float_value;
+        };
+
+        union {
+            int m_max_int_value{};
+            float m_max_float_value;
+        };
+
+        bool m_frozen{false};
+    };
+
+    class CVarStandard : public CVar {
+    public:
+        CVarStandard(const std::wstring& module, const std::wstring& name, Type type, int min_value, int max_value) 
+            : CVar{module, name, type, min_value, max_value}
+        {
+        }
+
+        CVarStandard(const std::wstring& module, const std::wstring& name, Type type, float min_value, float max_value)
+            : CVar{module, name, type, min_value, max_value}
+        {
+        }
+
+        void load() override;
+        void save() override;
+        void freeze() override;
+        void update() override;
+        void draw_ui() override;
+
+    protected:
+        std::wstring m_frozen_value{};
+        sdk::IConsoleVariable** m_cvar{nullptr};
+    };
+
+    class CVarData : public CVar {
+    public:
+        CVarData(const std::wstring& module, const std::wstring& name, Type type, int min_value, int max_value)
+            : CVar{module, name, type, min_value, max_value}
+        {
+        }
+        CVarData(const std::wstring& module, const std::wstring& name, Type type, float min_value, float max_value)
+            : CVar{module, name, type, min_value, max_value}
+        {
+        }
+
+        void load() override;
+        void save() override;
+        void freeze() override;
+        void update() override;
+        void draw_ui() override;
+
+    protected:
+        std::optional<sdk::ConsoleVariableDataWrapper> m_cvar_data;
+    };
+
+private:
+    std::vector<std::shared_ptr<CVar>> m_displayed_cvars{};
+    std::vector<std::shared_ptr<CVar>> m_all_cvars{}; // ones the user can manually add to cvars.txt
+
+    static inline std::vector<std::shared_ptr<CVarStandard>> s_default_standard_cvars {
+        // Bools
+        std::make_unique<CVarStandard>(L"Renderer", L"r.HZBOcclusion", CVar::Type::BOOL, 0, 1),
+
+        // Ints
+        std::make_unique<CVarStandard>(L"Renderer", L"r.DefaultFeature.AntiAliasing", CVar::Type::INT, 0, 2),
+        std::make_unique<CVarStandard>(L"Renderer", L"r.LightCulling.Quality", CVar::Type::INT, 0, 2),
+        std::make_unique<CVarStandard>(L"Renderer", L"r.SubsurfaceScattering", CVar::Type::INT, 0, 2),
+        
+        // Floats
+    };
+
+    static inline std::vector<std::shared_ptr<CVarData>> s_default_data_cvars {
+        // Bools
+        std::make_unique<CVarData>(L"Engine", L"r.OneFrameThreadLag", CVar::Type::BOOL, 0, 1),
+        std::make_unique<CVarData>(L"Engine", L"r.AllowOcclusionQueries", CVar::Type::BOOL, 0, 1),
+        std::make_unique<CVarData>(L"Engine", L"r.VolumetricCloud", CVar::Type::BOOL, 0, 1),
+
+        // Ints
+        std::make_unique<CVarData>(L"Engine", L"r.AmbientOcclusionLevels", CVar::Type::INT, 0, 4),
+        std::make_unique<CVarData>(L"Engine", L"r.DepthOfFieldQuality", CVar::Type::INT, 0, 2),
+        std::make_unique<CVarData>(L"Engine", L"r.MotionBlurQuality", CVar::Type::INT, 0, 4),
+
+        // Floats
+        std::make_unique<CVarData>(L"Engine", L"r.MotionBlur.Max", CVar::Type::FLOAT, -1.0f, 100.0f),
+        std::make_unique<CVarData>(L"Engine", L"r.SceneColorFringe.Max", CVar::Type::FLOAT, -1.0f, 100.0f),
+        std::make_unique<CVarData>(L"Engine", L"r.SceneColorFringe.Quality", CVar::Type::FLOAT, 0.0f, 1.0f),
+    };
+};

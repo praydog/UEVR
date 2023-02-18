@@ -877,6 +877,8 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
 }
 
 void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
+    m_cvar_manager->on_pre_engine_tick(engine, delta);
+
     if (!get_runtime()->loaded || !is_hmd_active()) {
         return;
     }
@@ -1500,102 +1502,7 @@ void VR::on_draw_ui() {
 
     ImGui::Columns(1);
 
-    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_FirstUseEver);
-
-    if (ImGui::TreeNode("CVars")) {
-        #define DISPLAY_CVAR_DATA_INT(cvar_variable, cvar_module, cvar_name, friendly_name, mn, mx) \
-            static auto cvar_variable = sdk::find_cvar_data(cvar_module, cvar_name); \
-            if (cvar_variable) try {\
-                auto cvar = cvar_variable->get<int>();\
-                if (cvar != nullptr) {\
-                    auto value = cvar->get();\
-                    if (ImGui::SliderInt(friendly_name, &value, mn, mx)) {\
-                        cvar->set(value);\
-                    }\
-                }\
-            } catch(...) {\
-                ImGui::TextWrapped("Failed to read " #cvar_name " cvar");\
-            }
-
-        #define DISPLAY_CVAR_DATA_FLOAT(cvar_variable, cvar_module, cvar_name, friendly_name, mn, mx) \
-            static auto cvar_variable = sdk::find_cvar_data(cvar_module, cvar_name); \
-            if (cvar_variable) try {\
-                auto cvar = cvar_variable->get<float>();\
-                if (cvar != nullptr) {\
-                    auto value = cvar->get();\
-                    if (ImGui::SliderFloat(friendly_name, &value, mn, mx)) {\
-                        cvar->set(value);\
-                    }\
-                }\
-            } catch(...) {\
-                ImGui::TextWrapped("Failed to read " #cvar_name " cvar");\
-            }
-
-        #define DISPLAY_CVAR_DATA_BOOL(cvar_variable, cvar_module, cvar_name, friendly_name) \
-            static auto cvar_variable = sdk::find_cvar_data(cvar_module, cvar_name); \
-            if (cvar_variable) try {\
-                auto cvar = cvar_variable->get<int>();\
-                if (cvar != nullptr) {\
-                    auto value = cvar->get();\
-                    if (ImGui::Checkbox(friendly_name, (bool*)&value)) {\
-                        cvar->set(value);\
-                    }\
-                }\
-            } catch(...) {\
-                ImGui::TextWrapped("Failed to read " #cvar_name " cvar");\
-            }
-
-        // This is the one that uses find_cvar and GameThreadWorker
-        #define DISPLAY_CVAR_REF_INT(cvar_variable, cvar_module, cvar_name, friendly_name, mn, mx)\
-            static auto cvar_variable = sdk::find_cvar(cvar_module, cvar_name); \
-            if (cvar_variable != nullptr && *cvar_variable != nullptr) try {\
-                auto cvar = *cvar_variable;\
-                auto value = cvar->GetInt();\
-                if (ImGui::SliderInt(friendly_name, &value, mn, mx)) {\
-                    GameThreadWorker::get().enqueue([cvar, value] {\
-                        cvar->Set(std::to_wstring(value).c_str());\
-                    });\
-                }\
-            } catch(...) {\
-                ImGui::TextWrapped("Failed to read " #cvar_name " cvar");\
-            }
-
-        #define DISPLAY_CVAR_REF_BOOL(cvar_variable, cvar_module, cvar_name, friendly_name)\
-            static auto cvar_variable = sdk::find_cvar(cvar_module, cvar_name); \
-            if (cvar_variable != nullptr && *cvar_variable != nullptr) try {\
-                auto cvar = *cvar_variable;\
-                auto value = cvar->GetInt();\
-                if (ImGui::Checkbox(friendly_name, (bool*)&value)) {\
-                    GameThreadWorker::get().enqueue([cvar, value] {\
-                        cvar->Set(std::to_wstring(value).c_str());\
-                    });\
-                }\
-            } catch(...) {\
-                ImGui::TextWrapped("Failed to read " #cvar_name " cvar");\
-            }
-
-        // Boolean values
-        // r.OneFrameThreadLag
-        DISPLAY_CVAR_DATA_BOOL(one_frame_thread_lag, L"Engine", L"r.OneFrameThreadLag", "One Frame Thread Lag");
-        DISPLAY_CVAR_DATA_BOOL(r_allow_occlusion_queries, L"Engine", L"r.AllowOcclusionQueries", "Allow Occlusion Queries");
-        DISPLAY_CVAR_REF_BOOL(r_hzbo_cvar, L"Renderer", L"r.HZBOcclusion", "HZBOcclusion");
-        DISPLAY_CVAR_DATA_BOOL(r_volumetric_cloud, L"Engine", L"r.VolumetricCloud", "Volumetric Cloud");
-
-        // Sliders (int values)
-        DISPLAY_CVAR_REF_INT(r_default_feature_anti_aliasing_cvar, L"Engine", L"r.DefaultFeature.AntiAliasing", "Anti Aliasing", 0, 2);
-        DISPLAY_CVAR_DATA_INT(r_ambient_occlusion_levels_cvar, L"Engine", L"r.AmbientOcclusionLevels", "Ambient Occlusion Levels", 0, 4);
-        DISPLAY_CVAR_DATA_INT(r_depth_of_field_quality_cvar, L"Engine", L"r.DepthOfFieldQuality", "Depth of Field Quality", 0, 2);
-        DISPLAY_CVAR_DATA_INT(r_motion_blur_quality_cvar, L"Engine", L"r.MotionBlurQuality", "Motion Blur Quality", 0, 4);
-        DISPLAY_CVAR_DATA_FLOAT(r_motion_blur_max_cvar, L"Engine", L"r.MotionBlur.Max", "Motion Blur Max", -1, 100);
-        DISPLAY_CVAR_DATA_FLOAT(r_scene_color_fringe_max_cvar, L"Engine", L"r.SceneColorFringe.Max", "Scene Color Fringe Max", -1, 100);
-        DISPLAY_CVAR_DATA_FLOAT(r_scene_color_fringe_quality_cvar, L"Engine", L"r.SceneColorFringe.Quality", "Scene Color Fringe Quality", 0, 1);
-
-        DISPLAY_CVAR_REF_INT(r_light_culling_quality_cvar, L"Engine", L"r.LightCulling.Quality", "Light Culling Quality", 0, 2);
-
-        DISPLAY_CVAR_DATA_INT(r_subsurface_scattering_cvar, L"Engine", L"r.SubsurfaceScattering", "Subsurface Scattering", 0, 2);
-
-        ImGui::TreePop();
-    }
+    m_cvar_manager->on_draw_ui();
 
     if (m_fake_stereo_hook != nullptr) {
         m_fake_stereo_hook->on_draw_ui();
