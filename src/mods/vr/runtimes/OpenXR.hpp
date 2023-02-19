@@ -113,7 +113,7 @@ public:
     std::optional<std::string> initialize_actions(const std::string& json_string);
 
     XrResult begin_frame();
-    XrResult end_frame(const std::vector<XrCompositionLayerQuad>& quad_layers);
+    XrResult end_frame(const std::vector<XrCompositionLayerQuad>& quad_layers, bool has_depth = false);
 
     void begin_profile() {
         if (!this->profile_calls) {
@@ -202,7 +202,7 @@ public:
     }
     
     const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 5.0f, 1.0f) };
-    
+
     Mod::ValueList options{
         *resolution_scale,
     };
@@ -217,6 +217,7 @@ public:
 
         UI = 2,
         FRAMEWORK_UI = 3,
+        DEPTH = 4,
 
         EXTRA_END,
         END = EXTRA_END,

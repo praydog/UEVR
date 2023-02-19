@@ -283,6 +283,19 @@ public:
     auto& get_render_target_pool_hook() {
         return m_render_target_pool_hook;
     }
+
+    void set_world_to_meters(float value) {
+        m_world_to_meters = value;
+    }
+
+    float get_world_to_meters() const {
+        return m_world_to_meters * m_world_scale->value();
+    }
+
+    float get_depth_scale() const {
+        return m_depth_scale;
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;
@@ -347,6 +360,8 @@ private:
 
     float m_nearz{ 0.1f };
     float m_farz{ 3000.0f };
+    float m_world_to_meters{1.0f}; // Placeholder, it gets set later in a hook
+    float m_depth_scale{ 1.0f };
 
     std::unique_ptr<FFakeStereoRenderingHook> m_fake_stereo_hook{ std::make_unique<FFakeStereoRenderingHook>() };
     std::unique_ptr<RenderTargetPoolHook> m_render_target_pool_hook{ std::make_unique<RenderTargetPoolHook>() };
@@ -467,6 +482,7 @@ private:
 
     bool m_stereo_emulation_mode{false}; // not a good config option, just for debugging
     bool m_wait_for_present{true};
+    bool m_pass_depth_to_runtime{true};
 
     ValueList m_options{
         *m_rendering_method,

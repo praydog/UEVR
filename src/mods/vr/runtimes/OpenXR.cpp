@@ -7,9 +7,11 @@
 #include <imgui.h>
 
 #include <sdk/CVar.hpp>
+#include <sdk/Globals.hpp>
 
 #include "Framework.hpp"
 
+#include "../../VR.hpp"
 #include "OpenXR.hpp"
 
 using namespace nlohmann;
@@ -1362,7 +1364,7 @@ XrResult OpenXR::begin_frame() {
     return result;
 }
 
-XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layers) {
+XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layers, bool has_depth) {
     std::scoped_lock _{sync_mtx};
 
     if (!this->ready() || !this->got_first_poses || !this->frame_synced) {
@@ -1378,6 +1380,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
 
     std::vector<XrCompositionLayerBaseHeader*> layers{};
     std::vector<XrCompositionLayerProjectionView> projection_layer_views{};
+    std::vector<XrCompositionLayerDepthInfoKHR> depth_layers{};
 
     // we CANT push the layers every time, it cause some layer error
     // in xrEndFrame, so we must only do it when shouldRender is true
@@ -1385,6 +1388,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
         const auto stage_views = get_stage_view_for_submit();
 
         projection_layer_views.resize(stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
+        depth_layers.resize(projection_layer_views.size(), {XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR});
 
         for (auto i = 0; i < projection_layer_views.size(); ++i) {
             const auto& swapchain = this->swapchains[i];
@@ -1395,6 +1399,29 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
             projection_layer_views[i].subImage.swapchain = swapchain.handle;
             projection_layer_views[i].subImage.imageRect.offset = {0, 0};
             projection_layer_views[i].subImage.imageRect.extent = {swapchain.width, swapchain.height};
+
+            if (has_depth) {
+                const auto& depth_swapchain = this->swapchains[(uint32_t)OpenXR::SwapchainIndex::DEPTH];
+
+                depth_layers[i].type = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR;
+                depth_layers[i].next = nullptr;
+                depth_layers[i].subImage.swapchain = depth_swapchain.handle;
+                depth_layers[i].subImage.imageRect.offset = {(depth_swapchain.width / 2) * i, 0};
+                depth_layers[i].subImage.imageRect.extent = {depth_swapchain.width / 2, depth_swapchain.height};
+                depth_layers[i].minDepth = 0.0f;
+                depth_layers[i].maxDepth = 1.0f;
+                auto wtm = VR::get()->get_world_to_meters();
+                if (wtm < 0.0f || wtm == 0.0f) {
+                    wtm = 1.0f;
+                }
+
+                const auto nearz = sdk::globals::get_near_clipping_plane() / wtm;
+
+                depth_layers[i].nearZ = FLT_MAX;
+                depth_layers[i].farZ = nearz * VR::get()->get_depth_scale(); // todo: add global world scale into this...?
+
+                projection_layer_views[i].next = &depth_layers[i];
+            }
         }
 
         auto& layer = this->projection_layer_cache.emplace_back();

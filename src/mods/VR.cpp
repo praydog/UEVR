@@ -251,6 +251,36 @@ std::optional<std::string> VR::initialize_openxr() {
             extensions.push_back(XR_KHR_D3D11_ENABLE_EXTENSION_NAME);
         }
 
+        // Enumerate available extensions and enable depth extension if available
+        uint32_t extension_count{};
+        result = xrEnumerateInstanceExtensionProperties(nullptr, 0, &extension_count, nullptr);
+
+        if (!XR_FAILED(result)) try {
+            std::vector<XrExtensionProperties> extension_properties(extension_count, {XR_TYPE_EXTENSION_PROPERTIES});
+            result = xrEnumerateInstanceExtensionProperties(nullptr, extension_count, &extension_count, extension_properties.data());
+
+            if (!XR_FAILED(result)) {
+                for (const auto& extension_property : extension_properties) {
+                    spdlog::info("[VR] Found OpenXR extension: {}", extension_property.extensionName);
+                }
+
+                const std::unordered_set<std::string> wanted_extensions {
+                    XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
+                    // To be seen if we need more!
+                };
+
+                for (const auto& extension_property : extension_properties) {
+                    if (wanted_extensions.contains(extension_property.extensionName)) {
+                        spdlog::info("[VR] Enabling {} extension", extension_property.extensionName);
+                        extensions.push_back(extension_property.extensionName);
+                        break;
+                    }
+                }
+            }
+        } catch(...) {
+            spdlog::error("[VR] Unknown error while enumerating OpenXR extensions");
+        }
+
         XrInstanceCreateInfo instance_create_info{XR_TYPE_INSTANCE_CREATE_INFO};
         instance_create_info.next = nullptr;
         instance_create_info.enabledExtensionCount = (uint32_t)extensions.size();
@@ -1553,6 +1583,8 @@ void VR::on_draw_ui() {
     ImGui::Checkbox("Disable VR Overlay", &m_disable_overlay);
     ImGui::Checkbox("Stereo Emulation Mode", &m_stereo_emulation_mode);
     ImGui::Checkbox("Wait for Present", &m_wait_for_present);
+    ImGui::Checkbox("Pass Depth to Runtime", &m_pass_depth_to_runtime);
+    ImGui::SliderFloat("Depth Scale", &m_depth_scale, 0.0f, 1.0f);
 
     const double min_ = 0.0;
     const double max_ = 25.0;

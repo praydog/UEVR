@@ -108,6 +108,18 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         clear_tex((ID3D11Resource*)ui_target->get_native_resource());
     }
 
+    auto& rt_pool = vr->get_render_target_pool_hook();
+    const auto scene_depth_rt = rt_pool->get_render_target(L"SceneDepthZ");
+    ComPtr<ID3D11Texture2D> scene_depth_tex{};
+
+    if (vr->m_pass_depth_to_runtime && scene_depth_rt != nullptr && scene_depth_rt->item.texture.texture != nullptr) {
+        const auto depth_tex = (ID3D11Texture2D*)scene_depth_rt->item.texture.texture->get_native_resource();
+
+        if (depth_tex != nullptr) {
+            scene_depth_tex = depth_tex;
+        }
+    }
+
     // If m_frame_count is even, we're rendering the left eye.
     if (is_left_eye_frame) {
         m_submitted_left_eye = true;
@@ -123,6 +135,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             src_box.front = 0;
             src_box.back = 1;
             m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::LEFT_EYE, backbuffer.Get(), &src_box);
+
+            /*if (scene_depth_tex != nullptr) {
+                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DEPTH_LEFT, scene_depth_tex.Get(), &src_box);
+            }*/
         }
 
         const auto has_skip_present_fix = vr->m_desktop_fix->value() && vr->m_desktop_fix_skip_present->value();
@@ -212,6 +228,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
             m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::RIGHT_EYE, backbuffer.Get(), &src_box);
 
+            if (scene_depth_tex != nullptr) {
+                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DEPTH, scene_depth_tex.Get(), nullptr);
+            }
+
             LOG_VERBOSE("Ending frame");
             std::vector<XrCompositionLayerQuad> quad_layers{};
 
@@ -227,7 +247,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 quad_layers.push_back(*framework_quad);
             }
             
-            auto result = vr->m_openxr->end_frame(quad_layers);
+            auto result = vr->m_openxr->end_frame(quad_layers, scene_depth_tex != nullptr);
 
             vr->m_openxr->needs_pose_update = true;
             vr->m_submitted = result == XR_SUCCESS;
@@ -542,22 +562,6 @@ bool D3D11Component::setup() {
     if (FAILED(device->CreateRenderTargetView(m_right_eye_tex.Get(), &rtv_desc, &m_right_eye_rtv))) {
         spdlog::error("[VR] Failed to create right eye render target view (D3D11).");
         return false;
-    }
-
-    // Make depth stencils for both eyes.
-    auto depthstencil = hook->get_last_depthstencil_used();
-
-    if (depthstencil != nullptr) {
-        D3D11_TEXTURE2D_DESC depthstencil_desc{};
-
-        depthstencil->GetDesc(&depthstencil_desc);
-
-        // Create eye depthstencils.
-        device->CreateTexture2D(&depthstencil_desc, nullptr, &m_left_eye_depthstencil);
-        device->CreateTexture2D(&depthstencil_desc, nullptr, &m_right_eye_depthstencil);
-
-        // Copy the current depthstencil into the right eye.
-        context->CopyResource(m_right_eye_depthstencil.Get(), depthstencil.Get());
     }
 
     spdlog::info("[VR] d3d11 textures have been setup");
@@ -1025,23 +1029,7 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
     this->contexts.clear();
     this->contexts.resize(openxr.views.size() + (uint32_t)runtimes::OpenXR::SwapchainIndex::EXTRA_COUNT); // +1 for the UI texture
 
-    auto create_swapchain = [&](uint32_t i, uint32_t w, uint32_t h) -> std::optional<std::string> {
-        const auto old_w = backbuffer_desc.Width;
-        const auto old_h = backbuffer_desc.Height;
-
-        backbuffer_desc.Width = w;
-        backbuffer_desc.Height = h;
-
-        XrSwapchainCreateInfo swapchain_create_info{XR_TYPE_SWAPCHAIN_CREATE_INFO};
-        swapchain_create_info.arraySize = 1;
-        swapchain_create_info.format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-        swapchain_create_info.width = w;
-        swapchain_create_info.height = h;
-        swapchain_create_info.mipCount = 1;
-        swapchain_create_info.faceCount = 1;
-        swapchain_create_info.sampleCount = 1;
-        swapchain_create_info.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
-
+    auto create_swapchain = [&](uint32_t i, const XrSwapchainCreateInfo& swapchain_create_info, D3D11_TEXTURE2D_DESC desc) -> std::optional<std::string> {
         runtimes::OpenXR::Swapchain swapchain{};
         swapchain.width = swapchain_create_info.width;
         swapchain.height = swapchain_create_info.height;
@@ -1071,15 +1059,15 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
 
             ctx.textures[j] = {XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR};
 
-            if (FAILED(device->CreateTexture2D(&backbuffer_desc, nullptr, &ctx.textures[j].texture))) {
+            if (FAILED(device->CreateTexture2D(&desc, nullptr, &ctx.textures[j].texture))) {
                 spdlog::error("[VR] Failed to create swapchain texture {} {}", i, j);
                 return "Failed to create swapchain texture.";
             }
 
             // get immediate context
-            ComPtr<ID3D11DeviceContext> context{};
-            device->GetImmediateContext(&context);
-            context->CopyResource(ctx.textures[j].texture, backbuffer.Get());
+            //ComPtr<ID3D11DeviceContext> context{};
+            //device->GetImmediateContext(&context);
+            //context->CopyResource(ctx.textures[j].texture, backbuffer.Get());
         }
 
         result = xrEnumerateSwapchainImages(swapchain.handle, image_count, &image_count, (XrSwapchainImageBaseHeader*)&ctx.textures[0]);
@@ -1089,11 +1077,22 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
             return "Failed to enumerate swapchain images after texture creation.";
         }
 
-        backbuffer_desc.Width = old_w;
-        backbuffer_desc.Height = old_h;
-
         return std::nullopt;
     };
+
+    XrSwapchainCreateInfo standard_swapchain_create_info{XR_TYPE_SWAPCHAIN_CREATE_INFO};
+    standard_swapchain_create_info.arraySize = 1;
+    standard_swapchain_create_info.format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    standard_swapchain_create_info.width = vr->get_hmd_width();
+    standard_swapchain_create_info.height = vr->get_hmd_height();
+    standard_swapchain_create_info.mipCount = 1;
+    standard_swapchain_create_info.faceCount = 1;
+    standard_swapchain_create_info.sampleCount = 1;
+    standard_swapchain_create_info.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
+
+    auto hmd_desc = backbuffer_desc;
+    hmd_desc.Width = vr->get_hmd_width();
+    hmd_desc.Height = vr->get_hmd_height();
 
     // Create eye textures.
     for (auto i = 0; i < openxr.views.size(); ++i) {
@@ -1101,17 +1100,65 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
         spdlog::info("[VR] Width: {}", vr->get_hmd_width());
         spdlog::info("[VR] Height: {}", vr->get_hmd_height());
 
-        if (auto err = create_swapchain(i, vr->get_hmd_width(), vr->get_hmd_height())) {
+        if (auto err = create_swapchain(i, standard_swapchain_create_info, hmd_desc)) {
             return err;
         }
     }
 
+    auto desktop_rt_swapchain_create_info = standard_swapchain_create_info;
+    desktop_rt_swapchain_create_info.width = g_framework->get_d3d11_rt_size().x;
+    desktop_rt_swapchain_create_info.height = g_framework->get_d3d11_rt_size().y;
+
+    auto desktop_rt_desc = backbuffer_desc;
+    desktop_rt_desc.Width = g_framework->get_d3d11_rt_size().x;
+    desktop_rt_desc.Height = g_framework->get_d3d11_rt_size().y;
+
     // The UI texture
-    if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, g_framework->get_d3d11_rt_size().x, g_framework->get_d3d11_rt_size().y)) {
+    if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, desktop_rt_swapchain_create_info, desktop_rt_desc)) {
         return err;
     }
 
-    if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, g_framework->get_d3d11_rt_size().x, g_framework->get_d3d11_rt_size().y)) {
+    if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, desktop_rt_swapchain_create_info, desktop_rt_desc)) {
+        return err;
+    }
+
+    // Depth textures
+    auto depth_swapchain_create_info = standard_swapchain_create_info;
+    depth_swapchain_create_info.format = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+    depth_swapchain_create_info.createFlags = 0;
+    depth_swapchain_create_info.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT;
+    depth_swapchain_create_info.width = vr->get_hmd_width() * 2;
+    depth_swapchain_create_info.height = vr->get_hmd_height();
+
+    auto depth_desc = backbuffer_desc;
+    depth_desc.Format = DXGI_FORMAT_R32G8X24_TYPELESS;
+    depth_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+    depth_desc.Usage = D3D11_USAGE_DEFAULT;
+
+    auto& rt_pool = vr->get_render_target_pool_hook();
+    auto scene_depth_rt = rt_pool->get_render_target(L"SceneDepthZ");
+
+    if (scene_depth_rt != nullptr && scene_depth_rt->item.texture.texture != nullptr) {
+        const auto depth_tex = (ID3D11Texture2D*)scene_depth_rt->item.texture.texture->get_native_resource();
+
+        if (depth_tex != nullptr) {
+            depth_tex->GetDesc(&depth_desc);
+
+            spdlog::info("Depth texture size: {}x{}", depth_desc.Width, depth_desc.Height);
+            spdlog::info("Depth texture format: {}", depth_desc.Format);
+
+            depth_desc.Width = vr->get_hmd_width() * 2;
+            depth_desc.Height = vr->get_hmd_height();
+        } else {
+            depth_desc.Width = vr->get_hmd_width() * 2;
+            depth_desc.Height = vr->get_hmd_height();
+        }
+    } else {
+        depth_desc.Width = vr->get_hmd_width() * 2;
+        depth_desc.Height = vr->get_hmd_height();
+    }
+
+    if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::DEPTH, depth_swapchain_create_info, depth_desc)) {
         return err;
     }
 
