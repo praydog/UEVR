@@ -890,6 +890,8 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
         once = false;
     }
 
+    m_render_target_pool_hook->on_pre_engine_tick(engine, delta);
+
     //update_hmd_state();
     update_action_states();
 }

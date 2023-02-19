@@ -13,6 +13,7 @@
 #include "vr/OverlayComponent.hpp"
 
 #include "vr/FFakeStereoRenderingHook.hpp"
+#include "vr/RenderTargetPoolHook.hpp"
 #include "vr/CVarManager.hpp"
 
 #include "Mod.hpp"
@@ -279,6 +280,9 @@ public:
         return m_lowest_xinput_user_index;
     }
 
+    auto& get_render_target_pool_hook() {
+        return m_render_target_pool_hook;
+    }
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;
@@ -345,7 +349,7 @@ private:
     float m_farz{ 3000.0f };
 
     std::unique_ptr<FFakeStereoRenderingHook> m_fake_stereo_hook{ std::make_unique<FFakeStereoRenderingHook>() };
-    
+    std::unique_ptr<RenderTargetPoolHook> m_render_target_pool_hook{ std::make_unique<RenderTargetPoolHook>() };
     std::unique_ptr<CVarManager> m_cvar_manager{ std::make_unique<CVarManager>() };
 
     std::shared_ptr<VRRuntime> m_runtime{std::make_shared<VRRuntime>()}; // will point to the real runtime if it exists
