@@ -106,7 +106,7 @@ private:
             uint32_t num_textures_acquired{0};
         };
 
-        std::vector<SwapchainContext> contexts{};
+        std::unordered_map<uint32_t, SwapchainContext> contexts{};
         std::recursive_mutex mtx{};
         std::array<uint32_t, 2> last_resolution{};
 

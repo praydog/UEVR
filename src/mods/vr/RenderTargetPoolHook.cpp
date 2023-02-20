@@ -52,19 +52,26 @@ bool RenderTargetPoolHook::find_free_element_hook(
     const auto result = g_hook->m_find_free_element_hook.call<bool>(pool, cmd_list, desc, out, name, a6, a7, a8, a9, a10);
 
     if (name != nullptr) {
-        SPDLOG_INFO("FRenderTargetPool::FindFreeElement called with name {}", utility::narrow(name));
+        //SPDLOG_INFO("FRenderTargetPool::FindFreeElement called with name {}", utility::narrow(name));
 
         if (out != nullptr) {
             std::scoped_lock _{g_hook->m_mutex};
             g_hook->m_render_targets[name] = out->reference;
 
             if (out->reference != nullptr && out->reference->item.texture.texture != nullptr) {
-                /*const auto resource = out->reference->item.texture.texture->get_native_resource();
+                const auto resource = out->reference->item.texture.texture->get_native_resource();
                 
                 if (resource != nullptr) {
-                    SPDLOG_INFO("Native resource: {:x}", (uintptr_t)resource);
-                }*/
+                    //SPDLOG_INFO("Native resource {}: {:x}", utility::narrow(name), (uintptr_t)resource);
+                    g_hook->m_d3d_textures[name] = (IUnknown*)resource;
+                } else {
+                    g_hook->m_d3d_textures[name].Reset();
+                }
+            } else {
+                g_hook->m_d3d_textures[name].Reset();
             }
+        } else {
+            g_hook->m_d3d_textures[name].Reset();
         }
     }
 

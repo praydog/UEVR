@@ -1376,6 +1376,30 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
         return XR_ERROR_CALL_ORDER_INVALID;
     }
 
+    const auto is_afr = VR::get()->is_using_afr();
+
+    if (is_afr) {
+        if (!this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::AFR_LEFT_EYE) || !this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::AFR_RIGHT_EYE)) {
+            spdlog::error("[VR] AFR swapchains not created");
+            return XR_ERROR_VALIDATION_FAILURE;
+        }
+
+        if (has_depth && (!this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::AFR_DEPTH_LEFT_EYE) || !this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::AFR_DEPTH_RIGHT_EYE))) {
+            spdlog::error("[VR] AFR depth swapchains not created");
+            return XR_ERROR_VALIDATION_FAILURE;
+        }
+    } else {
+        if (!this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::DOUBLE_WIDE)) {
+            spdlog::error("[VR] Double wide swapchain not created");
+            return XR_ERROR_VALIDATION_FAILURE;
+        }
+
+        if (has_depth && !this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::DEPTH)) {
+            spdlog::error("[VR] Double wide depth swapchain not created");
+            return XR_ERROR_VALIDATION_FAILURE;
+        }
+    }
+
     this->projection_layer_cache.clear();
 
     std::vector<XrCompositionLayerBaseHeader*> layers{};
@@ -1391,23 +1415,56 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
         depth_layers.resize(projection_layer_views.size(), {XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR});
 
         for (auto i = 0; i < projection_layer_views.size(); ++i) {
-            const auto& swapchain = this->swapchains[i];
+            Swapchain* swapchain = nullptr;
+
+            if (is_afr) {
+                if (i == 0) {
+                    swapchain = &this->swapchains[(uint32_t)OpenXR::SwapchainIndex::AFR_LEFT_EYE];
+                } else {
+                    swapchain = &this->swapchains[(uint32_t)OpenXR::SwapchainIndex::AFR_RIGHT_EYE];
+                }
+            } else {
+                swapchain = &this->swapchains[(uint32_t)OpenXR::SwapchainIndex::DOUBLE_WIDE];
+            }
 
             projection_layer_views[i].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
             projection_layer_views[i].pose = stage_views[i].pose;
             projection_layer_views[i].fov = stage_views[i].fov;
-            projection_layer_views[i].subImage.swapchain = swapchain.handle;
-            projection_layer_views[i].subImage.imageRect.offset = {0, 0};
-            projection_layer_views[i].subImage.imageRect.extent = {swapchain.width, swapchain.height};
+            projection_layer_views[i].subImage.swapchain = swapchain->handle;
+
+            if (is_afr) {
+                projection_layer_views[i].subImage.imageRect.offset = {0, 0};
+                projection_layer_views[i].subImage.imageRect.extent = {swapchain->width, swapchain->height};
+            } else {
+                projection_layer_views[i].subImage.imageRect.offset = {(swapchain->width / 2) * i, 0};
+                projection_layer_views[i].subImage.imageRect.extent = {swapchain->width / 2, swapchain->height};
+            }
 
             if (has_depth) {
-                const auto& depth_swapchain = this->swapchains[(uint32_t)OpenXR::SwapchainIndex::DEPTH];
+                Swapchain* depth_swapchain = nullptr;
+
+                if (is_afr) {
+                    if (i == 0) {
+                        depth_swapchain = &this->swapchains[(uint32_t)OpenXR::SwapchainIndex::AFR_DEPTH_LEFT_EYE];
+                    } else {
+                        depth_swapchain = &this->swapchains[(uint32_t)OpenXR::SwapchainIndex::AFR_DEPTH_RIGHT_EYE];
+                    }
+                } else {
+                    depth_swapchain = &this->swapchains[(uint32_t)OpenXR::SwapchainIndex::DEPTH];
+                }
 
                 depth_layers[i].type = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR;
                 depth_layers[i].next = nullptr;
-                depth_layers[i].subImage.swapchain = depth_swapchain.handle;
-                depth_layers[i].subImage.imageRect.offset = {(depth_swapchain.width / 2) * i, 0};
-                depth_layers[i].subImage.imageRect.extent = {depth_swapchain.width / 2, depth_swapchain.height};
+                depth_layers[i].subImage.swapchain = depth_swapchain->handle;
+
+                if (is_afr) {
+                    depth_layers[i].subImage.imageRect.offset = {0, 0};
+                    depth_layers[i].subImage.imageRect.extent = {depth_swapchain->width, depth_swapchain->height};
+                } else {
+                    depth_layers[i].subImage.imageRect.offset = {(depth_swapchain->width / 2) * i, 0};
+                    depth_layers[i].subImage.imageRect.extent = {depth_swapchain->width / 2, depth_swapchain->height};
+                }
+
                 depth_layers[i].minDepth = 0.0f;
                 depth_layers[i].maxDepth = 1.0f;
                 auto wtm = VR::get()->get_world_to_meters();

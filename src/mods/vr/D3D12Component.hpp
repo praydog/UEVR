@@ -68,6 +68,8 @@ private:
 
         bool waiting_for_fence{false};
         bool has_commands{false};
+
+        std::wstring internal_name{L"ResourceCopier object"};
     };
 
     ComPtr<ID3D12Resource> m_prev_backbuffer{};
@@ -211,8 +213,8 @@ private:
         void wait_for_all_copies() {
             std::scoped_lock _{this->mtx};
 
-            for (auto& ctx : this->contexts) {
-                for (auto& texture_ctx : ctx.texture_contexts) {
+            for (auto& it : this->contexts) {
+                for (auto& texture_ctx : it.second.texture_contexts) {
                     texture_ctx->copier.wait(INFINITE);
                 }
             }
@@ -230,7 +232,7 @@ private:
             uint32_t num_textures_acquired{0};
         };
 
-        std::vector<SwapchainContext> contexts{};
+        std::unordered_map<uint32_t, SwapchainContext> contexts{};
         std::recursive_mutex mtx{};
         std::array<uint32_t, 2> last_resolution{};
     } m_openxr;
@@ -239,6 +241,7 @@ private:
 
     uint32_t m_last_rendered_frame{0};
     bool m_force_reset{false};
+    bool m_last_afr_state{true};
     bool m_submitted_left_eye{false};
 };
 } // namespace vrmod

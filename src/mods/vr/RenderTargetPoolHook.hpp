@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mutex>
+#include <wrl.h>
 
 #include "../../Mod.hpp"
 
@@ -28,6 +29,18 @@ public:
         return nullptr;
     }
 
+    template<typename T>
+    Microsoft::WRL::ComPtr<T> get_texture(const std::wstring& name) {
+        std::scoped_lock _{m_mutex};
+        if (auto it = m_d3d_textures.find(name); it != m_d3d_textures.end()) {
+            Microsoft::WRL::ComPtr<T> result{};
+            it->second.As(&result);
+            return result;
+        }
+
+        return nullptr;
+    }
+
 private:
     bool hook();
 
@@ -47,4 +60,5 @@ private:
     std::recursive_mutex m_mutex{};
     SafetyHookInline m_find_free_element_hook{};
     std::unordered_map<std::wstring, IPooledRenderTarget*> m_render_targets{};
+    std::unordered_map<std::wstring, Microsoft::WRL::ComPtr<IUnknown>> m_d3d_textures{};
 };

@@ -174,10 +174,11 @@ public:
 
     XrSpaceLocation view_space_location{XR_TYPE_SPACE_LOCATION};
 
+    std::unordered_set<std::string> enabled_extensions{};
     std::vector<XrCompositionLayerProjection> projection_layer_cache{};
 
     std::vector<XrViewConfigurationView> view_configs{};
-    std::vector<Swapchain> swapchains{};
+    std::unordered_map<uint32_t, Swapchain> swapchains{}; // SwapchainIndex -> Swapchain
     std::vector<XrView> views{};
     std::vector<XrView> stage_views{};
 
@@ -208,21 +209,34 @@ public:
     };
 
     enum class SwapchainIndex {
-        START = 0,
+        STANDARD_START = 0,
 
-        LEFT_EYE = 0,
-        RIGHT_EYE = 1,
+        // Standard native stereo swapchains
+        DOUBLE_WIDE = STANDARD_START,
+        DEPTH,
 
-        EXTRA_START = 2,
+        STANDARD_END,
 
-        UI = 2,
-        FRAMEWORK_UI = 3,
-        DEPTH = 4,
+        EXTRA_START,
+
+        UI = EXTRA_START,
+        FRAMEWORK_UI,
 
         EXTRA_END,
-        END = EXTRA_END,
 
-        COUNT = END - START,
+        AFR_START,
+
+        // Swapchains when using synchronized sequential or AFR
+        AFR_LEFT_EYE = AFR_START,
+        AFR_RIGHT_EYE,
+        AFR_DEPTH_LEFT_EYE,
+        AFR_DEPTH_RIGHT_EYE,
+
+        AFR_END,
+
+        END = AFR_END,
+
+        STANDARD_COUNT = STANDARD_END - STANDARD_START,
         EXTRA_COUNT = EXTRA_END - EXTRA_START,
     };
 
