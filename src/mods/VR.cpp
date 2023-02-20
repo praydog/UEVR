@@ -212,6 +212,7 @@ std::optional<std::string> VR::initialize_openvr_input() {
 }
 
 std::optional<std::string> VR::initialize_openxr() {
+    m_openxr.reset();
     m_openxr = std::make_shared<runtimes::OpenXR>();
 
     spdlog::info("[VR] Initializing OpenXR");
@@ -255,8 +256,9 @@ std::optional<std::string> VR::initialize_openxr() {
         uint32_t extension_count{};
         result = xrEnumerateInstanceExtensionProperties(nullptr, 0, &extension_count, nullptr);
 
+        std::vector<XrExtensionProperties> extension_properties(extension_count, {XR_TYPE_EXTENSION_PROPERTIES});
+
         if (!XR_FAILED(result)) try {
-            std::vector<XrExtensionProperties> extension_properties(extension_count, {XR_TYPE_EXTENSION_PROPERTIES});
             result = xrEnumerateInstanceExtensionProperties(nullptr, extension_count, &extension_count, extension_properties.data());
 
             if (!XR_FAILED(result)) {
@@ -272,6 +274,7 @@ std::optional<std::string> VR::initialize_openxr() {
                 for (const auto& extension_property : extension_properties) {
                     if (wanted_extensions.contains(extension_property.extensionName)) {
                         spdlog::info("[VR] Enabling {} extension", extension_property.extensionName);
+                        m_openxr->enabled_extensions.insert(extension_property.extensionName);
                         extensions.push_back(extension_property.extensionName);
                         break;
                     }
