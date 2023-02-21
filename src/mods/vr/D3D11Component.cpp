@@ -31,12 +31,14 @@ namespace pixel_shader1 {
 
 namespace vrmod {
 vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
-    if (m_left_eye_tex == nullptr || m_force_reset) {
+    if (m_left_eye_tex == nullptr || m_force_reset || m_last_afr_state != vr->is_using_afr()) {
         if (!setup()) {
             spdlog::error("Failed to setup D3D11Component, trying again next frame");
             m_force_reset = true;
             return vr::VRCompositorError_None;
         }
+
+        m_last_afr_state = vr->is_using_afr();
     }
 
     auto& hook = g_framework->get_d3d11_hook();
@@ -433,9 +435,11 @@ void D3D11Component::on_reset(VR* vr) {
         if (m_openxr.last_resolution[0] != vr->get_hmd_width() || m_openxr.last_resolution[1] != vr->get_hmd_height() ||
             vr->m_openxr->swapchains.empty() ||
             g_framework->get_d3d11_rt_size()[0] != vr->m_openxr->swapchains[(uint32_t)runtimes::OpenXR::SwapchainIndex::UI].width ||
-            g_framework->get_d3d11_rt_size()[1] != vr->m_openxr->swapchains[(uint32_t)runtimes::OpenXR::SwapchainIndex::UI].height) 
+            g_framework->get_d3d11_rt_size()[1] != vr->m_openxr->swapchains[(uint32_t)runtimes::OpenXR::SwapchainIndex::UI].height ||
+            m_last_afr_state != vr->is_using_afr())
         {
             m_openxr.create_swapchains();
+            m_last_afr_state = vr->is_using_afr();
         }
     }
 }
@@ -1191,9 +1195,10 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
             spdlog::info("[VR] Depth texture size: {}x{}", depth_desc.Width, depth_desc.Height);
             spdlog::info("[VR] Depth texture format: {}", depth_desc.Format);
 
-            depth_desc.Width = vr->get_hmd_width() * double_wide_multiple;
-            depth_desc.Height = vr->get_hmd_height();
+            depth_swapchain_create_info.width = depth_desc.Width;
+            depth_swapchain_create_info.height = depth_desc.Height;
         } else {
+            spdlog::error("[VR] Depth texture is null! Using default values");
             depth_desc.Width = vr->get_hmd_width() * double_wide_multiple;
             depth_desc.Height = vr->get_hmd_height();
         }
@@ -1233,20 +1238,26 @@ void D3D11Component::OpenXR::destroy_swapchains() {
 
     spdlog::info("[VR] Destroying swapchains.");
 
-    for (auto it : this->contexts) {
+    for (auto& it : this->contexts) {
         auto& ctx = it.second;
         const auto i = it.first;
 
-        auto result = xrDestroySwapchain(VR::get()->m_openxr->swapchains[i].handle);
+        if (VR::get()->m_openxr->swapchains.contains(i)) {
+            auto result = xrDestroySwapchain(VR::get()->m_openxr->swapchains[i].handle);
 
-        if (result != XR_SUCCESS) {
-            spdlog::error("[VR] Failed to destroy swapchain {}.", i);
+            if (result != XR_SUCCESS) {
+                spdlog::error("[VR] Failed to destroy swapchain {}.", i);
+            } else {
+                spdlog::info("[VR] Destroyed swapchain {}.", i);
+            }
         } else {
-            spdlog::info("[VR] Destroyed swapchain {}.", i);
+            spdlog::error("[VR] Swapchain {} does not exist.", i);
         }
 
         for (auto& tex : ctx.textures) {
-            tex.texture->Release();
+            if (tex.texture != nullptr) {
+                tex.texture->Release();
+            }
         }
         
         ctx.textures.clear();

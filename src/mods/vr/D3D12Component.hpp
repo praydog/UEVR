@@ -241,7 +241,7 @@ private:
 
     uint32_t m_last_rendered_frame{0};
     bool m_force_reset{false};
-    bool m_last_afr_state{true};
+    bool m_last_afr_state{false};
     bool m_submitted_left_eye{false};
 };
 } // namespace vrmod

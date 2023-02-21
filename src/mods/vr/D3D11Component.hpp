@@ -90,6 +90,7 @@ private:
     bool m_force_reset{false};
     bool m_submitted_left_eye{false};
     bool m_is_shader_setup{false};
+    bool m_last_afr_state{false};
 
     struct OpenXR {
         OpenXR(D3D11Component* p) : parent(p) {}

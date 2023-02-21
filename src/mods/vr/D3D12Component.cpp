@@ -801,6 +801,9 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
 
         depth_desc.Flags &= ~D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
+        depth_desc.Width = vr->get_hmd_width() * double_wide_multiple;
+        depth_desc.Height = vr->get_hmd_height();
+
         auto& rt_pool = vr->get_render_target_pool_hook();
         auto depth_tex = rt_pool->get_texture<ID3D12Resource>(L"SceneDepthZ");
 
@@ -814,9 +817,10 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
             depth_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
             depth_desc.Flags &= ~D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
-            depth_desc.Width = vr->get_hmd_width() * double_wide_multiple;
-            depth_desc.Height = vr->get_hmd_height();
+            depth_swapchain_create_info.width = depth_desc.Width;
+            depth_swapchain_create_info.height = depth_desc.Height;
         } else {
+            spdlog::error("[VR] Depth texture is null! Using default values");
             depth_desc.Width = vr->get_hmd_width() * double_wide_multiple;
             depth_desc.Height = vr->get_hmd_height();
         }
@@ -873,7 +877,9 @@ void D3D12Component::OpenXR::destroy_swapchains() {
         }
 
         for (auto& tex : ctx.textures) {
-            tex.texture->Release();
+            if (tex.texture != nullptr) {
+                tex.texture->Release();
+            }
         }
         
         ctx.textures.clear();
