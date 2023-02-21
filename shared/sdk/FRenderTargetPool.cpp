@@ -39,19 +39,28 @@ std::optional<uintptr_t> FRenderTargetPool::get_find_free_element_fn() {
             for (auto scene_depth_z_str : scene_depth_z_strs) {
                 SPDLOG_INFO("Found SceneDepthZ string at {:x}", scene_depth_z_str);
 
-                const auto scene_depth_z_instr = utility::scan_displacement_reference(module, scene_depth_z_str);
+                const auto scene_depth_z_ref = utility::scan_displacement_reference(module, scene_depth_z_str);
 
-                if (!scene_depth_z_instr) {
+                if (!scene_depth_z_ref) {
                     SPDLOG_ERROR("Failed to find reference to SceneDepthZ string");
                     continue;
                 }
+
+                const auto scene_depth_z_resolved = utility::resolve_instruction(*scene_depth_z_ref);
+
+                if (!scene_depth_z_resolved) {
+                    SPDLOG_ERROR("Failed to find resolve instruction from SceneDepthZ reference");
+                    continue;
+                }
+
+                const auto scene_depth_z_post_instruction = scene_depth_z_resolved->addr + scene_depth_z_resolved->instrux.Length;
 
                 // Scan forward for a call instruction, which is the call to FRenderTargetPool::FindFreeElement
                 // We're going to do a linear disassembly scan here, looking for any kind of call
                 // In modular builds, it calls via an import table, so we can't just scan for E8 calls
                 std::optional<uintptr_t> find_free_element{};
 
-                utility::exhaustive_decode((uint8_t*)*scene_depth_z_instr, 20, [&](INSTRUX& instr, uintptr_t ip) {
+                utility::exhaustive_decode((uint8_t*)scene_depth_z_post_instruction, 20, [&](INSTRUX& instr, uintptr_t ip) {
                     if (find_free_element) {
                         return utility::ExhaustionResult::BREAK;
                     }
