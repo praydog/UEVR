@@ -67,6 +67,8 @@ VRRuntime::Error OpenXR::synchronize_frame() {
     this->frame_state = {XR_TYPE_FRAME_STATE};
     auto result = xrWaitFrame(this->session, &frame_wait_info, &this->frame_state);
 
+    //this->frame_state_queue[(this->internal_render_frame_count + 1) % this->frame_state_queue.size()] = this->frame_state;
+
     this->end_profile("xrWaitFrame");
 
     if (result != XR_SUCCESS) {
@@ -97,7 +99,18 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
 
     uint32_t view_count{};
 
-    const auto display_time = this->frame_state.predictedDisplayTime + (XrDuration)(this->frame_state.predictedDisplayPeriod * this->prediction_scale);
+    bool should_enqueue = false;
+
+    if (frame_count == 0) {
+        frame_count = ++this->internal_frame_count;
+        should_enqueue = true;
+    } else {
+        this->internal_frame_count = frame_count;
+    }
+
+    this->frame_state_queue[frame_count % this->frame_state_queue.size()] = this->frame_state;
+    const auto& pipelined_frame_state = this->frame_state_queue[frame_count % this->frame_state_queue.size()];
+    const auto display_time = pipelined_frame_state.predictedDisplayTime + (XrDuration)(pipelined_frame_state.predictedDisplayPeriod * this->prediction_scale);
 
     if (display_time == 0) {
         return VRRuntime::Error::SUCCESS;
@@ -127,16 +140,8 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
         return (VRRuntime::Error)result;
     }
 
-    bool should_enqueue = false;
-
-    if (frame_count == 0) {
-        frame_count = ++this->internal_frame_count;
-        should_enqueue = true;
-    } else {
-        this->internal_frame_count = frame_count;
-    }
-
     this->stage_view_queue[frame_count % this->stage_view_queue.size()] = this->stage_views;
+    //this->frame_state_queue[frame_count % this->frame_state_queue.size()] = this->frame_state;
     
     if (should_enqueue) {
         enqueue_render_poses_unsafe(frame_count); // because we've already locked the mutexes.
@@ -413,15 +418,19 @@ void OpenXR::destroy() {
     this->frame_began = false;
 }
 
-std::vector<XrView> OpenXR::get_stage_view_for_submit() {
+OpenXR::SubmitState OpenXR::get_submit_state() {
     std::scoped_lock _{ this->sync_mtx };
     std::unique_lock __{ this->pose_mtx };
 
-    const auto last_view = !this->has_render_frame_count ? get_current_stage_view() : get_stage_view(this->internal_render_frame_count);
+    SubmitState out{};
+
+    out.stage_views = !this->has_render_frame_count ? get_current_stage_view() : get_stage_view(this->internal_render_frame_count);
+    out.frame_state = !this->has_render_frame_count ? this->frame_state : get_frame_state(this->internal_render_frame_count);
     this->has_render_frame_count = false;
 
-    return last_view;
+    return out;
 }
+
 
 void OpenXR::enqueue_render_poses(uint32_t frame_count) {
     std::scoped_lock _{ this->sync_mtx };
@@ -1384,21 +1393,29 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
             return XR_ERROR_VALIDATION_FAILURE;
         }
 
-        if (has_depth && (!this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::AFR_DEPTH_LEFT_EYE) || !this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::AFR_DEPTH_RIGHT_EYE))) {
+        /*if (has_depth && (!this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::AFR_DEPTH_LEFT_EYE) || !this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::AFR_DEPTH_RIGHT_EYE))) {
             spdlog::error("[VR] AFR depth swapchains not created");
             return XR_ERROR_VALIDATION_FAILURE;
-        }
+        }*/
+
+        has_depth = has_depth && this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::AFR_DEPTH_LEFT_EYE) && this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::AFR_DEPTH_RIGHT_EYE);
     } else {
         if (!this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::DOUBLE_WIDE)) {
             spdlog::error("[VR] Double wide swapchain not created");
             return XR_ERROR_VALIDATION_FAILURE;
         }
 
-        if (has_depth && !this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::DEPTH)) {
+        /*if (has_depth && !this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::DEPTH)) {
             spdlog::error("[VR] Double wide depth swapchain not created");
             return XR_ERROR_VALIDATION_FAILURE;
-        }
+        }*/
+
+        has_depth = has_depth && this->swapchains.contains((uint32_t)OpenXR::SwapchainIndex::DEPTH);
     }
+
+    const auto submit_state = this->get_submit_state();
+    const auto& pipelined_stage_views = submit_state.stage_views;
+    const auto& pipelined_frame_state = submit_state.frame_state;
 
     this->projection_layer_cache.clear();
 
@@ -1408,10 +1425,8 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
 
     // we CANT push the layers every time, it cause some layer error
     // in xrEndFrame, so we must only do it when shouldRender is true
-    if (this->frame_state.shouldRender == XR_TRUE) {
-        const auto stage_views = get_stage_view_for_submit();
-
-        projection_layer_views.resize(stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
+    if (pipelined_frame_state.shouldRender == XR_TRUE) {
+        projection_layer_views.resize(pipelined_stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
         depth_layers.resize(projection_layer_views.size(), {XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR});
 
         for (auto i = 0; i < projection_layer_views.size(); ++i) {
@@ -1428,8 +1443,8 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
             }
 
             projection_layer_views[i].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-            projection_layer_views[i].pose = stage_views[i].pose;
-            projection_layer_views[i].fov = stage_views[i].fov;
+            projection_layer_views[i].pose = pipelined_stage_views[i].pose;
+            projection_layer_views[i].fov = pipelined_stage_views[i].fov;
             projection_layer_views[i].subImage.swapchain = swapchain->handle;
 
             if (is_afr) {
@@ -1475,8 +1490,8 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
                 const auto nearz = sdk::globals::get_near_clipping_plane() / wtm;
 
                 depth_layers[i].nearZ = FLT_MAX;
-                depth_layers[i].farZ = nearz * VR::get()->get_depth_scale(); // todo: add global world scale into this...?
-
+                depth_layers[i].farZ = nearz * VR::get()->get_depth_scale();
+                
                 projection_layer_views[i].next = &depth_layers[i];
             }
         }
@@ -1497,11 +1512,12 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
     }
 
     XrFrameEndInfo frame_end_info{XR_TYPE_FRAME_END_INFO};
-    frame_end_info.displayTime = this->frame_state.predictedDisplayTime;
+    frame_end_info.displayTime = pipelined_frame_state.predictedDisplayTime;
     frame_end_info.environmentBlendMode = this->blend_mode;
     frame_end_info.layerCount = (uint32_t)layers.size();
     frame_end_info.layers = layers.data();
 
+    //spdlog::info("[VR] display time diff: {}", pipelined_frame_state.predictedDisplayTime - this->frame_state.predictedDisplayTime);
     //spdlog::info("[VR] Ending frame, {} layers", frame_end_info.layerCount);
     //spdlog::info("[VR] Ending frame, layer ptr: {:x}", (uintptr_t)frame_end_info.layers);
 

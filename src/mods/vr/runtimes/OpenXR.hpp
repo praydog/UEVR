@@ -85,7 +85,12 @@ struct OpenXR final : public VRRuntime {
     void enqueue_render_poses(uint32_t frame_count) override;
     void enqueue_render_poses_unsafe(uint32_t frame_count);
 
-    std::vector<XrView> get_stage_view_for_submit();
+    struct SubmitState {
+        std::vector<XrView> stage_views{};
+        XrFrameState frame_state{XR_TYPE_FRAME_STATE};
+    };
+
+    SubmitState get_submit_state();
 
 public:
     // openxr quaternions are xyzw and glm is wxyz
@@ -185,6 +190,7 @@ public:
     //std::deque<std::vector<XrView>> stage_view_queue{};
     std::array<std::vector<XrView>, 3> stage_view_queue{};
     std::array<XrSpaceLocation, 3> view_space_location_queue{};
+    std::array<XrFrameState, 3> frame_state_queue{};
 
     const auto& get_stage_view(uint32_t frame_count) {
         return stage_view_queue[frame_count % stage_view_queue.size()];
@@ -200,6 +206,14 @@ public:
 
     const auto& get_current_view_space_location() {
         return get_view_space_location(internal_frame_count);
+    }
+
+    const auto& get_frame_state(uint32_t frame_count) {
+        return frame_state_queue[frame_count % frame_state_queue.size()];
+    }
+
+    const auto& get_current_frame_state() {
+        return get_frame_state(internal_frame_count);
     }
     
     const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 5.0f, 1.0f) };

@@ -967,6 +967,7 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
             const auto now_frame = frame_count % m_openxr->view_space_location_queue.size();
             m_openxr->view_space_location_queue[now_frame] = m_openxr->view_space_location_queue[last_frame];
             m_openxr->stage_view_queue[now_frame] = m_openxr->stage_view_queue[last_frame];
+            m_openxr->frame_state_queue[now_frame] = m_openxr->frame_state_queue[last_frame];
         } else {
             const auto last_frame = (frame_count - 1) % m_openvr->pose_queue.size();
             const auto now_frame = frame_count % m_openvr->pose_queue.size();
