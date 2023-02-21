@@ -854,16 +854,22 @@ void D3D12Component::OpenXR::destroy_swapchains() {
 
     spdlog::info("[VR] Destroying swapchains.");
 
-    for (auto i = 0; i < this->contexts.size(); ++i) {
-        auto& ctx = this->contexts[i];
+    for (auto& it : this->contexts) {
+        auto& ctx = it.second;
+        const auto i = it.first;
+
         ctx.texture_contexts.clear();
 
-        auto result = xrDestroySwapchain(VR::get()->m_openxr->swapchains[i].handle);
+        if (VR::get()->m_openxr->swapchains.contains(i)) {
+            auto result = xrDestroySwapchain(VR::get()->m_openxr->swapchains[i].handle);
 
-        if (result != XR_SUCCESS) {
-            spdlog::error("[VR] Failed to destroy swapchain {}.", i);
+            if (result != XR_SUCCESS) {
+                spdlog::error("[VR] Failed to destroy swapchain {}.", i);
+            } else {
+                spdlog::info("[VR] Destroyed swapchain {}.", i);
+            }
         } else {
-            spdlog::info("[VR] Destroyed swapchain {}.", i);
+            spdlog::error("[VR] Swapchain {} does not exist.", i);
         }
 
         for (auto& tex : ctx.textures) {
