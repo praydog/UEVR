@@ -1473,8 +1473,9 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
                 depth_layers[i].subImage.swapchain = depth_swapchain->handle;
 
                 if (is_afr) {
+                    // Always the left half of the depth texture.
                     depth_layers[i].subImage.imageRect.offset = {0, 0};
-                    depth_layers[i].subImage.imageRect.extent = {depth_swapchain->width, depth_swapchain->height};
+                    depth_layers[i].subImage.imageRect.extent = {(depth_swapchain->width / 2), depth_swapchain->height};
                 } else {
                     depth_layers[i].subImage.imageRect.offset = {(depth_swapchain->width / 2) * i, 0};
                     depth_layers[i].subImage.imageRect.extent = {depth_swapchain->width / 2, depth_swapchain->height};

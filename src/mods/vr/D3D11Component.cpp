@@ -27,7 +27,7 @@ namespace pixel_shader1 {
 #endif
 
 #define SHADER_TEMP_DISABLED
-#define AFR_DEPTH_TEMP_DISABLED
+//#define AFR_DEPTH_TEMP_DISABLED
 
 namespace vrmod {
 vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
@@ -1174,11 +1174,13 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
 
     // Depth textures
     if (vr->get_openxr_runtime()->enabled_extensions.contains(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME)) {
+        // Even when using AFR, the depth tex is always the size of a double wide.
+        // That's kind of unfortunate in terms of how many copies we have to do but whatever.
         auto depth_swapchain_create_info = standard_swapchain_create_info;
         depth_swapchain_create_info.format = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
         depth_swapchain_create_info.createFlags = 0;
         depth_swapchain_create_info.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT;
-        depth_swapchain_create_info.width = vr->get_hmd_width() * double_wide_multiple;
+        depth_swapchain_create_info.width = vr->get_hmd_width() * 2;
         depth_swapchain_create_info.height = vr->get_hmd_height();
 
         auto depth_desc = backbuffer_desc;
@@ -1199,7 +1201,7 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
             depth_swapchain_create_info.height = depth_desc.Height;
         } else {
             spdlog::error("[VR] Depth texture is null! Using default values");
-            depth_desc.Width = vr->get_hmd_width() * double_wide_multiple;
+            depth_desc.Width = vr->get_hmd_width() * 2;
             depth_desc.Height = vr->get_hmd_height();
         }
 
