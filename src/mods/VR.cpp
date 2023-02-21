@@ -943,6 +943,12 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
         sdk::set_cvar_data_int(L"SlateRHIRenderer", L"r.HDR.UI.CompositeMode", 0);
     }
 
+    if (m_disable_blur_widgets->value()) {
+        if (auto val = sdk::get_cvar_int(L"Slate", L"Slate.AllowBackgroundBlurWidgets"); val && *val != 0) {
+            sdk::set_cvar_int(L"Slate", L"Slate.AllowBackgroundBlurWidgets", 0);
+        }
+    }
+
     if (!is_using_afr()) {
         // Forcefully disable r.HZBOcclusion, it doesn't work with native stereo mode
         if (m_disable_hzbocclusion->value()) {
@@ -1505,6 +1511,7 @@ void VR::on_draw_ui() {
     ImGui::BeginGroup();
     m_disable_hzbocclusion->draw("Disable HZBOcclusion");
     m_disable_hdr_compositing->draw("Disable HDR Composition");
+    m_disable_blur_widgets->draw("Disable Blur Widgets");
     m_uncap_framerate->draw("Uncap Framerate");
     m_enable_gui->draw("Enable GUI");
     ImGui::EndGroup();
