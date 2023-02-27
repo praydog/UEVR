@@ -5,6 +5,8 @@
 
 #include <sdk/FRenderTargetPool.hpp>
 #include <sdk/EngineModule.hpp>
+
+#include "../VR.hpp"
 #include "RenderTargetPoolHook.hpp"
 
 RenderTargetPoolHook* g_hook{nullptr};
@@ -27,6 +29,11 @@ bool RenderTargetPoolHook::hook() {
 
     if (!find_free_element) {
         SPDLOG_ERROR("Failed to find FRenderTargetPool::FindFreeElement, cannot hook");
+        return false;
+    }
+
+    if (VR::get()->get_fake_stereo_hook()->has_double_precision()) {
+        spdlog::error("Render target pool hook is temporarily disabled on UE5, sorry :(");
         return false;
     }
 
@@ -60,18 +67,7 @@ bool RenderTargetPoolHook::find_free_element_hook(
 
             if (out->reference != nullptr && out->reference->item.texture.texture != nullptr) {
                 const auto resource = out->reference->item.texture.texture->get_native_resource();
-                
-                if (resource != nullptr) {
-                    //SPDLOG_INFO("Native resource {}: {:x}", utility::narrow(name), (uintptr_t)resource);
-                    g_hook->m_d3d_textures[name] = (IUnknown*)resource;
-                } else {
-                    g_hook->m_d3d_textures[name].Reset();
-                }
-            } else {
-                g_hook->m_d3d_textures[name].Reset();
             }
-        } else {
-            g_hook->m_d3d_textures[name].Reset();
         }
     }
 

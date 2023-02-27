@@ -296,6 +296,10 @@ public:
         return m_depth_scale;
     }
 
+    auto& get_fake_stereo_hook() {
+        return m_fake_stereo_hook;
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;

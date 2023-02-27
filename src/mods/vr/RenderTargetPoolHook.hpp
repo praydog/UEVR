@@ -32,10 +32,21 @@ public:
     template<typename T>
     Microsoft::WRL::ComPtr<T> get_texture(const std::wstring& name) {
         std::scoped_lock _{m_mutex};
-        if (auto it = m_d3d_textures.find(name); it != m_d3d_textures.end()) {
-            Microsoft::WRL::ComPtr<T> result{};
-            it->second.As(&result);
-            return result;
+        if (auto it = m_render_targets.find(name); it != m_render_targets.end()) {
+            const auto& rt = it->second;
+            const auto& tex = rt->item.texture.texture;
+
+            if (tex == nullptr) {
+                return nullptr;
+            }
+
+            auto native_resource = (T*)tex->get_native_resource();
+
+            if (native_resource == nullptr) {
+                return nullptr;
+            }
+
+            return native_resource;
         }
 
         return nullptr;
@@ -60,5 +71,4 @@ private:
     std::recursive_mutex m_mutex{};
     SafetyHookInline m_find_free_element_hook{};
     std::unordered_map<std::wstring, IPooledRenderTarget*> m_render_targets{};
-    std::unordered_map<std::wstring, Microsoft::WRL::ComPtr<IUnknown>> m_d3d_textures{};
 };
