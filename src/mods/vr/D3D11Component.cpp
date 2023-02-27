@@ -112,10 +112,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         clear_tex((ID3D11Resource*)ui_target->get_native_resource());
     }
 
-    auto& rt_pool = vr->get_render_target_pool_hook();
     ComPtr<ID3D11Texture2D> scene_depth_tex{};
 
-    if (vr->m_pass_depth_to_runtime) {
+    if (vr->m_pass_depth_to_runtime && runtime->is_depth_allowed()) {
+        auto& rt_pool = vr->get_render_target_pool_hook();
         scene_depth_tex = rt_pool->get_texture<ID3D11Texture2D>(L"SceneDepthZ");
 
     #ifdef AFR_DEPTH_TEMP_DISABLED
@@ -432,11 +432,27 @@ void D3D11Component::on_reset(VR* vr) {
     m_is_shader_setup = false;
 
     if (vr->get_runtime()->is_openxr() && vr->get_runtime()->loaded) {
+        auto& rt_pool = vr->get_render_target_pool_hook();
+        ComPtr<ID3D11Texture2D> scene_depth_tex{rt_pool->get_texture<ID3D11Texture2D>(L"SceneDepthZ")};
+
+        bool needs_depth_resize = false;
+
+        if (scene_depth_tex != nullptr) {
+            D3D11_TEXTURE2D_DESC desc{};
+            scene_depth_tex->GetDesc(&desc);
+            needs_depth_resize = vr->m_openxr->needs_depth_resize(desc.Width, desc.Height);
+
+            if (needs_depth_resize) {
+                spdlog::info("[VR] SceneDepthZ needs resize ({}x{})", desc.Width, desc.Height);
+            }
+        }
+
         if (m_openxr.last_resolution[0] != vr->get_hmd_width() || m_openxr.last_resolution[1] != vr->get_hmd_height() ||
             vr->m_openxr->swapchains.empty() ||
             g_framework->get_d3d11_rt_size()[0] != vr->m_openxr->swapchains[(uint32_t)runtimes::OpenXR::SwapchainIndex::UI].width ||
             g_framework->get_d3d11_rt_size()[1] != vr->m_openxr->swapchains[(uint32_t)runtimes::OpenXR::SwapchainIndex::UI].height ||
-            m_last_afr_state != vr->is_using_afr())
+            m_last_afr_state != vr->is_using_afr() ||
+            needs_depth_resize)
         {
             m_openxr.create_swapchains();
             m_last_afr_state = vr->is_using_afr();
@@ -1170,8 +1186,8 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
 
     if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, desktop_rt_swapchain_create_info, desktop_rt_desc)) {
         return err;
-    }
 
+    }
     // Depth textures
     if (vr->get_openxr_runtime()->enabled_extensions.contains(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME)) {
         // Even when using AFR, the depth tex is always the size of a double wide.

@@ -49,6 +49,10 @@ struct OpenXR final : public VRRuntime {
         return VRRuntime::ready() && this->session_ready;
     }
 
+    bool is_depth_allowed() const override {
+        return this->enabled_extensions.contains(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME);
+    }
+
     void on_config_load(const utility::Config& cfg, bool set_defaults) override;
     void on_config_save(utility::Config& cfg) override;
     void on_draw_ui() override;
@@ -84,13 +88,6 @@ struct OpenXR final : public VRRuntime {
     void destroy() override;
     void enqueue_render_poses(uint32_t frame_count) override;
     void enqueue_render_poses_unsafe(uint32_t frame_count);
-
-    struct SubmitState {
-        std::vector<XrView> stage_views{};
-        XrFrameState frame_state{XR_TYPE_FRAME_STATE};
-    };
-
-    SubmitState get_submit_state();
 
 public:
     // openxr quaternions are xyzw and glm is wxyz
@@ -162,6 +159,7 @@ public:
     std::chrono::high_resolution_clock::time_point profiler_start_time{};
 
     std::recursive_mutex sync_mtx{};
+    std::recursive_mutex swapchain_mtx{};
 
     XrInstance instance{XR_NULL_HANDLE};
     XrSession session{XR_NULL_HANDLE};
@@ -215,6 +213,34 @@ public:
     const auto& get_current_frame_state() {
         return get_frame_state(internal_frame_count);
     }
+
+    bool needs_depth_resize(uint32_t w, uint32_t h) {
+        std::scoped_lock _{swapchain_mtx};
+
+        if (!is_depth_allowed()) {
+            return false;
+        }
+
+        for (auto& [i, swapchain] : swapchains) {
+            if (i == (uint32_t)SwapchainIndex::DEPTH ||
+                i == (uint32_t)SwapchainIndex::AFR_DEPTH_LEFT_EYE ||
+                i == (uint32_t)SwapchainIndex::AFR_DEPTH_RIGHT_EYE) 
+            {
+                if (swapchain.width != w || swapchain.height != h) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    struct SubmitState {
+        std::vector<XrView> stage_views{};
+        XrFrameState frame_state{XR_TYPE_FRAME_STATE};
+    };
+
+    SubmitState get_submit_state();
     
     const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 5.0f, 1.0f) };
 

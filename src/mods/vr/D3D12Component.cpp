@@ -117,10 +117,10 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         }
     }
 
-    auto& rt_pool = vr->get_render_target_pool_hook();
     ComPtr<ID3D12Resource> scene_depth_tex{};
 
-    if (vr->m_pass_depth_to_runtime) {
+    if (vr->m_pass_depth_to_runtime && runtime->is_depth_allowed()) {
+        auto& rt_pool = vr->get_render_target_pool_hook();
         scene_depth_tex = rt_pool->get_texture<ID3D12Resource>(L"SceneDepthZ");
 
     #ifdef AFR_DEPTH_TEMP_DISABLED
@@ -460,11 +460,27 @@ void D3D12Component::on_reset(VR* vr) {
             }
         }
 
+        auto& rt_pool = vr->get_render_target_pool_hook();
+        ComPtr<ID3D12Resource> scene_depth_tex{rt_pool->get_texture<ID3D12Resource>(L"SceneDepthZ")};
+
+        bool needs_depth_resize = false;
+
+        if (scene_depth_tex != nullptr) {
+            const auto desc = scene_depth_tex->GetDesc();
+            needs_depth_resize = vr->m_openxr->needs_depth_resize(desc.Width, desc.Height);
+
+            if (needs_depth_resize) {
+                spdlog::info("[VR] SceneDepthZ needs resize ({}x{})", desc.Width, desc.Height);
+            }
+        }
+
+
         if (m_openxr.last_resolution[0] != vr->get_hmd_width() || m_openxr.last_resolution[1] != vr->get_hmd_height() ||
             vr->m_openxr->swapchains.empty() ||
             g_framework->get_d3d12_rt_size()[0] != vr->m_openxr->swapchains[(uint32_t)runtimes::OpenXR::SwapchainIndex::UI].width ||
             g_framework->get_d3d12_rt_size()[1] != vr->m_openxr->swapchains[(uint32_t)runtimes::OpenXR::SwapchainIndex::UI].height ||
-            m_last_afr_state != vr->is_using_afr()) 
+            m_last_afr_state != vr->is_using_afr() ||
+            needs_depth_resize)
         {
             m_openxr.create_swapchains();
             m_last_afr_state = vr->is_using_afr();
@@ -784,12 +800,14 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
     }
 
     // Depth textures
-    if (vr->get_openxr_runtime()->enabled_extensions.contains(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME)) {
+    if (vr->get_openxr_runtime()->is_depth_allowed()) {
+        // Even when using AFR, the depth tex is always the size of a double wide.
+        // That's kind of unfortunate in terms of how many copies we have to do but whatever.
         auto depth_swapchain_create_info = standard_swapchain_create_info;
         depth_swapchain_create_info.format = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
         depth_swapchain_create_info.createFlags = 0;
         depth_swapchain_create_info.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT;
-        depth_swapchain_create_info.width = vr->get_hmd_width() * double_wide_multiple;
+        depth_swapchain_create_info.width = vr->get_hmd_width() * 2;
         depth_swapchain_create_info.height = vr->get_hmd_height();
 
         auto depth_desc = backbuffer_desc;
@@ -801,7 +819,7 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
 
         depth_desc.Flags &= ~D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
-        depth_desc.Width = vr->get_hmd_width() * double_wide_multiple;
+        depth_desc.Width = vr->get_hmd_width() * 2;
         depth_desc.Height = vr->get_hmd_height();
 
         auto& rt_pool = vr->get_render_target_pool_hook();
@@ -821,7 +839,7 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
             depth_swapchain_create_info.height = depth_desc.Height;
         } else {
             spdlog::error("[VR] Depth texture is null! Using default values");
-            depth_desc.Width = vr->get_hmd_width() * double_wide_multiple;
+            depth_desc.Width = vr->get_hmd_width() * 2;
             depth_desc.Height = vr->get_hmd_height();
         }
 
@@ -855,6 +873,8 @@ void D3D12Component::OpenXR::destroy_swapchains() {
 	if (this->contexts.empty()) {
         return;
     }
+
+    std::scoped_lock __{VR::get()->m_openxr->swapchain_mtx};
 
     spdlog::info("[VR] Destroying swapchains.");
 

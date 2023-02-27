@@ -56,6 +56,10 @@ struct OpenVR final : public VRRuntime {
         std::unique_lock _{ this->pose_mtx };
     }
 
+    bool is_depth_allowed() const override {
+        return true;
+    }
+
     bool is_hmd_active{false};
     bool was_hmd_active{true};
 
