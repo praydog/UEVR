@@ -446,17 +446,15 @@ void OpenXR::enqueue_render_poses_unsafe(uint32_t frame_count) {
 
 
 std::string OpenXR::get_result_string(XrResult result) const {
-    std::string result_string{};
-    result_string.resize(XR_MAX_RESULT_STRING_SIZE);
-    xrResultToString(this->instance, result, result_string.data());
+    char result_string[XR_MAX_RESULT_STRING_SIZE]{};
+    xrResultToString(this->instance, result, result_string);
 
     return result_string;
 }
 
 std::string OpenXR::get_structure_string(XrStructureType type) const {
-    std::string structure_string{};
-    structure_string.resize(XR_MAX_STRUCTURE_NAME_SIZE);
-    xrStructureTypeToString(this->instance, type, structure_string.data());
+    char structure_string[XR_MAX_STRUCTURE_NAME_SIZE]{};
+    xrStructureTypeToString(this->instance, type, structure_string);
 
     return structure_string;
 }
