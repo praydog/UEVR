@@ -67,7 +67,16 @@ VRRuntime::Error OpenXR::synchronize_frame() {
     this->frame_state = {XR_TYPE_FRAME_STATE};
     auto result = xrWaitFrame(this->session, &frame_wait_info, &this->frame_state);
 
-    //this->frame_state_queue[(this->internal_render_frame_count + 1) % this->frame_state_queue.size()] = this->frame_state;
+    // Initialize all the existing frame states if they aren't already so we don't get some random error when calling xrEndFrame
+    for (auto& frame_state : this->frame_state_queue) {
+        if (frame_state.predictedDisplayTime == 0) {
+            frame_state = this->frame_state;
+        }
+    }
+
+    if (this->last_submit_state.frame_count > 0) {
+        this->frame_state_queue[(this->last_submit_state.frame_count + 1) % this->frame_state_queue.size()] = this->frame_state;
+    }
 
     this->end_profile("xrWaitFrame");
 
@@ -108,7 +117,7 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
         this->internal_frame_count = frame_count;
     }
 
-    this->frame_state_queue[frame_count % this->frame_state_queue.size()] = this->frame_state;
+    //this->frame_state_queue[frame_count % this->frame_state_queue.size()] = this->frame_state;
     const auto& pipelined_frame_state = this->frame_state_queue[frame_count % this->frame_state_queue.size()];
     const auto display_time = pipelined_frame_state.predictedDisplayTime + (XrDuration)(pipelined_frame_state.predictedDisplayPeriod * this->prediction_scale);
 
@@ -422,13 +431,12 @@ OpenXR::SubmitState OpenXR::get_submit_state() {
     std::scoped_lock _{ this->sync_mtx };
     std::unique_lock __{ this->pose_mtx };
 
-    SubmitState out{};
-
-    out.stage_views = !this->has_render_frame_count ? get_current_stage_view() : get_stage_view(this->internal_render_frame_count);
-    out.frame_state = !this->has_render_frame_count ? this->frame_state : get_frame_state(this->internal_render_frame_count);
+    last_submit_state.stage_views = !this->has_render_frame_count ? get_current_stage_view() : get_stage_view(this->internal_render_frame_count);
+    last_submit_state.frame_state = !this->has_render_frame_count ? this->frame_state : get_frame_state(this->internal_render_frame_count);
+    last_submit_state.frame_count = !this->has_render_frame_count ? this->internal_frame_count : this->internal_render_frame_count;
     this->has_render_frame_count = false;
 
-    return out;
+    return last_submit_state;
 }
 
 
@@ -1526,6 +1534,11 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
     
     if (result != XR_SUCCESS) {
         spdlog::error("[VR] xrEndFrame failed: {}", this->get_result_string(result));
+
+        if (result == XR_ERROR_TIME_INVALID) {
+             spdlog::error("[VR] xrEndFrame time: submitted: {} vs frame_state: {}", frame_end_info.displayTime, this->frame_state.predictedDisplayTime);
+             spdlog::error("[VR] display time diff: {}", pipelined_frame_state.predictedDisplayTime - this->frame_state.predictedDisplayTime);
+        }
     }
     
     this->frame_began = false;

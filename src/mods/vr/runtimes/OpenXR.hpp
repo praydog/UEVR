@@ -238,8 +238,10 @@ public:
     struct SubmitState {
         std::vector<XrView> stage_views{};
         XrFrameState frame_state{XR_TYPE_FRAME_STATE};
+        uint32_t frame_count{0};
     };
 
+    SubmitState last_submit_state{};
     SubmitState get_submit_state();
     
     const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 5.0f, 1.0f) };
