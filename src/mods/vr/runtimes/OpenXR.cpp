@@ -76,6 +76,10 @@ VRRuntime::Error OpenXR::synchronize_frame() {
 
     if (this->last_submit_state.frame_count > 0) {
         this->frame_state_queue[(this->last_submit_state.frame_count + 1) % this->frame_state_queue.size()] = this->frame_state;
+
+        if (VR::get()->is_using_afr()) {
+            this->frame_state_queue[(this->last_submit_state.frame_count + 2) % this->frame_state_queue.size()] = this->frame_state;
+        }
     }
 
     this->end_profile("xrWaitFrame");
