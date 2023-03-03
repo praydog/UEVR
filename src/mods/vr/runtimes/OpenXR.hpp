@@ -191,7 +191,13 @@ public:
     std::array<XrFrameState, 3> frame_state_queue{};
 
     const auto& get_stage_view(uint32_t frame_count) {
-        return stage_view_queue[frame_count % stage_view_queue.size()];
+        const auto& result = stage_view_queue[frame_count % stage_view_queue.size()];
+
+        if (result.empty()) {
+            return stage_views;
+        }
+
+        return result;
     }
 
     const auto& get_current_stage_view() {
@@ -207,7 +213,13 @@ public:
     }
 
     const auto& get_frame_state(uint32_t frame_count) {
-        return frame_state_queue[frame_count % frame_state_queue.size()];
+        const auto& result = frame_state_queue[frame_count % frame_state_queue.size()];
+
+        if (result.predictedDisplayTime == 0) {
+            return frame_state;
+        }
+
+        return result;
     }
 
     const auto& get_current_frame_state() {
