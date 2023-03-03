@@ -23,10 +23,19 @@ float get_near_clipping_plane() {
             return nullptr;
         }
 
-        const auto bEnableOnScreenDebugMessages_instr = utility::scan_displacement_reference(engine, *bEnableOnScreenDebugMessages_str);
+        const auto bEnableOnScreenDebugMessages_ref = utility::scan_displacement_reference(engine, *bEnableOnScreenDebugMessages_str);
+
+        if (!bEnableOnScreenDebugMessages_ref) {
+            SPDLOG_ERROR("Failed to find reference to bEnableOnScreenDebugMessages string, cannot find GNearClippingPlane");
+            return nullptr;
+        }
+
+        spdlog::info("Found reference to bEnableOnScreenDebugMessages at {:x}", *bEnableOnScreenDebugMessages_ref);
+
+        const auto bEnableOnScreenDebugMessages_instr = utility::resolve_instruction(*bEnableOnScreenDebugMessages_ref);
 
         if (!bEnableOnScreenDebugMessages_instr) {
-            SPDLOG_ERROR("Failed to find reference to bEnableOnScreenDebugMessages string, cannot find GNearClippingPlane");
+            SPDLOG_ERROR("Failed to find instruction containing reference to bEnableOnScreenDebugMessages string, cannot find GNearClippingPlane");
             return nullptr;
         }
 
@@ -36,7 +45,7 @@ float get_near_clipping_plane() {
         bool found = false;
         float* result = nullptr;
 
-        utility::exhaustive_decode((uint8_t*)*bEnableOnScreenDebugMessages_instr, 50, [&](const INSTRUX& instr, uintptr_t ip) -> utility::ExhaustionResult {
+        utility::exhaustive_decode((uint8_t*)bEnableOnScreenDebugMessages_instr->addr, 50, [&](const INSTRUX& instr, uintptr_t ip) -> utility::ExhaustionResult {
             if (found) {
                 return utility::ExhaustionResult::BREAK;
             }
@@ -67,7 +76,7 @@ float get_near_clipping_plane() {
         // Fallback for modular builds
         std::optional<uintptr_t> last_ptr_store{};
         std::optional<uint32_t> last_ptr_stored_register{};
-        utility::exhaustive_decode((uint8_t*)*bEnableOnScreenDebugMessages_instr, 50, [&](const INSTRUX& instr, uintptr_t ip) -> utility::ExhaustionResult {
+        utility::exhaustive_decode((uint8_t*)bEnableOnScreenDebugMessages_instr->addr, 50, [&](const INSTRUX& instr, uintptr_t ip) -> utility::ExhaustionResult {
             if (found) {
                 return utility::ExhaustionResult::BREAK;
             }
