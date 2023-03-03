@@ -118,6 +118,18 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         auto& rt_pool = vr->get_render_target_pool_hook();
         scene_depth_tex = rt_pool->get_texture<ID3D11Texture2D>(L"SceneDepthZ");
 
+        if (scene_depth_tex != nullptr) {
+            D3D11_TEXTURE2D_DESC desc{};
+            scene_depth_tex->GetDesc(&desc);
+
+            if (runtime->is_openxr()) {
+                if (vr->m_openxr->needs_depth_resize(desc.Width, desc.Height)) {
+                    spdlog::info("[OpenXR] Depth size changed, recreating swapchains [{}x{}]", desc.Width, desc.Height);
+                    m_openxr.create_swapchains(); // recreate swapchains to match the new depth size
+                }
+            }
+        }
+
     #ifdef AFR_DEPTH_TEMP_DISABLED
         if (is_actually_afr) {
             scene_depth_tex.Reset();
@@ -1189,10 +1201,10 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
     auto virtual_desktop_dummy_desc = backbuffer_desc;
     auto virtual_desktop_dummy_swapchain_create_info = standard_swapchain_create_info;
 
-    virtual_desktop_dummy_desc.Width = 64;
-    virtual_desktop_dummy_desc.Height = 64;
-    virtual_desktop_dummy_swapchain_create_info.width = 64;
-    virtual_desktop_dummy_swapchain_create_info.height = 64;
+    virtual_desktop_dummy_desc.Width = 4;
+    virtual_desktop_dummy_desc.Height = 4;
+    virtual_desktop_dummy_swapchain_create_info.width = 4;
+    virtual_desktop_dummy_swapchain_create_info.height = 4;
     virtual_desktop_dummy_swapchain_create_info.createFlags = XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT; // so we dont need to acquire/release/wait
 
 

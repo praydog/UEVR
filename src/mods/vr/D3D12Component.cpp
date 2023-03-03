@@ -123,7 +123,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         auto& rt_pool = vr->get_render_target_pool_hook();
         scene_depth_tex = rt_pool->get_texture<ID3D12Resource>(L"SceneDepthZ");
 
-        /*if (scene_depth_tex != nullptr) {
+        if (scene_depth_tex != nullptr) {
             const auto desc = scene_depth_tex->GetDesc();
 
             if (runtime->is_openxr()) {
@@ -132,7 +132,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                     m_openxr.create_swapchains(); // recreate swapchains to match the new depth size
                 }
             }
-        }*/
+        }
 
     #ifdef AFR_DEPTH_TEMP_DISABLED
         if (is_actually_afr) {
