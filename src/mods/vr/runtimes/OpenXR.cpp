@@ -1429,6 +1429,31 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
     std::vector<XrCompositionLayerProjectionView> projection_layer_views{};
     std::vector<XrCompositionLayerDepthInfoKHR> depth_layers{};
 
+    // Dummy projection layers for Virtual Desktop. If we don't do this, timewarp does not work correctly on VD.
+    // the reasoning from ggodin (VD dev) is that VD composites all layers using the top layer's pose (apparently)
+    // I am actually not sure why this fixes the issue, but it does. and even makes the SteamVR overlay work completely fine.
+    XrCompositionLayerProjection dummy_projection_layer{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
+    std::array<XrCompositionLayerProjectionView, 2> dummy_projection_layer_views{};
+
+    const auto& vd_swapchain = this->swapchains[(uint32_t)OpenXR::SwapchainIndex::DUMMY_VIRTUAL_DESKTOP];
+
+    for (auto i = 0; i < dummy_projection_layer_views.size(); ++i) {
+        auto& view = dummy_projection_layer_views[i];
+        view = {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW};
+        view.pose = pipelined_stage_views[i].pose;
+        view.fov = pipelined_stage_views[i].fov;
+
+        view.subImage.swapchain = vd_swapchain.handle;
+        view.subImage.imageRect.offset = {(vd_swapchain.width / 2) * i, 0};
+        view.subImage.imageRect.extent = {(vd_swapchain.width / 2), vd_swapchain.height};
+        view.subImage.imageArrayIndex = 0;
+    }
+
+    dummy_projection_layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
+    dummy_projection_layer.viewCount = 2;
+    dummy_projection_layer.views = dummy_projection_layer_views.data();
+    dummy_projection_layer.space = this->stage_space;
+
     // we CANT push the layers every time, it cause some layer error
     // in xrEndFrame, so we must only do it when shouldRender is true
     if (pipelined_frame_state.shouldRender == XR_TRUE) {
@@ -1477,14 +1502,17 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
                 depth_layers[i].type = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR;
                 depth_layers[i].next = nullptr;
                 depth_layers[i].subImage.swapchain = depth_swapchain->handle;
+    
+                XrExtent2Di depth_extent = {depth_swapchain->width / 2, depth_swapchain->height};
+                depth_extent = {std::min<int>(get_width(), depth_extent.width), std::min<int>(get_height(), depth_extent.height)};
 
                 if (is_afr) {
                     // Always the left half of the depth texture.
                     depth_layers[i].subImage.imageRect.offset = {0, 0};
-                    depth_layers[i].subImage.imageRect.extent = {(depth_swapchain->width / 2), depth_swapchain->height};
+                    depth_layers[i].subImage.imageRect.extent = depth_extent;
                 } else {
-                    depth_layers[i].subImage.imageRect.offset = {(depth_swapchain->width / 2) * i, 0};
-                    depth_layers[i].subImage.imageRect.extent = {depth_swapchain->width / 2, depth_swapchain->height};
+                    depth_layers[i].subImage.imageRect.offset = {depth_extent.width * i, 0};
+                    depth_layers[i].subImage.imageRect.extent = depth_extent;
                 }
 
                 depth_layers[i].minDepth = 0.0f;
@@ -1508,6 +1536,8 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
         layer.space = this->stage_space;
         layer.viewCount = (uint32_t)projection_layer_views.size();
         layer.views = projection_layer_views.data();
+
+        layers.push_back((XrCompositionLayerBaseHeader*)&dummy_projection_layer);
 
         for (auto& l : this->projection_layer_cache) {
             layers.push_back((XrCompositionLayerBaseHeader*)&l);

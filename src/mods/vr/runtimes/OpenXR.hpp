@@ -256,6 +256,7 @@ public:
         // Standard native stereo swapchains
         DOUBLE_WIDE = STANDARD_START,
         DEPTH,
+        DUMMY_VIRTUAL_DESKTOP,
 
         STANDARD_END,
 

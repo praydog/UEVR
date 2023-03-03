@@ -1116,6 +1116,21 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
             return "Failed to enumerate swapchain images after texture creation.";
         }
 
+        if (swapchain_create_info.createFlags & XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT) {
+            for (uint32_t j = 0; j < image_count; ++j) {
+                // we dgaf so just acquire/wait/release. maybe later we can actually write something to it, but we dont care rn
+                XrSwapchainImageAcquireInfo acquire_info{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
+                XrSwapchainImageWaitInfo wait_info{XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
+                wait_info.timeout = XR_INFINITE_DURATION;
+                XrSwapchainImageReleaseInfo release_info{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
+
+                uint32_t index{};
+                xrAcquireSwapchainImage(swapchain.handle, &acquire_info, &index);
+                xrWaitSwapchainImage(swapchain.handle, &wait_info);
+                xrReleaseSwapchainImage(swapchain.handle, &release_info);
+            }
+        }
+
         return std::nullopt;
     };
 
@@ -1169,6 +1184,21 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
         if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_RIGHT_EYE, standard_swapchain_create_info, hmd_desc)) {
             return err;
         }
+    }
+
+    auto virtual_desktop_dummy_desc = backbuffer_desc;
+    auto virtual_desktop_dummy_swapchain_create_info = standard_swapchain_create_info;
+
+    virtual_desktop_dummy_desc.Width = 64;
+    virtual_desktop_dummy_desc.Height = 64;
+    virtual_desktop_dummy_swapchain_create_info.width = 64;
+    virtual_desktop_dummy_swapchain_create_info.height = 64;
+    virtual_desktop_dummy_swapchain_create_info.createFlags = XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT; // so we dont need to acquire/release/wait
+
+
+    // The virtual desktop dummy texture
+    if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::DUMMY_VIRTUAL_DESKTOP, virtual_desktop_dummy_swapchain_create_info, virtual_desktop_dummy_desc)) {
+        return err;
     }
 
     auto desktop_rt_swapchain_create_info = standard_swapchain_create_info;

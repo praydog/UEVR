@@ -123,6 +123,17 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         auto& rt_pool = vr->get_render_target_pool_hook();
         scene_depth_tex = rt_pool->get_texture<ID3D12Resource>(L"SceneDepthZ");
 
+        /*if (scene_depth_tex != nullptr) {
+            const auto desc = scene_depth_tex->GetDesc();
+
+            if (runtime->is_openxr()) {
+                if (vr->m_openxr->needs_depth_resize(desc.Width, desc.Height)) {
+                    spdlog::info("[OpenXR] Depth size changed, recreating swapchains [{}x{}]", desc.Width, desc.Height);
+                    m_openxr.create_swapchains(); // recreate swapchains to match the new depth size
+                }
+            }
+        }*/
+
     #ifdef AFR_DEPTH_TEMP_DISABLED
         if (is_actually_afr) {
             scene_depth_tex.Reset();
@@ -740,6 +751,21 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
             spdlog::info("[VR] AFTER Swapchain texture {} {} ref count: {}", i, j, ref_count);
         }
 
+        if (swapchain_create_info.createFlags & XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT) {
+            for (uint32_t j = 0; j < image_count; ++j) {
+                // we dgaf so just acquire/wait/release. maybe later we can actually write something to it, but we dont care rn
+                XrSwapchainImageAcquireInfo acquire_info{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
+                XrSwapchainImageWaitInfo wait_info{XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
+                wait_info.timeout = XR_INFINITE_DURATION;
+                XrSwapchainImageReleaseInfo release_info{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
+
+                uint32_t index{};
+                xrAcquireSwapchainImage(swapchain.handle, &acquire_info, &index);
+                xrWaitSwapchainImage(swapchain.handle, &wait_info);
+                xrReleaseSwapchainImage(swapchain.handle, &release_info);
+            }
+        }
+
         return std::nullopt;
     };
 
@@ -785,6 +811,20 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
         if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_RIGHT_EYE, standard_swapchain_create_info, hmd_desc)) {
             return err;
         }
+    }
+
+    auto virtual_desktop_dummy_desc = backbuffer_desc;
+    auto virtual_desktop_dummy_swapchain_create_info = standard_swapchain_create_info;
+
+    virtual_desktop_dummy_desc.Width = 4;
+    virtual_desktop_dummy_desc.Height = 4;
+    virtual_desktop_dummy_swapchain_create_info.width = 4;
+    virtual_desktop_dummy_swapchain_create_info.height = 4;
+    virtual_desktop_dummy_swapchain_create_info.createFlags = XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT; // so we dont need to acquire/release/wait
+
+    // The virtual desktop dummy texture
+    if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::DUMMY_VIRTUAL_DESKTOP, virtual_desktop_dummy_swapchain_create_info, virtual_desktop_dummy_desc)) {
+        return err;
     }
 
     auto desktop_rt_swapchain_create_info = standard_swapchain_create_info;
@@ -927,7 +967,6 @@ void D3D12Component::OpenXR::destroy_swapchains() {
         } else {
             spdlog::error("[VR] Swapchain {} does not exist.", i);
         }
-
 
         for (auto& tex : needs_release) {
             if (const auto ref_count = tex->Release(); ref_count != 0) {
