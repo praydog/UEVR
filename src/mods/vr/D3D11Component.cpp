@@ -1260,6 +1260,15 @@ void D3D11Component::OpenXR::destroy_swapchains() {
         auto& ctx = it.second;
         const auto i = it.first;
 
+        std::vector<ID3D11Resource*> needs_release{};
+
+        for (auto& tex : ctx.textures) {
+            if (tex.texture != nullptr) {
+                tex.texture->AddRef();
+                needs_release.push_back(tex.texture);
+            }
+        }
+
         if (VR::get()->m_openxr->swapchains.contains(i)) {
             auto result = xrDestroySwapchain(VR::get()->m_openxr->swapchains[i].handle);
 
@@ -1272,9 +1281,11 @@ void D3D11Component::OpenXR::destroy_swapchains() {
             spdlog::error("[VR] Swapchain {} does not exist.", i);
         }
 
-        for (auto& tex : ctx.textures) {
-            if (tex.texture != nullptr) {
-                tex.texture->Release();
+        for (auto& tex : needs_release) {
+            if (const auto ref_count = tex->Release(); ref_count != 0) {
+                spdlog::info("[VR] Memory leak detected in swapchain texture {} ({} refs)", i, ref_count);
+            } else {
+                spdlog::info("[VR] Swapchain texture {} released.", i);
             }
         }
         

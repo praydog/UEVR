@@ -454,11 +454,7 @@ void D3D12Component::on_reset(VR* vr) {
     m_game_ui_tex.reset();
 
     if (runtime->is_openxr() && runtime->loaded) {
-        for (auto& it : m_openxr.contexts) {
-            for (auto& texctx : it.second.texture_contexts) {
-                texctx->copier.wait(2000);
-            }
-        }
+        m_openxr.wait_for_all_copies();
 
         auto& rt_pool = vr->get_render_target_pool_hook();
         ComPtr<ID3D12Resource> scene_depth_tex{rt_pool->get_texture<ID3D12Resource>(L"SceneDepthZ")};
@@ -723,6 +719,11 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
             }
 
             ctx.textures[j].texture->SetName(L"OpenXR Swapchain Texture");
+
+            ctx.textures[j].texture->AddRef();
+            const auto ref_count = ctx.textures[j].texture->Release();
+
+            spdlog::info("[VR] BEFORE Swapchain texture {} {} ref count: {}", i, j, ref_count);
         }
 
         result = xrEnumerateSwapchainImages(swapchain.handle, image_count, &image_count, (XrSwapchainImageBaseHeader*)&ctx.textures[0]);
@@ -730,6 +731,13 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
         if (result != XR_SUCCESS) {
             spdlog::error("[VR] Failed to enumerate swapchain images after texture creation.");
             return "Failed to enumerate swapchain images after texture creation.";
+        }
+
+        for (uint32_t j = 0; j < image_count; ++j) {
+            ctx.textures[j].texture->AddRef();
+            const auto ref_count = ctx.textures[j].texture->Release();
+
+            spdlog::info("[VR] AFTER Swapchain texture {} {} ref count: {}", i, j, ref_count);
         }
 
         return std::nullopt;
@@ -832,6 +840,12 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
             spdlog::info("[VR] Depth texture format: {}", depth_desc.Format);
             spdlog::info("[VR] Depth texture flags: {}", depth_desc.Flags);
 
+            if (depth_desc.Width > hmd_desc.Width || depth_desc.Height > hmd_desc.Height) {
+                spdlog::info("[VR] Depth texture is larger than the HMD");
+                //depth_desc.Width = hmd_desc.Width;
+                //depth_desc.Height = hmd_desc.Height;
+            }
+
             depth_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
             depth_desc.Flags &= ~D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
@@ -873,19 +887,37 @@ void D3D12Component::OpenXR::destroy_swapchains() {
 	if (this->contexts.empty()) {
         return;
     }
-
-    std::scoped_lock __{VR::get()->m_openxr->swapchain_mtx};
+    
+    auto& vr = VR::get();
+    std::scoped_lock __{vr->m_openxr->swapchain_mtx};
 
     spdlog::info("[VR] Destroying swapchains.");
+
+    this->wait_for_all_copies();
 
     for (auto& it : this->contexts) {
         auto& ctx = it.second;
         const auto i = it.first;
 
+        //ctx.texture_contexts.clear();
+        for (auto& texture_context : ctx.texture_contexts) {
+            texture_context->copier.reset();
+        }
+
         ctx.texture_contexts.clear();
 
-        if (VR::get()->m_openxr->swapchains.contains(i)) {
-            auto result = xrDestroySwapchain(VR::get()->m_openxr->swapchains[i].handle);
+        std::vector<ID3D12Resource*> needs_release{};
+
+        for (auto& tex : ctx.textures) {
+            if (tex.texture != nullptr) {
+                tex.texture->AddRef();
+                needs_release.push_back(tex.texture);
+            }
+        }
+
+
+        if (vr->m_openxr->swapchains.contains(i)) {
+            auto result = xrDestroySwapchain(vr->m_openxr->swapchains[i].handle);
 
             if (result != XR_SUCCESS) {
                 spdlog::error("[VR] Failed to destroy swapchain {}.", i);
@@ -896,9 +928,12 @@ void D3D12Component::OpenXR::destroy_swapchains() {
             spdlog::error("[VR] Swapchain {} does not exist.", i);
         }
 
-        for (auto& tex : ctx.textures) {
-            if (tex.texture != nullptr) {
-                tex.texture->Release();
+
+        for (auto& tex : needs_release) {
+            if (const auto ref_count = tex->Release(); ref_count != 0) {
+                spdlog::info("[VR] Memory leak detected in swapchain texture {} ({} refs)", i, ref_count);
+            } else {
+                spdlog::info("[VR] Swapchain texture {} released.", i);
             }
         }
         
@@ -906,7 +941,7 @@ void D3D12Component::OpenXR::destroy_swapchains() {
     }
 
     this->contexts.clear();
-    VR::get()->m_openxr->swapchains.clear();
+    vr->m_openxr->swapchains.clear();
 }
 
 void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resource, std::optional<std::function<void(ResourceCopier&)>> additional_commands, D3D12_RESOURCE_STATES src_state, D3D12_BOX* src_box) {
