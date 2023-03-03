@@ -110,6 +110,7 @@ private:
         std::unordered_map<uint32_t, SwapchainContext> contexts{};
         std::recursive_mutex mtx{};
         std::array<uint32_t, 2> last_resolution{};
+        bool made_depth_with_null_defaults{false};
 
         D3D11Component* parent{};
         friend class D3D11Component;

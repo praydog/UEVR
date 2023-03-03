@@ -127,7 +127,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             const auto desc = scene_depth_tex->GetDesc();
 
             if (runtime->is_openxr()) {
-                if (vr->m_openxr->needs_depth_resize(desc.Width, desc.Height)) {
+                if (vr->m_openxr->needs_depth_resize(desc.Width, desc.Height) || m_openxr.made_depth_with_null_defaults) {
                     spdlog::info("[OpenXR] Depth size changed, recreating swapchains [{}x{}]", desc.Width, desc.Height);
                     m_openxr.create_swapchains(); // recreate swapchains to match the new depth size
                 }
@@ -874,6 +874,7 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
         auto depth_tex = rt_pool->get_texture<ID3D12Resource>(L"SceneDepthZ");
 
         if (depth_tex != nullptr) {
+            this->made_depth_with_null_defaults = false;
             depth_desc = depth_tex->GetDesc();
 
             if (depth_desc.Format == DXGI_FORMAT_R24G8_TYPELESS) {
@@ -896,6 +897,7 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
             depth_swapchain_create_info.width = depth_desc.Width;
             depth_swapchain_create_info.height = depth_desc.Height;
         } else {
+            this->made_depth_with_null_defaults = true;
             spdlog::error("[VR] Depth texture is null! Using default values");
             depth_desc.Width = vr->get_hmd_width() * 2;
             depth_desc.Height = vr->get_hmd_height();
