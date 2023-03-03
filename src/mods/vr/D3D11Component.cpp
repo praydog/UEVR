@@ -1252,6 +1252,10 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
         if (depth_tex != nullptr) {
             depth_tex->GetDesc(&depth_desc);
 
+            if (depth_desc.Format == DXGI_FORMAT_R24G8_TYPELESS) {
+                depth_swapchain_create_info.format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+            }
+
             spdlog::info("[VR] Depth texture size: {}x{}", depth_desc.Width, depth_desc.Height);
             spdlog::info("[VR] Depth texture format: {}", depth_desc.Format);
 
