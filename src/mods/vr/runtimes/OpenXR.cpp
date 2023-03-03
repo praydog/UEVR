@@ -1502,8 +1502,20 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
                 depth_layers[i].type = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR;
                 depth_layers[i].next = nullptr;
                 depth_layers[i].subImage.swapchain = depth_swapchain->handle;
+
+                const auto is_afr = VR::get()->is_using_afr();
+                bool doublewide_depth = true;
+
+                if (is_afr && depth_swapchain->width == get_width() && depth_swapchain->height == get_height()) {
+                    doublewide_depth = false;
+                }
     
-                XrExtent2Di depth_extent = {depth_swapchain->width / 2, depth_swapchain->height};
+                XrExtent2Di depth_extent = {depth_swapchain->width, depth_swapchain->height};
+
+                if (doublewide_depth) {
+                    depth_extent.width /= 2;
+                }
+
                 depth_extent = {std::min<int>(get_width(), depth_extent.width), std::min<int>(get_height(), depth_extent.height)};
 
                 if (is_afr) {
