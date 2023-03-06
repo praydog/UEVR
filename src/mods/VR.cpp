@@ -1505,6 +1505,7 @@ void VR::on_draw_ui() {
     }
 
     m_world_scale->draw("World Scale");
+    m_depth_scale->draw("Depth Scale");
 
     ImGui::BeginGroup();
     ImGui::Columns(2);
@@ -1515,6 +1516,7 @@ void VR::on_draw_ui() {
     m_disable_blur_widgets->draw("Disable Blur Widgets");
     m_uncap_framerate->draw("Uncap Framerate");
     m_enable_gui->draw("Enable GUI");
+    m_enable_depth->draw("Enable Depth");
     ImGui::EndGroup();
 
     ImGui::NextColumn();
@@ -1574,7 +1576,7 @@ void VR::on_draw_ui() {
 
     m_overlay_component.on_draw_ui();
 
-    ImGui::Separator();
+    /*ImGui::Separator();
 
     ImGui::Text("Graphical Options");
 
@@ -1584,7 +1586,7 @@ void VR::on_draw_ui() {
         m_desktop_fix_skip_present->draw("Skip Present");
         ImGui::PopID();
         ImGui::TreePop();
-    }
+    }*/
 
     ImGui::Separator();
     ImGui::Text("Debug info");
@@ -1594,8 +1596,6 @@ void VR::on_draw_ui() {
     ImGui::Checkbox("Disable VR Overlay", &m_disable_overlay);
     ImGui::Checkbox("Stereo Emulation Mode", &m_stereo_emulation_mode);
     ImGui::Checkbox("Wait for Present", &m_wait_for_present);
-    ImGui::Checkbox("Pass Depth to Runtime", &m_pass_depth_to_runtime);
-    ImGui::SliderFloat("Depth Scale", &m_depth_scale, 0.0f, 1.0f);
 
     const double min_ = 0.0;
     const double max_ = 25.0;

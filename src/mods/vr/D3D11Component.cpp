@@ -114,7 +114,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
     ComPtr<ID3D11Texture2D> scene_depth_tex{};
 
-    if (vr->m_pass_depth_to_runtime && runtime->is_depth_allowed()) {
+    if (vr->is_depth_enabled() && runtime->is_depth_allowed()) {
         auto& rt_pool = vr->get_render_target_pool_hook();
         scene_depth_tex = rt_pool->get_texture<ID3D11Texture2D>(L"SceneDepthZ");
 

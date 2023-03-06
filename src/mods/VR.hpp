@@ -293,7 +293,11 @@ public:
     }
 
     float get_depth_scale() const {
-        return m_depth_scale;
+        return m_depth_scale->value();
+    }
+
+    bool is_depth_enabled() const {
+        return m_enable_depth->value();
     }
 
     auto& get_fake_stereo_hook() {
@@ -365,7 +369,6 @@ private:
     float m_nearz{ 0.1f };
     float m_farz{ 3000.0f };
     float m_world_to_meters{1.0f}; // Placeholder, it gets set later in a hook
-    float m_depth_scale{ 1.0f };
 
     std::unique_ptr<FFakeStereoRenderingHook> m_fake_stereo_hook{ std::make_unique<FFakeStereoRenderingHook>() };
     std::unique_ptr<RenderTargetPoolHook> m_render_target_pool_hook{ std::make_unique<RenderTargetPoolHook>() };
@@ -469,6 +472,7 @@ private:
     const ModToggle::Ptr m_desktop_fix{ ModToggle::create(generate_name("DesktopRecordingFix"), false) };
     const ModToggle::Ptr m_desktop_fix_skip_present{ ModToggle::create(generate_name("DesktopRecordingFixSkipPresent"), false) };
     const ModToggle::Ptr m_enable_gui{ ModToggle::create(generate_name("EnableGUI"), true) };
+    const ModToggle::Ptr m_enable_depth{ ModToggle::create(generate_name("EnableDepth"), true) };
     const ModSlider::Ptr m_motion_controls_inactivity_timer{ ModSlider::create(generate_name("MotionControlsInactivityTimer"), 30.0f, 100.0f, 30.0f) };
     const ModSlider::Ptr m_joystick_deadzone{ ModSlider::create(generate_name("JoystickDeadzone"), 0.01f, 0.9f, 0.15f) };
     const ModSlider::Ptr m_camera_forward_offset{ ModSlider::create(generate_name("CameraForwardOffset"), -4000.0f, 4000.0f, 0.0f) };
@@ -476,6 +480,7 @@ private:
     const ModSlider::Ptr m_camera_up_offset{ ModSlider::create(generate_name("CameraUpOffset"), -4000.0f, 4000.0f, 0.0f) };
     const ModSlider::Ptr m_camera_fov_distance_multiplier{ ModSlider::create(generate_name("CameraFOVDistanceMultiplier"), 0.00f, 1000.0f, 0.0f) };
     const ModSlider::Ptr m_world_scale{ ModSlider::create(generate_name("WorldScale"), 0.01f, 10.0f, 1.0f) };
+    const ModSlider::Ptr m_depth_scale{ ModSlider::create(generate_name("DepthScale"), 0.01f, 1.0f, 1.0f) };
 
     struct CameraData {
         glm::vec3 offset{};
@@ -487,7 +492,6 @@ private:
 
     bool m_stereo_emulation_mode{false}; // not a good config option, just for debugging
     bool m_wait_for_present{true};
-    bool m_pass_depth_to_runtime{true};
 
     ValueList m_options{
         *m_rendering_method,
@@ -498,12 +502,14 @@ private:
         *m_desktop_fix,
         *m_desktop_fix_skip_present,
         *m_enable_gui,
+        *m_enable_depth,
         *m_motion_controls_inactivity_timer,
         *m_joystick_deadzone,
         *m_camera_forward_offset,
         *m_camera_right_offset,
         *m_camera_up_offset,
         *m_world_scale,
+        *m_depth_scale,
     };
     
 
