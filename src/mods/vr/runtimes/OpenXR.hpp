@@ -257,9 +257,11 @@ public:
     SubmitState get_submit_state();
     
     const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 5.0f, 1.0f) };
+    const ModToggle::Ptr push_dummy_projection{ ModToggle::create("OpenXR_PushDummyProjection", true) };
 
     Mod::ValueList options{
         *resolution_scale,
+        *push_dummy_projection,
     };
 
     enum class SwapchainIndex {

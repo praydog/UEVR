@@ -21,6 +21,7 @@ void OpenXR::on_draw_ui() {
     ImGui::SetNextItemOpen(true, ImGuiCond_Once);
     if (ImGui::TreeNode("OpenXR Options")) {
         this->resolution_scale->draw("Resolution Scale");
+        this->push_dummy_projection->draw("Virtual Desktop Fix");
 
         if (ImGui::TreeNode("Bindings")) {
             display_bindings_editor();
@@ -1436,27 +1437,32 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
     // Dummy projection layers for Virtual Desktop. If we don't do this, timewarp does not work correctly on VD.
     // the reasoning from ggodin (VD dev) is that VD composites all layers using the top layer's pose (apparently)
     // I am actually not sure why this fixes the issue, but it does. and even makes the SteamVR overlay work completely fine.
+    const auto should_push_dummy = this->push_dummy_projection->value() == true;
+
     XrCompositionLayerProjection dummy_projection_layer{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
     std::array<XrCompositionLayerProjectionView, 2> dummy_projection_layer_views{};
 
-    const auto& vd_swapchain = this->swapchains[(uint32_t)OpenXR::SwapchainIndex::DUMMY_VIRTUAL_DESKTOP];
+    if (should_push_dummy) {
+        const auto& vd_swapchain = this->swapchains[(uint32_t)OpenXR::SwapchainIndex::DUMMY_VIRTUAL_DESKTOP];
 
-    for (auto i = 0; i < dummy_projection_layer_views.size(); ++i) {
-        auto& view = dummy_projection_layer_views[i];
-        view = {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW};
-        view.pose = pipelined_stage_views[i].pose;
-        view.fov = pipelined_stage_views[i].fov;
+        for (auto i = 0; i < dummy_projection_layer_views.size(); ++i) {
+            auto& view = dummy_projection_layer_views[i];
+            view = {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW};
+            view.pose = pipelined_stage_views[i].pose;
+            view.fov = pipelined_stage_views[i].fov;
 
-        view.subImage.swapchain = vd_swapchain.handle;
-        view.subImage.imageRect.offset = {(vd_swapchain.width / 2) * i, 0};
-        view.subImage.imageRect.extent = {(vd_swapchain.width / 2), vd_swapchain.height};
-        view.subImage.imageArrayIndex = 0;
+            view.subImage.swapchain = vd_swapchain.handle;
+            view.subImage.imageRect.offset = {(vd_swapchain.width / 2) * i, 0};
+            view.subImage.imageRect.extent = {(vd_swapchain.width / 2), vd_swapchain.height};
+            view.subImage.imageArrayIndex = 0;
+        }
+
+        dummy_projection_layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
+        dummy_projection_layer.viewCount = 2;
+        dummy_projection_layer.views = dummy_projection_layer_views.data();
+        dummy_projection_layer.space = this->stage_space;
+        dummy_projection_layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
     }
-
-    dummy_projection_layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
-    dummy_projection_layer.viewCount = 2;
-    dummy_projection_layer.views = dummy_projection_layer_views.data();
-    dummy_projection_layer.space = this->stage_space;
 
     // we CANT push the layers every time, it cause some layer error
     // in xrEndFrame, so we must only do it when shouldRender is true
@@ -1552,8 +1558,11 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
         layer.space = this->stage_space;
         layer.viewCount = (uint32_t)projection_layer_views.size();
         layer.views = projection_layer_views.data();
+        layer.layerFlags = 0;
 
-        layers.push_back((XrCompositionLayerBaseHeader*)&dummy_projection_layer);
+        if (should_push_dummy) {
+            layers.push_back((XrCompositionLayerBaseHeader*)&dummy_projection_layer);
+        }
 
         for (auto& l : this->projection_layer_cache) {
             layers.push_back((XrCompositionLayerBaseHeader*)&l);
