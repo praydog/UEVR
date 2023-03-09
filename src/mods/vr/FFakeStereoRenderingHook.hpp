@@ -34,6 +34,7 @@ public:
 
     void calculate_render_target_size(const FViewport& viewport, uint32_t& x, uint32_t& y);
     bool need_reallocate_view_target(const FViewport& Viewport);
+    bool need_reallocate_depth_texture(const void* DepthTarget);
 
 public:
     FRHITexture2D* get_ui_target() { return ui_target; }
@@ -59,6 +60,7 @@ protected:
     bool is_using_texture_desc{false};
     bool is_version_greq_5_1{false};
     bool is_version_5_0_3{false};
+    bool wants_depth_reallocate{false};
 
     uint32_t last_width{0};
     uint32_t last_height{0};
@@ -94,6 +96,9 @@ public:
     uintptr_t m_last_calculate_render_size_return_address{0};
     uintptr_t m_last_needs_reallocate_depth_texture_return_address{0};
     uintptr_t m_last_allocate_render_target_return_address{0};
+
+    // Allows signaling to the engine that depth texture reallocation is needed if return address analysis passed.
+    bool depth_analysis_passed{false};
 };
 
 struct VRRenderTargetManager_418 : IStereoRenderTargetManager_418, VRRenderTargetManager_Base {
@@ -110,6 +115,10 @@ struct VRRenderTargetManager_418 : IStereoRenderTargetManager_418, VRRenderTarge
 
     virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
         return VRRenderTargetManager_Base::need_reallocate_view_target(Viewport);
+    }
+
+    virtual bool NeedReAllocateDepthTexture(const void* DepthTarget) override {
+        return VRRenderTargetManager_Base::need_reallocate_depth_texture(&DepthTarget);
     }
 
     // We will use this to keep track of the game-allocated render targets.

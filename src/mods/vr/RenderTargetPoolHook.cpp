@@ -65,9 +65,9 @@ bool RenderTargetPoolHook::find_free_element_hook(
             std::scoped_lock _{g_hook->m_mutex};
             g_hook->m_render_targets[name] = out->reference;
 
-            if (out->reference != nullptr && out->reference->item.texture.texture != nullptr) {
+            /*if (out->reference != nullptr && out->reference->item.texture.texture != nullptr) {
                 const auto resource = out->reference->item.texture.texture->get_native_resource();
-            }
+            }*/
         }
     }
 

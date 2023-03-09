@@ -3588,6 +3588,10 @@ __declspec(noinline) void VRRenderTargetManager::CalculateRenderTargetSize(const
 __declspec(noinline) bool VRRenderTargetManager::NeedReAllocateDepthTexture(const void* DepthTarget) {
     m_last_needs_reallocate_depth_texture_return_address = (uintptr_t)_ReturnAddress();
 
+    if (this->depth_analysis_passed) {
+        return VRRenderTargetManager_Base::need_reallocate_depth_texture(DepthTarget);
+    }
+
     return false;
 }
 
@@ -3650,7 +3654,21 @@ bool VRRenderTargetManager_Base::need_reallocate_view_target(const FViewport& Vi
     if (w != this->last_width || h != this->last_height || g_hook->should_recreate_textures()) {
         this->last_width = w;
         this->last_height = h;
+        this->wants_depth_reallocate = true;
         g_hook->set_should_recreate_textures(false);
+        return true;
+    }
+
+    return false;
+}
+
+bool VRRenderTargetManager_Base::need_reallocate_depth_texture(const void* DepthTarget) {
+    if (!g_framework->is_game_data_intialized()) {
+        return false;
+    }
+
+    if (this->wants_depth_reallocate) {
+        this->wants_depth_reallocate = false;
         return true;
     }
 
@@ -4542,6 +4560,8 @@ bool VRRenderTargetManager::AllocateRenderTargetTexture(uint32_t Index, uint32_t
 
         return false;
     }
+
+    this->depth_analysis_passed = true;
 
     return this->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &OutTargetableTexture, &OutShaderResourceTexture);
 
