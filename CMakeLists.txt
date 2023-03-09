@@ -62,21 +62,21 @@ FetchContent_Declare(bddisasm
 )
 FetchContent_MakeAvailable(bddisasm)
 
-message(STATUS "Fetching kananlib (ecab223bb5b11a05226a1d110dc28bc3a125e0c6)...")
+message(STATUS "Fetching kananlib (877374fdf0658ce144023a7c614a919fe7a7b8e0)...")
 FetchContent_Declare(kananlib
 	GIT_REPOSITORY
 		"https://github.com/cursey/kananlib"
 	GIT_TAG
-		ecab223bb5b11a05226a1d110dc28bc3a125e0c6
+		877374fdf0658ce144023a7c614a919fe7a7b8e0
 )
 FetchContent_MakeAvailable(kananlib)
 
-message(STATUS "Fetching safetyhook (d4b220a270819b032858196da36cfe57d73eb604)...")
+message(STATUS "Fetching safetyhook (35d28aab6d10f9ed17499df8461c92721f0db025)...")
 FetchContent_Declare(safetyhook
 	GIT_REPOSITORY
 		"https://github.com/cursey/safetyhook"
 	GIT_TAG
-		d4b220a270819b032858196da36cfe57d73eb604
+		35d28aab6d10f9ed17499df8461c92721f0db025
 )
 FetchContent_MakeAvailable(safetyhook)
 

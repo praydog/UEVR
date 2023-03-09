@@ -50,7 +50,7 @@ tag = "877374fdf0658ce144023a7c614a919fe7a7b8e0"
 
 [fetch-content.safetyhook]
 git = "https://github.com/cursey/safetyhook"
-tag = "d4b220a270819b032858196da36cfe57d73eb604"
+tag = "35d28aab6d10f9ed17499df8461c92721f0db025"
 
 [fetch-content.openxr]
 git = "https://github.com/KhronosGroup/OpenXR-SDK"
