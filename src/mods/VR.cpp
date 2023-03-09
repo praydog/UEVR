@@ -421,13 +421,7 @@ std::optional<std::string> VR::initialize_openxr() {
         return std::nullopt;
     }
 
-    spdlog::info("[VR] OpenXR system Name: {}", system_properties.systemName);
-    spdlog::info("[VR] OpenXR system Vendor: {}", system_properties.vendorId);
-    spdlog::info("[VR] OpenXR system max width: {}", system_properties.graphicsProperties.maxSwapchainImageWidth);
-    spdlog::info("[VR] OpenXR system max height: {}", system_properties.graphicsProperties.maxSwapchainImageHeight);
-    spdlog::info("[VR] OpenXR system supports {} layers", system_properties.graphicsProperties.maxLayerCount);
-    spdlog::info("[VR] OpenXR system orientation: {}", system_properties.trackingProperties.orientationTracking);
-    spdlog::info("[VR] OpenXR system position: {}", system_properties.trackingProperties.positionTracking);
+    m_openxr->on_system_properties_acquired(system_properties);
 
     // Step 6: Get the view configuration properties
     m_openxr->update_render_target_size();
@@ -933,7 +927,6 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
     std::scoped_lock _{m_openvr_mtx};
 
     auto runtime = get_runtime();
-
     if (m_uncap_framerate->value()) {
         sdk::set_cvar_data_float(L"Engine", L"t.MaxFPS", 500.0f);
     }

@@ -69,7 +69,7 @@ public:
         return m_value;
     }
 
-    const T& default_value() const {
+    T& default_value() {
         return m_default_value;
     }
 

@@ -1,6 +1,10 @@
+#include <Windows.h>
+#include <TlHelp32.h>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+
+#include <spdlog/spdlog.h>
 
 #include <nlohmann/json.hpp>
 #include <utility/String.hpp>
@@ -21,7 +25,9 @@ void OpenXR::on_draw_ui() {
     ImGui::SetNextItemOpen(true, ImGuiCond_Once);
     if (ImGui::TreeNode("OpenXR Options")) {
         this->resolution_scale->draw("Resolution Scale");
-        this->push_dummy_projection->draw("Virtual Desktop Fix");
+        //this->push_dummy_projection->draw("Virtual Desktop Fix");
+
+        ImGui::Checkbox("Virtual Desktop Fix", &this->push_dummy_projection);
 
         if (ImGui::TreeNode("Bindings")) {
             display_bindings_editor();
@@ -29,6 +35,62 @@ void OpenXR::on_draw_ui() {
         }
         
         ImGui::TreePop();
+    }
+}
+
+void OpenXR::on_system_properties_acquired(const XrSystemProperties& system_properties) {
+    spdlog::info("[OpenXR] OpenXR system Name: {}", system_properties.systemName);
+    spdlog::info("[OpenXR] OpenXR system Vendor: {}", system_properties.vendorId);
+    spdlog::info("[OpenXR] OpenXR system max width: {}", system_properties.graphicsProperties.maxSwapchainImageWidth);
+    spdlog::info("[OpenXR] OpenXR system max height: {}", system_properties.graphicsProperties.maxSwapchainImageHeight);
+    spdlog::info("[OpenXR] OpenXR system supports {} layers", system_properties.graphicsProperties.maxLayerCount);
+    spdlog::info("[OpenXR] OpenXR system orientation: {}", system_properties.trackingProperties.orientationTracking);
+    spdlog::info("[OpenXR] OpenXR system position: {}", system_properties.trackingProperties.positionTracking);
+
+    if (std::string_view{system_properties.systemName}.find("SteamVR/OpenXR") != std::string_view::npos) try {
+        spdlog::info("[OpenXR] Detected SteamVR/OpenXR, checking for Virtual Desktop Streamer...");
+
+        // Now double check that the Virtual Desktop streamer executable is running
+        HANDLE hProcessSnap{};
+        PROCESSENTRY32 pe32{};
+        pe32.dwSize = sizeof(PROCESSENTRY32);
+
+        // Take a snapshot of all processes in the system.
+        hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+        if (hProcessSnap == INVALID_HANDLE_VALUE) {
+            spdlog::error("[OpenXR] Failed to take a snapshot of all processes in the system.");
+            return;
+        }
+
+        // Retrieve information about the first process,
+        // and exit if unsuccessful
+        if (!Process32First(hProcessSnap, &pe32)) {
+            spdlog::error("[OpenXR] Failed to retrieve information about the first process.");
+            CloseHandle(hProcessSnap); // clean the snapshot object
+            return;
+        }
+
+        // Now walk the snapshot of processes, and
+        // display information about each process in turn
+        bool found = false;
+        do {
+            if (std::string_view{pe32.szExeFile}.find("VirtualDesktop.Streamer.exe") != std::string_view::npos) {
+                spdlog::info("[OpenXR] Detected Virtual Desktop, enabling Virtual Desktop fix.");
+                this->push_dummy_projection = true;
+                found = true;
+                break;
+            }
+        } while (Process32Next(hProcessSnap, &pe32));
+
+        if (!found) {
+            spdlog::info("[OpenXR] Did not detect Virtual Desktop, disabling Virtual Desktop fix.");
+            this->push_dummy_projection = false;
+        }
+
+        CloseHandle(hProcessSnap);
+    } catch(...) {
+        spdlog::error("[OpenXR] Failed to check if Virtual Desktop is running.");
     }
 }
 
@@ -1437,7 +1499,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
     // Dummy projection layers for Virtual Desktop. If we don't do this, timewarp does not work correctly on VD.
     // the reasoning from ggodin (VD dev) is that VD composites all layers using the top layer's pose (apparently)
     // I am actually not sure why this fixes the issue, but it does. and even makes the SteamVR overlay work completely fine.
-    const auto should_push_dummy = this->push_dummy_projection->value() == true;
+    const auto should_push_dummy = this->push_dummy_projection == true;
 
     XrCompositionLayerProjection dummy_projection_layer{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
     std::array<XrCompositionLayerProjectionView, 2> dummy_projection_layer_views{};

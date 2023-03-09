@@ -53,6 +53,8 @@ struct OpenXR final : public VRRuntime {
         return this->enabled_extensions.contains(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME);
     }
 
+    void on_system_properties_acquired(const XrSystemProperties& props);
+
     void on_config_load(const utility::Config& cfg, bool set_defaults) override;
     void on_config_save(utility::Config& cfg) override;
     void on_draw_ui() override;
@@ -257,11 +259,10 @@ public:
     SubmitState get_submit_state();
     
     const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 5.0f, 1.0f) };
-    const ModToggle::Ptr push_dummy_projection{ ModToggle::create("OpenXR_PushDummyProjection", true) };
+    bool push_dummy_projection{ false };
 
     Mod::ValueList options{
         *resolution_scale,
-        *push_dummy_projection,
     };
 
     enum class SwapchainIndex {
