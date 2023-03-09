@@ -1578,7 +1578,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
                 const auto is_afr = VR::get()->is_using_afr();
                 bool doublewide_depth = true;
 
-                if (is_afr && depth_swapchain->width == get_width() && depth_swapchain->height == get_height()) {
+                if (is_afr /*&& depth_swapchain->width == get_width() && depth_swapchain->height == get_height()*/) {
                     doublewide_depth = false;
                 }
     
