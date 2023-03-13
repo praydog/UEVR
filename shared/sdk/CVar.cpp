@@ -723,7 +723,81 @@ void IConsoleVariable::locate_vtable_indices() {
             {
                 previous_nullptr_index = i;
             } else if (previous_nullptr_index) {
-                s_set_vtable_index = *previous_nullptr_index + 2;
+                auto destructor_index = *previous_nullptr_index + 1;
+                const auto module_within = utility::get_module_within(func);
+
+                // Verify and go forward a bit to look for something that looks like the destructor
+                // Usually all the calls we want will be right after the destructor
+                // Most games won't need this automatic analysis, but there
+                // are some games which have modified the cvar vtables
+                SPDLOG_INFO("Starting from {}, looking for destructor...", destructor_index);
+                SPDLOG_INFO("Looking for {:x}...", vtable[0]);
+                for (auto j = destructor_index; j < destructor_index + 5; ++j) {
+                    // Emulate each function and check if instruction pointer lands inside vtable[0]
+                    // If it does, then we've found the destructor
+                    SPDLOG_INFO("Emulating vtable[{}]...", j);
+                    const auto fn = vtable[j];
+
+                    if (fn == 0 || fn == vtable[0]) { // if fn == vtable[0], we're in some other vtable
+                        SPDLOG_ERROR("Reached end of IConsoleVariable vtable at index {}", j);
+                        break;
+                    }
+
+                    utility::ShemuContext emu{ *module_within };
+
+                    emu.ctx->Registers.RegRcx = (ND_UINT64)this;
+                    emu.ctx->Registers.RegRip = (ND_UINT64)fn;
+                    emu.ctx->MemThreshold = 100;
+                    
+                    bool prev_was_branch = false;
+                    bool found_destructor = false;
+
+                    do {
+                        SPDLOG_INFO("Emulating instruction at {:x}...", emu.ctx->Registers.RegRip);
+
+                        const auto ip = emu.ctx->Registers.RegRip;
+
+                        if (ip == 0 || IsBadReadPtr((void*)emu.ctx->Registers.RegRip, 4)) {
+                            break;
+                        }
+
+                        if (ip == vtable[0]) {
+                            SPDLOG_INFO("Found destructor at index {}", j);
+                            destructor_index = j;
+                            found_destructor = true;
+                            break;
+                        }
+
+                        const auto bytes = (uint8_t*)ip;
+                        const auto decoded = utility::decode_one((uint8_t*)ip);
+
+                        if (!decoded) {
+                            SPDLOG_ERROR("Failed to decode instruction at {:x}", ip);
+                            break;
+                        }
+
+                        if (decoded->MemoryAccess & ND_ACCESS_ANY_WRITE) {
+                            SPDLOG_INFO("Skipping write to memory instruction at {:x} ({:x} bytes, landing at {:x})", ip, decoded->Length, ip + decoded->Length);
+                            emu.ctx->Registers.RegRip += decoded->Length;
+                            emu.ctx->Instruction = *decoded; // pseudo-emulate the instruction
+                            ++emu.ctx->InstructionsCount;
+                            prev_was_branch = false;
+                            continue;
+                        }
+
+                        prev_was_branch = emu.ctx->InstructionsCount == 0 || emu.ctx->Instruction.BranchInfo.IsBranch;
+
+                        if (prev_was_branch) {
+                            SPDLOG_INFO("Branch!");
+                        }
+                    } while(emu.emulate() == SHEMU_SUCCESS && emu.ctx->InstructionsCount < 50);
+
+                    if (found_destructor) {
+                        break;
+                    }
+                }
+
+                s_set_vtable_index = destructor_index + 1;
                 auto potential_get_int_index = *s_set_vtable_index + 1;
 
                 // means this function is GetBool or something like that.
