@@ -293,7 +293,8 @@ private:
 
     safetyhook::InlineHook m_tick_hook{};
     safetyhook::InlineHook m_adjust_view_rect_hook{};
-    safetyhook::InlineHook m_calculate_stereo_view_offset_hook{};
+    safetyhook::InlineHook m_calculate_stereo_view_offset_hook_inline{};
+    std::unique_ptr<PointerHook> m_calculate_stereo_view_offset_hook_ptr{}; // some games have a short jmp which isnt supported by safetyhook right now so we use pointerhook
     safetyhook::InlineHook m_calculate_stereo_projection_matrix_hook{};
     safetyhook::InlineHook m_render_texture_render_thread_hook{};
     safetyhook::InlineHook m_slate_thread_hook{};

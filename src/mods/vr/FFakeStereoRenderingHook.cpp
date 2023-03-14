@@ -373,7 +373,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     const auto stereo_projection_matrix_index = *stereo_view_offset_index + 1;
     const auto is_4_18_or_lower = stereo_view_offset_index <= 6;
 
-    const auto stereo_view_offset_func = ((uintptr_t*)vtable)[*stereo_view_offset_index];
+    const auto& stereo_view_offset_func = ((uintptr_t*)vtable)[*stereo_view_offset_index];
 
     auto render_texture_render_thread_func = utility::find_virtual_function_from_string_ref(game, L"RenderTexture_RenderThread");
 
@@ -600,6 +600,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
     SPDLOG_INFO("AdjustViewRect: {:x}", (uintptr_t)adjust_view_rect_func);
     SPDLOG_INFO("CalculateStereoProjectionMatrix: {:x}", (uintptr_t)calculate_stereo_projection_matrix_func);
+    SPDLOG_INFO("CalculateStereoViewOffset: {:x}", (uintptr_t)stereo_view_offset_func);
     SPDLOG_INFO("IsStereoEnabled: {:x}", (uintptr_t)*is_stereo_enabled_func_ptr);
 
     m_has_double_precision = is_using_double_precision(stereo_view_offset_func) || is_using_double_precision(calculate_stereo_projection_matrix_func);
@@ -607,7 +608,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     {
         auto builder = SafetyHookFactory::acquire();
         m_adjust_view_rect_hook = builder.create_inline((void*)adjust_view_rect_func, adjust_view_rect);
-        m_calculate_stereo_view_offset_hook = builder.create_inline((void*)stereo_view_offset_func, calculate_stereo_view_offset);
+        m_calculate_stereo_view_offset_hook_inline = builder.create_inline((void*)stereo_view_offset_func, calculate_stereo_view_offset);
         m_calculate_stereo_projection_matrix_hook = builder.create_inline((void*)calculate_stereo_projection_matrix_func, calculate_stereo_projection_matrix);
     }
     
@@ -615,8 +616,9 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         SPDLOG_ERROR("Failed to create AdjustViewRect hook");
     }
 
-    if (!m_calculate_stereo_view_offset_hook) {
-        SPDLOG_ERROR("Failed to create CalculateStereoViewOffset hook");
+    if (!m_calculate_stereo_view_offset_hook_inline) {
+        SPDLOG_ERROR("Failed to create CalculateStereoViewOffset hook, falling back to pointer hook");
+        m_calculate_stereo_view_offset_hook_ptr = std::make_unique<PointerHook>((void**)&stereo_view_offset_func, (void*)calculate_stereo_view_offset);
     }
 
     if (!m_calculate_stereo_projection_matrix_hook) {
