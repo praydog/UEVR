@@ -53,7 +53,31 @@ std::optional<uintptr_t> UGameEngine::get_tick_address() {
 
                     SPDLOG_INFO("UEngine::Tick reference (call or jmp): {:x}", (uintptr_t)*func_call);
 
-                    uengine_tick_vtable_middle = utility::scan_ptr(module, *func_call - insn_size);
+                    auto potential_pure_virtual = *func_call - insn_size;
+                    auto potential_vtable_middle = utility::scan_ptr(module, potential_pure_virtual);
+                    
+                    // If this happens, there's some random instructions at the top of the function wrapper
+                    // instead of it just being a jmp only, so we have to bruteforce backwards
+                    if (!potential_vtable_middle) {
+                        SPDLOG_ERROR("Failed to find vtable middle even after finding a reference to it");
+                        SPDLOG_INFO("Performing bruteforce backwards search");
+
+                        for (auto i = 0; i < 10; ++i) {
+                            potential_pure_virtual--;
+                            potential_vtable_middle = utility::scan_ptr(module, potential_pure_virtual);
+
+                            if (potential_vtable_middle) {
+                                SPDLOG_INFO("Found pure virtual at {:x}", (uintptr_t)potential_pure_virtual);
+                                break;
+                            }
+                        }
+
+                        if (!potential_vtable_middle) {
+                            SPDLOG_ERROR("Failed to find pure virtual after bruteforce backwards search");
+                        }
+                    }
+
+                    uengine_tick_vtable_middle = potential_vtable_middle;
 
                     if (!uengine_tick_vtable_middle) {
                         SPDLOG_ERROR("Failed to find UEngine::Tick vtable middle even after finding a reference to it");
