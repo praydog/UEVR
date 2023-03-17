@@ -62,6 +62,8 @@ bool RenderTargetPoolHook::find_free_element_hook(
     // and on some games it will crash if we mess with anything
     // so, TODO: fix the games that crash with depth enabled
     if (!VR::get()->is_depth_enabled()) {
+        std::scoped_lock _{g_hook->m_mutex};
+        g_hook->m_render_targets.clear();
         return result;
     }
 
