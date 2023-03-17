@@ -14,8 +14,6 @@ namespace sdk {
 std::optional<uintptr_t> UGameViewportClient::get_draw_function() {
     static auto result = []() -> std::optional<uintptr_t> {
         const auto engine_module = sdk::get_ue_module(L"Engine");
-        const auto engine_size = utility::get_module_size(engine_module);
-        const auto engine_end = engine_module + *engine_size;
         const auto canvas_object_strings = utility::scan_strings(engine_module, L"CanvasObject", true);
 
         if (canvas_object_strings.empty()) {
@@ -31,6 +29,7 @@ std::optional<uintptr_t> UGameViewportClient::get_draw_function() {
         // Step 2: Disassemble the functions and look for function calls to the other functions that contain the
         // "CanvasObject" string. This is because games can have multiple viewport types
         // and they will fallback to calling UGameViewportClient::Draw.
+        // If there is a function that does NOT call one of the other functions, that's UGameViewportClient::Draw.
         std::vector<uintptr_t> possible_functions{};
 
         for (const auto canvas_object_string : canvas_object_strings) {

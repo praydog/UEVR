@@ -34,6 +34,7 @@
 #include <sdk/threading/RenderThreadWorker.hpp>
 #include <sdk/threading/RHIThreadWorker.hpp>
 #include "../VR.hpp"
+#include "../../utility/Logging.hpp"
 
 #include "FFakeStereoRenderingHook.hpp"
 
@@ -1239,7 +1240,7 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
     m_gameviewportclient_draw_hook = builder.create_inline((void*)*game_viewport_client_draw, &game_viewport_client_draw_hook);
     m_has_game_viewport_client_draw_hook = true;
 
-    if (m_gameviewportclient_draw_hook) {
+    if (!m_gameviewportclient_draw_hook) {
         SPDLOG_ERROR("Failed to hook UGameViewportClient::Draw!");
         return false;
     }
@@ -1290,12 +1291,7 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_cli
         g_hook->m_gameviewportclient_draw_hook.call(viewport_client, viewport, canvas, a4);
     };
 
-    static bool once = true;
-
-    if (once) {
-        SPDLOG_INFO("UGameViewportClient::Draw called for the first time.");
-        once = false;
-    }
+    SPDLOG_INFO_ONCE("UGameViewportClient::Draw called for the first time.");
 
     if (!g_framework->is_game_data_intialized()) {
         call_orig();
@@ -2600,6 +2596,8 @@ bool FFakeStereoRenderingHook::attempt_runtime_inject_stereo() {
 bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("is stereo enabled called!");
+#else
+    SPDLOG_INFO_ONCE("is stereo enabled called!");
 #endif
 
     // wait!!!
@@ -2672,6 +2670,9 @@ void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, in
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("adjust view rect called! {}", index);
     SPDLOG_INFO(" x: {}, y: {}, w: {}, h: {}", *x, *y, *w, *h);
+#else
+    SPDLOG_INFO_ONCE("adjust view rect called! {}", index);
+    SPDLOG_INFO_ONCE(" x: {}, y: {}, w: {}, h: {}", *x, *y, *w, *h);
 #endif
 
     if (!g_framework->is_game_data_intialized()) {
@@ -2706,6 +2707,8 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("calculate stereo view offset called! {}", view_index);
+#else
+    SPDLOG_INFO_ONCE("calculate stereo view offset called! {}", view_index);
 #endif
 
     if (!g_framework->is_game_data_intialized()) {
@@ -2876,12 +2879,16 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("Finished calculating stereo view offset!");
+#else
+    SPDLOG_INFO_ONCE("Finished calculating stereo view offset!");
 #endif
 }
 
 __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("calculate stereo projection matrix called! {} from {:x}", view_index, (uintptr_t)_ReturnAddress() - (uintptr_t)utility::get_module_within((uintptr_t)_ReturnAddress()).value_or(nullptr));
+#else
+    SPDLOG_INFO_ONCE("calculate stereo projection matrix called! {} from {:x}", view_index, (uintptr_t)_ReturnAddress() - (uintptr_t)utility::get_module_within((uintptr_t)_ReturnAddress()).value_or(nullptr));
 #endif
 
     if (!g_hook->m_fixed_localplayer_view_count) {
@@ -2969,6 +2976,8 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
 
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("Finished calculating stereo projection matrix!");
+#else
+    SPDLOG_INFO_ONCE("Finished calculating stereo projection matrix!");
 #endif
     
     return out;
@@ -2985,6 +2994,8 @@ __forceinline void FFakeStereoRenderingHook::render_texture_render_thread(FFakeS
 
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("render texture render thread called!");
+#else
+    SPDLOG_INFO_ONCE("render texture render thread called!");
 #endif
 
 
@@ -3032,6 +3043,8 @@ __forceinline void FFakeStereoRenderingHook::render_texture_render_thread(FFakeS
 void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneView* view, UCanvas* canvas) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("init canvas called!");
+#else
+    SPDLOG_INFO_ONCE("init canvas called!");
 #endif
 
     if (!g_framework->is_game_data_intialized()) {
@@ -3109,6 +3122,8 @@ void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneV
 uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoRendering* stereo, bool is_stereo_enabled) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("get desired number of views hook called!");
+#else
+    SPDLOG_INFO_ONCE("get desired number of views hook called!");
 #endif
 
     if (!is_stereo_enabled || VR::get()->is_using_afr()) {
@@ -3124,6 +3139,8 @@ uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoR
 EStereoscopicPass FFakeStereoRenderingHook::get_view_pass_for_index_hook(FFakeStereoRendering* stereo, bool stereo_requested, int32_t view_index) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("get view pass for index hook called! {} {}", stereo_requested, view_index);
+#else
+    SPDLOG_INFO_ONCE("get view pass for index hook called! {} {}", stereo_requested, view_index);
 #endif
 
     // On 5.0.3 this check is not here, it was only added in 5.1
@@ -3138,6 +3155,8 @@ EStereoscopicPass FFakeStereoRenderingHook::get_view_pass_for_index_hook(FFakeSt
 IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_hook(FFakeStereoRendering* stereo) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("get render target manager hook called!");
+#else
+    SPDLOG_INFO_ONCE("get render target manager hook called!");
 #endif
 
     if (!g_framework->is_game_data_intialized()) {
@@ -3168,6 +3187,8 @@ IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_
 IStereoLayers* FFakeStereoRenderingHook::get_stereo_layers_hook(FFakeStereoRendering* stereo) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("get stereo layers hook called!");
+#else
+    SPDLOG_INFO_ONCE("get stereo layers hook called!");
 #endif
 
     if (!g_framework->is_game_data_intialized()) {
@@ -3191,6 +3212,8 @@ IStereoLayers* FFakeStereoRenderingHook::get_stereo_layers_hook(FFakeStereoRende
 void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhook::Context& ctx) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("post calculate stereo projection matrix called!");
+#else
+    SPDLOG_INFO_ONCE("post calculate stereo projection matrix called!");
 #endif
 
     if (g_hook->m_fixed_localplayer_view_count || g_hook->m_hooked_alternative_localplayer_scan) {
@@ -3331,6 +3354,8 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
 void FFakeStereoRenderingHook::pre_get_projection_data(safetyhook::Context& ctx) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("pre get projection data called!");
+#else
+    SPDLOG_INFO_ONCE("pre get projection data called!");
 #endif
 
     if (g_hook->m_fixed_localplayer_view_count) {
@@ -3500,14 +3525,9 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
 {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("SlateRHIRenderer::DrawWindow_RenderThread called!");
+#else
+    SPDLOG_INFO_ONCE("SlateRHIRenderer::DrawWindow_RenderThread called!");
 #endif
-
-    static bool once = true;
-
-    if (once) {
-        once = false;
-        SPDLOG_INFO("SlateRHIRenderer::DrawWindow_RenderThread called for the first time!");
-    }
 
     if (!g_framework->is_game_data_intialized()) {
         return g_hook->m_slate_thread_hook.call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
@@ -3576,18 +3596,23 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
     }
     
     // After this we copy over the texture and clear it in the present hook. doing it here just seems to crash sometimes.
+    SPDLOG_INFO_ONCE("SlateRHIRenderer::DrawWindow_RenderThread finished!");
 
     return ret;
 }
 
 // INTERNAL USE ONLY!!!!
 __declspec(noinline) void VRRenderTargetManager::CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) {
+    SPDLOG_INFO_ONCE("VRRenderTargetManager::CalculateRenderTargetSize called!");
+
     m_last_calculate_render_size_return_address = (uintptr_t)_ReturnAddress();
 
     VRRenderTargetManager_Base::calculate_render_target_size(Viewport, InOutSizeX, InOutSizeY);
 }
 
 __declspec(noinline) bool VRRenderTargetManager::NeedReAllocateDepthTexture(const void* DepthTarget) {
+    SPDLOG_INFO_ONCE("VRRenderTargetManager::NeedReAllocateDepthTexture called!");
+
     m_last_needs_reallocate_depth_texture_return_address = (uintptr_t)_ReturnAddress();
 
     if (this->depth_analysis_passed) {
@@ -3598,6 +3623,8 @@ __declspec(noinline) bool VRRenderTargetManager::NeedReAllocateDepthTexture(cons
 }
 
 __declspec(noinline) bool VRRenderTargetManager::NeedReAllocateShadingRateTexture(const void* ShadingRateTarget) {
+    SPDLOG_INFO_ONCE("VRRenderTargetManager::NeedReAllocateShadingRateTexture called!");
+
     const auto return_address = (uintptr_t)_ReturnAddress();
     const auto diff = return_address - m_last_calculate_render_size_return_address;
 
@@ -3621,6 +3648,8 @@ __declspec(noinline) bool VRRenderTargetManager::NeedReAllocateShadingRateTextur
 }
 
 void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const FViewport& vp, class SViewport* vp_widget) {
+    SPDLOG_INFO_ONCE("VRRenderTargetManager_Base::update_viewport called!");
+
     if (!g_framework->is_game_data_intialized()) {
         return;
     }
@@ -3629,6 +3658,8 @@ void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const FVi
 }
 
 void VRRenderTargetManager_Base::calculate_render_target_size(const FViewport& viewport, uint32_t& x, uint32_t& y) {
+    SPDLOG_INFO_ONCE("VRRenderTargetManager_Base::calculate_render_target_size called!");
+
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("calculate render target size called!");
 #endif
@@ -3646,6 +3677,8 @@ void VRRenderTargetManager_Base::calculate_render_target_size(const FViewport& v
 }
 
 bool VRRenderTargetManager_Base::need_reallocate_view_target(const FViewport& Viewport) {
+    SPDLOG_INFO_ONCE("VRRenderTargetManager_Base::need_reallocate_view_target called!");
+
     if (!g_framework->is_game_data_intialized()) {
         return false;
     }
@@ -3665,6 +3698,8 @@ bool VRRenderTargetManager_Base::need_reallocate_view_target(const FViewport& Vi
 }
 
 bool VRRenderTargetManager_Base::need_reallocate_depth_texture(const void* DepthTarget) {
+    SPDLOG_INFO_ONCE("VRRenderTargetManager_Base::need_reallocate_depth_texture called!");
+
     if (!g_framework->is_game_data_intialized()) {
         return false;
     }
