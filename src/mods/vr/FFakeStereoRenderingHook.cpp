@@ -754,6 +754,8 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
             std::make_unique<PointerHook>((void**)calculate_render_target_size_func_ptr, +[](void* self, const FViewport& viewport, uint32_t& x, uint32_t& y) {
             #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
                 SPDLOG_INFO("CalculateRenderTargetSize (embedded)");
+            #else
+                SPDLOG_INFO_ONCE("CalculateRenderTargetSize (embedded)");
             #endif
 
                 return g_hook->get_render_target_manager()->calculate_render_target_size(viewport, x, y);
@@ -767,6 +769,8 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 FTexture2DRHIRef& out_shader_resource, uint32_t num_samples) -> bool {
             #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
                 SPDLOG_INFO("AllocateRenderTargetTexture (embedded): {:x}", (uintptr_t)_ReturnAddress());
+            #else
+                SPDLOG_INFO_ONCE("AllocateRenderTargetTexture (embedded): {:x}", (uintptr_t)_ReturnAddress());
             #endif
 
                 return g_hook->get_render_target_manager()->allocate_render_target_texture((uintptr_t)_ReturnAddress(), &out_texture, &out_shader_resource);
@@ -777,8 +781,10 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
             std::make_unique<PointerHook>((void**)should_use_separate_render_target_func_ptr, +[](void* self) -> bool {
             #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
                 SPDLOG_INFO("ShouldUseSeparateRenderTarget (embedded): {:x}", (uintptr_t)_ReturnAddress());
+            #else
+                SPDLOG_INFO_ONCE("ShouldUseSeparateRenderTarget (embedded): {:x}", (uintptr_t)_ReturnAddress());
             #endif
-
+            
                 auto vr = VR::get();
 
                 return vr->is_hmd_active() && !vr->is_stereo_emulation_enabled();
@@ -790,6 +796,8 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 std::make_unique<PointerHook>((void**)need_reallocate_viewport_render_target_func_ptr, +[](void* self, FViewport* viewport) -> bool {
                 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
                     SPDLOG_INFO("NeedReallocateViewportRenderTarget (embedded): {:x}", (uintptr_t)_ReturnAddress());
+                #else
+                    SPDLOG_INFO_ONCE("NeedReallocateViewportRenderTarget (embedded): {:x}", (uintptr_t)_ReturnAddress());
                 #endif
 
                     return g_hook->get_render_target_manager()->need_reallocate_view_target(*viewport);
@@ -1689,12 +1697,7 @@ struct SceneViewExtensionAnalyzer {
         };
 
         g_view_extension_vtable[begin_render_viewfamily_index] = (uintptr_t)+[](ISceneViewExtension* extension, FSceneViewFamily& view_family) -> void {
-            static bool once = true;
-
-            if (once) {
-                SPDLOG_INFO("Called BeginRenderViewFamily for the first time");
-                once = false;
-            }
+            SPDLOG_INFO_ONCE("Called BeginRenderViewFamily for the first time");
 
             if (!g_framework->is_game_data_intialized()) {
                 return;
@@ -1719,12 +1722,7 @@ struct SceneViewExtensionAnalyzer {
             // TODO: Check if this can cause a memory leak, I don't know who is resonsible
             // for destroying the views in the array
             if (vr->is_using_afr() && (view_family.views.count == 2 || view_family.views.count == 3)) {
-                static bool once2 = true;
-
-                if (once2) {
-                    SPDLOG_INFO("Setting view count to 1");
-                    once2 = false;
-                }
+                SPDLOG_INFO_ONCE("Setting view count to 1");
                 view_family.views.count = 1;
             }
         };
@@ -1735,12 +1733,7 @@ struct SceneViewExtensionAnalyzer {
                 RenderThreadWorker::get().execute();
             }};
             
-            static bool once = true;
-
-            if (once) {
-                SPDLOG_INFO("Called PreRenderViewFamily_RenderThread for the first time");
-                once = false;
-            }
+            SPDLOG_INFO_ONCE("Called PreRenderViewFamily_RenderThread for the first time");
             
             if (!g_framework->is_game_data_intialized()) {
                 return;
