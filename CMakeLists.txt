@@ -62,12 +62,12 @@ FetchContent_Declare(bddisasm
 )
 FetchContent_MakeAvailable(bddisasm)
 
-message(STATUS "Fetching kananlib (877374fdf0658ce144023a7c614a919fe7a7b8e0)...")
+message(STATUS "Fetching kananlib (7ed315999286cfd9f5a0cb49e8fbd593913454fc)...")
 FetchContent_Declare(kananlib
 	GIT_REPOSITORY
 		"https://github.com/cursey/kananlib"
 	GIT_TAG
-		877374fdf0658ce144023a7c614a919fe7a7b8e0
+		7ed315999286cfd9f5a0cb49e8fbd593913454fc
 )
 FetchContent_MakeAvailable(kananlib)
 
@@ -748,6 +748,7 @@ list(APPEND ue4poc_SOURCES
 	"src/mods/vr/shaders/vs.hpp"
 	"src/ue4poc-imgui/font_robotomedium.hpp"
 	"src/ue4poc-imgui/ue4poc_imconfig.hpp"
+	"src/utility/Logging.hpp"
 	"src/ue4poc-imgui/imgui_impl_dx11.h"
 	"src/ue4poc-imgui/imgui_impl_dx12.h"
 	"src/ue4poc-imgui/imgui_impl_win32.h"
@@ -881,6 +882,7 @@ list(APPEND ue4poc-nolog_SOURCES
 	"src/mods/vr/shaders/vs.hpp"
 	"src/ue4poc-imgui/font_robotomedium.hpp"
 	"src/ue4poc-imgui/ue4poc_imconfig.hpp"
+	"src/utility/Logging.hpp"
 	"src/ue4poc-imgui/imgui_impl_dx11.h"
 	"src/ue4poc-imgui/imgui_impl_dx12.h"
 	"src/ue4poc-imgui/imgui_impl_win32.h"
