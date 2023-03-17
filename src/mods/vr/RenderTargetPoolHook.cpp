@@ -58,6 +58,13 @@ bool RenderTargetPoolHook::find_free_element_hook(
 
     const auto result = g_hook->m_find_free_element_hook.call<bool>(pool, cmd_list, desc, out, name, a6, a7, a8, a9, a10);
 
+    // Right now we are only using this for depth
+    // and on some games it will crash if we mess with anything
+    // so, TODO: fix the games that crash with depth enabled
+    if (!VR::get()->is_depth_enabled()) {
+        return result;
+    }
+
     if (name != nullptr) {
         //SPDLOG_INFO("FRenderTargetPool::FindFreeElement called with name {}", utility::narrow(name));
 
