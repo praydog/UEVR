@@ -265,6 +265,8 @@ typedef struct {
     bool (*is_using_controllers)();
 
     unsigned int (*get_lowest_xinput_index)();
+
+    void (*recenter_view)();
 } UEVR_VRData;
 
 typedef struct {

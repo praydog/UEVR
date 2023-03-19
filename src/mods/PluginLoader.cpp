@@ -347,6 +347,10 @@ bool is_using_controllers() {
 unsigned int get_lowest_xinput_index() {
     return VR::get()->get_lowest_xinput_index();
 }
+
+void recenter_view() {
+    VR::get()->recenter_view();
+}
 }
 }
 
@@ -373,7 +377,8 @@ UEVR_VRData g_vr_data {
     uevr::vr::get_joystick_axis,
     uevr::vr::trigger_haptic_vibration,
     uevr::vr::is_using_controllers,
-    uevr::vr::get_lowest_xinput_index
+    uevr::vr::get_lowest_xinput_index,
+    uevr::vr::recenter_view,
 };
 
 
