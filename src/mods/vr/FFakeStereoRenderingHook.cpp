@@ -176,10 +176,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
         }
     }
 
-    auto builder = SafetyHookFactory::acquire();
-    
-
-    m_tick_hook = builder.create_inline((void*)*func, +[](sdk::UGameEngine* engine, float delta, bool idle) -> void* {
+    m_tick_hook = safetyhook::create_inline((void*)*func, +[](sdk::UGameEngine* engine, float delta, bool idle) -> void* {
         auto hook = g_hook;
         
         hook->m_in_engine_tick = true;
@@ -267,10 +264,7 @@ void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_addres
         SPDLOG_INFO("Found FSlateRHIRenderer::DrawWindow_RenderThread with alternative return address method: {:x}", *func);
     }
 
-    auto builder = SafetyHookFactory::acquire();
-    
-
-    m_slate_thread_hook = builder.create_inline((void*)*func, &FFakeStereoRenderingHook::slate_draw_window_render_thread);
+    m_slate_thread_hook = safetyhook::create_inline((void*)*func, &FFakeStereoRenderingHook::slate_draw_window_render_thread);
     m_hooked_slate_thread = true;
 
     if (!m_slate_thread_hook) {
@@ -607,10 +601,9 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     m_has_double_precision = is_using_double_precision(stereo_view_offset_func) || is_using_double_precision(calculate_stereo_projection_matrix_func);
 
     {
-        auto builder = SafetyHookFactory::acquire();
-        m_adjust_view_rect_hook = builder.create_inline((void*)adjust_view_rect_func, adjust_view_rect);
-        m_calculate_stereo_view_offset_hook_inline = builder.create_inline((void*)stereo_view_offset_func, calculate_stereo_view_offset);
-        m_calculate_stereo_projection_matrix_hook = builder.create_inline((void*)calculate_stereo_projection_matrix_func, calculate_stereo_projection_matrix);
+        m_adjust_view_rect_hook = safetyhook::create_inline((void*)adjust_view_rect_func, adjust_view_rect);
+        m_calculate_stereo_view_offset_hook_inline = safetyhook::create_inline((void*)stereo_view_offset_func, calculate_stereo_view_offset);
+        m_calculate_stereo_projection_matrix_hook = safetyhook::create_inline((void*)calculate_stereo_projection_matrix_func, calculate_stereo_projection_matrix);
     }
     
     if (!m_adjust_view_rect_hook) {
@@ -630,8 +623,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     // compiler optimization makes that function get re-used in a lot of places
     // so it's not feasible to just detour it, we need to replace the pointer in the vtable.
     if (!m_rendertarget_manager_embedded_in_stereo_device) {
-        auto builder = SafetyHookFactory::acquire();
-        m_render_texture_render_thread_hook = builder.create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
+        m_render_texture_render_thread_hook = safetyhook::create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
 
         if (!m_render_texture_render_thread_hook) {
             SPDLOG_ERROR("Failed to create RenderTexture_RenderThread hook");
@@ -667,8 +659,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 if (prev_function_returned_false) {
                     render_texture_render_thread_func = func;
                     rendertexture_fn_vtable_index = i;
-                    auto builder = SafetyHookFactory::acquire();
-                    m_render_texture_render_thread_hook = builder.create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
+                    m_render_texture_render_thread_hook = safetyhook::create_inline((void*)*render_texture_render_thread_func, render_texture_render_thread);
                     if (!m_render_texture_render_thread_hook) {
                         SPDLOG_ERROR("Failed to create RenderTexture_RenderThread hook");
                     }
@@ -1243,9 +1234,7 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
         return false;
     }
 
-    auto builder = SafetyHookFactory::acquire();
-
-    m_gameviewportclient_draw_hook = builder.create_inline((void*)*game_viewport_client_draw, &game_viewport_client_draw_hook);
+    m_gameviewportclient_draw_hook = safetyhook::create_inline((void*)*game_viewport_client_draw, &game_viewport_client_draw_hook);
     m_has_game_viewport_client_draw_hook = true;
 
     if (!m_gameviewportclient_draw_hook) {
@@ -1404,12 +1393,9 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_cli
                         return false;
                     }
 
-                    SPDLOG_INFO("Found FViewport::Draw function at {:x}", (uintptr_t)*viewport_draw);
+                    SPDLOG_INFO("Found FViewport::Draw function at {:x}", (uintptr_t)*viewport_draw); 
 
-                    auto builder = SafetyHookFactory::acquire();
-                    
-
-                    g_hook->m_viewport_draw_hook = builder.create_inline((void*)*viewport_draw, &viewport_draw_hook);
+                    g_hook->m_viewport_draw_hook = safetyhook::create_inline((void*)*viewport_draw, &viewport_draw_hook);
 
                     if (!g_hook->m_viewport_draw_hook) {
                         SPDLOG_ERROR("Failed to hook FViewport::Draw function!");
@@ -2899,10 +2885,7 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
                 SPDLOG_INFO(" {:x}", (uintptr_t)stack[i]);
             }
 
-            auto builder = SafetyHookFactory::acquire();
-            
-
-            g_hook->m_calculate_stereo_projection_matrix_post_hook = builder.create_mid((void*)return_address, &FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix);
+            g_hook->m_calculate_stereo_projection_matrix_post_hook = safetyhook::create_mid((void*)return_address, &FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix);
 
             if (!g_hook->m_calculate_stereo_projection_matrix_post_hook) {
                 SPDLOG_ERROR("Failed to insert midhook after CalculateStereoProjectionMatrix!");
@@ -3252,10 +3235,7 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
 
                 g_hook->m_hooked_alternative_localplayer_scan = true;
 
-                auto builder = SafetyHookFactory::acquire();
-                
-
-                g_hook->m_get_projection_data_pre_hook = builder.create_mid((void*)*get_projection_data, &FFakeStereoRenderingHook::pre_get_projection_data);
+                g_hook->m_get_projection_data_pre_hook = safetyhook::create_mid((void*)*get_projection_data, &FFakeStereoRenderingHook::pre_get_projection_data);
                 g_hook->m_projection_matrix_stack.clear();
 
                 if (g_hook->m_get_projection_data_pre_hook) {
@@ -4466,9 +4446,6 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                         const auto post_call = (uintptr_t)ip + decoded->Length;
                         SPDLOG_INFO("AllocateRenderTargetTexture post_call: {:x}", post_call - (uintptr_t)*utility::get_module_within((void*)post_call));
 
-                        auto builder = SafetyHookFactory::acquire();
-                        
-
                         if (*(uint8_t*)ip == 0xE8) {
                             SPDLOG_INFO("E8 call found!");
                             this->is_pre_texture_call_e8 = true;
@@ -4480,8 +4457,8 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                         this->texture_create_insn_bytes.resize(decoded->Length);
                         memcpy(this->texture_create_insn_bytes.data(), (void*)ip, decoded->Length);
 
-                        this->texture_hook = builder.create_mid((void*)post_call, &VRRenderTargetManager::texture_hook_callback);
-                        this->pre_texture_hook = builder.create_mid((void*)ip, &VRRenderTargetManager::pre_texture_hook_callback);
+                        this->texture_hook = safetyhook::create_mid((void*)post_call, &VRRenderTargetManager::texture_hook_callback);
+                        this->pre_texture_hook = safetyhook::create_mid((void*)ip, &VRRenderTargetManager::pre_texture_hook_callback);
                         this->set_up_texture_hook = true;
 
                         return false;

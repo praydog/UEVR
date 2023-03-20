@@ -71,12 +71,14 @@ FetchContent_Declare(kananlib
 )
 FetchContent_MakeAvailable(kananlib)
 
-message(STATUS "Fetching safetyhook (35d28aab6d10f9ed17499df8461c92721f0db025)...")
+set(SAFETYHOOK_FETCH_ZYDIS ON)
+
+message(STATUS "Fetching safetyhook (v0.1.0-pre)...")
 FetchContent_Declare(safetyhook
 	GIT_REPOSITORY
 		"https://github.com/cursey/safetyhook"
 	GIT_TAG
-		35d28aab6d10f9ed17499df8461c92721f0db025
+		v0.1.0-pre
 )
 FetchContent_MakeAvailable(safetyhook)
 
@@ -314,7 +316,7 @@ if(sdk_SOURCES)
 endif()
 
 target_compile_features(sdk PUBLIC
-	cxx_std_20
+	cxx_std_23
 )
 
 target_compile_options(sdk PUBLIC
@@ -390,7 +392,7 @@ if(sdk-nolog_SOURCES)
 endif()
 
 target_compile_features(sdk-nolog PUBLIC
-	cxx_std_20
+	cxx_std_23
 )
 
 target_compile_options(sdk-nolog PUBLIC
@@ -451,7 +453,7 @@ endif()
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${plugin_renderlib_SOURCES})
 
 target_compile_features(plugin_renderlib PUBLIC
-	cxx_std_20
+	cxx_std_23
 )
 
 target_compile_options(plugin_renderlib PUBLIC
@@ -493,7 +495,7 @@ endif()
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${example_plugin_SOURCES})
 
 target_compile_features(example_plugin PUBLIC
-	cxx_std_20
+	cxx_std_23
 )
 
 target_include_directories(example_plugin PUBLIC
@@ -530,7 +532,7 @@ endif()
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${vr-plugin-nullifier_SOURCES})
 
 target_compile_features(vr-plugin-nullifier PUBLIC
-	cxx_std_20
+	cxx_std_23
 )
 
 target_compile_options(vr-plugin-nullifier PUBLIC
@@ -664,7 +666,7 @@ endif()
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${LuaVR_SOURCES})
 
 target_compile_features(LuaVR PUBLIC
-	cxx_std_20
+	cxx_std_23
 )
 
 target_include_directories(LuaVR PUBLIC
@@ -767,7 +769,7 @@ endif()
 
 
 target_compile_features(ue4poc PUBLIC
-	cxx_std_20
+	cxx_std_23
 )
 
 target_compile_options(ue4poc PUBLIC
@@ -901,7 +903,7 @@ endif()
 
 
 target_compile_features(ue4poc-nolog PUBLIC
-	cxx_std_20
+	cxx_std_23
 )
 
 target_compile_options(ue4poc-nolog PUBLIC

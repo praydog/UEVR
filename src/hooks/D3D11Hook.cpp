@@ -3,7 +3,7 @@
 #include <utility/Thread.hpp>
 #include <utility/Module.hpp>
 
-#include <safetyhook/ThreadFreezer.hpp>
+#include <safetyhook/thread_freezer.hpp>
 
 #include "WindowFilter.hpp"
 #include "Framework.hpp"

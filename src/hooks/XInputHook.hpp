@@ -2,7 +2,7 @@
 
 #include <thread>
 
-#include <safetyhook/InlineHook.hpp>
+#include <safetyhook/inline_hook.hpp>
 #include <Xinput.h>
 
 class XInputHook {

@@ -7,6 +7,7 @@
 #include <sdk/EngineModule.hpp>
 
 #include "../VR.hpp"
+#include "../../utility/Logging.hpp"
 #include "RenderTargetPoolHook.hpp"
 
 RenderTargetPoolHook* g_hook{nullptr};
@@ -37,8 +38,7 @@ bool RenderTargetPoolHook::hook() {
         return false;
     }
 
-    auto builder = SafetyHookFactory::acquire();
-    m_find_free_element_hook = builder.create_inline((void*)*find_free_element, find_free_element_hook);
+    m_find_free_element_hook = safetyhook::create_inline((void*)*find_free_element, find_free_element_hook);
 
     return true;
 }
@@ -49,14 +49,11 @@ bool RenderTargetPoolHook::find_free_element_hook(
     const wchar_t* name, 
     uintptr_t a6, uintptr_t a7, uintptr_t a8, uintptr_t a9, uintptr_t a10)
 {
-    static bool once = true;
-
-    if (once) {
-        SPDLOG_INFO("FRenderTargetPool::FindFreeElement called for the first time!");
-        once = false;
-    }
+    SPDLOG_INFO_ONCE("FRenderTargetPool::FindFreeElement called for the first time!");
 
     const auto result = g_hook->m_find_free_element_hook.call<bool>(pool, cmd_list, desc, out, name, a6, a7, a8, a9, a10);
+
+    SPDLOG_INFO_ONCE("Finished calling FRenderTargetPool::FindFreeElement!");
 
     // Right now we are only using this for depth
     // and on some games it will crash if we mess with anything

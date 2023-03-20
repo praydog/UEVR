@@ -238,7 +238,7 @@ public:
     }
 
     bool has_slate_hook() {
-        return m_slate_thread_hook == true;
+        return (bool)m_slate_thread_hook;
     }
 
     bool has_engine_tick_hook() {

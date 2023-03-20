@@ -50,7 +50,10 @@ tag = "7ed315999286cfd9f5a0cb49e8fbd593913454fc"
 
 [fetch-content.safetyhook]
 git = "https://github.com/cursey/safetyhook"
-tag = "35d28aab6d10f9ed17499df8461c92721f0db025"
+tag = "v0.1.0-pre"
+cmake-before="""
+set(SAFETYHOOK_FETCH_ZYDIS ON)
+"""
 
 [fetch-content.openxr]
 git = "https://github.com/KhronosGroup/OpenXR-SDK"
@@ -88,7 +91,7 @@ sources = ["shared/sdk/**.cpp", "shared/sdk/**.c"]
 headers = ["shared/sdk/**.hpp", "shared/sdk/**.h"]
 include-directories = ["shared/"]
 compile-options = ["/EHa", "/MP"]
-compile-features = ["cxx_std_20"]
+compile-features = ["cxx_std_23"]
 link-libraries = [
     "spdlog",
     "bddisasm",
@@ -115,7 +118,7 @@ sources = ["examples/renderlib/**.cpp", "examples/renderlib/**.c"]
 headers = ["examples/renderlib/**.hpp", "examples/renderlib/**.h"]
 include-directories = ["examples/renderlib", "include/"]
 compile-options = ["/EHa", "/MP"]
-compile-features = ["cxx_std_20"]
+compile-features = ["cxx_std_23"]
 link-libraries = [
     "imgui"
 ]
@@ -123,7 +126,7 @@ link-libraries = [
 [template.plugin]
 type = "shared"
 include-directories = ["include/", "examples/renderlib"]
-compile-features = ["cxx_std_20"]
+compile-features = ["cxx_std_23"]
 link-libraries = [
     "plugin_renderlib",
 ]
@@ -137,7 +140,7 @@ headers = ["examples/example_plugin/**.hpp", "examples/example_plugin/**.h"]
 type = "shared"
 sources = ["vr-plugin-nullifier/**.cpp", "vr-plugin-nullifier/**.c"]
 compile-options = ["/GS-", "/EHa", "/MP"]
-compile-features = ["cxx_std_20"]
+compile-features = ["cxx_std_23"]
 link-libraries = [
     "kananlib"
 ]
@@ -162,7 +165,7 @@ include-directories = ["dependencies/sol2/single/single/include"]
 
 [target.LuaVR]
 type = "shared"
-compile-features = ["cxx_std_20"]
+compile-features = ["cxx_std_23"]
 include-directories = ["include/"]
 sources = ["lua-api/**.cpp", "lua-api/**.c"]
 headers = ["lua-api/**.hpp", "lua-api/**.h"]
@@ -190,7 +193,7 @@ include-directories = [
     "${OPENXR_SOURCE_DIR}/src"
 ]
 compile-options = ["/GS-", "/bigobj", "/EHa", "/MP"]
-compile-features = ["cxx_std_20"]
+compile-features = ["cxx_std_23"]
 compile-definitions = []
 link-libraries = [
     "shlwapi",

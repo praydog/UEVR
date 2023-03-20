@@ -2,7 +2,7 @@
 #include <vector>
 
 #include <spdlog/spdlog.h>
-#include <safetyhook/ThreadFreezer.hpp>
+#include <safetyhook/thread_freezer.hpp>
 
 #include "utility/Thread.hpp"
 
