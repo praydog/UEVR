@@ -308,6 +308,16 @@ public:
         return m_fake_stereo_hook;
     }
 
+    void set_pre_flattened_rotation(const glm::quat& rot) {
+        std::unique_lock _{m_decoupled_pitch_data.mtx};
+        m_decoupled_pitch_data.pre_flattened_rotation = rot;
+    }
+
+    auto get_pre_flattened_rotation() const {
+        std::shared_lock _{m_decoupled_pitch_data.mtx};
+        return m_decoupled_pitch_data.pre_flattened_rotation;
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;
@@ -486,6 +496,11 @@ private:
     const ModSlider::Ptr m_camera_fov_distance_multiplier{ ModSlider::create(generate_name("CameraFOVDistanceMultiplier"), 0.00f, 1000.0f, 0.0f) };
     const ModSlider::Ptr m_world_scale{ ModSlider::create(generate_name("WorldScale"), 0.01f, 10.0f, 1.0f) };
     const ModSlider::Ptr m_depth_scale{ ModSlider::create(generate_name("DepthScale"), 0.01f, 1.0f, 1.0f) };
+
+    struct DecoupledPitchData {
+        mutable std::shared_mutex mtx{};
+        glm::quat pre_flattened_rotation{};
+    } m_decoupled_pitch_data{};
 
     struct CameraData {
         glm::vec3 offset{};

@@ -2798,6 +2798,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
     // Decoupled Pitch
     if (vr->is_decoupled_pitch_enabled()) {
+        vr->set_pre_flattened_rotation(vqi_norm);
         vqi_norm = utility::math::flatten(vqi_norm);
     }
 
@@ -2807,7 +2808,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     const auto camera_forward = quat_converter * (vqi_norm * glm::vec3{0, 0, camera_forward_offset});
     const auto camera_right = quat_converter * (vqi_norm * glm::vec3{-camera_right_offset, 0, 0});
     const auto camera_up = quat_converter * (vqi_norm * glm::vec3{0, -camera_up_offset, 0});
-    
+
     const auto world_scale = world_to_meters * vr->get_world_scale();
 
     if (has_double_precision) {

@@ -204,8 +204,18 @@ void OverlayComponent::update_slate_openvr() {
     vr::TrackedDevicePose_t pose{};
     vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, &pose, 1);
 
+    auto rotation_offset = glm::inverse(vr->get_rotation_offset());
+
+    if (vr->is_decoupled_pitch_enabled()) {
+        const auto pre_flat_rotation = vr->get_pre_flattened_rotation();
+        const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
+
+        // Add the inverse of the pitch rotation to the rotation offset
+        rotation_offset = glm::inverse(pre_flat_pitch) * rotation_offset;
+    }
+
     //auto glm_matrix = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
-    auto glm_matrix = Matrix4x4f{glm::inverse(vr->get_rotation_offset())};
+    auto glm_matrix = Matrix4x4f{rotation_offset};
     glm_matrix[3] += vr->get_standing_origin();
     glm_matrix[3] -= glm_matrix[2] * m_slate_distance->value();
     glm_matrix[3].w = 1.0f;
@@ -588,7 +598,17 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
     if (vr->m_overlay_component.m_ui_follows_view->value()) {
         layer.space = vr->m_openxr->view_space;
     } else {
-        glm_matrix = Matrix4x4f{glm::inverse(vr->get_rotation_offset())};   
+        auto rotation_offset = glm::inverse(vr->get_rotation_offset());
+
+        if (vr->is_decoupled_pitch_enabled()) {
+            const auto pre_flat_rotation = vr->get_pre_flattened_rotation();
+            const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
+
+            // Add the inverse of the pitch rotation to the rotation offset
+            rotation_offset = glm::inverse(pre_flat_pitch) * rotation_offset;
+        }
+
+        glm_matrix = Matrix4x4f{rotation_offset};   
         glm_matrix[3] += vr->get_standing_origin();
         layer.space = vr->m_openxr->stage_space;
     }
