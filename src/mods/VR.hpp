@@ -508,6 +508,7 @@ private:
         *m_desktop_fix_skip_present,
         *m_enable_gui,
         *m_enable_depth,
+        *m_decoupled_pitch,
         *m_motion_controls_inactivity_timer,
         *m_joystick_deadzone,
         *m_camera_forward_offset,
