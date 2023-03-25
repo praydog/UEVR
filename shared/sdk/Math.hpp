@@ -120,9 +120,8 @@ static quat flatten(const quat& q) {
 
 // Obtains the forward dir, and isolates the pitch component
 static quat pitch_only(const quat& q) {
-    const auto forward = glm::normalize(glm::quat{q} * Vector3f{ 0.0f, 0.0f, 1.0f });
-
-    const auto pitch = glm::degrees(glm::asin(forward.y));
-    return glm::quat(glm::radians(glm::vec3{ pitch, 0.0f, 0.0f }));
+    const auto forward = glm::normalize(q * Vector3f{ 0.0f, 0.0f, 1.0f });
+    const auto pitch = glm::asin(forward.y);
+    return glm::quat(glm::vec3{ pitch, 0.0f, 0.0f });
 }
 }
