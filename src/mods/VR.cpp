@@ -1515,6 +1515,8 @@ void VR::on_draw_ui() {
     ImGui::NextColumn();
     ImGui::BeginGroup();
 
+    m_decoupled_pitch->draw("Decoupled Pitch");
+
     for (auto i = 0; i < m_camera_datas.size(); ++i) {
         auto& data = m_camera_datas[i];
 

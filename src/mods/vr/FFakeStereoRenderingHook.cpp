@@ -2794,7 +2794,12 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         0, 0, 0, 1
     }};
 
-    const auto vqi_norm = glm::normalize(view_quat_inverse);
+    auto vqi_norm = glm::normalize(view_quat_inverse);
+
+    // Decoupled Pitch
+    if (vr->is_decoupled_pitch_enabled()) {
+        vqi_norm = utility::math::flatten(vqi_norm);
+    }
 
     const auto camera_forward_offset = vr->get_camera_forward_offset();
     const auto camera_right_offset = vr->get_camera_right_offset();
@@ -2802,7 +2807,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     const auto camera_forward = quat_converter * (vqi_norm * glm::vec3{0, 0, camera_forward_offset});
     const auto camera_right = quat_converter * (vqi_norm * glm::vec3{-camera_right_offset, 0, 0});
     const auto camera_up = quat_converter * (vqi_norm * glm::vec3{0, -camera_up_offset, 0});
-
+    
     const auto world_scale = world_to_meters * vr->get_world_scale();
 
     if (has_double_precision) {
@@ -2823,7 +2828,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         const auto current_hmd_rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(0)});
         const auto current_eye_rotation_offset = glm::normalize(glm::quat{vr->get_eye_transform(true_index)});
 
-        const auto new_rotation = glm::normalize(view_quat_inverse * current_hmd_rotation * current_eye_rotation_offset);
+        const auto new_rotation = glm::normalize(vqi_norm * current_hmd_rotation * current_eye_rotation_offset);
         const auto eye_offset = glm::vec3{vr->get_eye_offset((VRRuntime::Eye)(true_index))};
 
         const auto pos = glm::vec3{rotation_offset * ((vr->get_position(0) - vr->get_standing_origin()))};

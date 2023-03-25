@@ -300,6 +300,10 @@ public:
         return m_enable_depth->value();
     }
 
+    bool is_decoupled_pitch_enabled() const {
+        return m_decoupled_pitch->value();
+    }
+
     auto& get_fake_stereo_hook() {
         return m_fake_stereo_hook;
     }
@@ -473,6 +477,7 @@ private:
     const ModToggle::Ptr m_desktop_fix_skip_present{ ModToggle::create(generate_name("DesktopRecordingFixSkipPresent"), false) };
     const ModToggle::Ptr m_enable_gui{ ModToggle::create(generate_name("EnableGUI"), true) };
     const ModToggle::Ptr m_enable_depth{ ModToggle::create(generate_name("EnableDepth"), false) };
+    const ModToggle::Ptr m_decoupled_pitch{ ModToggle::create(generate_name("DecoupledPitch"), false) };
     const ModSlider::Ptr m_motion_controls_inactivity_timer{ ModSlider::create(generate_name("MotionControlsInactivityTimer"), 30.0f, 100.0f, 30.0f) };
     const ModSlider::Ptr m_joystick_deadzone{ ModSlider::create(generate_name("JoystickDeadzone"), 0.01f, 0.9f, 0.15f) };
     const ModSlider::Ptr m_camera_forward_offset{ ModSlider::create(generate_name("CameraForwardOffset"), -4000.0f, 4000.0f, 0.0f) };
