@@ -3,7 +3,7 @@
 #include "OpenVR.hpp"
 
 namespace runtimes {
-VRRuntime::Error OpenVR::synchronize_frame() {
+VRRuntime::Error OpenVR::synchronize_frame(std::optional<uint32_t> frame_count) {
     if (this->got_first_poses && !this->is_hmd_active) {
         return VRRuntime::Error::SUCCESS;
     }

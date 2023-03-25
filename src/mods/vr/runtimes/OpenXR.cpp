@@ -106,7 +106,7 @@ void OpenXR::on_config_save(utility::Config& cfg) {
     }
 }
 
-VRRuntime::Error OpenXR::synchronize_frame() {
+VRRuntime::Error OpenXR::synchronize_frame(std::optional<uint32_t> frame_count) {
     std::scoped_lock _{sync_mtx};
 
     // cant sync frame between begin and endframe
@@ -127,8 +127,11 @@ VRRuntime::Error OpenXR::synchronize_frame() {
     this->begin_profile();
 
     XrFrameWaitInfo frame_wait_info{XR_TYPE_FRAME_WAIT_INFO};
-    this->frame_state = {XR_TYPE_FRAME_STATE};
-    auto result = xrWaitFrame(this->session, &frame_wait_info, &this->frame_state);
+    XrFrameState local_frame_state{XR_TYPE_FRAME_STATE};
+    auto result = xrWaitFrame(this->session, &frame_wait_info, &local_frame_state);
+
+    std::scoped_lock __{this->sync_assignment_mtx};
+    this->frame_state = local_frame_state;
 
     // Initialize all the existing frame states if they aren't already so we don't get some random error when calling xrEndFrame
     for (auto& frame_state : this->frame_state_queue) {
@@ -137,11 +140,21 @@ VRRuntime::Error OpenXR::synchronize_frame() {
         }
     }
 
-    if (this->last_submit_state.frame_count > 0) {
+    if (!frame_count && this->last_submit_state.frame_count > 0) {
         this->frame_state_queue[(this->last_submit_state.frame_count + 1) % this->frame_state_queue.size()] = this->frame_state;
+        this->submit_state_sync_queue[(this->last_submit_state.frame_count + 1) % this->frame_state_queue.size()] = this->last_submit_state;
 
         if (VR::get()->is_using_afr()) {
             this->frame_state_queue[(this->last_submit_state.frame_count + 2) % this->frame_state_queue.size()] = this->frame_state;
+            this->submit_state_sync_queue[(this->last_submit_state.frame_count + 2) % this->frame_state_queue.size()] = this->last_submit_state;
+        }
+    } else if (frame_count) {
+        this->frame_state_queue[*frame_count % this->frame_state_queue.size()] = this->frame_state;
+        this->submit_state_sync_queue[*frame_count % this->frame_state_queue.size()] = this->last_submit_state;
+
+        if (VR::get()->is_using_afr()) {
+            this->frame_state_queue[(*frame_count + 1) % this->frame_state_queue.size()] = this->frame_state;
+            this->submit_state_sync_queue[(*frame_count + 1) % this->frame_state_queue.size()] = this->last_submit_state;
         }
     }
 
@@ -159,7 +172,7 @@ VRRuntime::Error OpenXR::synchronize_frame() {
 }
 
 VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_count) {
-    std::scoped_lock _{ this->sync_mtx };
+    std::scoped_lock _{ this->sync_assignment_mtx };
     std::unique_lock __{ this->pose_mtx };
 
     if (!this->session_ready) {
@@ -184,9 +197,13 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
         this->internal_frame_count = frame_count;
     }
 
-    //this->frame_state_queue[frame_count % this->frame_state_queue.size()] = this->frame_state;
-    const auto& pipelined_frame_state = this->frame_state_queue[(frame_count - 1) % this->frame_state_queue.size()];
-    const auto display_time = pipelined_frame_state.predictedDisplayTime + pipelined_frame_state.predictedDisplayPeriod + (XrDuration)(pipelined_frame_state.predictedDisplayPeriod * this->prediction_scale);
+    if (this->submit_state_sync_queue[frame_count % this->submit_state_sync_queue.size()].frame_count < frame_count) {
+        this->frame_state_queue[frame_count % this->frame_state_queue.size()] = this->frame_state;
+        this->frame_state_queue[frame_count % this->frame_state_queue.size()].predictedDisplayTime += this->frame_state.predictedDisplayPeriod;
+    }
+
+    const auto& pipelined_frame_state = this->frame_state_queue[frame_count % this->frame_state_queue.size()];
+    const auto display_time = pipelined_frame_state.predictedDisplayTime + (XrDuration)(pipelined_frame_state.predictedDisplayPeriod * this->prediction_scale);
 
     if (display_time == 0) {
         return VRRuntime::Error::SUCCESS;
@@ -286,7 +303,7 @@ uint32_t OpenXR::get_height() const {
 }
 
 VRRuntime::Error OpenXR::consume_events(std::function<void(void*)> callback) {
-    std::scoped_lock _{sync_mtx};
+    std::scoped_lock _{event_mtx};
 
     XrEventDataBuffer edb{XR_TYPE_EVENT_DATA_BUFFER};
     auto result = xrPollEvent(this->instance, &edb);
@@ -503,12 +520,16 @@ OpenXR::SubmitState OpenXR::get_submit_state() {
     last_submit_state.frame_count = !this->has_render_frame_count ? this->internal_frame_count : this->internal_render_frame_count;
     this->has_render_frame_count = false;
 
+    if (get_frame_state(this->internal_render_frame_count-1).predictedDisplayTime > last_submit_state.frame_state.predictedDisplayTime) {
+        spdlog::warn("[VR] Frame state is older than previous frame state!");
+    }
+
     return last_submit_state;
 }
 
 
 void OpenXR::enqueue_render_poses(uint32_t frame_count) {
-    std::scoped_lock _{ this->sync_mtx };
+    //std::scoped_lock _{ this->sync_mtx };
     std::unique_lock __{ this->pose_mtx };
 
     enqueue_render_poses_unsafe(frame_count);

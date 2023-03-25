@@ -59,7 +59,7 @@ struct VRRuntime {
         this->loaded = false;
     }
 
-    virtual Error synchronize_frame() {
+    virtual Error synchronize_frame(std::optional<uint32_t> frame_count = std::nullopt) {
         return Error::SUCCESS;
     }
 

@@ -66,7 +66,7 @@ struct OpenXR final : public VRRuntime {
         //stage_view_queue_renderthread.clear();
     }
 
-    VRRuntime::Error synchronize_frame() override;
+    VRRuntime::Error synchronize_frame(std::optional<uint32_t> frame_count = std::nullopt) override;
     VRRuntime::Error fix_frame() override {
         // sync if necessary.
         VRRuntime::fix_frame();
@@ -161,6 +161,8 @@ public:
     std::chrono::high_resolution_clock::time_point profiler_start_time{};
 
     std::recursive_mutex sync_mtx{};
+    std::recursive_mutex sync_assignment_mtx{};
+    std::recursive_mutex event_mtx{};
     std::recursive_mutex swapchain_mtx{};
 
     XrInstance instance{XR_NULL_HANDLE};
@@ -256,6 +258,7 @@ public:
     };
 
     SubmitState last_submit_state{};
+    std::array<SubmitState, 3> submit_state_sync_queue{};
     SubmitState get_submit_state();
     
     const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 5.0f, 1.0f) };
