@@ -185,8 +185,8 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
     }
 
     //this->frame_state_queue[frame_count % this->frame_state_queue.size()] = this->frame_state;
-    const auto& pipelined_frame_state = this->frame_state_queue[frame_count % this->frame_state_queue.size()];
-    const auto display_time = pipelined_frame_state.predictedDisplayTime + (XrDuration)(pipelined_frame_state.predictedDisplayPeriod * this->prediction_scale);
+    const auto& pipelined_frame_state = this->frame_state_queue[(frame_count - 1) % this->frame_state_queue.size()];
+    const auto display_time = pipelined_frame_state.predictedDisplayTime + pipelined_frame_state.predictedDisplayPeriod + (XrDuration)(pipelined_frame_state.predictedDisplayPeriod * this->prediction_scale);
 
     if (display_time == 0) {
         return VRRuntime::Error::SUCCESS;
