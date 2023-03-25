@@ -520,9 +520,9 @@ OpenXR::SubmitState OpenXR::get_submit_state() {
     last_submit_state.frame_count = !this->has_render_frame_count ? this->internal_frame_count : this->internal_render_frame_count;
     this->has_render_frame_count = false;
 
-    if (get_frame_state(this->internal_render_frame_count-1).predictedDisplayTime > last_submit_state.frame_state.predictedDisplayTime) {
+    /*if (get_frame_state(this->internal_render_frame_count-1).predictedDisplayTime > last_submit_state.frame_state.predictedDisplayTime) {
         spdlog::warn("[VR] Frame state is older than previous frame state!");
-    }
+    }*/
 
     return last_submit_state;
 }
