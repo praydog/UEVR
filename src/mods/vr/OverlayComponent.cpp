@@ -211,7 +211,7 @@ void OverlayComponent::update_slate_openvr() {
         const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
 
         // Add the inverse of the pitch rotation to the rotation offset
-        rotation_offset = glm::inverse(pre_flat_pitch) * rotation_offset;
+        rotation_offset = glm::normalize(glm::inverse(pre_flat_pitch * vr->get_rotation_offset()));
     }
 
     //auto glm_matrix = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
@@ -605,7 +605,7 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
             const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
 
             // Add the inverse of the pitch rotation to the rotation offset
-            rotation_offset = glm::inverse(pre_flat_pitch) * rotation_offset;
+            rotation_offset = glm::normalize(glm::inverse(pre_flat_pitch * vr->get_rotation_offset()));
         }
 
         glm_matrix = Matrix4x4f{rotation_offset};   
