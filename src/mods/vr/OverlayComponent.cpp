@@ -206,7 +206,7 @@ void OverlayComponent::update_slate_openvr() {
 
     auto rotation_offset = glm::inverse(vr->get_rotation_offset());
 
-    if (vr->is_decoupled_pitch_enabled()) {
+    if (vr->is_decoupled_pitch_enabled() && vr->is_decoupled_pitch_ui_adjust_enabled()) {
         const auto pre_flat_rotation = vr->get_pre_flattened_rotation();
         const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
 
@@ -600,7 +600,7 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
     } else {
         auto rotation_offset = glm::inverse(vr->get_rotation_offset());
 
-        if (vr->is_decoupled_pitch_enabled()) {
+        if (vr->is_decoupled_pitch_enabled() && vr->is_decoupled_pitch_ui_adjust_enabled()) {
             const auto pre_flat_rotation = vr->get_pre_flattened_rotation();
             const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
 
