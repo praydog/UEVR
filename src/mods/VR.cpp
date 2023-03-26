@@ -1529,7 +1529,7 @@ void VR::on_draw_ui() {
     ImGui::NextColumn();
     ImGui::BeginGroup();
 
-    ImGui::SetNextItemOpen(m_enable_depth->value(), ImGuiCond_::ImGuiCond_Once);
+    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
     if (ImGui::TreeNode("Decoupled Pitch")) {
         m_decoupled_pitch->draw("Enabled");
         m_decoupled_pitch_ui_adjust->draw("Auto Adjust UI");
