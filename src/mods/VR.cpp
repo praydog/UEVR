@@ -1152,6 +1152,10 @@ void VR::load_cameras() try {
             if (auto offs = cfg.get<float>(std::format("camera_forward_offset{}", i))) {
                 data.offset.z = *offs;
             }
+
+            if (auto scale = cfg.get<float>(std::format("world_scale{}", i))) {
+                data.world_scale = *scale;
+            }
         }
     }
 } catch(...) {
