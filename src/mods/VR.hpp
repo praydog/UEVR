@@ -510,6 +510,8 @@ private:
     struct CameraData {
         glm::vec3 offset{};
         float world_scale{1.0f};
+        bool decoupled_pitch{false};
+        bool decoupled_pitch_ui_adjust{true};
     };
     std::array<CameraData, 3> m_camera_datas{};
     void save_cameras();
@@ -529,6 +531,7 @@ private:
         *m_enable_gui,
         *m_enable_depth,
         *m_decoupled_pitch,
+        *m_decoupled_pitch_ui_adjust,
         *m_motion_controls_inactivity_timer,
         *m_joystick_deadzone,
         *m_camera_forward_offset,

@@ -1156,6 +1156,14 @@ void VR::load_cameras() try {
             if (auto scale = cfg.get<float>(std::format("world_scale{}", i))) {
                 data.world_scale = *scale;
             }
+
+            if (auto decoupled_pitch = cfg.get<bool>(std::format("decoupled_pitch{}", i))) {
+                data.decoupled_pitch = *decoupled_pitch;
+            }
+
+            if (auto decoupled_pitch_ui_adjust = cfg.get<bool>(std::format("decoupled_pitch_ui_adjust{}", i))) {
+                data.decoupled_pitch_ui_adjust = *decoupled_pitch_ui_adjust;
+            }
         }
     }
 } catch(...) {
@@ -1175,6 +1183,8 @@ void VR::save_cameras() try {
         cfg.set<float>(std::format("camera_up_offset{}", i), data.offset.y);
         cfg.set<float>(std::format("camera_forward_offset{}", i), data.offset.z);
         cfg.set<float>(std::format("world_scale{}", i), m_camera_datas[i].world_scale);
+        cfg.set<bool>(std::format("decoupled_pitch{}", i), m_camera_datas[i].decoupled_pitch);
+        cfg.set<bool>(std::format("decoupled_pitch_ui_adjust{}", i), m_camera_datas[i].decoupled_pitch_ui_adjust);
     }
 
     cfg.save(cameras_txt.string());
@@ -1519,7 +1529,13 @@ void VR::on_draw_ui() {
     ImGui::NextColumn();
     ImGui::BeginGroup();
 
-    m_decoupled_pitch->draw("Decoupled Pitch");
+    ImGui::SetNextItemOpen(m_enable_depth->value(), ImGuiCond_::ImGuiCond_Once);
+    if (ImGui::TreeNode("Decoupled Pitch")) {
+        m_decoupled_pitch->draw("Enabled");
+        m_decoupled_pitch_ui_adjust->draw("Auto Adjust UI");
+
+        ImGui::TreePop();
+    }
 
     for (auto i = 0; i < m_camera_datas.size(); ++i) {
         auto& data = m_camera_datas[i];
@@ -1532,6 +1548,8 @@ void VR::on_draw_ui() {
             };
 
             data.world_scale = m_world_scale->value();
+            data.decoupled_pitch = m_decoupled_pitch->value();
+            data.decoupled_pitch_ui_adjust = m_decoupled_pitch_ui_adjust->value();
 
             save_cameras();
         }
@@ -1543,6 +1561,8 @@ void VR::on_draw_ui() {
             m_camera_up_offset->value() = data.offset.y;
             m_camera_forward_offset->value() = data.offset.z;
             m_world_scale->value() = data.world_scale;
+            m_decoupled_pitch->value() = data.decoupled_pitch;
+            m_decoupled_pitch_ui_adjust->value() = data.decoupled_pitch_ui_adjust;
         }
     }
 
