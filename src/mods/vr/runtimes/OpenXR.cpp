@@ -197,9 +197,17 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
         this->internal_frame_count = frame_count;
     }
 
-    if (this->submit_state_sync_queue[frame_count % this->submit_state_sync_queue.size()].frame_count < frame_count) {
+    // Pre-emptively update the frame state
+    // this will allow us to get near-correct estimated poses for this frame
+    // before xrWaitFrame has finished on the previous frame
+    // This is usually the case *most* of the time, but sometimes the game thread will
+    // actually execute after xrWaitFrame has finished, so we don't need to adjust the frame state
+    if (this->submit_state_sync_queue[frame_count % this->submit_state_sync_queue.size()].frame_count + 1 < frame_count) {
+        // Update the main frame state's predicted display time because it's possible that
+        // the game thread can run multiple times before xrWaitFrame has finished
+        // So maybe we will end up predicting more than one period ahead at times
+        this->frame_state.predictedDisplayTime += this->frame_state.predictedDisplayPeriod;
         this->frame_state_queue[frame_count % this->frame_state_queue.size()] = this->frame_state;
-        this->frame_state_queue[frame_count % this->frame_state_queue.size()].predictedDisplayTime += this->frame_state.predictedDisplayPeriod;
     }
 
     const auto& pipelined_frame_state = this->frame_state_queue[frame_count % this->frame_state_queue.size()];
