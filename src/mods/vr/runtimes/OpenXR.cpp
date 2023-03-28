@@ -142,10 +142,10 @@ VRRuntime::Error OpenXR::synchronize_frame(std::optional<uint32_t> frame_count) 
     } else {
         std::scoped_lock __{this->sync_assignment_mtx};
 
-    // Initialize all the existing frame states if they aren't already so we don't get some random error when calling xrEndFrame
-    for (auto& pipeline_state : this->pipeline_states) {
-        if (pipeline_state.frame_state.predictedDisplayTime == 0) {
-            pipeline_state.frame_state = this->frame_state;
+        // Correct for invalid predictedDisplayPeriod values. Seen on SteamVR OpenXR
+        if (local_frame_state.predictedDisplayPeriod >= 1000000000) {
+            spdlog::error("[VR] xrWaitFrame returned invalid predictedDisplayPeriod: {}", local_frame_state.predictedDisplayPeriod);
+            local_frame_state.predictedDisplayPeriod = 0;
         }
 
         this->frame_state = local_frame_state;
