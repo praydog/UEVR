@@ -187,7 +187,6 @@ VRRuntime::Error OpenXR::synchronize_frame(std::optional<uint32_t> frame_count) 
 VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_count) {
     //std::scoped_lock ___{sync_mtx};
     std::scoped_lock _{ this->sync_assignment_mtx };
-    std::unique_lock __{ this->pose_mtx };
 
     if (!this->session_ready) {
         return VRRuntime::Error::SUCCESS;
@@ -547,8 +546,6 @@ void OpenXR::destroy() {
 
 OpenXR::PipelineState OpenXR::get_submit_state() {
     std::scoped_lock __{ this->sync_assignment_mtx };
-    std::unique_lock _{ this->pose_mtx };
-    //std::scoped_lock ___{ this->sync_mtx };
 
     if (this->has_render_frame_count) {
         last_submit_state = this->pipeline_states[this->internal_render_frame_count % QUEUE_SIZE];
