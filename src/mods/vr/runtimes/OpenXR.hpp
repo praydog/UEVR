@@ -198,7 +198,8 @@ public:
         XrFrameState frame_state{XR_TYPE_FRAME_STATE};
         XrSpaceLocation view_space_location{XR_TYPE_SPACE_LOCATION};
         std::vector<XrView> stage_views{};
-        uint32_t frame_count{0};
+        uint32_t frame_count{0}; // Updated on game thread prior to rendering
+        uint32_t prev_frame_count{0}; // Updated right after xrWaitFrame is called
     };
     /*std::array<std::vector<XrView>, 3> stage_view_queue{};
     std::array<XrSpaceLocation, 3> view_space_location_queue{};
@@ -277,7 +278,6 @@ public:
     }
 
     PipelineState last_submit_state{};
-    std::array<PipelineState, QUEUE_SIZE> submit_state_sync_queue{};
     PipelineState get_submit_state();
     
     const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 5.0f, 1.0f) };
