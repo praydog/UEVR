@@ -1191,6 +1191,7 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
                 uint32_t index{};
                 xrAcquireSwapchainImage(swapchain.handle, &acquire_info, &index);
                 xrWaitSwapchainImage(swapchain.handle, &wait_info);
+                this->parent->clear_tex(ctx.textures[index].texture);
                 xrReleaseSwapchainImage(swapchain.handle, &release_info);
             }
         }

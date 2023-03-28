@@ -717,7 +717,7 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
             spdlog::info("[VR] Creating swapchain image {} for swapchain {}", j, i);
 
             ctx.textures[j] = {XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR};
-            ctx.texture_contexts[j] = std::make_unique<D3D12Component::OpenXR::SwapchainContext::TextureContext>();
+            ctx.texture_contexts[j] = std::make_unique<D3D12Component::TextureContext>();
             ctx.texture_contexts[j]->copier.setup((std::wstring{L"OpenXR Copier "} + std::to_wstring(i) + L" " + std::to_wstring(j)).c_str());
 
             auto resource_state = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -732,6 +732,14 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
             }
 
             ctx.textures[j].texture->SetName(L"OpenXR Swapchain Texture");
+            ctx.texture_contexts[j]->texture = ctx.textures[j].texture;
+
+            // Depth stencil textures don't need an RTV.
+            if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) == 0) {
+                if (!ctx.texture_contexts[j]->create_rtv(device, (DXGI_FORMAT)swapchain_create_info.format)) {
+                    spdlog::error("[VR] Failed to create swapchain RTV {} {}", i, j);
+                }
+            }
 
             ctx.textures[j].texture->AddRef();
             const auto ref_count = ctx.textures[j].texture->Release();
@@ -755,7 +763,6 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
 
         if (swapchain_create_info.createFlags & XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT) {
             for (uint32_t j = 0; j < image_count; ++j) {
-                // we dgaf so just acquire/wait/release. maybe later we can actually write something to it, but we dont care rn
                 XrSwapchainImageAcquireInfo acquire_info{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
                 XrSwapchainImageWaitInfo wait_info{XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
                 wait_info.timeout = XR_INFINITE_DURATION;
@@ -764,6 +771,13 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
                 uint32_t index{};
                 xrAcquireSwapchainImage(swapchain.handle, &acquire_info, &index);
                 xrWaitSwapchainImage(swapchain.handle, &wait_info);
+
+                auto& texture_ctx = ctx.texture_contexts[index];
+                const float clear_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                texture_ctx->copier.clear_rtv(ctx.textures[index].texture, texture_ctx->get_rtv(), clear_color, D3D12_RESOURCE_STATE_RENDER_TARGET);
+                texture_ctx->copier.execute();
+                texture_ctx->copier.wait(16);
+                
                 xrReleaseSwapchainImage(swapchain.handle, &release_info);
             }
         }

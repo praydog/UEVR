@@ -223,12 +223,8 @@ private:
         XrGraphicsBindingD3D12KHR binding{XR_TYPE_GRAPHICS_BINDING_D3D12_KHR};
 
         struct SwapchainContext {
-            struct TextureContext {
-                ResourceCopier copier{};
-            };
-
             std::vector<XrSwapchainImageD3D12KHR> textures{};
-            std::vector<std::unique_ptr<TextureContext>> texture_contexts{};
+            std::vector<std::unique_ptr<D3D12Component::TextureContext>> texture_contexts{};
             uint32_t num_textures_acquired{0};
         };
 
@@ -236,6 +232,8 @@ private:
         std::recursive_mutex mtx{};
         std::array<uint32_t, 2> last_resolution{};
         bool made_depth_with_null_defaults{false};
+
+        friend class D3D12Component;
     } m_openxr;
 
     uint32_t m_backbuffer_size[2]{};
