@@ -1312,7 +1312,8 @@ void D3D12Component::ResourceCopier::clear_rtv(ID3D12Resource* dst, D3D12_CPU_DE
     dst_barrier.Transition.StateBefore = dst_state;
     dst_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
 
-    {
+    // No need to switch if we're already in the right state.
+    if (dst_state != dst_barrier.Transition.StateAfter) {
         D3D12_RESOURCE_BARRIER barriers[1]{dst_barrier};
         this->cmd_list->ResourceBarrier(1, barriers);
     }
@@ -1324,7 +1325,7 @@ void D3D12Component::ResourceCopier::clear_rtv(ID3D12Resource* dst, D3D12_CPU_DE
     dst_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     dst_barrier.Transition.StateAfter = dst_state;
 
-    {
+    if (dst_state != dst_barrier.Transition.StateBefore) {
         D3D12_RESOURCE_BARRIER barriers[1]{dst_barrier};
         this->cmd_list->ResourceBarrier(1, barriers);
     }
