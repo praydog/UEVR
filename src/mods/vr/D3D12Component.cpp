@@ -657,12 +657,14 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
     ComPtr<ID3D12Resource> backbuffer{};
 
     auto vr = VR::get();
+    bool has_actual_vr_backbuffer = false;
 
     if (vr != nullptr && vr->m_fake_stereo_hook != nullptr) {
         auto ue4_texture = vr->m_fake_stereo_hook->get_render_target_manager()->get_render_target();
 
         if (ue4_texture != nullptr) {
             backbuffer = (ID3D12Resource*)ue4_texture->get_native_resource();
+            has_actual_vr_backbuffer = backbuffer != nullptr;
         }
     }
     
@@ -785,6 +787,10 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
     hmd_desc.Width = vr->get_hmd_width() * double_wide_multiple;
     hmd_desc.Height = vr->get_hmd_height();
 
+    if (!has_actual_vr_backbuffer) {
+        hmd_desc.Format = DXGI_FORMAT_B8G8R8A8_TYPELESS;
+    }
+
     hmd_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     hmd_desc.Flags &= ~D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
@@ -816,6 +822,7 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
     auto virtual_desktop_dummy_desc = backbuffer_desc;
     auto virtual_desktop_dummy_swapchain_create_info = standard_swapchain_create_info;
 
+    virtual_desktop_dummy_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
     virtual_desktop_dummy_desc.Width = 4;
     virtual_desktop_dummy_desc.Height = 4;
     virtual_desktop_dummy_swapchain_create_info.width = 4;
@@ -828,10 +835,12 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
     }
 
     auto desktop_rt_swapchain_create_info = standard_swapchain_create_info;
+    desktop_rt_swapchain_create_info.format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
     desktop_rt_swapchain_create_info.width = g_framework->get_d3d12_rt_size().x;
     desktop_rt_swapchain_create_info.height = g_framework->get_d3d12_rt_size().y;
 
     auto desktop_rt_desc = backbuffer_desc;
+    desktop_rt_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
     desktop_rt_desc.Width = g_framework->get_d3d12_rt_size().x;
     desktop_rt_desc.Height = g_framework->get_d3d12_rt_size().y;
 
