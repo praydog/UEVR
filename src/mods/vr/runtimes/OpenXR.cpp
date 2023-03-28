@@ -546,8 +546,8 @@ void OpenXR::destroy() {
 }
 
 OpenXR::PipelineState OpenXR::get_submit_state() {
-    std::unique_lock _{ this->pose_mtx };
     std::scoped_lock __{ this->sync_assignment_mtx };
+    std::unique_lock _{ this->pose_mtx };
     //std::scoped_lock ___{ this->sync_mtx };
 
     if (this->has_render_frame_count) {
