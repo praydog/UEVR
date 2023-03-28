@@ -924,7 +924,7 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
 }
 
 void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
-    std::scoped_lock _{m_openvr_mtx};
+    std::scoped_lock _{m_reinitialize_mtx};
 
     auto runtime = get_runtime();
     if (m_uncap_framerate->value()) {
@@ -1412,6 +1412,8 @@ void VR::on_post_present() {
     }
 
     if (runtime->wants_reinitialize) {
+        std::scoped_lock _{m_reinitialize_mtx};
+
         if (runtime->is_openvr()) {
             m_openvr->wants_reinitialize = false;
             reinitialize_openvr();

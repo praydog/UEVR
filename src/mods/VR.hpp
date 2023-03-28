@@ -397,6 +397,7 @@ private:
     std::shared_ptr<runtimes::OpenXR> m_openxr{std::make_shared<runtimes::OpenXR>()};
 
     mutable std::recursive_mutex m_openvr_mtx{};
+    mutable std::recursive_mutex m_reinitialize_mtx{};
     mutable std::shared_mutex m_rotation_mtx{};
 
     std::vector<int32_t> m_controllers{};
