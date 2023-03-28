@@ -30,6 +30,77 @@ namespace pixel_shader1 {
 //#define AFR_DEPTH_TEMP_DISABLED
 
 namespace vrmod {
+D3D11Component::TextureContext::TextureContext(ID3D11Resource* in_tex, std::optional<DXGI_FORMAT> rtv_format) {
+    set(in_tex, rtv_format);
+}
+
+bool D3D11Component::TextureContext::set(ID3D11Resource* in_tex, std::optional<DXGI_FORMAT> rtv_format) {
+    bool is_same_tex = this->tex.Get() == in_tex;
+
+    if (!is_same_tex) {
+        this->tex.Reset();
+    }
+
+    this->tex = in_tex;
+
+    if (in_tex == nullptr) {
+        this->rtv.Reset();
+        return false;
+    }
+   
+    if (!is_same_tex) {
+        this->rtv.Reset();
+
+        auto device = g_framework->get_d3d11_hook()->get_device();
+        bool made_rtv = false;
+
+        if (!rtv_format) {
+            if (!FAILED(device->CreateRenderTargetView(tex.Get(), nullptr, &rtv))) {
+                made_rtv = true;
+            }
+        }
+
+        if (!made_rtv) {
+            if (!rtv_format) {
+                rtv_format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+            }
+
+            D3D11_RENDER_TARGET_VIEW_DESC rtv_desc{};
+            rtv_desc.Format = *rtv_format;
+            rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+            rtv_desc.Texture2D.MipSlice = 0;
+
+            made_rtv = !FAILED(device->CreateRenderTargetView(tex.Get(), &rtv_desc, &this->rtv));
+        }
+
+        if (!made_rtv) {
+            spdlog::error("Failed to create render target view for texture");
+        }
+
+        return made_rtv;
+    }
+
+    return true;
+}
+
+bool D3D11Component::TextureContext::clear_rtv(float* color) {
+    if (tex == nullptr || rtv == nullptr) {
+        return false;
+    }
+
+    if (color == nullptr) {
+        return false;
+    }
+
+    auto device = g_framework->get_d3d11_hook()->get_device();
+
+    ComPtr<ID3D11DeviceContext> context{};
+    device->GetImmediateContext(&context);
+
+    context->ClearRenderTargetView(rtv.Get(), color);
+    return true;
+}
+
 vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     if (m_left_eye_tex == nullptr || m_force_reset || m_last_afr_state != vr->is_using_afr()) {
         if (!setup()) {
@@ -93,13 +164,17 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     const auto ui_target = ffsr->get_render_target_manager()->get_ui_target();
 
     if (ui_target != nullptr) {
+        m_engine_ui_ref.set((ID3D11Texture2D*)ui_target->get_native_resource(), DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
+
         // Duplicate frames can sometimes cause the UI to get stuck on the screen.
         // and can lock up the compositor.
         if (is_right_eye_frame) {
-            if (runtime->is_openvr() && get_ui_tex().Get() != nullptr) {
-                copy_tex((ID3D11Resource*)ui_target->get_native_resource(), get_ui_tex().Get());
+            if (runtime->is_openvr() && get_ui_tex().Get() != nullptr && m_engine_ui_ref.has_texture()) {
+                copy_tex(m_engine_ui_ref, get_ui_tex().Get());
             } else if (runtime->is_openxr() && vr->m_openxr->frame_began) {
-                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, (ID3D11Texture2D*)ui_target->get_native_resource());
+                if (m_engine_ui_ref.has_texture()) {
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, m_engine_ui_ref);
+                }
 
                 auto fw_rt = g_framework->get_rendertarget_d3d11();
 
@@ -108,8 +183,12 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 }
             }
         }
-
-        clear_tex((ID3D11Resource*)ui_target->get_native_resource());
+        
+        // clear the game's UI texture
+        float clear_color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+        m_engine_ui_ref.clear_rtv(clear_color);
+    } else {
+        m_engine_ui_ref.reset();
     }
 
     ComPtr<ID3D11Texture2D> scene_depth_tex{};
@@ -472,14 +551,12 @@ void D3D11Component::on_reset(VR* vr) {
     }
 }
 
-void D3D11Component::clear_tex(ID3D11Resource* rsrc) {
-    auto& hook = g_framework->get_d3d11_hook();
-    auto device = hook->get_device();
+// Quick function for one-time rtv clearing
+bool D3D11Component::clear_tex(ID3D11Resource* tex, std::optional<DXGI_FORMAT> format) {
+    auto ctx = TextureContext{tex, format};
 
-    ComPtr<ID3D11DeviceContext> context{};
-    device->GetImmediateContext(&context);
-
-    context->CopyResource(rsrc, get_blank_tex().Get());
+    float color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    return ctx.clear_rtv(color);
 }
 
 void D3D11Component::copy_tex(ID3D11Resource* src, ID3D11Resource* dst) {
@@ -553,34 +630,9 @@ bool D3D11Component::setup() {
     device->CreateTexture2D(&backbuffer_desc, nullptr, &m_ui_tex);
     device->CreateTexture2D(&backbuffer_desc, nullptr, &m_blank_tex);
 
-    auto clear_tex_easy = [device, context](ID3D11Texture2D* tex) {
-        ComPtr<ID3D11RenderTargetView> temp_rtv{};
-        bool made_rtv = false;
-
-        if (!FAILED(device->CreateRenderTargetView(tex, nullptr, &temp_rtv))) {
-            made_rtv = true;
-        }
-
-        if (!made_rtv) {
-            D3D11_RENDER_TARGET_VIEW_DESC rtv_desc{};
-            rtv_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-            rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-            rtv_desc.Texture2D.MipSlice = 0;
-
-            if (!FAILED(device->CreateRenderTargetView(tex, &rtv_desc, &temp_rtv))) {
-                made_rtv = true;
-            }
-        }
-
-        if (made_rtv) {
-            float color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-            context->ClearRenderTargetView(temp_rtv.Get(), color);
-            spdlog::info("Successfully cleared texture");
-        }
-    };
-
-    clear_tex_easy(m_ui_tex.Get());
-    clear_tex_easy(m_blank_tex.Get());
+    // No need to pass the format as the backbuffer is not a typeless format.
+    clear_tex(m_ui_tex.Get());
+    clear_tex(m_blank_tex.Get());
 
     // copy backbuffer into right eye
     context->CopyResource(m_right_eye_tex.Get(), backbuffer.Get());
