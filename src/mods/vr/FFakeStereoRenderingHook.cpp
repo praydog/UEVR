@@ -1805,7 +1805,7 @@ struct SceneViewExtensionAnalyzer {
                         is_ue5_rdg_builder = true;
                         const auto rdg_builder = (uintptr_t)cmd_list;
 
-                        for (auto i = 0x10; i < 0x100; i += sizeof(void*)) {
+                        for (auto i = 0x10; i <= 0x100; i += sizeof(void*)) try {
                             const auto value = *(uintptr_t*)(rdg_builder + i);
 
                             if (value == 0 || IsBadReadPtr((void*)value, sizeof(void*))) {
@@ -1836,10 +1836,23 @@ struct SceneViewExtensionAnalyzer {
                                 continue;
                             }
 
+                            // Check that there is a valid function in the vtable
+                            const auto first_function = *(uintptr_t*)root_vtable;
+
+                            if (first_function == 0 || IsBadReadPtr((void*)first_function, sizeof(void*))) {
+                                continue;
+                            }
+
+                            if (!utility::get_module_within((void*)first_function).has_value()) {
+                                continue;
+                            }
+
                             SPDLOG_INFO("Possible UE5 command list found at offset 0x{:x}", i);
                             ue5_command_offset = i;
                             cmd_list = (sdk::FRHICommandListBase*)value;
                             break;
+                        } catch(...) {
+                            spdlog::error("Exception occurred while analyzing UE5 command list");
                         }
                     };
 
@@ -1849,6 +1862,11 @@ struct SceneViewExtensionAnalyzer {
                         // UE5
                         if (g_hook->has_double_precision()) {
                             analyze_for_ue5();
+
+                            if (ue5_command_offset == 0) {
+                                SPDLOG_ERROR("Failed to find UE5 command list, trying again next frame");
+                                return;
+                            }
                         } else {
                             SPDLOG_INFO("Old FRHICommandBase detected");
                             is_old_command_base = true;
