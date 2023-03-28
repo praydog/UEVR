@@ -116,6 +116,10 @@ struct VRRuntime {
     virtual void on_draw_ui() {}
     virtual void on_device_reset() {}
 
+    virtual void on_pre_render_game_thread(uint32_t frame_count) {};
+    virtual void on_pre_render_render_thread(uint32_t frame_count) {};
+    virtual void on_pre_render_rhi_thread(uint32_t frame_count) {};
+
     bool is_openxr() const {
         return this->type() == Type::OPENXR;
     }

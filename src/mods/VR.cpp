@@ -956,11 +956,12 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
 
     if (frame_count != 0 && is_using_afr() && frame_count % 2 == 0) {
         if (runtime->is_openxr()) {
-            const auto last_frame = (frame_count - 1) % m_openxr->view_space_location_queue.size();
-            const auto now_frame = frame_count % m_openxr->view_space_location_queue.size();
-            m_openxr->view_space_location_queue[now_frame] = m_openxr->view_space_location_queue[last_frame];
-            m_openxr->stage_view_queue[now_frame] = m_openxr->stage_view_queue[last_frame];
-            m_openxr->frame_state_queue[now_frame] = m_openxr->frame_state_queue[last_frame];
+            std::scoped_lock __{ m_openxr->sync_assignment_mtx };
+
+            const auto last_frame = (frame_count - 1) % runtimes::OpenXR::QUEUE_SIZE;
+            const auto now_frame = frame_count % runtimes::OpenXR::QUEUE_SIZE;
+            m_openxr->pipeline_states[now_frame] = m_openxr->pipeline_states[last_frame];
+            m_openxr->pipeline_states[now_frame].frame_count = now_frame;
         } else {
             const auto last_frame = (frame_count - 1) % m_openvr->pose_queue.size();
             const auto now_frame = frame_count % m_openvr->pose_queue.size();
@@ -1683,7 +1684,8 @@ Vector4f VR::get_position_unsafe(uint32_t index) const {
 
         // HMD position
         if (index == 0 && !m_openxr->stage_views.empty()) {
-            return Vector4f{ *(Vector3f*)&m_openxr->get_current_view_space_location().pose.position, 1.0f };
+            const auto vspl = m_openxr->get_current_view_space_location();
+            return Vector4f{ *(Vector3f*)&vspl.pose.position, 1.0f };
         } else if (index > 0) {
             return Vector4f{ *(Vector3f*)&m_openxr->hands[index-1].location.pose.position, 1.0f };
         }
@@ -1758,10 +1760,9 @@ Matrix4x4f VR::get_hmd_transform(uint32_t frame_count) const {
         const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&pose };
         return glm::rowMajor4(matrix);
     } else if (get_runtime()->is_openxr()) {
-        std::shared_lock _{ get_runtime()->pose_mtx };
         std::shared_lock __{ get_runtime()->eyes_mtx };
 
-        const auto& vspl = m_openxr->get_view_space_location(frame_count);
+        const auto vspl = m_openxr->get_view_space_location(frame_count);
         auto mat = Matrix4x4f{runtimes::OpenXR::to_glm(vspl.pose.orientation)};
         mat[3] = Vector4f{*(Vector3f*)&vspl.pose.position, 1.0f};
 
@@ -1789,7 +1790,6 @@ Matrix4x4f VR::get_rotation(uint32_t index) const {
         auto matrix = Matrix4x4f{ *(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking };
         return glm::extractMatrixRotation(glm::rowMajor4(matrix));
     } else if (get_runtime()->is_openxr()) {
-        std::shared_lock _{ get_runtime()->pose_mtx };
         std::shared_lock __{ get_runtime()->eyes_mtx };
 
         // HMD rotation
@@ -1831,11 +1831,9 @@ Matrix4x4f VR::get_transform(uint32_t index) const {
         const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking };
         return glm::rowMajor4(matrix);
     } else if (get_runtime()->is_openxr()) {
-        std::shared_lock _{ get_runtime()->pose_mtx };
-
         // HMD rotation
         if (index == 0 && !m_openxr->stage_views.empty()) {
-            const auto& vspl = m_openxr->get_current_view_space_location();
+            const auto vspl = m_openxr->get_current_view_space_location();
             auto mat = Matrix4x4f{runtimes::OpenXR::to_glm(vspl.pose.orientation)};
             mat[3] = Vector4f{*(Vector3f*)&vspl.pose.position, 1.0f};
             return mat;

@@ -1702,7 +1702,9 @@ struct SceneViewExtensionAnalyzer {
 
             const auto frame_count = *(uint32_t*)((uintptr_t)&view_family + frame_count_offset);
             //vr->update_hmd_state(true, frame_count);
-            vr->get_runtime()->internal_frame_count = frame_count;
+            auto runtime = vr->get_runtime();
+            runtime->internal_frame_count = frame_count;
+            runtime->on_pre_render_game_thread(frame_count);
 
             // If we couldn't find GetDesiredNumberOfViews, we need to set the view count to 1 as a workaround
             // TODO: Check if this can cause a memory leak, I don't know who is resonsible
@@ -1947,6 +1949,9 @@ struct SceneViewExtensionAnalyzer {
     static void hook_new_rhi_command(sdk::FRHICommandBase_New* last_command, uint32_t frame_count) {
         std::scoped_lock __{vtable_mutex};
 
+        auto runtime = VR::get()->get_runtime();
+        runtime->on_pre_render_render_thread(frame_count);
+
         if (last_command == nullptr || *(void**)last_command == nullptr) {
             SPDLOG_INFO("Cannot hook command with no vtable, falling back to passing current frame count to runtime");
             VR::get()->get_runtime()->enqueue_render_poses(frame_count);
@@ -1977,6 +1982,9 @@ struct SceneViewExtensionAnalyzer {
 
         std::scoped_lock __{func_mutex};
 
+        auto runtime = VR::get()->get_runtime();
+        runtime->on_pre_render_render_thread(frame_count);
+
         cmd_frame_counts[last_command] = frame_count;
 
         static auto func_override = (sdk::FRHICommandBase_Old::Func)+[](sdk::FRHICommandListBase* cmd_list, sdk::FRHICommandBase_Old* cmd) {
@@ -1996,7 +2004,8 @@ struct SceneViewExtensionAnalyzer {
             const auto func = original_funcs[cmd];
             const auto frame_count = cmd_frame_counts[cmd];
 
-            vr->get_runtime()->enqueue_render_poses(frame_count);
+            runtime->enqueue_render_poses(frame_count);
+            runtime->on_pre_render_rhi_thread(frame_count);
 
             auto call_orig = [&]() {
                 func(*cmd_list, cmd);

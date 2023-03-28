@@ -777,7 +777,7 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
                 texture_ctx->copier.clear_rtv(ctx.textures[index].texture, texture_ctx->get_rtv(), clear_color, D3D12_RESOURCE_STATE_RENDER_TARGET);
                 texture_ctx->copier.execute();
                 texture_ctx->copier.wait(16);
-                
+
                 xrReleaseSwapchainImage(swapchain.handle, &release_info);
             }
         }
@@ -800,10 +800,7 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
     auto hmd_desc = backbuffer_desc;
     hmd_desc.Width = vr->get_hmd_width() * double_wide_multiple;
     hmd_desc.Height = vr->get_hmd_height();
-
-    if (!has_actual_vr_backbuffer) {
-        hmd_desc.Format = DXGI_FORMAT_B8G8R8A8_TYPELESS;
-    }
+    hmd_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
 
     hmd_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     hmd_desc.Flags &= ~D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;

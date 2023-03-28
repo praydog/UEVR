@@ -66,6 +66,10 @@ struct OpenXR final : public VRRuntime {
         //stage_view_queue_renderthread.clear();
     }
 
+    void on_pre_render_game_thread(uint32_t frame_count) override;
+    void on_pre_render_render_thread(uint32_t frame_count) override {};
+    void on_pre_render_rhi_thread(uint32_t frame_count) override {};
+
     VRRuntime::Error synchronize_frame(std::optional<uint32_t> frame_count = std::nullopt) override;
     VRRuntime::Error fix_frame() override {
         // sync if necessary.
@@ -190,12 +194,23 @@ public:
     std::vector<XrView> stage_views{};
 
     //std::deque<std::vector<XrView>> stage_view_queue{};
-    std::array<std::vector<XrView>, 3> stage_view_queue{};
+    struct PipelineState {
+        XrFrameState frame_state{XR_TYPE_FRAME_STATE};
+        XrSpaceLocation view_space_location{XR_TYPE_SPACE_LOCATION};
+        std::vector<XrView> stage_views{};
+        uint32_t frame_count{0};
+    };
+    /*std::array<std::vector<XrView>, 3> stage_view_queue{};
     std::array<XrSpaceLocation, 3> view_space_location_queue{};
-    std::array<XrFrameState, 3> frame_state_queue{};
+    std::array<XrFrameState, 3> frame_state_queue{};*/
 
-    const auto& get_stage_view(uint32_t frame_count) {
-        const auto& result = stage_view_queue[frame_count % stage_view_queue.size()];
+    static constexpr auto QUEUE_SIZE = 6;
+    std::array<PipelineState, QUEUE_SIZE> pipeline_states{};
+
+    auto get_stage_view(uint32_t frame_count) {
+        std::scoped_lock _{ this->sync_assignment_mtx };
+        
+        const auto& result = pipeline_states[frame_count % QUEUE_SIZE].stage_views;
 
         if (result.empty()) {
             return stage_views;
@@ -204,20 +219,28 @@ public:
         return result;
     }
 
-    const auto& get_current_stage_view() {
+    auto get_current_stage_view() {
+        std::scoped_lock _{ this->sync_assignment_mtx };
+
         return get_stage_view(internal_frame_count);
     }
 
-    const auto& get_view_space_location(uint32_t frame_count) {
-        return view_space_location_queue[frame_count % view_space_location_queue.size()];
+    auto get_view_space_location(uint32_t frame_count) {
+        std::scoped_lock _{ this->sync_assignment_mtx };
+
+        return pipeline_states[frame_count % QUEUE_SIZE].view_space_location;
     }
 
-    const auto& get_current_view_space_location() {
+    auto get_current_view_space_location() {
+        std::scoped_lock _{ this->sync_assignment_mtx };
+
         return get_view_space_location(internal_frame_count);
     }
 
-    const auto& get_frame_state(uint32_t frame_count) {
-        const auto& result = frame_state_queue[frame_count % frame_state_queue.size()];
+    auto get_frame_state(uint32_t frame_count) {
+        std::scoped_lock _{ this->sync_assignment_mtx };
+
+        const auto& result = pipeline_states[frame_count % QUEUE_SIZE].frame_state;
 
         if (result.predictedDisplayTime == 0) {
             return frame_state;
@@ -226,7 +249,9 @@ public:
         return result;
     }
 
-    const auto& get_current_frame_state() {
+    auto get_current_frame_state() {
+        std::scoped_lock _{ this->sync_assignment_mtx };
+
         return get_frame_state(internal_frame_count);
     }
 
@@ -251,15 +276,9 @@ public:
         return false;
     }
 
-    struct SubmitState {
-        std::vector<XrView> stage_views{};
-        XrFrameState frame_state{XR_TYPE_FRAME_STATE};
-        uint32_t frame_count{0};
-    };
-
-    SubmitState last_submit_state{};
-    std::array<SubmitState, 3> submit_state_sync_queue{};
-    SubmitState get_submit_state();
+    PipelineState last_submit_state{};
+    std::array<PipelineState, QUEUE_SIZE> submit_state_sync_queue{};
+    PipelineState get_submit_state();
     
     const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 5.0f, 1.0f) };
     bool push_dummy_projection{ false };

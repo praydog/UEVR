@@ -106,6 +106,10 @@ void OpenXR::on_config_save(utility::Config& cfg) {
     }
 }
 
+void OpenXR::on_pre_render_game_thread(uint32_t frame_count) {
+    this->pipeline_states[frame_count % OpenXR::QUEUE_SIZE].frame_count = frame_count;
+}
+
 VRRuntime::Error OpenXR::synchronize_frame(std::optional<uint32_t> frame_count) {
     std::scoped_lock _{sync_mtx};
 
@@ -134,27 +138,29 @@ VRRuntime::Error OpenXR::synchronize_frame(std::optional<uint32_t> frame_count) 
     this->frame_state = local_frame_state;
 
     // Initialize all the existing frame states if they aren't already so we don't get some random error when calling xrEndFrame
-    for (auto& frame_state : this->frame_state_queue) {
-        if (frame_state.predictedDisplayTime == 0) {
-            frame_state = this->frame_state;
+    for (auto& pipeline_state : this->pipeline_states) {
+        if (pipeline_state.frame_state.predictedDisplayTime == 0) {
+            pipeline_state.frame_state = this->frame_state;
         }
     }
 
     if (!frame_count && this->last_submit_state.frame_count > 0) {
-        this->frame_state_queue[(this->last_submit_state.frame_count + 1) % this->frame_state_queue.size()] = this->frame_state;
-        this->submit_state_sync_queue[(this->last_submit_state.frame_count + 1) % this->frame_state_queue.size()] = this->last_submit_state;
+        const auto next_frame = (this->last_submit_state.frame_count + 1) % OpenXR::QUEUE_SIZE;
+        this->pipeline_states[next_frame].frame_state = this->frame_state;
+        this->submit_state_sync_queue[next_frame] = this->last_submit_state;
 
         if (VR::get()->is_using_afr()) {
-            this->frame_state_queue[(this->last_submit_state.frame_count + 2) % this->frame_state_queue.size()] = this->frame_state;
-            this->submit_state_sync_queue[(this->last_submit_state.frame_count + 2) % this->frame_state_queue.size()] = this->last_submit_state;
+            const auto afr_frame = (next_frame + 1) % OpenXR::QUEUE_SIZE;
+            this->pipeline_states[afr_frame].frame_state = this->frame_state;
+            this->submit_state_sync_queue[afr_frame] = this->last_submit_state;
         }
     } else if (frame_count) {
-        this->frame_state_queue[*frame_count % this->frame_state_queue.size()] = this->frame_state;
-        this->submit_state_sync_queue[*frame_count % this->frame_state_queue.size()] = this->last_submit_state;
+        this->pipeline_states[*frame_count % OpenXR::QUEUE_SIZE].frame_state = this->frame_state;
+        this->submit_state_sync_queue[*frame_count % OpenXR::QUEUE_SIZE] = this->last_submit_state;
 
         if (VR::get()->is_using_afr()) {
-            this->frame_state_queue[(*frame_count + 1) % this->frame_state_queue.size()] = this->frame_state;
-            this->submit_state_sync_queue[(*frame_count + 1) % this->frame_state_queue.size()] = this->last_submit_state;
+            this->pipeline_states[(*frame_count + 1) % OpenXR::QUEUE_SIZE].frame_state = this->frame_state;
+            this->submit_state_sync_queue[(*frame_count + 1) % OpenXR::QUEUE_SIZE] = this->last_submit_state;
         }
     }
 
@@ -197,21 +203,27 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
         this->internal_frame_count = frame_count;
     }
 
+    auto& pipeline_state = this->pipeline_states[frame_count % OpenXR::QUEUE_SIZE];
+    const auto& submit_state = this->submit_state_sync_queue[frame_count % OpenXR::QUEUE_SIZE];
+
+    if (pipeline_state.frame_state.predictedDisplayTime == 0) {
+        pipeline_state.frame_state = this->frame_state;
+    }
+
     // Pre-emptively update the frame state
     // this will allow us to get near-correct estimated poses for this frame
     // before xrWaitFrame has finished on the previous frame
     // This is usually the case *most* of the time, but sometimes the game thread will
     // actually execute after xrWaitFrame has finished, so we don't need to adjust the frame state
-    if (this->submit_state_sync_queue[frame_count % this->submit_state_sync_queue.size()].frame_count + 1 < frame_count) {
+    if (submit_state.frame_count + 1 < frame_count) {
         // Update the main frame state's predicted display time because it's possible that
         // the game thread can run multiple times before xrWaitFrame has finished
         // So maybe we will end up predicting more than one period ahead at times
         this->frame_state.predictedDisplayTime += this->frame_state.predictedDisplayPeriod;
-        this->frame_state_queue[frame_count % this->frame_state_queue.size()] = this->frame_state;
+        pipeline_state.frame_state = this->frame_state;
     }
 
-    const auto& pipelined_frame_state = this->frame_state_queue[frame_count % this->frame_state_queue.size()];
-    const auto display_time = pipelined_frame_state.predictedDisplayTime + (XrDuration)(pipelined_frame_state.predictedDisplayPeriod * this->prediction_scale);
+    const auto display_time = pipeline_state.frame_state.predictedDisplayTime + (XrDuration)(pipeline_state.frame_state.predictedDisplayPeriod * this->prediction_scale);
 
     if (display_time == 0) {
         return VRRuntime::Error::SUCCESS;
@@ -241,7 +253,7 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
         return (VRRuntime::Error)result;
     }
 
-    this->stage_view_queue[frame_count % this->stage_view_queue.size()] = this->stage_views;
+    pipeline_state.stage_views = this->stage_views;
     //this->frame_state_queue[frame_count % this->frame_state_queue.size()] = this->frame_state;
     
     if (should_enqueue) {
@@ -252,10 +264,15 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
 
     if (result != XR_SUCCESS) {
         spdlog::error("[VR] xrLocateSpace for view space failed: {}", this->get_result_string(result));
+
+        if (result == XR_ERROR_TIME_INVALID) {
+            spdlog::info("[VR] Time: {}", display_time);
+        }
+
         return (VRRuntime::Error)result;
     }
 
-    this->view_space_location_queue[frame_count % this->view_space_location_queue.size()] = this->view_space_location;
+    pipeline_state.view_space_location = this->view_space_location;
 
     for (auto& hand : this->hands) {
         hand.location.next = &hand.velocity;
@@ -425,6 +442,8 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
 }
 
 VRRuntime::Error OpenXR::update_input() {
+    std::scoped_lock _{this->event_mtx};
+
     if (!this->ready() || this->session_state != XR_SESSION_STATE_FOCUSED) {
         return (VRRuntime::Error)XR_ERROR_SESSION_NOT_READY;
     }
@@ -519,13 +538,20 @@ void OpenXR::destroy() {
     this->frame_began = false;
 }
 
-OpenXR::SubmitState OpenXR::get_submit_state() {
-    std::scoped_lock _{ this->sync_mtx };
-    std::unique_lock __{ this->pose_mtx };
+OpenXR::PipelineState OpenXR::get_submit_state() {
+    std::unique_lock _{ this->pose_mtx };
+    std::scoped_lock __{ this->sync_assignment_mtx };
+    //std::scoped_lock ___{ this->sync_mtx };
 
-    last_submit_state.stage_views = !this->has_render_frame_count ? get_current_stage_view() : get_stage_view(this->internal_render_frame_count);
-    last_submit_state.frame_state = !this->has_render_frame_count ? this->frame_state : get_frame_state(this->internal_render_frame_count);
-    last_submit_state.frame_count = !this->has_render_frame_count ? this->internal_frame_count : this->internal_render_frame_count;
+    if (this->has_render_frame_count) {
+        last_submit_state = this->pipeline_states[this->internal_render_frame_count % QUEUE_SIZE];
+    } else {
+        last_submit_state.stage_views = get_current_stage_view();
+        last_submit_state.view_space_location = this->view_space_location;
+        last_submit_state.frame_state = this->frame_state;
+        last_submit_state.frame_count = this->internal_frame_count;
+    }
+
     this->has_render_frame_count = false;
 
     /*if (get_frame_state(this->internal_render_frame_count-1).predictedDisplayTime > last_submit_state.frame_state.predictedDisplayTime) {
@@ -538,7 +564,8 @@ OpenXR::SubmitState OpenXR::get_submit_state() {
 
 void OpenXR::enqueue_render_poses(uint32_t frame_count) {
     //std::scoped_lock _{ this->sync_mtx };
-    std::unique_lock __{ this->pose_mtx };
+    //std::unique_lock __{ this->pose_mtx };
+    std::scoped_lock __{ this->sync_assignment_mtx };
 
     enqueue_render_poses_unsafe(frame_count);
 }
@@ -1518,6 +1545,10 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
     const auto submit_state = this->get_submit_state();
     const auto& pipelined_stage_views = submit_state.stage_views;
     const auto& pipelined_frame_state = submit_state.frame_state;
+
+    if (pipelined_stage_views.empty()) {
+        spdlog::warn("[VR] No stage views to submit");
+    }
 
     this->projection_layer_cache.clear();
 
