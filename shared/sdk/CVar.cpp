@@ -636,9 +636,9 @@ std::optional<ConsoleVariableDataWrapper> get_one_frame_thread_lag_cvar() {
 
 namespace sdk {
 void IConsoleVariable::Set(const wchar_t* value, uint32_t set_by_flags) {
-    locate_vtable_indices();
+    const auto info = locate_vtable_indices();
 
-    if (!s_set_vtable_index) {
+    if (!info) {
         static bool once = true;
 
         if (once) {
@@ -650,15 +650,15 @@ void IConsoleVariable::Set(const wchar_t* value, uint32_t set_by_flags) {
     }
 
     using SetFn = void(__thiscall*)(IConsoleVariable*, const wchar_t*, uint32_t);
-    const auto func = (*(SetFn**)this)[*s_set_vtable_index];
+    const auto func = (*(SetFn**)this)[info->set_vtable_index];
 
     func(this, value, set_by_flags);
 }
 
 int32_t IConsoleVariable::GetInt() {
-    locate_vtable_indices();
+    const auto info = locate_vtable_indices();
 
-    if (!s_get_int_vtable_index) {
+    if (!info) {
         static bool once = true;
 
         if (once) {
@@ -670,15 +670,15 @@ int32_t IConsoleVariable::GetInt() {
     }
 
     using GetIntFn = int32_t(__thiscall*)(IConsoleVariable*);
-    const auto func = (*(GetIntFn**)this)[*s_get_int_vtable_index];
+    const auto func = (*(GetIntFn**)this)[info->get_int_vtable_index];
 
     return func(this);
 }
 
 float IConsoleVariable::GetFloat() {
-    locate_vtable_indices();
+    const auto info = locate_vtable_indices();
 
-    if (!s_get_float_vtable_index) {
+    if (!info) {
         static bool once = true;
 
         if (once) {
@@ -690,141 +690,143 @@ float IConsoleVariable::GetFloat() {
     }
 
     using GetFloatFn = float(__thiscall*)(IConsoleVariable*);
-    const auto func = (*(GetFloatFn**)this)[*s_get_float_vtable_index];
+    const auto func = (*(GetFloatFn**)this)[info->get_float_vtable_index];
 
     return func(this);
 }
 
-void IConsoleVariable::locate_vtable_indices() {
-    // easy thread safe way to execute this function only once
-    // the way this works is that the lambda is executed, and the result is stored in the static variable
-    // the compiler uses thread safe static initialization to ensure that the lambda is only executed once
-    // so there are no race conditions here.
-    static bool once = [this]() {
-        // Search the vtable for the last function that returns nullptr (AsConsoleCommand)
-        // in most cases the +2 function will be the Set function (the +1 function is Release)
-        // from there, GetInt, GetFloat, etc will be the next subsequent functions
-        // THIS MUST BE CALLED FROM AN ACTUAL IConsoleVariable INSTANCE, NOT A CONSOLE COMMAND!!!
-        SPDLOG_INFO("Locating IConsoleVariable vtable indices...");
+std::optional<IConsoleVariable::VtableInfo> IConsoleVariable::locate_vtable_indices() {
+    std::scoped_lock _{ s_vtable_mutex };
 
-        const auto vtable = *(uintptr_t**)this;
-        std::optional<uint32_t> previous_nullptr_index{};
+    const auto vtable = *(uintptr_t**)this;
 
-        for (auto i = 0; i < 20; ++i) {
-            const auto func = vtable[i];
+    if (s_vtable_infos.contains(vtable)) {
+        return s_vtable_infos[vtable];
+    }
 
-            if (func == 0 || IsBadReadPtr((void*)func, 1)) {
-                SPDLOG_ERROR("Reached end of IConsoleVariable vtable at index {}", i);
-                break;
-            }
+    // Search the vtable for the last function that returns nullptr (AsConsoleCommand)
+    // in most cases the +2 function will be the Set function (the +1 function is Release)
+    // from there, GetInt, GetFloat, etc will be the next subsequent functions
+    // THIS MUST BE CALLED FROM AN ACTUAL IConsoleVariable INSTANCE, NOT A CONSOLE COMMAND!!!
+    SPDLOG_INFO("Locating IConsoleVariable vtable indices...");
+    std::optional<uint32_t> previous_nullptr_index{};
 
-            if (is_vfunc_pattern(func, "33 C0") ||
-                is_vfunc_pattern(func, "48 89 4C 24 08 33 C0")) // Weird variant that moves rcx into rsp+8 for... reasons?
-            {
-                previous_nullptr_index = i;
-            } else if (previous_nullptr_index) {
-                auto destructor_index = *previous_nullptr_index + 1;
-                const auto module_within = utility::get_module_within(func);
+    SPDLOG_INFO("Vtable: {:x}", (uintptr_t)vtable);
 
-                // Verify and go forward a bit to look for something that looks like the destructor
-                // Usually all the calls we want will be right after the destructor
-                // Most games won't need this automatic analysis, but there
-                // are some games which have modified the cvar vtables
-                SPDLOG_INFO("Starting from {}, looking for destructor...", destructor_index);
-                SPDLOG_INFO("Looking for {:x}...", vtable[0]);
-                for (auto j = destructor_index; j < destructor_index + 5; ++j) {
-                    // Emulate each function and check if instruction pointer lands inside vtable[0]
-                    // If it does, then we've found the destructor
-                    SPDLOG_INFO("Emulating vtable[{}]...", j);
-                    const auto fn = vtable[j];
+    for (auto i = 0; i < 20; ++i) {
+        const auto func = vtable[i];
 
-                    if (fn == 0 || fn == vtable[0]) { // if fn == vtable[0], we're in some other vtable
-                        SPDLOG_ERROR("Reached end of IConsoleVariable vtable at index {}", j);
+        if (func == 0 || IsBadReadPtr((void*)func, 1)) {
+            SPDLOG_ERROR("Reached end of IConsoleVariable vtable at index {}", i);
+            break;
+        }
+
+        if (is_vfunc_pattern(func, "33 C0") ||
+            is_vfunc_pattern(func, "48 89 4C 24 08 33 C0")) // Weird variant that moves rcx into rsp+8 for... reasons?
+        {
+            previous_nullptr_index = i;
+        } else if (previous_nullptr_index) {
+            auto destructor_index = *previous_nullptr_index + 1;
+            const auto module_within = utility::get_module_within(func);
+
+            // Verify and go forward a bit to look for something that looks like the destructor
+            // Usually all the calls we want will be right after the destructor
+            // Most games won't need this automatic analysis, but there
+            // are some games which have modified the cvar vtables
+            SPDLOG_INFO("Starting from {}, looking for destructor...", destructor_index);
+            SPDLOG_INFO("Looking for {:x}...", vtable[0]);
+            for (auto j = destructor_index; j < destructor_index + 5; ++j) {
+                // Emulate each function and check if instruction pointer lands inside vtable[0]
+                // If it does, then we've found the destructor
+                SPDLOG_INFO("Emulating vtable[{}]...", j);
+                const auto fn = vtable[j];
+
+                if (fn == 0 || fn == vtable[0]) { // if fn == vtable[0], we're in some other vtable
+                    SPDLOG_ERROR("Reached end of IConsoleVariable vtable at index {}", j);
+                    break;
+                }
+
+                utility::ShemuContext emu{ *module_within };
+
+                emu.ctx->Registers.RegRcx = (ND_UINT64)this;
+                emu.ctx->Registers.RegRip = (ND_UINT64)fn;
+                emu.ctx->MemThreshold = 100;
+                
+                bool prev_was_branch = false;
+                bool found_destructor = false;
+
+                do {
+                    SPDLOG_INFO("Emulating instruction at {:x}...", emu.ctx->Registers.RegRip);
+
+                    const auto ip = emu.ctx->Registers.RegRip;
+
+                    if (ip == 0 || IsBadReadPtr((void*)emu.ctx->Registers.RegRip, 4)) {
                         break;
                     }
 
-                    utility::ShemuContext emu{ *module_within };
-
-                    emu.ctx->Registers.RegRcx = (ND_UINT64)this;
-                    emu.ctx->Registers.RegRip = (ND_UINT64)fn;
-                    emu.ctx->MemThreshold = 100;
-                    
-                    bool prev_was_branch = false;
-                    bool found_destructor = false;
-
-                    do {
-                        SPDLOG_INFO("Emulating instruction at {:x}...", emu.ctx->Registers.RegRip);
-
-                        const auto ip = emu.ctx->Registers.RegRip;
-
-                        if (ip == 0 || IsBadReadPtr((void*)emu.ctx->Registers.RegRip, 4)) {
-                            break;
-                        }
-
-                        if (ip == vtable[0]) {
-                            SPDLOG_INFO("Found destructor at index {}", j);
-                            destructor_index = j;
-                            found_destructor = true;
-                            break;
-                        }
-
-                        const auto bytes = (uint8_t*)ip;
-                        const auto decoded = utility::decode_one((uint8_t*)ip);
-
-                        if (!decoded) {
-                            SPDLOG_ERROR("Failed to decode instruction at {:x}", ip);
-                            break;
-                        }
-
-                        if (decoded->MemoryAccess & ND_ACCESS_ANY_WRITE) {
-                            SPDLOG_INFO("Skipping write to memory instruction at {:x} ({:x} bytes, landing at {:x})", ip, decoded->Length, ip + decoded->Length);
-                            emu.ctx->Registers.RegRip += decoded->Length;
-                            emu.ctx->Instruction = *decoded; // pseudo-emulate the instruction
-                            ++emu.ctx->InstructionsCount;
-                            prev_was_branch = false;
-                            continue;
-                        }
-
-                        prev_was_branch = emu.ctx->InstructionsCount == 0 || emu.ctx->Instruction.BranchInfo.IsBranch;
-
-                        if (prev_was_branch) {
-                            SPDLOG_INFO("Branch!");
-                        }
-                    } while(emu.emulate() == SHEMU_SUCCESS && emu.ctx->InstructionsCount < 50);
-
-                    if (found_destructor) {
+                    if (ip == vtable[0]) {
+                        SPDLOG_INFO("Found destructor at index {}", j);
+                        destructor_index = j;
+                        found_destructor = true;
                         break;
                     }
+
+                    const auto bytes = (uint8_t*)ip;
+                    const auto decoded = utility::decode_one((uint8_t*)ip);
+
+                    if (!decoded) {
+                        SPDLOG_ERROR("Failed to decode instruction at {:x}", ip);
+                        break;
+                    }
+
+                    if (decoded->MemoryAccess & ND_ACCESS_ANY_WRITE) {
+                        SPDLOG_INFO("Skipping write to memory instruction at {:x} ({:x} bytes, landing at {:x})", ip, decoded->Length, ip + decoded->Length);
+                        emu.ctx->Registers.RegRip += decoded->Length;
+                        emu.ctx->Instruction = *decoded; // pseudo-emulate the instruction
+                        ++emu.ctx->InstructionsCount;
+                        prev_was_branch = false;
+                        continue;
+                    }
+
+                    prev_was_branch = emu.ctx->InstructionsCount == 0 || emu.ctx->Instruction.BranchInfo.IsBranch;
+
+                    if (prev_was_branch) {
+                        SPDLOG_INFO("Branch!");
+                    }
+                } while(emu.emulate() == SHEMU_SUCCESS && emu.ctx->InstructionsCount < 50);
+
+                if (found_destructor) {
+                    break;
                 }
-
-                s_set_vtable_index = destructor_index + 1;
-                auto potential_get_int_index = *s_set_vtable_index + 1;
-
-                // means this function is GetBool or something like that.
-                if (is_vfunc_pattern(vtable[potential_get_int_index], "83 79")) {
-                    SPDLOG_INFO("GetBool detected, skipping ahead...");
-                    potential_get_int_index += 1;
-                }
-
-                s_get_int_vtable_index = potential_get_int_index;
-                s_get_float_vtable_index = *s_get_int_vtable_index + 1;
-                SPDLOG_INFO("Encountered final nullptr at index {}", *previous_nullptr_index);
-                SPDLOG_INFO("IConsoleVariable::Set vtable index: {}", *s_set_vtable_index);
-                SPDLOG_INFO("IConsoleVariable::GetInt vtable index: {}", *s_get_int_vtable_index);
-                SPDLOG_INFO("IConsoleVariable::GetFloat vtable index: {}", *s_get_float_vtable_index);
-                break;
             }
+
+            auto& vtable_info = s_vtable_infos[vtable];
+
+            vtable_info.set_vtable_index = destructor_index + 1;
+            auto potential_get_int_index = vtable_info.set_vtable_index + 1;
+
+            // means this function is GetBool or something like that.
+            if (is_vfunc_pattern(vtable[potential_get_int_index], "83 79")) {
+                SPDLOG_INFO("GetBool detected, skipping ahead...");
+                potential_get_int_index += 1;
+            }
+
+            vtable_info.get_int_vtable_index = potential_get_int_index;
+            vtable_info.get_float_vtable_index = vtable_info.get_int_vtable_index + 1;
+            SPDLOG_INFO("Encountered final nullptr at index {}", *previous_nullptr_index);
+            SPDLOG_INFO("IConsoleVariable::Set vtable index: {}", vtable_info.set_vtable_index);
+            SPDLOG_INFO("IConsoleVariable::GetInt vtable index: {}", vtable_info.get_int_vtable_index);
+            SPDLOG_INFO("IConsoleVariable::GetFloat vtable index: {}", vtable_info.get_float_vtable_index);
+
+            return vtable_info;
         }
+    }
 
-        if (!s_set_vtable_index) {
-            SPDLOG_ERROR("Failed to locate IConsoleVariable::Set vtable index!");
-        }
+    SPDLOG_ERROR("Failed to locate IConsoleVariable::Set vtable index!");
 
-        // TODO: verify that the destructor
-        // hasnt been randomly inserted at the end
-        // which will fuck everything up
-
-        return true;
-    }();
+    // TODO: verify that the destructor
+    // hasnt been randomly inserted at the end
+    // which will fuck everything up
+    return std::nullopt;
 }
 }

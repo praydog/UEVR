@@ -3,13 +3,37 @@
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <mutex>
+#include <unordered_map>
 
+#include <spdlog/spdlog.h>
 #include <windows.h>
 
 namespace sdk {
 template <typename T>
 struct TConsoleVariableData {
+    static inline std::recursive_mutex s_mutex{};
+    static inline std::unordered_map<TConsoleVariableData*, bool> s_valid_states{};
+
     void set(T value) {
+        {
+            std::scoped_lock _{s_mutex};
+
+            if (!s_valid_states.contains(this)) {
+                // What we're doing here is double checking that this cvar "data" does not actually point to a vtable or something
+                // because if it does, we will unintentionally corrupt the memory
+                s_valid_states[this] = IsBadReadPtr(*(void**)this, sizeof(void*)) == TRUE;
+
+                if (!s_valid_states[this]) {
+                    spdlog::error("TConsoleVariableData::set: Prevented corruption of memory at {:x}", (uintptr_t)this);
+                }
+            }
+
+            if (!s_valid_states[this]) {
+                return;
+            }
+        }
+
         this->values[0] = value;
         this->values[1] = value;
     }
@@ -37,10 +61,16 @@ struct IConsoleVariable : IConsoleObject {
     float GetFloat();
 
 private:
-    void locate_vtable_indices();
-    static inline std::optional<uint32_t> s_set_vtable_index{};
-    static inline std::optional<uint32_t> s_get_int_vtable_index{};
-    static inline std::optional<uint32_t> s_get_float_vtable_index{};
+    struct VtableInfo {
+        uint32_t set_vtable_index;
+        uint32_t get_int_vtable_index;
+        uint32_t get_float_vtable_index;
+    };
+
+    std::optional<VtableInfo> locate_vtable_indices();
+
+    static inline std::recursive_mutex s_vtable_mutex{};
+    static inline std::unordered_map<void*, VtableInfo> s_vtable_infos{};
 };
 
 struct FConsoleVariableBase : public IConsoleVariable {
