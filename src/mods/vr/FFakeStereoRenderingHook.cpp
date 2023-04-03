@@ -866,6 +866,30 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     // if the vtable pointer is equal to the original vtable pointer, and it will
     // not call the hook function, so we make a shadow copy of the vtable
     auto active_stereo_device = locate_active_stereo_rendering_device();
+    
+    // We need to manually insert a stereo device at this point if it's not already.
+    // This is what the "nonstandard" hooks did, but those did not have access to FFakeStereoRendering's vtable.
+    // All we need to do in this instance is get the engine offset to the stereo device, create a fake pointer with our own vtable,
+    // and just overwrite the engine's (null) stereo device pointer with our fake one.
+    // It is very rare that this should need to be done.
+    if (!active_stereo_device) {
+        SPDLOG_INFO("Attempting to create a stereo device without InitializeHMDDevice...");
+        const auto device_offset = sdk::UEngine::get_stereo_rendering_device_offset();
+
+        if (device_offset) {
+            auto engine = sdk::UGameEngine::get();
+
+            if (engine != nullptr) {
+                m_fallback_device.vtable = (void*)vtable;
+                *(uintptr_t*)((uintptr_t)engine + *device_offset) = (uintptr_t)&m_fallback_device;
+
+                active_stereo_device = (uintptr_t)&m_fallback_device;
+                s_stereo_rendering_device_offset = *device_offset; // Set it up if it's not already
+            }
+        } else {
+            SPDLOG_ERROR("Could not create a new stereo device, VR may not work!");
+        }
+    }
 
     if (active_stereo_device) {
         SPDLOG_INFO("Found active stereo device: {:x}", (uintptr_t)*active_stereo_device);

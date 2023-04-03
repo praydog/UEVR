@@ -368,6 +368,7 @@ private:
 
     struct FallbackDevice {
         void* vtable;
+        char padding[0x20]{};
     } m_fallback_device;
     std::vector<void*> m_fallback_vtable{};
 
