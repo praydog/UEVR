@@ -1976,8 +1976,6 @@ struct SceneViewExtensionAnalyzer {
             return;
         }
 
-        cmd_frame_counts[last_command] = frame_count;
-
         // Whichever one gets called first is the winner winner chicken dinner
         static std::array<uintptr_t, 7> new_vtable{
             (uintptr_t)&hooked_command_fn<0>,
@@ -1988,6 +1986,14 @@ struct SceneViewExtensionAnalyzer {
             (uintptr_t)&hooked_command_fn<5>,
             (uintptr_t)&hooked_command_fn<6>
         };
+
+        cmd_frame_counts[last_command] = frame_count;
+
+        if (original_vtables.contains(last_command) || *(void**)last_command == new_vtable.data()) {
+            spdlog::info("Something strange is going on, the vtable is already hooked");
+            spdlog::info("Maybe previous frame was not rendered?");
+            return;
+        }
 
         original_vtables[last_command] = *(void***)last_command;
         *(void***)last_command = (void**)new_vtable.data();
@@ -2004,6 +2010,12 @@ struct SceneViewExtensionAnalyzer {
         runtime->on_pre_render_render_thread(frame_count);
 
         cmd_frame_counts[last_command] = frame_count;
+
+        if (original_funcs.contains(last_command)) {
+            spdlog::info("Something strange is going on, the function is already hooked");
+            spdlog::info("Maybe previous frame was not rendered?");
+            return;
+        }
 
         static auto func_override = (sdk::FRHICommandBase_Old::Func)+[](sdk::FRHICommandListBase* cmd_list, sdk::FRHICommandBase_Old* cmd) {
             std::scoped_lock _{func_mutex};
