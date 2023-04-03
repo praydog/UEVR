@@ -1990,8 +1990,14 @@ struct SceneViewExtensionAnalyzer {
         cmd_frame_counts[last_command] = frame_count;
 
         if (original_vtables.contains(last_command) || *(void**)last_command == new_vtable.data()) {
-            spdlog::info("Something strange is going on, the vtable is already hooked");
-            spdlog::info("Maybe previous frame was not rendered?");
+            static auto last_log_time = std::chrono::high_resolution_clock::time_point{};
+            const auto now = std::chrono::high_resolution_clock::now();
+            
+            if (now - last_log_time > std::chrono::seconds(1)) {
+                SPDLOG_WARN("Something strange is going on, the vtable is already hooked, maybe previous frame was not rendered?");
+                last_log_time = now;
+            }
+
             return;
         }
 
@@ -2012,8 +2018,14 @@ struct SceneViewExtensionAnalyzer {
         cmd_frame_counts[last_command] = frame_count;
 
         if (original_funcs.contains(last_command)) {
-            spdlog::info("Something strange is going on, the function is already hooked");
-            spdlog::info("Maybe previous frame was not rendered?");
+            static auto last_log_time = std::chrono::high_resolution_clock::time_point{};
+            const auto now = std::chrono::high_resolution_clock::now();
+            
+            if (now - last_log_time > std::chrono::seconds(1)) {
+                SPDLOG_WARN("Something strange is going on, the function is already hooked, maybe previous frame was not rendered?");
+                last_log_time = now;
+            }
+
             return;
         }
 
