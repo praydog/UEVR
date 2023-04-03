@@ -250,6 +250,7 @@ private:
     bool standard_fake_stereo_hook(uintptr_t vtable);
     bool nonstandard_create_stereo_device_hook();
     bool nonstandard_create_stereo_device_hook_4_27();
+    bool nonstandard_create_stereo_device_hook_4_22();
     
     bool hook_game_viewport_client();
     bool setup_view_extensions();
