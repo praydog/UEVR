@@ -1358,7 +1358,7 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_22() {
         return pass != EStereoscopicPass::eSSP_FULL;
     };
 
-    m_special_detected_4_27 = true;
+    m_special_detected_4_22 = true;
     m_manually_constructed = true;
     m_fallback_device.vtable = m_fallback_vtable.data();
 
@@ -1749,7 +1749,8 @@ struct SceneViewExtensionAnalyzer {
                             if (func_next != nullptr) {
                                 if (func.times_frame_count_correct_a2 >= 50 && 
                                     func_next->times_frame_count_correct_a3 >= 50 && 
-                                    func.frame_count_offset_a2 == func_next->frame_count_offset_a3) 
+                                    func.frame_count_offset_a2 == func_next->frame_count_offset_a3 &&
+                                    std::abs((int32_t)func.frame_count_a2 - (int32_t)func_next->frame_count_a3) <= 3) // In some games, the frame delta is really high but the same offset (so, it's wrong)
                                 {
                                     SPDLOG_INFO("Found final frame count offset at {:x}", i);
                                     SPDLOG_INFO("Found BeginRenderViewFamily at index {}", N);
