@@ -172,13 +172,13 @@ void Framework::command_thread() {
 Framework::Framework(HMODULE framework_module)
     : m_framework_module{framework_module}
     , m_game_module{GetModuleHandle(0)},
-    m_logger{spdlog::basic_logger_mt("Framework", (get_persistent_dir() / "log.txt").string(), true)} 
+    m_logger{spdlog::basic_logger_mt("UnrealVR", (get_persistent_dir() / "log.txt").string(), true)} 
 {
     std::scoped_lock __{m_constructor_mutex};
 
     spdlog::set_default_logger(m_logger);
     spdlog::flush_on(spdlog::level::info);
-    spdlog::info("Framework entry");
+    spdlog::info("UnrealVR entry");
 
     const auto module_size = *utility::get_module_size(m_game_module);
 
