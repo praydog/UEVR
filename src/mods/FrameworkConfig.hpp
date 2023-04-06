@@ -13,12 +13,13 @@ public:
 
     std::optional<std::string> on_initialize() override;
     void on_draw_ui() override;
+    void on_frame() override;
     void on_config_load(const utility::Config& cfg, bool set_defaults) override;
     void on_config_save(utility::Config& cfg) override;
 
-    /*auto& get_menu_key() {
+    auto& get_menu_key() {
         return m_menu_key;
-    }*/
+    }
 
     auto& get_menu_open() {
         return m_menu_open;
@@ -32,21 +33,30 @@ public:
         return m_enable_l3_r3_toggle->value();
     }
 
+    bool is_always_show_cursor() {
+        return m_always_show_cursor->value();
+    }
+
     int32_t get_font_size() {
         return m_font_size->value();
     }
 
 private:
-    //ModKey::Ptr m_menu_key{ ModKey::create(generate_name("MenuKey"), DIK_INSERT) };
+    ModKey::Ptr m_menu_key{ ModKey::create(generate_name("MenuKey"), VK_INSERT) };
     ModToggle::Ptr m_menu_open{ ModToggle::create(generate_name("MenuOpen"), true) };
     ModToggle::Ptr m_remember_menu_state{ ModToggle::create(generate_name("RememberMenuState"), false) };
     ModToggle::Ptr m_enable_l3_r3_toggle{ ModToggle::create(generate_name("EnableL3R3Toggle"), true) };
+    ModToggle::Ptr m_always_show_cursor{ ModToggle::create(generate_name("AlwaysShowCursor"), false) };
+    ModKey::Ptr m_show_cursor_key{ ModKey::create(generate_name("ShowCursorKey")) };
     ModInt32::Ptr m_font_size{ModInt32::create(generate_name("FontSize"), 16)};
 
     ValueList m_options {
+        *m_menu_key,
+        *m_show_cursor_key,
         *m_menu_open,
         *m_remember_menu_state,
         *m_enable_l3_r3_toggle,
+        *m_always_show_cursor,
         *m_font_size,
     };
 };

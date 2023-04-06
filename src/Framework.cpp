@@ -771,17 +771,26 @@ bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_para
     bool is_mouse_moving{false};
     switch (message) {
     case WM_KEYDOWN:
-        if (w_param == VK_INSERT) {
-            set_draw_ui(!m_draw_ui, true);
+    case WM_SYSKEYDOWN:
+        if (w_param >= 0 && w_param < 256) {
+            m_last_keys[w_param] = true;
+        }
 
-            // Dont do this it breaks stuff.
-            /*if (m_draw_ui) {
-                ShowCursor(TRUE);
-            } else {
-                ShowCursor(FALSE);
-            }*/
+        if (w_param == VK_INSERT ||
+            w_param == FrameworkConfig::get()->get_menu_key()->value()) 
+        {
+            set_draw_ui(!m_draw_ui, true);
             return false;
         }
+        break;
+    case WM_KEYUP:
+    case WM_SYSKEYUP:
+        if (w_param >= 0 && w_param < 256) {
+            m_last_keys[w_param] = false;
+        }
+        break;
+    case WM_KILLFOCUS:
+        std::fill(std::begin(m_last_keys), std::end(m_last_keys), false);
         break;
     case WM_ACTIVATE:
         if (LOWORD(w_param) == WA_INACTIVE) {
@@ -811,17 +820,6 @@ bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_para
         }*/
     } break;
 
-    /*case RE_TOGGLE_CURSOR: {
-        const auto is_internal_message = l_param != 0;
-        const auto return_value = is_internal_message || !m_draw_ui;
-
-        if (!is_internal_message) {
-            m_cursor_state = (bool)w_param;
-            m_cursor_state_changed = true;
-        }
-
-        return return_value;
-    } break;*/
     default:
         break;
     }
@@ -953,6 +951,10 @@ void Framework::reset_config() try {
     spdlog::error("Failed to reset config: {}", e.what());
 }
 
+bool Framework::is_drawing_anything() const {
+    return m_draw_ui || FrameworkConfig::get()->is_always_show_cursor();
+}
+
 void Framework::set_draw_ui(bool state, bool should_save) {
     std::scoped_lock _{m_config_mtx};
 
@@ -1041,12 +1043,16 @@ void Framework::invalidate_device_objects() {
 void Framework::draw_ui() {
     std::lock_guard _{m_input_mutex};
 
-    ImGui::GetIO().MouseDrawCursor = m_draw_ui;
+    ImGui::GetIO().MouseDrawCursor = m_draw_ui || FrameworkConfig::get()->is_always_show_cursor();
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange; // causes bugs with the cursor
 
     if (!m_draw_ui) {
         // remove SetCursorPos patch
-        remove_set_cursor_pos_patch();
+        if (!FrameworkConfig::get()->is_always_show_cursor()) {
+            remove_set_cursor_pos_patch();
+        } else {
+            patch_set_cursor_pos();
+        }
 
         m_is_ui_focused = false;
         if (m_last_draw_ui) {

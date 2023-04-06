@@ -106,7 +106,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
                 auto fw_rt = g_framework->get_rendertarget_d3d12();
 
-                if (fw_rt && g_framework->is_drawing_ui()) {
+                if (fw_rt && g_framework->is_drawing_anything()) {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, g_framework->get_rendertarget_d3d12().Get(), std::nullopt, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
                 }
             } else {

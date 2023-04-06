@@ -126,6 +126,8 @@ public:
         return m_draw_ui;
     }
 
+    bool is_drawing_anything() const;
+
     void set_draw_ui(bool state, bool should_save = true);
 
     auto& get_hook_monitor_mutex() {

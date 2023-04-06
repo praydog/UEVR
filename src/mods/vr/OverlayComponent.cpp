@@ -519,7 +519,7 @@ void OverlayComponent::update_overlay_openvr() {
     }
 
     // Draw the UI as a plane in front of the user instead
-    if (!m_framework_wrist_ui->value() && g_framework->is_drawing_ui()) {
+    if (!m_framework_wrist_ui->value() && g_framework->is_drawing_anything()) {
         vr::VROverlay()->ShowOverlay(m_overlay_handle);
 
         // Show the entire texture
@@ -542,7 +542,13 @@ void OverlayComponent::update_overlay_openvr() {
         }
 
         glm_matrix[3] += vr->get_standing_origin();
-        glm_matrix[3] -= glm_matrix[2] * m_framework_distance->value();
+
+        if (g_framework->is_drawing_ui()) {
+            glm_matrix[3] -= glm_matrix[2] * m_framework_distance->value();
+        } else {
+            glm_matrix[3] -= glm_matrix[2] * (m_slate_distance->value() - 0.01f);
+        }
+
         glm_matrix[3].w = 1.0f;
         const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(glm_matrix)};
         vr::VROverlay()->SetOverlayTransformAbsolute(m_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
@@ -550,7 +556,7 @@ void OverlayComponent::update_overlay_openvr() {
         const auto is_d3d12 = g_framework->get_renderer_type() == Framework::RendererType::D3D12;
         const auto size = is_d3d12 ? g_framework->get_d3d12_rt_size() : g_framework->get_d3d11_rt_size();
         const auto aspect = size.x / size.y;
-        const auto width_meters = m_framework_size->value() * aspect;
+        const auto width_meters = g_framework->is_drawing_ui() ? (m_framework_size->value() * aspect) : (m_slate_size->value() * aspect);
         vr::VROverlay()->SetOverlayWidthInMeters(m_overlay_handle, width_meters);
 
         if (is_d3d11) {
@@ -628,7 +634,7 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
 }
 
 std::optional<std::reference_wrapper<XrCompositionLayerQuad>>  OverlayComponent::OpenXR::generate_framework_ui_quad() {
-    if (!g_framework->is_drawing_ui()) {
+    if (!g_framework->is_drawing_anything()) {
         return std::nullopt;
     }
 
@@ -656,12 +662,17 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>>  OverlayComponent:
         layer.space = vr->m_openxr->stage_space;
     }
 
-    const auto size_meters = m_parent->m_framework_size->value();
+    const auto size_meters = g_framework->is_drawing_ui() ? m_parent->m_framework_size->value() : m_parent->m_slate_size->value();
     const auto meters_w = (float)ui_swapchain.width / (float)ui_swapchain.height * size_meters;
     const auto meters_h = size_meters;
     layer.size = {meters_w, meters_h};
 
-    glm_matrix[3] -= glm_matrix[2] * m_parent->m_framework_distance->value();
+    if (g_framework->is_drawing_ui()) {
+        glm_matrix[3] -= glm_matrix[2] * m_parent->m_framework_distance->value();
+    } else {
+        glm_matrix[3] -= glm_matrix[2] * (m_parent->m_slate_distance->value() - 0.01f);
+    }
+
     glm_matrix[3].w = 1.0f;
 
     layer.pose.orientation = runtimes::OpenXR::to_openxr(glm::quat_cast(glm_matrix));

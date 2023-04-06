@@ -178,7 +178,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
                 auto fw_rt = g_framework->get_rendertarget_d3d11();
 
-                if (fw_rt != nullptr && g_framework->is_drawing_ui()) {
+                if (fw_rt != nullptr && g_framework->is_drawing_anything()) {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, fw_rt.Get());
                 }
             }

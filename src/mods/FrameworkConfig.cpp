@@ -18,15 +18,23 @@ void FrameworkConfig::on_draw_ui() {
 
     ImGui::TreePush("Configuration");
 
-    //m_menu_key->draw("Menu Key");
+    m_menu_key->draw("Menu Key");
+    m_show_cursor_key->draw("Show Cursor Key");
     m_remember_menu_state->draw("Remember Menu Open/Closed State");
     m_enable_l3_r3_toggle->draw("Enable L3 + R3 Toggle");
+    m_always_show_cursor->draw("Always Show Cursor");
 
     if (m_font_size->draw("Font Size")) {
         g_framework->set_font_size(m_font_size->value());
     }
 
     ImGui::TreePop();
+}
+
+void FrameworkConfig::on_frame() {
+    if (m_show_cursor_key->is_key_down_once()) {
+        m_always_show_cursor->toggle();
+    }
 }
 
 void FrameworkConfig::on_config_load(const utility::Config& cfg, bool set_defaults) {

@@ -14,6 +14,8 @@
 #include <sdk/UGameEngine.hpp>
 #include <sdk/FViewportInfo.hpp>
 
+#include "Framework.hpp"
+
 class IModValue {
 public:
     using Ptr = std::unique_ptr<IModValue>;
@@ -238,6 +240,115 @@ public:
 protected:
     std::vector<const char*> m_options{};
     std::vector<std::string> m_options_stdstr{};
+};
+
+class ModKey: public ModInt32 {
+public:
+    using Ptr = std::unique_ptr<ModKey>;
+
+    static auto create(std::string_view config_name, int32_t default_value = UNBOUND_KEY) {
+        return std::make_unique<ModKey>(config_name, default_value);
+    }
+
+    ModKey(std::string_view config_name, int32_t default_value = UNBOUND_KEY)
+        : ModInt32{ config_name, static_cast<uint32_t>(default_value) }
+    {
+    }
+
+    bool draw(std::string_view name) override {
+        if (name.empty()) {
+            return false;
+        }
+
+        ImGui::PushID(this);
+        ImGui::Button(name.data());
+
+        if (ImGui::IsItemHovered() && ImGui::GetIO().MouseDown[0]) {
+            m_waiting_for_new_key = true;
+        }
+
+        if (m_waiting_for_new_key) {
+            const auto &keys = g_framework->get_keyboard_state();
+            for (int32_t k{ 0 }; k < keys.size(); ++k) {
+                if (k == VK_LBUTTON || k == VK_RBUTTON) {
+                    continue;
+                }
+
+                if (keys[k]) {
+                    m_value = is_erase_key(k) ? UNBOUND_KEY : k;
+                    m_waiting_for_new_key = false;
+                    break;
+                }
+            }
+
+            ImGui::SameLine();
+            ImGui::Text("Press any key...");
+        }
+        else {
+            ImGui::SameLine();
+
+            if (m_value >= 0 && m_value <= 255) {
+                if (keycodes.contains(m_value)) {
+                    ImGui::Text("%s", keycodes[m_value].c_str());
+                }
+                else {
+                    ImGui::Text("%i (Unknown)", m_value);
+                }
+            }
+            else {
+                ImGui::Text("Not bound");
+            }
+        }
+
+        ImGui::PopID();
+
+        return true;
+    }
+
+    bool is_key_down() const {
+        if (m_value < 0 || m_value > 255) {
+            return false;
+        }
+
+        if (m_value == VK_LBUTTON || m_value == VK_RBUTTON) {
+            return false;
+        }
+
+        return g_framework->get_keyboard_state()[(uint8_t)m_value] != 0;
+    }
+
+    bool is_key_down_once() {
+        auto down = is_key_down();
+
+        if (!m_was_key_down && down) {
+            m_was_key_down = true;
+            return true;
+        }
+
+        if (!down) {
+            m_was_key_down = false;
+        }
+
+        return false;
+    }
+
+    bool is_erase_key(uint8_t k) const {
+        switch (k) {
+        case VK_ESCAPE:
+        case VK_BACK:
+            return true;
+
+        default:
+            return false;
+        }
+    }
+
+    static constexpr int32_t UNBOUND_KEY{ -1 };
+    static std::unordered_map<int, std::string> keycodes;
+
+protected:
+    bool m_was_key_down{ false };
+    bool m_waiting_for_new_key{ false };
 };
 
 class Mod {
