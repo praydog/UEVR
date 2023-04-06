@@ -1113,7 +1113,7 @@ void Framework::draw_ui() {
     }
 
     ImGui::SetNextWindowSize(ImVec2(window_w, window_h), ImGuiCond_::ImGuiCond_Once);
-    ImGui::Begin("Framework", &m_draw_ui);
+    ImGui::Begin("UEVR", &m_draw_ui);
 
     ImGui::BeginGroup();
     ImGui::Columns(2);
