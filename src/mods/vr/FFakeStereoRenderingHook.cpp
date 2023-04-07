@@ -342,6 +342,11 @@ bool FFakeStereoRenderingHook::hook() {
             return nonstandard_create_stereo_device_hook_4_22();
         }
 
+        // Check for version 4.18.3.0
+        if (check_file_version(0x40012, 0x30000)) {
+            return nonstandard_create_stereo_device_hook_4_18();
+        }
+
         return nonstandard_create_stereo_device_hook();
     }
 
@@ -1383,6 +1388,105 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_22() {
     };
 
     m_special_detected_4_22 = true;
+    m_manually_constructed = true;
+    m_fallback_device.vtable = m_fallback_vtable.data();
+
+    auto& current_device = *(uintptr_t*)((uintptr_t)engine + *stereo_rendering_device_offset);
+    SPDLOG_INFO("Current device: {:x}", current_device);
+    current_device = (uintptr_t)&m_fallback_device; // TODO: Automatically find this offset.
+
+    // So the view extension hook will work.
+    s_stereo_rendering_device_offset = *stereo_rendering_device_offset;
+
+    hook_game_viewport_client();
+    setup_view_extensions();
+
+    SPDLOG_INFO("Finished creating stereo device for the game using nonstandard method");
+
+    m_finished_hooking = true;
+
+    return true;
+}
+
+bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_18() {
+    SPDLOG_INFO("Attempting to create a stereo device for the game using nonstandard method (4.18)");
+
+    auto engine = sdk::UEngine::get();
+
+    if (engine == nullptr) {
+        SPDLOG_ERROR("Failed to get engine pointer! Cannot create stereo device!");
+        return false;
+    }
+
+    m_fallback_vtable.resize(30);
+
+    // Give all of the functions placeholders.
+    for (auto i = 0; i < m_fallback_vtable.size(); ++i) {
+        m_fallback_vtable[i] = +[](FFakeStereoRendering* stereo) -> void* {
+            return nullptr;
+        };
+    }
+
+    constexpr auto IS_STEREO_ENABLED_INDEX = 0;
+    constexpr auto IS_STEREO_ENABLED_ON_NEXT_FRAME_INDEX = 1;
+    constexpr auto ENABLE_STEREO_INDEX = 2;
+
+    constexpr auto ADJUST_VIEW_RECT_INDEX = 3;
+    constexpr auto CALCULATE_STEREO_VIEW_OFFSET_INDEX = ADJUST_VIEW_RECT_INDEX + 2;
+    constexpr auto CALCULATE_STEREO_PROJECTION_MATRIX_INDEX = CALCULATE_STEREO_VIEW_OFFSET_INDEX + 1;
+    constexpr auto RENDER_TEXTURE_RENDER_THREAD_INDEX = CALCULATE_STEREO_PROJECTION_MATRIX_INDEX + 3;
+    constexpr auto GET_RENDER_TARGET_MANAGER_INDEX = RENDER_TEXTURE_RENDER_THREAD_INDEX + 3;
+
+    auto stereo_rendering_device_offset = sdk::UEngine::get_stereo_rendering_device_offset();
+    if (!stereo_rendering_device_offset) {
+        stereo_rendering_device_offset = 0xAE8; // fallback for the engine this was originally made for.
+    }
+
+    // Actually implement the ones we care about now.
+    m_fallback_vtable[IS_STEREO_ENABLED_INDEX] = +[](FFakeStereoRendering* stereo) -> bool { 
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("IsStereoEnabled called: {:x}", (uintptr_t)_ReturnAddress());
+#endif
+
+        return g_hook->is_stereo_enabled(stereo); 
+    }; // IsStereoEnabled
+
+    m_fallback_vtable[IS_STEREO_ENABLED_ON_NEXT_FRAME_INDEX] = +[](FFakeStereoRendering* stereo) -> bool { return g_hook->is_stereo_enabled(stereo); }; // IsStereoEnabledOnNextFrame
+    m_fallback_vtable[ENABLE_STEREO_INDEX] = +[](FFakeStereoRendering* stereo) -> bool { return g_hook->is_stereo_enabled(stereo); }; // EnableStereo
+
+    m_fallback_vtable[ADJUST_VIEW_RECT_INDEX] = +[](FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h) { 
+        return g_hook->adjust_view_rect(stereo, index, x, y, w, h);
+    }; // AdjustViewRect
+
+    m_fallback_vtable[CALCULATE_STEREO_VIEW_OFFSET_INDEX] = 
+    +[](FFakeStereoRendering* stereo, const int32_t view_index, Rotator<float>* view_rotation, const float world_to_meters, Vector3f* view_location) {
+        return g_hook->calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location);
+    }; // CalculateStereoViewOffset
+
+    m_fallback_vtable[CALCULATE_STEREO_PROJECTION_MATRIX_INDEX] = +[](FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("CalculateStereoProjectionMatrix called: {:x} {} {:x}", (uintptr_t)_ReturnAddress(), view_index, (uintptr_t)out);
+#endif
+
+        if (!g_hook->m_has_double_precision) {
+            (*out)[3][2] = 0.1f; // Need to pre-set the Z value to something, otherwise it will be 0.0f & probably break something.
+        } else {
+            auto dmat = (Matrix4x4d*)out;
+            (*dmat)[3][2] = 0.1;
+        }
+
+        return g_hook->calculate_stereo_projection_matrix(stereo, out, view_index);
+    }; // CalculateStereoProjectionMatrix
+
+    m_fallback_vtable[RENDER_TEXTURE_RENDER_THREAD_INDEX] = 
+    +[](FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list, FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size) {
+        return g_hook->render_texture_render_thread(stereo, rhi_command_list, backbuffer, src_texture, window_size);
+    };
+
+    m_fallback_vtable[GET_RENDER_TARGET_MANAGER_INDEX] = +[](FFakeStereoRendering* stereo) { return g_hook->get_render_target_manager_hook(stereo); }; // GetRenderTargetManager
+
+    m_special_detected_4_18 = true;
+    m_uses_old_rendertarget_manager = true; // this engine has a funny render target manager.
     m_manually_constructed = true;
     m_fallback_device.vtable = m_fallback_vtable.data();
 
