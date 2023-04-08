@@ -2403,7 +2403,24 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
     // older versions may not work or crash.
     // TODO: Figure out older versions.
     constexpr auto weak_ptr_size = sizeof(TWeakPtr<void*>);
+    uintptr_t potential_hmd_device = (uintptr_t)engine + s_stereo_rendering_device_offset + weak_ptr_size;
     uintptr_t potential_view_extensions = (uintptr_t)engine + s_stereo_rendering_device_offset + (weak_ptr_size * 2); // 2 to skip over the XRSystem
+
+    // This can happen if the game left a VR plugin in it
+    // Usually this isn't an issue, but some games can leave a valid HMDDevice or XRSystem laying around for whatever reason
+    // If this isn't cleaned up, the game will crash because it tries to gather view extensions from the existing device
+    // and the view extensions it gathered will cause a crash when calling them. also the HMD device itself can cause a crash, it's not actually initialized.
+    if (*(void**)potential_hmd_device != nullptr) {
+        // Double check that we're actually replacing a pointer and not an integer or something
+        if (!IsBadReadPtr(*(void**)potential_hmd_device, sizeof(void*))) {
+            SPDLOG_INFO("Found an existing HMDDevice or XRSystem, nullifying it...");
+            *(void**)potential_hmd_device = nullptr;
+        }
+
+        if (!IsBadReadPtr(*(void**)(potential_hmd_device + sizeof(void*)), sizeof(void*))) {
+            *(void**)(potential_hmd_device + sizeof(void*)) = nullptr;
+        }
+    }
 
     // The TWeakPtr version is for >= 4.11 UE versions
     TWeakPtr<FSceneViewExtensions>& view_extensions_tweakptr = 
