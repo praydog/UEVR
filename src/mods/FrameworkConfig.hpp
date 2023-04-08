@@ -33,7 +33,7 @@ public:
         return m_enable_l3_r3_toggle->value();
     }
 
-    bool is_always_show_cursor() {
+    bool is_always_show_cursor() const {
         return m_always_show_cursor->value();
     }
 

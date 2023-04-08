@@ -91,6 +91,14 @@ void OverlayComponent::on_config_load(const utility::Config& cfg, bool set_defau
 void OverlayComponent::on_draw_ui() {
     ImGui::SetNextItemOpen(true, ImGuiCond_Once);
     if (ImGui::TreeNode("Overlay Options")) {
+        float ui_offset[] { m_slate_x_offset->value(), m_slate_y_offset->value(), m_slate_distance->value() };
+
+        if (ImGui::SliderFloat3("UI Offset", ui_offset, -10.0f, 10.0f)) {
+            m_slate_x_offset->value() = ui_offset[0];
+            m_slate_y_offset->value() = ui_offset[1];
+            m_slate_distance->value() = ui_offset[2];
+        }
+
         m_slate_distance->draw("UI Distance");
         m_slate_size->draw("UI Size");
         m_ui_follows_view->draw("UI Follows View");
@@ -218,6 +226,8 @@ void OverlayComponent::update_slate_openvr() {
     auto glm_matrix = Matrix4x4f{rotation_offset};
     glm_matrix[3] += vr->get_standing_origin();
     glm_matrix[3] -= glm_matrix[2] * m_slate_distance->value();
+    glm_matrix[3] += m_slate_x_offset->value() * glm_matrix[0];
+    glm_matrix[3] += m_slate_y_offset->value() * glm_matrix[1];
     glm_matrix[3].w = 1.0f;
     const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(glm_matrix)};
     vr::VROverlay()->SetOverlayTransformAbsolute(m_slate_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
@@ -547,6 +557,9 @@ void OverlayComponent::update_overlay_openvr() {
             glm_matrix[3] -= glm_matrix[2] * m_framework_distance->value();
         } else {
             glm_matrix[3] -= glm_matrix[2] * (m_slate_distance->value() - 0.01f);
+
+            glm_matrix[3] += m_slate_x_offset->value() * glm_matrix[0];
+            glm_matrix[3] += m_slate_y_offset->value() * glm_matrix[1];
         }
 
         glm_matrix[3].w = 1.0f;
@@ -625,6 +638,8 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
     layer.size = {meters_w, meters_h};
 
     glm_matrix[3] -= glm_matrix[2] * m_parent->m_slate_distance->value();
+    glm_matrix[3] += m_parent->m_slate_x_offset->value() * glm_matrix[0];
+    glm_matrix[3] += m_parent->m_slate_y_offset->value() * glm_matrix[1];
     glm_matrix[3].w = 1.0f;
 
     layer.pose.orientation = runtimes::OpenXR::to_openxr(glm::quat_cast(glm_matrix));
@@ -671,6 +686,9 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>>  OverlayComponent:
         glm_matrix[3] -= glm_matrix[2] * m_parent->m_framework_distance->value();
     } else {
         glm_matrix[3] -= glm_matrix[2] * (m_parent->m_slate_distance->value() - 0.01f);
+
+        glm_matrix[3] += m_parent->m_slate_x_offset->value() * glm_matrix[0];
+        glm_matrix[3] += m_parent->m_slate_y_offset->value() * glm_matrix[1];
     }
 
     glm_matrix[3].w = 1.0f;

@@ -69,6 +69,8 @@ private:
     bool m_just_opened_ui{false};
 
     const ModSlider::Ptr m_slate_distance{ ModSlider::create("UI_Distance", 0.5f, 10.0f, 2.0f) };
+    const ModSlider::Ptr m_slate_x_offset{ ModSlider::create("UI_X_Offset", -10.0f, 10.0f, 0.0f) };
+    const ModSlider::Ptr m_slate_y_offset{ ModSlider::create("UI_Y_Offset", -10.0f, 10.0f, 0.0f) };
     const ModSlider::Ptr m_slate_size{ ModSlider::create("UI_Size", 0.5f, 10.0f, 2.0f) };
     const ModToggle::Ptr m_ui_follows_view{ ModToggle::create("UI_FollowView", false) };
 
@@ -78,6 +80,8 @@ private:
     const ModToggle::Ptr m_framework_wrist_ui{ ModToggle::create("UI_Framework_WristUI", false) };
 
     Mod::ValueList m_options{
+        *m_slate_x_offset,
+        *m_slate_y_offset,
         *m_slate_distance,
         *m_slate_size,
         *m_ui_follows_view,

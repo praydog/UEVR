@@ -38,7 +38,15 @@ bool RenderTargetPoolHook::hook() {
         return false;
     }
 
+    SPDLOG_INFO("Performing hook...");
+
     m_find_free_element_hook = safetyhook::create_inline((void*)*find_free_element, find_free_element_hook);
+
+    if (m_find_free_element_hook) {
+        SPDLOG_INFO("Successfully hooked RenderTargetPool::FindFreeElement");
+    } else {
+        SPDLOG_ERROR("Failed to hook RenderTargetPool::FindFreeElement");
+    }
 
     return true;
 }
