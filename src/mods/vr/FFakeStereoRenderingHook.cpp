@@ -3784,6 +3784,43 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
         static std::vector<Patch::Ptr> patches{};
         static std::vector<uintptr_t> patch_locations{};
 
+        static std::vector<Patch::Ptr> assert_patches{};
+        const void (*post_init_properties)(uintptr_t) = (*(decltype(post_init_properties)**)localplayer)[*idx];
+
+        // Scan through all of the branches of PostInitProperties to find any assertions
+        // The assertion we're looking for is easily identified by a string that it loads in RCX, named "!Reference"
+        // If we dont do this, there's a possibility that the game will crash at some point or cause some sort of corruption
+        utility::exhaustive_decode((uint8_t*)post_init_properties, 100, [](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
+            if (ix.Operands[1].Type == ND_OP_MEM) {
+                const auto referenced_addr = utility::resolve_displacement(ip);
+
+                if (referenced_addr) try {
+                    if (std::string_view{(const char*)*referenced_addr}.starts_with("!Reference")) {
+                        // Scan forward and patch out the first call or jmp we run into
+                        utility::exhaustive_decode((uint8_t*)ip, 10, [](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
+                            if (*(uint8_t*)ip == 0xE8) {
+                                SPDLOG_INFO("Patching assertion at {:x}!", ip);
+                                assert_patches.push_back(Patch::create(ip, { 0x90, 0x90, 0x90, 0x90, 0x90 }));
+                                return utility::ExhaustionResult::BREAK;
+                            }
+
+                            if (*(uint8_t*)ip == 0xE9) {
+                                SPDLOG_INFO("Patching assertion at {:x}!", ip);
+                                assert_patches.push_back(Patch::create(ip, { 0xC3 }));
+                                return utility::ExhaustionResult::BREAK;
+                            }
+
+                            return utility::ExhaustionResult::CONTINUE;
+                        });
+                    }
+                } catch(...) {
+
+                }
+            }
+
+            return utility::ExhaustionResult::CONTINUE;
+        });
+
         // set up a handler to skip int3 assertions
         // we do this because debug builds assert when the views are already setup.
         const auto seh_handler = [](PEXCEPTION_POINTERS info) -> LONG {
@@ -3838,8 +3875,6 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
         };
 
         const auto exception_handler = AddVectoredExceptionHandler(1, seh_handler);
-
-        const void (*post_init_properties)(uintptr_t) = (*(decltype(post_init_properties)**)localplayer)[*idx];
         post_init_properties(localplayer);
 
         SPDLOG_INFO("PostInitProperties called!");
