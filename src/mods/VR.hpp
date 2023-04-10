@@ -517,6 +517,8 @@ private:
     std::array<CameraData, 3> m_camera_datas{};
     void save_cameras();
     void load_cameras();
+    void load_camera(int index);
+    void save_camera(int index);
 
     bool m_stereo_emulation_mode{false}; // not a good config option, just for debugging
     bool m_wait_for_present{true};
@@ -563,7 +565,14 @@ private:
     bool m_init_finished{false};
     bool m_has_hw_scheduling{false}; // hardware accelerated GPU scheduling
     bool m_spoofed_gamepad_connection{false};
-    bool m_draw_rt_modifier_window{false};
+
+    struct {
+        bool draw{false};
+        bool was_moving_left{false};
+        bool was_moving_right{false};
+        uint8_t page{0};
+        uint8_t num_pages{3};
+    } m_rt_modifier{};
 
     bool m_disable_projection_matrix_override{ false };
     bool m_disable_view_matrix_override{false};

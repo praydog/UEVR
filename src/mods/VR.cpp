@@ -770,7 +770,7 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
     }
 
     if (!g_framework->is_drawing_ui()) {
-        m_draw_rt_modifier_window = false;
+        m_rt_modifier.draw = false;
         return;
     }
 
@@ -798,10 +798,16 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
 
         // Now that we're drawing the UI, check for special button combos the user can use as shortcuts
         // like recenter view, set standing origin, camera offset modification, etc.
-        m_draw_rt_modifier_window = gamepad.bRightTrigger >= 128;
+        m_rt_modifier.draw = gamepad.bRightTrigger >= 128;
+
+        if (!m_rt_modifier.draw) {
+            m_rt_modifier.page = 0;
+            m_rt_modifier.was_moving_left = false;
+            m_rt_modifier.was_moving_right = false;
+        }
 
         // If user holding down RT with menu open...
-        if (m_draw_rt_modifier_window) {
+        if (m_rt_modifier.draw) {
             // Camera offset modification
             const auto right_ratio = (float)gamepad.sThumbLX / 32767.0f;
             const auto forward_ratio = (float)gamepad.sThumbLY / 32767.0f;
@@ -822,21 +828,87 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
                 m_camera_up_offset->value() += up_offset;
             }
 
+            if (gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT) {
+                if (!m_rt_modifier.was_moving_left) {
+                    if (m_rt_modifier.page > 0) {
+                        m_rt_modifier.page--;
+                    } else {
+                        m_rt_modifier.page = m_rt_modifier.num_pages - 1;
+                    }
+
+                    m_rt_modifier.was_moving_left = true;
+                }
+            } else {
+                m_rt_modifier.was_moving_left = false;
+            }
+
+            if (gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) {
+                if (!m_rt_modifier.was_moving_right) {
+                    if (m_rt_modifier.page < m_rt_modifier.num_pages - 1) {
+                        m_rt_modifier.page++;
+                    } else {
+                        m_rt_modifier.page = 0;
+                    }
+                    
+                    m_rt_modifier.was_moving_right = true;
+                }
+            } else {
+                m_rt_modifier.was_moving_right = false;
+            }
+
             // Reset camera offset
-            if (gamepad.wButtons & XINPUT_GAMEPAD_B) {
-                m_camera_right_offset->value() = 0.0f;
-                m_camera_forward_offset->value() = 0.0f;
-                m_camera_up_offset->value() = 0.0f;
-            }
+            switch (m_rt_modifier.page) {
+            case 2:
+                if (gamepad.wButtons & XINPUT_GAMEPAD_B) {
+                    save_camera(2);
+                }
 
-            // Recenter
-            if (gamepad.wButtons & XINPUT_GAMEPAD_Y) {
-                this->recenter_view();
-            }
+                // Recenter
+                if (gamepad.wButtons & XINPUT_GAMEPAD_Y) {
+                    save_camera(1);
+                }
 
-            // Reset standing origin
-            if (gamepad.wButtons & XINPUT_GAMEPAD_X) {
-                this->set_standing_origin(this->get_position(0));
+                // Reset standing origin
+                if (gamepad.wButtons & XINPUT_GAMEPAD_X) {
+                    save_camera(0);
+                }
+                break;
+            
+            case 1:
+                if (gamepad.wButtons & XINPUT_GAMEPAD_B) {
+                    load_camera(2);
+                }
+
+                // Recenter
+                if (gamepad.wButtons & XINPUT_GAMEPAD_Y) {
+                    load_camera(1);
+                }
+
+                // Reset standing origin
+                if (gamepad.wButtons & XINPUT_GAMEPAD_X) {
+                    load_camera(0);
+                }
+
+                break; 
+            case 0:
+            default:
+                if (gamepad.wButtons & XINPUT_GAMEPAD_B) {
+                    m_camera_right_offset->value() = 0.0f;
+                    m_camera_forward_offset->value() = 0.0f;
+                    m_camera_up_offset->value() = 0.0f;
+                }
+
+                // Recenter
+                if (gamepad.wButtons & XINPUT_GAMEPAD_Y) {
+                    this->recenter_view();
+                }
+
+                // Reset standing origin
+                if (gamepad.wButtons & XINPUT_GAMEPAD_X) {
+                    this->set_standing_origin(this->get_position(0));
+                }
+                
+                break;
             }
 
             // ignore everything else
@@ -1171,6 +1243,41 @@ void VR::load_cameras() try {
     spdlog::error("[VR] Failed to load camera offsets");
 }
 
+void VR::load_camera(int index) {
+    if (index < 0 || index >= m_camera_datas.size()) {
+        return;
+    }
+
+    const auto& data = m_camera_datas[index];
+
+    m_camera_right_offset->value() = data.offset.x;
+    m_camera_up_offset->value() = data.offset.y;
+    m_camera_forward_offset->value() = data.offset.z;
+    m_world_scale->value() = data.world_scale;
+    m_decoupled_pitch->value() = data.decoupled_pitch;
+    m_decoupled_pitch_ui_adjust->value() = data.decoupled_pitch_ui_adjust;
+}
+
+void VR::save_camera(int index) {
+    if (index < 0 || index >= m_camera_datas.size()) {
+        return;
+    }
+
+    auto& data = m_camera_datas[index];
+
+    data.offset = {
+        m_camera_right_offset->value(),
+        m_camera_up_offset->value(),
+        m_camera_forward_offset->value()
+    };
+
+    data.world_scale = m_world_scale->value();
+    data.decoupled_pitch = m_decoupled_pitch->value();
+    data.decoupled_pitch_ui_adjust = m_decoupled_pitch_ui_adjust->value();
+
+    save_cameras();
+}
+
 void VR::save_cameras() try {
     const auto cameras_txt = Framework::get_persistent_dir("cameras.txt");
 
@@ -1215,18 +1322,42 @@ void VR::on_frame() {
     const auto is_allowed_draw_window = now - m_last_xinput_update < std::chrono::seconds(2);
 
     if (!is_allowed_draw_window) {
-        m_draw_rt_modifier_window = false;
+        m_rt_modifier.draw = false;
     }
 
-    if (m_draw_rt_modifier_window) {
+    if (m_rt_modifier.draw) {
         const auto rt_size = g_framework->get_rt_size();
 
         ImGui::Begin("RT Modifier Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav);
+        
+        ImGui::Separator();
         ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + Left Stick: Camera left/right/forward/back");
         ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + Right Stick: Camera up/down");
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + B: Reset camera offset");
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + Y: Recenter view");
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + X: Reset standing origin");
+        
+        ImGui::Text("Page: %d", m_rt_modifier.page + 1);
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "DPad Left: Previous page | DPad Right: Next page");
+
+        switch (m_rt_modifier.page) {
+        case 2:
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + B: Save Camera 2");
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + Y: Save Camera 1");
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + X: Save Camera 0");
+            break;
+
+        case 1:
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + B: Load Camera 2");
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + Y: Load Camera 1");
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + X: Load Camera 0");
+            break;
+
+        case 0:
+        default:
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + B: Reset camera offset");
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + Y: Recenter view");
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "RT + X: Reset standing origin");
+            m_rt_modifier.page = 0;
+            break;
+        }
 
         const auto window_size = ImGui::GetWindowSize();
 
@@ -1544,28 +1675,13 @@ void VR::on_draw_ui() {
         auto& data = m_camera_datas[i];
 
         if (ImGui::Button(std::format("Save Camera {}", i).data())) {
-            data.offset = {
-                m_camera_right_offset->value(),
-                m_camera_up_offset->value(),
-                m_camera_forward_offset->value()
-            };
-
-            data.world_scale = m_world_scale->value();
-            data.decoupled_pitch = m_decoupled_pitch->value();
-            data.decoupled_pitch_ui_adjust = m_decoupled_pitch_ui_adjust->value();
-
-            save_cameras();
+            save_camera(i);
         }
 
         ImGui::SameLine();
 
         if (ImGui::Button(std::format("Load Camera {}", i).data())) {
-            m_camera_right_offset->value() = data.offset.x;
-            m_camera_up_offset->value() = data.offset.y;
-            m_camera_forward_offset->value() = data.offset.z;
-            m_world_scale->value() = data.world_scale;
-            m_decoupled_pitch->value() = data.decoupled_pitch;
-            m_decoupled_pitch_ui_adjust->value() = data.decoupled_pitch_ui_adjust;
+            load_camera(i);
         }
     }
 
