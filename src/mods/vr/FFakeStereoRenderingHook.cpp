@@ -2414,8 +2414,9 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
     // older versions may not work or crash.
     // TODO: Figure out older versions.
     constexpr auto weak_ptr_size = sizeof(TWeakPtr<void*>);
-    uintptr_t potential_hmd_device = (uintptr_t)engine + s_stereo_rendering_device_offset + weak_ptr_size;
-    uintptr_t potential_view_extensions = (uintptr_t)engine + s_stereo_rendering_device_offset + (weak_ptr_size * 2); // 2 to skip over the XRSystem
+    static const auto potential_hmd_device_offset = s_stereo_rendering_device_offset + weak_ptr_size;
+    static const uintptr_t potential_hmd_device = (uintptr_t)engine + potential_hmd_device_offset;
+    static const uintptr_t potential_view_extensions = (uintptr_t)engine + s_stereo_rendering_device_offset + (weak_ptr_size * 2); // 2 to skip over the XRSystem
 
     // This can happen if the game left a VR plugin in it
     // Usually this isn't an issue, but some games can leave a valid HMDDevice or XRSystem laying around for whatever reason
@@ -2433,6 +2434,119 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
             *(void**)(potential_hmd_device + sizeof(void*)) = nullptr;
         }
     }
+
+    // Add a vectored exception handler that catches attempted dereferences of a null XRSystem or HMDDevice
+    // The exception handler will then patch out the instructions causing the crash and continue execution
+    static std::vector<Patch::Ptr> xrsystem_patches{};
+    static std::unordered_set<uintptr_t> ignored_addresses{};
+    static std::mutex ignored_addresses_mutex{};
+
+    AddVectoredExceptionHandler(1, [](PEXCEPTION_POINTERS exception) -> LONG {
+        if (exception->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) {
+            const auto exception_address = exception->ContextRecord->Rip;
+
+            if (ignored_addresses.contains(exception_address)) {
+                return EXCEPTION_CONTINUE_SEARCH;
+            }
+
+            ignored_addresses.insert(exception_address);
+
+            const auto decoded = utility::decode_one((uint8_t*)exception_address);
+
+            if (!decoded) {
+                SPDLOG_ERROR("[Exception Handler] Failed to decode instruction at {:x}", exception_address);
+                return EXCEPTION_CONTINUE_SEARCH;
+            }
+
+            const auto& op2 = decoded->Operands[1];
+
+            if (decoded->OperandsCount != 2 || 
+                 op2.Type != ND_OP_MEM      || 
+                !op2.Info.Memory.HasBase)
+            {
+                return EXCEPTION_CONTINUE_SEARCH;
+            }
+
+            SPDLOG_INFO("Encountered attempted dereference of null pointer at {:x}", exception_address);
+
+            // Get the start of the previous instruction
+            const auto previous_instruction = utility::resolve_instruction(exception_address - 1);
+
+            if (!previous_instruction) {
+                SPDLOG_ERROR("Could not resolve previous instruction at {:x}", exception_address - 1);
+                return EXCEPTION_CONTINUE_SEARCH;
+            }
+
+            if (previous_instruction->instrux.Operands[0].Type != ND_OP_REG ||
+                previous_instruction->instrux.Operands[0].Info.Register.Reg != op2.Info.Memory.Base)
+            {
+                SPDLOG_ERROR("Previous instruction does not use the same register as the dereference");
+                return EXCEPTION_CONTINUE_SEARCH;
+            }
+
+            const auto prev_op2 = previous_instruction->instrux.Operands[1];
+
+            if (previous_instruction->instrux.OperandsCount < 2 ||
+                prev_op2.Type != ND_OP_MEM ||
+                !prev_op2.Info.Memory.HasBase)
+            {
+                SPDLOG_ERROR("Previous instruction is not a memory dereference");
+                return EXCEPTION_CONTINUE_SEARCH;
+            }
+
+            if (!prev_op2.Info.Memory.HasDisp) {
+                SPDLOG_ERROR("Previous instruction does not have a displacement");
+                return EXCEPTION_CONTINUE_SEARCH;
+            }
+
+            if (prev_op2.Info.Memory.Disp != potential_hmd_device_offset) {
+                SPDLOG_ERROR("Previous instruction is not the XRSystem or HMDDevice dereference");
+                return EXCEPTION_CONTINUE_SEARCH;
+            }
+
+            SPDLOG_INFO("Found the dereference of the XRSystem or HMDDevice at {:x}", previous_instruction->addr);
+
+            // Patch the initial instruction that caused the crash
+            SPDLOG_INFO("Creating first patch...");
+
+            std::vector<int16_t> first_patch{};
+
+            for (auto i = 0; i < decoded->Length; ++i) {
+                first_patch.push_back(0x90);
+            }
+
+            xrsystem_patches.push_back(Patch::create(exception_address, first_patch));
+
+            const auto next_instruction_addr = exception_address + decoded->Length;
+            const auto next_instruction = utility::decode_one((uint8_t*)next_instruction_addr);
+
+            if (!next_instruction) {
+                SPDLOG_ERROR("Could not decode next instruction at {:x}", exception_address + decoded->Length);
+                return EXCEPTION_CONTINUE_SEARCH;
+            }
+
+            if (!std::string_view{next_instruction->Mnemonic}.starts_with("CALL")) {
+                SPDLOG_ERROR("Next instruction is not a call, continuing anyways since we patched the dereference");
+                return EXCEPTION_CONTINUE_EXECUTION;
+            }
+
+            // Patch the next instruction if it's a call
+            SPDLOG_INFO("Creating second patch...");
+
+            std::vector<int16_t> second_patch{};
+
+            for (auto i = 0; i < next_instruction->Length; ++i) {
+                second_patch.push_back(0x90);
+            }
+
+            xrsystem_patches.push_back(Patch::create(next_instruction_addr, second_patch));
+
+            SPDLOG_INFO("Finished creating patches, continuing execution. Hopefully we don't crash...");
+            return EXCEPTION_CONTINUE_EXECUTION;
+        }
+
+        return EXCEPTION_CONTINUE_SEARCH;
+    });
 
     // The TWeakPtr version is for >= 4.11 UE versions
     TWeakPtr<FSceneViewExtensions>& view_extensions_tweakptr = 
