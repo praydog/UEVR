@@ -2426,6 +2426,13 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
         // Double check that we're actually replacing a pointer and not an integer or something
         if (!IsBadReadPtr(*(void**)potential_hmd_device, sizeof(void*))) {
             SPDLOG_INFO("Found an existing HMDDevice or XRSystem, nullifying it...");
+            static std::vector<uintptr_t> replacement_vtable{};
+
+            for (auto i = 0; i < 200; ++i) {
+                replacement_vtable.push_back((uintptr_t)+[]() { return nullptr; });
+            }
+
+            //**(void***)potential_hmd_device = replacement_vtable.data();
             *(void**)potential_hmd_device = nullptr;
             m_fixed_localplayer_view_count = true; // If this is already allocated, then there's already a second view for us to use
         }
@@ -2522,7 +2529,7 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
 
             if (!next_instruction) {
                 SPDLOG_ERROR("Could not decode next instruction at {:x}", exception_address + decoded->Length);
-                return EXCEPTION_CONTINUE_SEARCH;
+                return EXCEPTION_CONTINUE_EXECUTION;
             }
 
             if (!std::string_view{next_instruction->Mnemonic}.starts_with("CALL")) {
