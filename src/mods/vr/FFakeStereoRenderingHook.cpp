@@ -2446,7 +2446,6 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
     // The exception handler will then patch out the instructions causing the crash and continue execution
     static std::vector<Patch::Ptr> xrsystem_patches{};
     static std::unordered_set<uintptr_t> ignored_addresses{};
-    static std::mutex ignored_addresses_mutex{};
 
     AddVectoredExceptionHandler(1, [](PEXCEPTION_POINTERS exception) -> LONG {
         if (exception->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) {

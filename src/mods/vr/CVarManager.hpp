@@ -178,5 +178,10 @@ private:
         std::make_unique<CVarData>(L"Engine", L"r.MotionBlur.Max", CVar::Type::FLOAT, -1.0f, 100.0f),
         std::make_unique<CVarData>(L"Engine", L"r.SceneColorFringe.Max", CVar::Type::FLOAT, -1.0f, 100.0f),
         std::make_unique<CVarData>(L"Engine", L"r.SceneColorFringe.Quality", CVar::Type::FLOAT, 0.0f, 1.0f),
+        std::make_unique<CVarData>(L"Renderer", L"r.Color.Min", CVar::Type::FLOAT, -1.0f, 1.0f),
+        std::make_unique<CVarData>(L"Renderer", L"r.Color.Mid", CVar::Type::FLOAT, 0.0f, 1.0f),
+        std::make_unique<CVarData>(L"Renderer", L"r.Color.Max", CVar::Type::FLOAT, -1.0f, 2.0f),
+        std::make_unique<CVarData>(L"Renderer", L"r.Tonemapper.Sharpen", CVar::Type::FLOAT, 0.0f, 10.0f),
+        std::make_unique<CVarData>(L"Renderer", L"r.Gamma", CVar::Type::FLOAT, 0.0f, 2.0f),
     };
 };
