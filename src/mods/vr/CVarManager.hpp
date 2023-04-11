@@ -182,6 +182,6 @@ private:
         std::make_unique<CVarData>(L"Renderer", L"r.Color.Mid", CVar::Type::FLOAT, 0.0f, 1.0f),
         std::make_unique<CVarData>(L"Renderer", L"r.Color.Max", CVar::Type::FLOAT, -1.0f, 2.0f),
         std::make_unique<CVarData>(L"Renderer", L"r.Tonemapper.Sharpen", CVar::Type::FLOAT, 0.0f, 10.0f),
-        std::make_unique<CVarData>(L"Renderer", L"r.Gamma", CVar::Type::FLOAT, 0.0f, 2.0f),
+        std::make_unique<CVarData>(L"Renderer", L"r.TonemapperGamma", CVar::Type::FLOAT, -5.0f, 5.0f),
     };
 };
