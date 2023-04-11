@@ -788,7 +788,12 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
             
                 auto vr = VR::get();
 
-                return vr->is_hmd_active() && !vr->is_stereo_emulation_enabled();
+                if (vr->is_hmd_active() && !vr->is_stereo_emulation_enabled()) {
+                    g_hook->get_embedded_rtm().should_use_separate_rt_called = true;
+                    return true;
+                }
+
+                return false;
             }
         );
 
@@ -801,7 +806,13 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                     SPDLOG_INFO_ONCE("NeedReallocateViewportRenderTarget (embedded): {:x}", (uintptr_t)_ReturnAddress());
                 #endif
 
-                    return g_hook->get_render_target_manager()->need_reallocate_view_target(*viewport);
+                    if (g_hook->get_render_target_manager()->need_reallocate_view_target(*viewport)) {
+                        g_hook->get_embedded_rtm().need_reallocate_viewport_render_target_called = true;
+                        g_hook->get_embedded_rtm().last_time_needed_hmd_reallocate = std::chrono::steady_clock::now();
+                        return true;
+                    }
+
+                    return false;
                 }
             );
         }
@@ -2415,6 +2426,7 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
         if (!IsBadReadPtr(*(void**)potential_hmd_device, sizeof(void*))) {
             SPDLOG_INFO("Found an existing HMDDevice or XRSystem, nullifying it...");
             *(void**)potential_hmd_device = nullptr;
+            m_fixed_localplayer_view_count = true; // If this is already allocated, then there's already a second view for us to use
         }
 
         if (!IsBadReadPtr(*(void**)(potential_hmd_device + sizeof(void*)), sizeof(void*))) {
@@ -4698,12 +4710,176 @@ void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx)
     ++rtm->last_texture_index;
 }
 
+// This is a very special fix for cases where engine modifications
+// can add a second call to UpdateViewportRHI right before the place we expect it to get called
+// The fact that they get called back-to-back over and over causes huge performance problems
+// because the viewport texture keeps getting recreated over and over.
+// This hook attempts to only allow the last call to UpdateViewportRHI inside of EnqueueBeginRenderFrame to do anything
+// Usually there's only one call to UpdateViewportRHI inside of EnqueueBeginRenderFrame, but (very rarely) there can be two.
+__declspec(noinline) void FFakeStereoRenderingHook::update_viewport_rhi_hook(void* viewport, size_t destroyed, size_t new_size_x, size_t new_size_y, size_t new_window_mode, size_t preferred_pixel_format) {
+    auto call_orig = [&]() {
+        g_hook->m_update_viewport_rhi_hook->get_original<void(*)(void*, size_t, size_t, size_t, size_t, size_t)>()(viewport, destroyed, new_size_x, new_size_y, new_window_mode, preferred_pixel_format);
+    };
+
+    SPDLOG_INFO_ONCE("UpdateViewportRHI (embedded): {:x}", (uintptr_t)_ReturnAddress());
+
+    const auto hmd_active = VR::get()->is_hmd_active();
+
+    if (!hmd_active) {
+        call_orig();
+        return;
+    }
+
+    auto& rtm = g_hook->get_embedded_rtm();
+
+    struct FunctionInfo {
+        std::vector<uintptr_t> return_addrs{}; // in order of call
+        size_t count{0};
+    };
+
+    static std::mutex mtx{};
+    static std::unordered_map<uintptr_t, uintptr_t> functions_within{};
+    static std::unordered_map<uintptr_t, FunctionInfo> function_infos{};
+
+    {
+        std::scoped_lock _{mtx};
+
+        const auto return_addr = (uintptr_t)_ReturnAddress();
+        auto function_within = functions_within.find(return_addr);
+
+        if (function_within == functions_within.end()) {
+            const auto result = utility::find_virtual_function_start(return_addr);
+
+            if (result) {
+                functions_within[return_addr] = *result;
+            } else {
+                functions_within[return_addr] = 0;
+            }
+
+            function_within = functions_within.find(return_addr);
+
+            if (function_within->second != 0) {
+                ++function_infos[function_within->second].count;
+            }
+
+            function_infos[function_within->second].return_addrs.push_back(return_addr);
+
+            SPDLOG_INFO("Added new call of UpdateViewportRHI to function {:x} (count: {})", function_within->second, function_infos[function_within->second].count);
+        }
+
+        if (function_within->second == 0) {
+            SPDLOG_INFO_ONCE("Could not find vfunc start for call of UpdateViewportRHI, calling original.");
+            call_orig();
+            return;
+        }
+
+        const auto& function_info = function_infos[function_within->second];
+
+        // We only care about corrections where UpdateViewportRHI is called more than once in the same function.
+        if (function_info.count <= 1 || function_info.return_addrs.empty()) {
+            call_orig();
+            return;
+        }
+
+        // We only want the last function to be called.
+        // We don't need to call the original here because it will get called by the last function.
+        // if we call the original here, it will cause performance issues.
+        if (function_info.return_addrs.back() != return_addr) {
+            return;
+        }
+    }
+
+    static std::chrono::steady_clock::time_point last_time_hmd_active{};
+    static bool hmd_was_active = false;
+    bool should_call_orig = false;
+
+    if (hmd_active && !hmd_was_active) {
+        last_time_hmd_active = std::chrono::steady_clock::now();
+        hmd_was_active = true;
+    } else if (!hmd_active) {
+        hmd_was_active = false;
+        should_call_orig = true;
+    }
+
+    if (hmd_active) {
+        should_call_orig = std::chrono::steady_clock::now() - last_time_hmd_active <= std::chrono::milliseconds(2000);
+        //should_call_orig = should_call_orig || (std::chrono::steady_clock::now() - rtm.last_time_needed_hmd_reallocate <= std::chrono::milliseconds(2000));
+    }
+
+    if (should_call_orig) {
+        rtm.should_use_separate_rt_called = false;
+        rtm.need_reallocate_viewport_render_target_called = false;
+        call_orig();
+        return;
+    }
+
+    if (!rtm.should_use_separate_rt_called) {
+        SPDLOG_INFO_ONCE("Skipping UpdateViewportRHI (embedded) because ShouldUseSeparateRenderTarget() was not called!");
+        return; // Do not call at all.
+    }
+
+    if (!rtm.need_reallocate_viewport_render_target_called) {
+        const auto need_reallocate = g_hook->get_render_target_manager()->need_reallocate_view_target(*(FViewport*)viewport);
+
+        if (!need_reallocate) {
+            SPDLOG_INFO_ONCE("Skipping UpdateViewportRHI (embedded) because NeedReallocateViewportRenderTarget() was not called and we don't need to reallocate anyway!");
+            rtm.should_use_separate_rt_called = false;
+            return; // Do not call at all.
+        }
+
+        SPDLOG_INFO_ONCE("We need to reallocate the viewport render target even though NeedReallocateViewportRenderTarget() was not called!");
+        //rtm.last_time_needed_hmd_reallocate = std::chrono::steady_clock::now();
+    }
+
+    call_orig();
+    rtm.should_use_separate_rt_called = false;
+    rtm.need_reallocate_viewport_render_target_called = false;
+}
+
+void FFakeStereoRenderingHook::attempt_hook_update_viewport_rhi(uintptr_t return_address) {
+    if (!m_rendertarget_manager_embedded_in_stereo_device || m_special_detected || m_attempted_hook_update_viewport_rhi) {
+        return;
+    }
+
+    m_attempted_hook_update_viewport_rhi = true;
+
+    if (m_update_viewport_rhi_hook == nullptr) {
+        SPDLOG_INFO("Attempting to hook UpdateViewportRHI...");
+
+        const auto init_dynamic_rhi = utility::find_virtual_function_start(return_address);
+
+        if (init_dynamic_rhi) {
+            SPDLOG_INFO("Found InitDynamicRHI: {:x}", *init_dynamic_rhi);
+
+            const auto init_dynamic_rhi_ptr = utility::scan_ptr(*utility::get_module_within(*init_dynamic_rhi), *init_dynamic_rhi);
+            if (!init_dynamic_rhi_ptr) {
+                SPDLOG_ERROR("Failed to find InitDynamicRHI pointer!");
+                return;
+            }
+
+            const auto update_viewport_rhi_ptr = *init_dynamic_rhi_ptr - (sizeof(void*) * 2);
+
+            if (*(void**)update_viewport_rhi_ptr == nullptr || IsBadReadPtr(*(void**)update_viewport_rhi_ptr, sizeof(void*))) {
+                SPDLOG_ERROR("Failed to find UpdateViewportRHI!");
+                return;
+            }
+
+            m_update_viewport_rhi_hook = std::make_unique<PointerHook>((void**)update_viewport_rhi_ptr, &update_viewport_rhi_hook);
+        } else {
+            SPDLOG_ERROR("Failed to find InitDynamicRHI, cannot hook UpdateViewportRHI!");
+        }
+    }
+}
+
 bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return_address, FTexture2DRHIRef* tex, FTexture2DRHIRef* shader_resource) {
     this->texture_hook_ref = tex;
     this->shader_resource_hook_ref = shader_resource;
 
     if (!this->set_up_texture_hook) {
         SPDLOG_INFO("AllocateRenderTargetTexture retaddr: {:x}", return_address);
+
+        g_hook->attempt_hook_update_viewport_rhi(return_address);
+
         SPDLOG_INFO("Scanning for call instr...");
 
         bool next_call_is_not_the_right_one = false;

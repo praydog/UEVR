@@ -176,6 +176,8 @@ public:
     void attempt_hooking();
     void attempt_hook_game_engine_tick(uintptr_t return_address = 0);
     void attempt_hook_slate_thread(uintptr_t return_address = 0);
+    void attempt_hook_update_viewport_rhi(uintptr_t return_address);
+    
 
     bool has_double_precision() const {
         return m_has_double_precision;
@@ -245,6 +247,10 @@ public:
         return m_hooked_game_engine_tick;
     }
 
+    auto& get_embedded_rtm() {
+        return m_embedded_rtm;
+    }
+
 private:
     bool hook();
     bool standard_fake_stereo_hook(uintptr_t vtable);
@@ -255,7 +261,7 @@ private:
     
     bool hook_game_viewport_client();
     bool setup_view_extensions();
-    
+
     static std::optional<uintptr_t> locate_fake_stereo_rendering_constructor();
     static std::optional<uintptr_t> locate_fake_stereo_rendering_vtable();
     static std::optional<uintptr_t> locate_active_stereo_rendering_device();
@@ -291,6 +297,8 @@ private:
     static void viewport_draw_hook(void* viewport, bool should_present);
     static void game_viewport_client_draw_hook(void* gameviewportclient, void* viewport, void* canvas, void* a4);
 
+    static void update_viewport_rhi_hook(void* viewport, size_t destroyed, size_t new_size_x, size_t new_size_y, size_t new_window_mode, size_t preferred_pixel_format);
+
     std::unique_ptr<ThreadWorker<FRHICommandListImmediate*>> m_slate_thread_worker{std::make_unique<ThreadWorker<FRHICommandListImmediate*>>()};
 
     safetyhook::InlineHook m_tick_hook{};
@@ -315,6 +323,7 @@ private:
     std::unique_ptr<PointerHook> m_init_canvas_hook{};
     std::unique_ptr<PointerHook> m_get_desired_number_of_views_hook{};
     std::unique_ptr<PointerHook> m_get_view_pass_for_index_hook{};
+    std::unique_ptr<PointerHook> m_update_viewport_rhi_hook{};
 
     VRRenderTargetManager m_rtm{};
     VRRenderTargetManager_418 m_rtm_418{};
@@ -333,6 +342,7 @@ private:
     bool m_hooked_slate_thread{false};
     bool m_attempted_hook_game_engine_tick{false};
     bool m_attempted_hook_slate_thread{false};
+    bool m_attempted_hook_update_viewport_rhi{false};
     bool m_uses_old_rendertarget_manager{false};
     bool m_rendertarget_manager_embedded_in_stereo_device{false}; // 4.17 and below...?
     bool m_special_detected{false};
@@ -380,6 +390,9 @@ private:
         std::unique_ptr<PointerHook> calculate_render_target_size_hook{};
         std::unique_ptr<PointerHook> allocate_render_target_texture_hook{};
         std::unique_ptr<PointerHook> need_reallocate_viewport_render_target_hook{};
+        std::chrono::steady_clock::time_point last_time_needed_hmd_reallocate{};
+        bool should_use_separate_rt_called{true};
+        bool need_reallocate_viewport_render_target_called{true};
     } m_embedded_rtm;
 
     const ModToggle::Ptr m_recreate_textures_on_reset{ ModToggle::create("VR_RecreateTexturesOnReset", true) };
