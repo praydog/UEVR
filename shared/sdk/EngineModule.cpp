@@ -15,6 +15,14 @@ HMODULE get_ue_module(const std::wstring& name) {
         }
     }
 
+    if (exe_name && exe_name->ends_with("UE4Editor.exe")) {
+        const auto mod = utility::find_partial_module(L"UE4Editor-" + name + L".dll");
+
+        if (mod != nullptr) {
+            return mod;
+        }
+    }
+
     const auto partial_module = utility::find_partial_module(L"-" + name + L"-Win64-Shipping.dll");
 
     if (partial_module != nullptr) {
