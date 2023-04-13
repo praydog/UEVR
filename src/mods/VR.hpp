@@ -308,6 +308,10 @@ public:
         return m_decoupled_pitch_ui_adjust->value();
     }
 
+    void set_decoupled_pitch(bool value) {
+        m_decoupled_pitch->value() = value;
+    }
+
     bool is_headlocked_aim_enabled() const {
         return m_headlocked_aim->value();
     }

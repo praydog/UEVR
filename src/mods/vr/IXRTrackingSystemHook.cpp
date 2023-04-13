@@ -662,6 +662,7 @@ void IXRTrackingSystemHook::process_view_rotation(void* player_controller, float
         *rot = g_hook->m_last_view_rotation;
     }
 
+    vr->set_decoupled_pitch(true);
     vr->recenter_view();
 
     call_orig();
