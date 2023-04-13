@@ -11,6 +11,8 @@
 #include <sdk/FViewportInfo.hpp>
 #include <sdk/threading/ThreadWorker.hpp>
 
+#include "IXRTrackingSystemHook.hpp"
+
 #include "Mod.hpp"
 
 struct FRHICommandListImmediate;
@@ -325,12 +327,17 @@ private:
     std::unique_ptr<PointerHook> m_get_view_pass_for_index_hook{};
     std::unique_ptr<PointerHook> m_update_viewport_rhi_hook{};
 
+    std::unique_ptr<IXRTrackingSystemHook> m_tracking_system_hook{};
+
     VRRenderTargetManager m_rtm{};
     VRRenderTargetManager_418 m_rtm_418{};
     VRRenderTargetManager_Special m_rtm_special{};
 
     Rotator<float> m_last_afr_rotation{};
     Rotator<double> m_last_afr_rotation_double{};
+
+    std::atomic<Rotator<float>> m_last_rotation{};
+    std::atomic<Rotator<double>> m_last_rotation_double{};
 
     std::vector<uintptr_t> m_projection_matrix_stack{};
     bool m_hooked_alternative_localplayer_scan{false};
@@ -402,4 +409,6 @@ private:
         *m_recreate_textures_on_reset,
         *m_frame_delay_compensation
     };
+
+    friend class IXRTrackingSystemHook;
 };

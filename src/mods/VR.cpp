@@ -1664,6 +1664,14 @@ void VR::on_draw_ui() {
     ImGui::BeginGroup();
 
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+    if (ImGui::TreeNode("Head Locked Aim")) {
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Experimental, may crash");
+        m_headlocked_aim->draw("Enabled");
+
+        ImGui::TreePop();
+    }
+
+    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
     if (ImGui::TreeNode("Decoupled Pitch")) {
         m_decoupled_pitch->draw("Enabled");
         m_decoupled_pitch_ui_adjust->draw("Auto Adjust UI");

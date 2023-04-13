@@ -210,6 +210,10 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
         delta += hook->m_ignored_engine_delta;
         hook->m_ignored_engine_delta = 0.0f;
 
+        if (hook->m_tracking_system_hook != nullptr) {
+            hook->m_tracking_system_hook->on_pre_engine_tick(engine, delta);
+        }
+
         const auto& mods = g_framework->get_mods()->get_mods();
         for (auto& mod : mods) {
             mod->on_pre_engine_tick(engine, delta);
@@ -2442,6 +2446,8 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
         }
     }
 
+    m_tracking_system_hook = std::make_unique<IXRTrackingSystemHook>(this, potential_hmd_device_offset);
+
     // Add a vectored exception handler that catches attempted dereferences of a null XRSystem or HMDDevice
     // The exception handler will then patch out the instructions causing the crash and continue execution
     static std::vector<Patch::Ptr> xrsystem_patches{};
@@ -2456,6 +2462,16 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
             }
 
             ignored_addresses.insert(exception_address);
+
+            if (exception_address == 0) {
+                SPDLOG_INFO("[Exception Handler] Exception address is null");
+                return EXCEPTION_CONTINUE_SEARCH;
+            }
+
+            if (IsBadReadPtr((void*)exception_address, sizeof(void*))) {
+                SPDLOG_INFO("[Exception Handler] Bad read pointer at {:x}", exception_address);
+                return EXCEPTION_CONTINUE_SEARCH;
+            }
 
             const auto decoded = utility::decode_one((uint8_t*)exception_address);
 
@@ -3345,6 +3361,11 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
     for (auto& mod : mods) {
         mod->on_post_calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location, g_hook->m_has_double_precision);
+    }
+
+    if (true_index == 0) {
+        g_hook->m_last_rotation = *view_rotation;
+        g_hook->m_last_rotation_double = *rot_d;
     }
 
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS

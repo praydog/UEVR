@@ -51,4 +51,80 @@ bool is_vfunc_pattern(uintptr_t addr, std::string_view pattern) {
     SPDLOG_ERROR("Failed to find true vfunc at {:x}, reason {}", addr, ctx.status);
     return false;
 };
+
+VS_FIXEDFILEINFO get_file_version_info() {
+    try {
+        const auto full_path = utility::get_module_path(utility::get_executable());
+
+        if (!full_path) {
+            SPDLOG_ERROR("Failed to get executable path");
+            return {};
+        }
+
+        const auto file_version_size = GetFileVersionInfoSizeA(full_path->c_str(), nullptr);
+
+        if (file_version_size == 0) {
+            SPDLOG_ERROR("Failed to get file version info size");
+            return {};
+        }
+
+        std::vector<uint8_t> file_version_data(file_version_size);
+        GetFileVersionInfoA(full_path->c_str(), 0, file_version_size, file_version_data.data());
+
+        UINT size{};
+        VS_FIXEDFILEINFO* fixed_file_info{};
+
+        if (VerQueryValueA(file_version_data.data(), "\\", (LPVOID*)&fixed_file_info, &size) && fixed_file_info != nullptr) {
+            SPDLOG_INFO("MS: {:x}, LS: {:x}", fixed_file_info->dwFileVersionMS, fixed_file_info->dwFileVersionLS);
+            return *fixed_file_info;
+        } else {
+            SPDLOG_ERROR("Failed to get file version info");
+        }
+    } catch(...) {
+        SPDLOG_ERROR("Failed to get file version info");
+    }
+
+    return {};
+}
+
+bool check_file_version(uint32_t ms, uint32_t ls) {
+    try {
+        const auto full_path = utility::get_module_path(utility::get_executable());
+
+        if (!full_path) {
+            SPDLOG_ERROR("Failed to get executable path");
+            return false;
+        }
+
+        const auto file_version_size = GetFileVersionInfoSizeA(full_path->c_str(), nullptr);
+
+        if (file_version_size == 0) {
+            SPDLOG_ERROR("Failed to get file version info size");
+            return false;
+        }
+
+        std::vector<uint8_t> file_version_data(file_version_size);
+        GetFileVersionInfoA(full_path->c_str(), 0, file_version_size, file_version_data.data());
+
+        UINT size{};
+        VS_FIXEDFILEINFO* fixed_file_info{};
+
+        if (VerQueryValueA(file_version_data.data(), "\\", (LPVOID*)&fixed_file_info, &size) && fixed_file_info != nullptr) {
+            SPDLOG_INFO("MS: {:x}, LS: {:x}", fixed_file_info->dwFileVersionMS, fixed_file_info->dwFileVersionLS);
+
+            if (fixed_file_info->dwFileVersionMS == ms && fixed_file_info->dwFileVersionLS == ls) {
+                SPDLOG_INFO("Found matching executable");
+                return true;
+            } else {
+                SPDLOG_INFO("File does not match requested version");
+            }
+        } else {
+            SPDLOG_ERROR("Failed to get file version info");
+        }
+    } catch(...) {
+        SPDLOG_ERROR("Failed to get file version info");
+    }
+
+    return false;
+}
 }

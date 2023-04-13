@@ -14,4 +14,7 @@ namespace sdk {
 // so it performs emulation until the instruction pointer lands
 // on a set of instructions that match the pattern
 bool is_vfunc_pattern(uintptr_t addr, std::string_view pattern);
+
+VS_FIXEDFILEINFO get_file_version_info();
+bool check_file_version(uint32_t ms, uint32_t ls);
 }
