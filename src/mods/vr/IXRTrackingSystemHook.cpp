@@ -49,6 +49,80 @@ public:
 };
 }
 
+namespace ue_510 {
+class IXRTrackingSystemVT : public detail::IXRTrackingSystemVT {
+public:
+    static IXRTrackingSystemVT& get() {
+        static IXRTrackingSystemVT instance;
+        return instance;
+    }
+
+    bool implemented() const override { return true; }
+
+    std::optional<size_t> get_xr_camera_index() const override { return 35; }
+    std::optional<size_t> is_head_tracking_allowed_index() const override { return 40; }
+    std::optional<size_t> is_head_tracking_allowed_for_world_index()const  override { return 41; }
+};
+
+class IXRCameraVT : public detail::IXRCameraVT {
+public:
+    static IXRCameraVT& get() {
+        static IXRCameraVT instance;
+        return instance;
+    }
+
+    bool implemented() const override { return true; }
+
+    std::optional<size_t> get_system_name_index() const override { return 0; }
+    std::optional<size_t> get_system_device_id_index() const override { return 1; }
+    std::optional<size_t> use_implicit_hmd_position_index() const override { return 2; }
+    std::optional<size_t> get_implicit_hmd_position_index() const override { return 3; }
+    std::optional<size_t> apply_hmd_rotation_index() const override { return 4; }
+    std::optional<size_t> update_player_camera_index() const override { return 5; }
+    std::optional<size_t> override_fov_index() const override { return 6; }
+    std::optional<size_t> setup_late_update_index() const override { return 7; }
+    std::optional<size_t> calculate_stereo_camera_offset_index() const override { return 8; }
+    std::optional<size_t> get_passthrough_camera_uvs_index() const override { return 9; }
+};
+}
+
+namespace ue_503 {
+class IXRTrackingSystemVT : public detail::IXRTrackingSystemVT {
+public:
+    static IXRTrackingSystemVT& get() {
+        static IXRTrackingSystemVT instance;
+        return instance;
+    }
+
+    bool implemented() const override { return true; }
+
+    std::optional<size_t> get_xr_camera_index() const override { return 35; }
+    std::optional<size_t> is_head_tracking_allowed_index() const override { return 40; }
+    std::optional<size_t> is_head_tracking_allowed_for_world_index()const  override { return 41; }
+};
+
+class IXRCameraVT : public detail::IXRCameraVT {
+public:
+    static IXRCameraVT& get() {
+        static IXRCameraVT instance;
+        return instance;
+    }
+
+    bool implemented() const override { return true; }
+
+    std::optional<size_t> get_system_name_index() const override { return 0; }
+    std::optional<size_t> get_system_device_id_index() const override { return 1; }
+    std::optional<size_t> use_implicit_hmd_position_index() const override { return 2; }
+    std::optional<size_t> get_implicit_hmd_position_index() const override { return 3; }
+    std::optional<size_t> apply_hmd_rotation_index() const override { return 4; }
+    std::optional<size_t> update_player_camera_index() const override { return 5; }
+    std::optional<size_t> override_fov_index() const override { return 6; }
+    std::optional<size_t> setup_late_update_index() const override { return 7; }
+    std::optional<size_t> calculate_stereo_camera_offset_index() const override { return 8; }
+    std::optional<size_t> get_passthrough_camera_uvs_index() const override { return 9; }
+};
+}
+
 namespace ue_427 {
 class IXRTrackingSystemVT : public detail::IXRTrackingSystemVT {
 public:
@@ -126,6 +200,16 @@ public:
 detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
     const auto version = sdk::get_file_version_info();
 
+    // >= 5.1
+    if (version.dwFileVersionMS >= 0x50001) {
+        return ue_510::IXRTrackingSystemVT::get();
+    }
+
+    // >= 5.0
+    if (version.dwFileVersionMS >= 0x50000) {
+        return ue_503::IXRTrackingSystemVT::get();
+    }
+
     // 4.27
     if (version.dwFileVersionMS == 0x4001B) {
         return ue_427::IXRTrackingSystemVT::get();
@@ -142,6 +226,16 @@ detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
 
 detail::IXRCameraVT& get_camera_vtable() {
     const auto version = sdk::get_file_version_info();
+
+    // >= 5.1
+    if (version.dwFileVersionMS >= 0x50001) {
+        return ue_510::IXRCameraVT::get();
+    }
+
+    // >= 5.0
+    if (version.dwFileVersionMS >= 0x50000) {
+        return ue_503::IXRCameraVT::get();
+    }
 
     // 4.27
     if (version.dwFileVersionMS == 0x4001B) {
@@ -497,7 +591,35 @@ void IXRTrackingSystemHook::process_view_rotation(void* player_controller, float
     call_orig();
 
     if (g_hook->m_stereo_hook->has_double_precision()) {
-        g_hook->m_last_view_rotation_double = *(Rotator<double>*)rot;
+        auto rot_d = (Rotator<double>*)rot;
+
+        g_hook->m_last_view_rotation_double = *rot_d;
+
+        const auto view_mat_inverse =
+        glm::yawPitchRoll(
+            glm::radians(-rot_d->yaw),
+            glm::radians(rot_d->pitch),
+            glm::radians(-rot_d->roll));
+
+        const auto view_quat_inverse = glm::quat {
+            view_mat_inverse
+        };
+
+        auto vqi_norm = glm::normalize(view_quat_inverse);
+
+        // Decoupled Pitch
+        if (vr->is_decoupled_pitch_enabled()) {
+            vr->set_pre_flattened_rotation(vqi_norm);
+            vqi_norm = utility::math::flatten(vqi_norm);
+        }
+
+        const auto current_hmd_rotation = glm::normalize(glm::quat{vr->get_rotation(0)});
+        const auto new_rotation = glm::normalize(vqi_norm * current_hmd_rotation);
+        const auto euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
+
+        rot_d->pitch = euler.x;
+        rot_d->yaw = euler.y;
+        rot_d->roll = euler.z;
     } else {
         g_hook->m_last_view_rotation = *rot;
 
