@@ -686,7 +686,7 @@ void IXRTrackingSystemHook::process_view_rotation(void* player_controller, float
 
         // Decoupled Pitch
         if (vr->is_decoupled_pitch_enabled()) {
-            vr->set_pre_flattened_rotation(vqi_norm);
+            //vr->set_pre_flattened_rotation(vqi_norm);
             vqi_norm = utility::math::flatten(vqi_norm);
         }
 
@@ -714,7 +714,7 @@ void IXRTrackingSystemHook::process_view_rotation(void* player_controller, float
 
         // Decoupled Pitch
         if (vr->is_decoupled_pitch_enabled()) {
-            vr->set_pre_flattened_rotation(vqi_norm);
+            //vr->set_pre_flattened_rotation(vqi_norm);
             vqi_norm = utility::math::flatten(vqi_norm);
         }
 
