@@ -38,6 +38,7 @@ private:
     };
 
     void initialize();
+    bool analyze_head_tracking_allowed(uintptr_t return_address);
 
     static bool is_head_tracking_allowed(sdk::IXRTrackingSystem*);
     static bool is_head_tracking_allowed_for_world(sdk::IXRTrackingSystem*, void* world);
@@ -67,6 +68,7 @@ private:
     std::unique_ptr<PointerHook> m_process_view_rotation_hook{};
     bool m_attempted_hook_view_rotation{false};
     bool m_initialized{false};
+    bool m_is_leq_4_25{false}; // <= 4.25, IsHeadTrackingAllowedForWorld does not exist
 
     size_t m_offset_in_engine{0};
 

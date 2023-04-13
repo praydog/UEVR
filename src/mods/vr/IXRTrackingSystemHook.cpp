@@ -197,6 +197,42 @@ public:
 };
 }
 
+namespace ue_425 {
+class IXRTrackingSystemVT : public detail::IXRTrackingSystemVT {
+public:
+    static IXRTrackingSystemVT& get() {
+        static IXRTrackingSystemVT instance;
+        return instance;
+    }
+
+    bool implemented() const override { return true; }
+
+    std::optional<size_t> get_xr_camera_index() const override { return 31; }
+    std::optional<size_t> is_head_tracking_allowed_index() const override { return 36; }
+};
+
+class IXRCameraVT : public detail::IXRCameraVT {
+public:
+    static IXRCameraVT& get() {
+        static IXRCameraVT instance;
+        return instance;
+    }
+
+    bool implemented() const override { return true; }
+
+    std::optional<size_t> get_system_name_index() const override { return 0; }
+    std::optional<size_t> get_system_device_id_index() const override { return 1; }
+    std::optional<size_t> use_implicit_hmd_position_index() const override { return 2; }
+    std::optional<size_t> get_implicit_hmd_position_index() const override { return 3; }
+    std::optional<size_t> apply_hmd_rotation_index() const override { return 4; }
+    std::optional<size_t> update_player_camera_index() const override { return 5; }
+    std::optional<size_t> override_fov_index() const override { return 6; }
+    std::optional<size_t> setup_late_update_index() const override { return 7; }
+    std::optional<size_t> calculate_stereo_camera_offset_index() const override { return 8; }
+    std::optional<size_t> get_passthrough_camera_uvs_index() const override { return 9; }
+};
+}
+
 detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
     const auto version = sdk::get_file_version_info();
 
@@ -218,6 +254,11 @@ detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
     // 4.26
     if (version.dwFileVersionMS == 0x4001A) {
         return ue_426::IXRTrackingSystemVT::get();
+    }
+    
+    // 4.25
+    if (version.dwFileVersionMS <= 0x40019) {
+        return ue_425::IXRTrackingSystemVT::get();
     }
 
     return detail::IXRTrackingSystemVT::get();
@@ -245,6 +286,11 @@ detail::IXRCameraVT& get_camera_vtable() {
     // 4.26
     if (version.dwFileVersionMS == 0x4001A) {
         return ue_426::IXRCameraVT::get();
+    }
+
+    // 4.25
+    if (version.dwFileVersionMS <= 0x40019) {
+        return ue_425::IXRCameraVT::get();
     }
 
     return detail::IXRCameraVT::get();
@@ -284,6 +330,13 @@ IXRTrackingSystemHook::IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_ho
         m_camera_vtable[i] = (uintptr_t)+[](void*) {
             return nullptr;
         };
+    }
+
+    const auto version = sdk::get_file_version_info();
+
+    if (version.dwFileVersionMS >= 0x40000 && version.dwFileVersionMS <= 0x40019) {
+        SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook: version <= 4.25");
+        m_is_leq_4_25 = true;
     }
 }
 
@@ -370,69 +423,92 @@ void IXRTrackingSystemHook::initialize() {
     SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook done");
 }
 
-bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
-    SPDLOG_INFO_ONCE("is_head_tracking_allowed");
+bool IXRTrackingSystemHook::analyze_head_tracking_allowed(uintptr_t return_address) {
+    ++detail::total_times_funcs_called;
 
-    if (!VR::get()->is_hmd_active()) {
+    std::scoped_lock _{detail::return_address_to_functions_mutex};
+
+    auto it = detail::return_address_to_functions.find(return_address);
+
+    if (it == detail::return_address_to_functions.end()) {
+        const auto vfunc = utility::find_virtual_function_start(return_address);
+
+        if (vfunc) {
+            detail::return_address_to_functions[return_address] = *vfunc;
+        } else {
+            detail::return_address_to_functions[return_address] = 0;
+        }
+
+        it = detail::return_address_to_functions.find(return_address);
+    }
+
+    if (it->second == 0) {
         return false;
+    }
+
+    auto& func = detail::functions[it->second];
+
+    if (g_hook->m_process_view_rotation_hook == nullptr && detail::total_times_funcs_called >= 100 && 
+        !func.calls_xr_camera && !func.calls_update_player_camera && !func.calls_apply_hmd_rotation)
+    {
+        g_hook->m_attempted_hook_view_rotation = true;
+
+        SPDLOG_INFO("Possibly found ProcessViewRotation: 0x{:x}", it->second);
+
+        const auto module = utility::get_module_within(it->second);
+
+        if (!module) {
+            SPDLOG_ERROR("Failed to get module for ProcessViewRotation");
+            return false;
+        }
+
+        const auto func_ptr = utility::scan_ptr(*module, it->second);
+
+        if (!func_ptr) {
+            SPDLOG_ERROR("Failed to find ProcessViewRotation");
+            return false;
+        }
+
+        g_hook->m_process_view_rotation_hook = std::make_unique<PointerHook>((void**)*func_ptr, (void*)&process_view_rotation);
+        SPDLOG_INFO("Hooked ProcessViewRotation");
     }
 
     return true;
 }
 
+bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
+    SPDLOG_INFO_ONCE("is_head_tracking_allowed");
+
+    auto& vr = VR::get();
+
+    if (!vr->is_hmd_active() || !vr->is_headlocked_aim_enabled()) {
+        return false;
+    }
+
+    if (g_hook->m_process_view_rotation_hook == nullptr && !g_hook->m_attempted_hook_view_rotation) {
+        const auto return_address = (uintptr_t)_ReturnAddress();
+
+        // <= 4.25 doesn't have IsHeadTrackingAllowedForWorld
+        if (g_hook->m_is_leq_4_25) {
+            g_hook->analyze_head_tracking_allowed(return_address);
+        }
+    }
+
+    return g_hook->m_process_view_rotation_hook == nullptr;
+}
+
 bool IXRTrackingSystemHook::is_head_tracking_allowed_for_world(sdk::IXRTrackingSystem*, void*) {
     SPDLOG_INFO_ONCE("is_head_tracking_allowed_for_world");
 
-    if (VR::get()->is_hmd_active() && g_hook->m_process_view_rotation_hook == nullptr && !g_hook->m_attempted_hook_view_rotation) {
+    auto& vr = VR::get();
+
+    if (!vr->is_hmd_active() || !vr->is_headlocked_aim_enabled()) {
+        return false;
+    }
+
+    if (g_hook->m_process_view_rotation_hook == nullptr && !g_hook->m_attempted_hook_view_rotation) {
         const auto return_address = (uintptr_t)_ReturnAddress();
-        ++detail::total_times_funcs_called;
-
-        std::scoped_lock _{detail::return_address_to_functions_mutex};
-
-        auto it = detail::return_address_to_functions.find(return_address);
-
-        if (it == detail::return_address_to_functions.end()) {
-            const auto vfunc = utility::find_virtual_function_start(return_address);
-
-            if (vfunc) {
-                detail::return_address_to_functions[return_address] = *vfunc;
-            } else {
-                detail::return_address_to_functions[return_address] = 0;
-            }
-
-            it = detail::return_address_to_functions.find(return_address);
-        }
-
-        if (it->second == 0) {
-            return false;
-        }
-
-        auto& func = detail::functions[it->second];
-
-        if (g_hook->m_process_view_rotation_hook == nullptr && detail::total_times_funcs_called >= 100 && 
-            !func.calls_xr_camera && !func.calls_update_player_camera && !func.calls_apply_hmd_rotation)
-        {
-            g_hook->m_attempted_hook_view_rotation = true;
-
-            SPDLOG_INFO("Possibly found ProcessViewRotation: 0x{:x}", it->second);
-
-            const auto module = utility::get_module_within(it->second);
-
-            if (!module) {
-                SPDLOG_ERROR("Failed to get module for ProcessViewRotation");
-                return false;
-            }
-
-            const auto func_ptr = utility::scan_ptr(*module, it->second);
-
-            if (!func_ptr) {
-                SPDLOG_ERROR("Failed to find ProcessViewRotation");
-                return false;
-            }
-
-            g_hook->m_process_view_rotation_hook = std::make_unique<PointerHook>((void**)*func_ptr, (void*)&process_view_rotation);
-            SPDLOG_INFO("Hooked ProcessViewRotation");
-        }
+        g_hook->analyze_head_tracking_allowed(return_address);
 
         return true;
     }
@@ -453,7 +529,7 @@ IXRTrackingSystemHook::SharedPtr* IXRTrackingSystemHook::get_xr_camera(sdk::IXRT
         *out = g_hook->m_xr_camera_shared;
     }
 
-    if (VR::get()->is_hmd_active() && g_hook->m_process_view_rotation_hook == nullptr) {
+    if (VR::get()->is_hmd_active() && g_hook->m_process_view_rotation_hook == nullptr && !g_hook->m_attempted_hook_view_rotation) {
         const auto return_address = (uintptr_t)_ReturnAddress();
         ++detail::total_times_funcs_called;
 
@@ -485,7 +561,7 @@ IXRTrackingSystemHook::SharedPtr* IXRTrackingSystemHook::get_xr_camera(sdk::IXRT
 void IXRTrackingSystemHook::apply_hmd_rotation(sdk::IXRCamera*, void* player_controller, Rotator<float>* rot) {
     SPDLOG_INFO_ONCE("apply_hmd_rotation");
 
-    if (VR::get()->is_hmd_active() && g_hook->m_process_view_rotation_hook == nullptr) {
+    if (VR::get()->is_hmd_active() && g_hook->m_process_view_rotation_hook == nullptr && !g_hook->m_attempted_hook_view_rotation) {
         const auto return_address = (uintptr_t)_ReturnAddress();
         ++detail::total_times_funcs_called;
 
@@ -531,7 +607,7 @@ void IXRTrackingSystemHook::apply_hmd_rotation(sdk::IXRCamera*, void* player_con
 bool IXRTrackingSystemHook::update_player_camera(sdk::IXRCamera*, glm::quat* rel_rot, glm::vec3* rel_pos) {
     SPDLOG_INFO_ONCE("update_player_camera");
 
-    if (VR::get()->is_hmd_active() && g_hook->m_process_view_rotation_hook == nullptr) {
+    if (VR::get()->is_hmd_active() && g_hook->m_process_view_rotation_hook == nullptr && !g_hook->m_attempted_hook_view_rotation) {
         ++detail::total_times_funcs_called;
 
         std::scoped_lock _{detail::return_address_to_functions_mutex};
