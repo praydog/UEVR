@@ -3966,6 +3966,17 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
                                 return utility::ExhaustionResult::BREAK;
                             }
 
+                            if (std::string_view{ix.Mnemonic}.starts_with("CALL")) {
+                                SPDLOG_INFO("Patching assertion at {:x}!", ip);
+                                std::vector<int16_t> nop{};
+                                for (auto i = 0; i < ix.Length; ++i) {
+                                    nop.push_back(0x90);
+                                }
+
+                                assert_patches.push_back(Patch::create(ip, nop));
+                                return utility::ExhaustionResult::BREAK;
+                            }
+
                             return utility::ExhaustionResult::CONTINUE;
                         });
                     }
