@@ -3364,8 +3364,11 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     }
 
     if (true_index == 0) {
-        g_hook->m_last_rotation = *view_rotation;
-        g_hook->m_last_rotation_double = *rot_d;
+        if (has_double_precision) {
+            g_hook->m_last_rotation_double = *rot_d;
+        } else {
+            g_hook->m_last_rotation = *view_rotation;
+        }
     }
 
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
