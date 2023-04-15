@@ -5,6 +5,7 @@
 #include <memory>
 
 #include <sdk/StereoStuff.hpp>
+#include <safetyhook.hpp>
 
 #include "Mod.hpp"
 
@@ -47,6 +48,11 @@ private:
     static void apply_hmd_rotation(sdk::IXRCamera*, void* player_controller, Rotator<float>* rot);
     static bool update_player_camera(sdk::IXRCamera*, glm::quat* rel_rot, glm::vec3* rel_pos);
 
+    // This function is the precursor to actually hooking ProcessViewRotation
+    // Because there's a very real possibility that we can accidentally hook the wrong function
+    // We need to verify that arg 2 and 3 are on the stack
+    // And the function that calls it is also a virtual function (APlayerController::UpdateRotation)
+    static void* process_view_rotation_analyzer(void*, size_t, size_t, size_t, size_t, size_t);
     static void process_view_rotation(void* player_controller, float delta_time, Rotator<float>* rot, Rotator<float>* delta_rot);
 
     FFakeStereoRenderingHook* m_stereo_hook{nullptr};
@@ -65,7 +71,9 @@ private:
 
     SharedPtr m_xr_camera_shared{};
 
-    std::unique_ptr<PointerHook> m_process_view_rotation_hook{};
+    uintptr_t m_addr_of_process_view_rotation_ptr{};
+    //std::unique_ptr<PointerHook> m_process_view_rotation_hook{};
+    safetyhook::InlineHook m_process_view_rotation_hook{};
     bool m_attempted_hook_view_rotation{false};
     bool m_initialized{false};
     bool m_is_leq_4_25{false}; // <= 4.25, IsHeadTrackingAllowedForWorld does not exist

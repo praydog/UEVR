@@ -154,6 +154,7 @@ struct FunctionInfo {
     bool calls_xr_camera{false};
     bool calls_update_player_camera{false};
     bool calls_apply_hmd_rotation{false};
+    bool process_view_rotation_analysis_failed{false};
 };
 
 std::mutex return_address_to_functions_mutex{};
@@ -309,8 +310,8 @@ bool IXRTrackingSystemHook::analyze_head_tracking_allowed(uintptr_t return_addre
 
     auto& func = detail::functions[it->second];
 
-    if (g_hook->m_process_view_rotation_hook == nullptr && detail::total_times_funcs_called >= 100 && 
-        !func.calls_xr_camera && !func.calls_update_player_camera && !func.calls_apply_hmd_rotation)
+    if (!g_hook->m_process_view_rotation_hook && detail::total_times_funcs_called >= 100 && 
+        !func.calls_xr_camera && !func.calls_update_player_camera && !func.calls_apply_hmd_rotation && !func.process_view_rotation_analysis_failed)
     {
         g_hook->m_attempted_hook_view_rotation = true;
 
@@ -330,7 +331,19 @@ bool IXRTrackingSystemHook::analyze_head_tracking_allowed(uintptr_t return_addre
             return false;
         }
 
-        g_hook->m_process_view_rotation_hook = std::make_unique<PointerHook>((void**)*func_ptr, (void*)&process_view_rotation);
+        // We do not definitively hook ProcessViewRotation here, we point it towards a function analyzer
+        // that checks whether the arguments match up with what we expect. If they do, we hook it.
+        m_addr_of_process_view_rotation_ptr = *func_ptr;
+        //g_hook->m_process_view_rotation_hook = std::make_unique<PointerHook>((void**)*func_ptr, (void*)&process_view_rotation_analyzer);
+        g_hook->m_process_view_rotation_hook = safetyhook::create_inline((void*)it->second, (void*)&process_view_rotation_analyzer);
+
+        if (!g_hook->m_process_view_rotation_hook) {
+            SPDLOG_ERROR("Failed to hook ProcessViewRotation");
+            func.process_view_rotation_analysis_failed = true;
+            g_hook->m_attempted_hook_view_rotation = false;
+            return true;
+        }
+
         SPDLOG_INFO("Hooked ProcessViewRotation");
     }
 
@@ -346,7 +359,7 @@ bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
         return false;
     }
 
-    if (g_hook->m_process_view_rotation_hook == nullptr && !g_hook->m_attempted_hook_view_rotation) {
+    if (!g_hook->m_process_view_rotation_hook && !g_hook->m_attempted_hook_view_rotation) {
         const auto return_address = (uintptr_t)_ReturnAddress();
 
         // <= 4.25 doesn't have IsHeadTrackingAllowedForWorld
@@ -355,7 +368,7 @@ bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
         }
     }
 
-    return g_hook->m_process_view_rotation_hook == nullptr;
+    return !g_hook->m_process_view_rotation_hook;
 }
 
 bool IXRTrackingSystemHook::is_head_tracking_allowed_for_world(sdk::IXRTrackingSystem*, void*) {
@@ -367,7 +380,7 @@ bool IXRTrackingSystemHook::is_head_tracking_allowed_for_world(sdk::IXRTrackingS
         return false;
     }
 
-    if (g_hook->m_process_view_rotation_hook == nullptr && !g_hook->m_attempted_hook_view_rotation) {
+    if (!g_hook->m_process_view_rotation_hook && !g_hook->m_attempted_hook_view_rotation) {
         const auto return_address = (uintptr_t)_ReturnAddress();
         g_hook->analyze_head_tracking_allowed(return_address);
 
@@ -390,7 +403,7 @@ IXRTrackingSystemHook::SharedPtr* IXRTrackingSystemHook::get_xr_camera(sdk::IXRT
         *out = g_hook->m_xr_camera_shared;
     }
 
-    if (VR::get()->is_hmd_active() && g_hook->m_process_view_rotation_hook == nullptr && !g_hook->m_attempted_hook_view_rotation) {
+    if (VR::get()->is_hmd_active() && !g_hook->m_process_view_rotation_hook && !g_hook->m_attempted_hook_view_rotation) {
         const auto return_address = (uintptr_t)_ReturnAddress();
         ++detail::total_times_funcs_called;
 
@@ -422,7 +435,7 @@ IXRTrackingSystemHook::SharedPtr* IXRTrackingSystemHook::get_xr_camera(sdk::IXRT
 void IXRTrackingSystemHook::apply_hmd_rotation(sdk::IXRCamera*, void* player_controller, Rotator<float>* rot) {
     SPDLOG_INFO_ONCE("apply_hmd_rotation");
 
-    if (VR::get()->is_hmd_active() && g_hook->m_process_view_rotation_hook == nullptr && !g_hook->m_attempted_hook_view_rotation) {
+    if (VR::get()->is_hmd_active() && !g_hook->m_process_view_rotation_hook && !g_hook->m_attempted_hook_view_rotation) {
         const auto return_address = (uintptr_t)_ReturnAddress();
         ++detail::total_times_funcs_called;
 
@@ -468,7 +481,7 @@ void IXRTrackingSystemHook::apply_hmd_rotation(sdk::IXRCamera*, void* player_con
 bool IXRTrackingSystemHook::update_player_camera(sdk::IXRCamera*, glm::quat* rel_rot, glm::vec3* rel_pos) {
     SPDLOG_INFO_ONCE("update_player_camera");
 
-    if (VR::get()->is_hmd_active() && g_hook->m_process_view_rotation_hook == nullptr && !g_hook->m_attempted_hook_view_rotation) {
+    if (VR::get()->is_hmd_active() && !g_hook->m_process_view_rotation_hook && !g_hook->m_attempted_hook_view_rotation) {
         ++detail::total_times_funcs_called;
 
         std::scoped_lock _{detail::return_address_to_functions_mutex};
@@ -500,12 +513,48 @@ bool IXRTrackingSystemHook::update_player_camera(sdk::IXRCamera*, glm::quat* rel
     return false;
 }
 
-void IXRTrackingSystemHook::process_view_rotation(void* player_controller, float delta_time, Rotator<float>* rot, Rotator<float>* delta_rot) {
+void* IXRTrackingSystemHook::process_view_rotation_analyzer(void* a1, size_t a2, size_t a3, size_t a4, size_t a5, size_t a6) {
+    SPDLOG_INFO_ONCE("process_view_rotation_analyzer");
+
+    std::scoped_lock _{detail::return_address_to_functions_mutex};
+
+    auto call_orig = [&]() {
+        return g_hook->m_process_view_rotation_hook.call<void*>(a1, a2, a3, a4, a5, a6);
+    };
+
+    const auto result = call_orig();
+
+    // Not the exact stack pointer but at least some memory pointing to the stack
+    // We need this to check whether the arguments reside on the stack.
+    // If they don't, then this is not the correct function and we need to analyze the next one.
+    const auto stack_pointer = (intptr_t)_AddressOfReturnAddress();
+
+    // Check if a3 and a4 are on the stack, and are not equal to eachother
+    if (std::abs((intptr_t)a3 - stack_pointer) > 0x1000 || std::abs((intptr_t)a4 - stack_pointer) > 0x1000 || a3 == a4) {
+        SPDLOG_ERROR("Function we hooked for ProcessViewRotation is not the correct one. Analyzing next function.");
+
+        const auto function_addr = g_hook->m_process_view_rotation_hook.target();
+        detail::functions[function_addr].process_view_rotation_analysis_failed = true;
+
+        g_hook->m_process_view_rotation_hook.reset();
+        g_hook->m_attempted_hook_view_rotation = false;
+    } else {
+        SPDLOG_INFO("Found correct function for ProcessViewRotation. Hooking it.");
+        const auto target = g_hook->m_process_view_rotation_hook.target();
+        g_hook->m_process_view_rotation_hook.reset();
+        //g_hook->m_process_view_rotation_hook = std::make_unique<PointerHook>((void**)g_hook->m_addr_of_process_view_rotation_ptr, &IXRTrackingSystemHook::process_view_rotation);
+        g_hook->m_process_view_rotation_hook = safetyhook::create_inline((void*)target, &IXRTrackingSystemHook::process_view_rotation);
+    }
+
+    return result;
+}
+
+void IXRTrackingSystemHook::process_view_rotation(
+    void* player_controller, float delta_time, Rotator<float>* rot, Rotator<float>* delta_rot) {
     SPDLOG_INFO_ONCE("process_view_rotation");
 
-    const auto orig = g_hook->m_process_view_rotation_hook->get_original<void(*)(void*, float, Rotator<float>*, Rotator<float>*)>();
     auto call_orig = [&]() {
-        orig(player_controller, delta_time, rot, delta_rot);
+        g_hook->m_process_view_rotation_hook.call<void>(player_controller, delta_time, rot, delta_rot);
     };
 
     auto& vr = VR::get();
