@@ -10,255 +10,70 @@
 
 #include "../VR.hpp"
 
+#include "vtables/IXRTrackingSystemVTables.hpp"
 #include "IXRTrackingSystemHook.hpp"
-
-namespace detail {
-class IXRTrackingSystemVT {
-public:
-    static IXRTrackingSystemVT& get() {
-        static IXRTrackingSystemVT instance;
-        return instance;
-    }
-
-    virtual bool implemented() const  { return false; }
-
-    virtual std::optional<size_t> get_xr_camera_index() const { return std::nullopt; }
-    virtual std::optional<size_t> is_head_tracking_allowed_index() const { return std::nullopt; }
-    virtual std::optional<size_t> is_head_tracking_allowed_for_world_index() const  { return std::nullopt; }
-};
-
-class IXRCameraVT {
-public:
-    static IXRCameraVT& get() {
-        static IXRCameraVT instance;
-        return instance;
-    }
-
-    virtual bool implemented() const { return false; }
-
-    virtual std::optional<size_t> get_system_name_index() const  { return std::nullopt; }
-    virtual std::optional<size_t> get_system_device_id_index() const  { return std::nullopt; }
-    virtual std::optional<size_t> use_implicit_hmd_position_index() const { return std::nullopt; }
-    virtual std::optional<size_t> get_implicit_hmd_position_index() const { return std::nullopt; }
-    virtual std::optional<size_t> apply_hmd_rotation_index() const { return std::nullopt; }
-    virtual std::optional<size_t> update_player_camera_index() const { return std::nullopt; }
-    virtual std::optional<size_t> override_fov_index() const { return std::nullopt; }
-    virtual std::optional<size_t> setup_late_update_index() const { return std::nullopt; }
-    virtual std::optional<size_t> calculate_stereo_camera_offset_index() const { return std::nullopt; }
-    virtual std::optional<size_t> get_passthrough_camera_uvs_index() const { return std::nullopt; }
-};
-}
-
-namespace ue_510 {
-class IXRTrackingSystemVT : public detail::IXRTrackingSystemVT {
-public:
-    static IXRTrackingSystemVT& get() {
-        static IXRTrackingSystemVT instance;
-        return instance;
-    }
-
-    bool implemented() const override { return true; }
-
-    std::optional<size_t> get_xr_camera_index() const override { return 35; }
-    std::optional<size_t> is_head_tracking_allowed_index() const override { return 40; }
-    std::optional<size_t> is_head_tracking_allowed_for_world_index()const  override { return 41; }
-};
-
-class IXRCameraVT : public detail::IXRCameraVT {
-public:
-    static IXRCameraVT& get() {
-        static IXRCameraVT instance;
-        return instance;
-    }
-
-    bool implemented() const override { return true; }
-
-    std::optional<size_t> get_system_name_index() const override { return 0; }
-    std::optional<size_t> get_system_device_id_index() const override { return 1; }
-    std::optional<size_t> use_implicit_hmd_position_index() const override { return 2; }
-    std::optional<size_t> get_implicit_hmd_position_index() const override { return 3; }
-    std::optional<size_t> apply_hmd_rotation_index() const override { return 4; }
-    std::optional<size_t> update_player_camera_index() const override { return 5; }
-    std::optional<size_t> override_fov_index() const override { return 6; }
-    std::optional<size_t> setup_late_update_index() const override { return 7; }
-    std::optional<size_t> calculate_stereo_camera_offset_index() const override { return 8; }
-    std::optional<size_t> get_passthrough_camera_uvs_index() const override { return 9; }
-};
-}
-
-namespace ue_503 {
-class IXRTrackingSystemVT : public detail::IXRTrackingSystemVT {
-public:
-    static IXRTrackingSystemVT& get() {
-        static IXRTrackingSystemVT instance;
-        return instance;
-    }
-
-    bool implemented() const override { return true; }
-
-    std::optional<size_t> get_xr_camera_index() const override { return 35; }
-    std::optional<size_t> is_head_tracking_allowed_index() const override { return 40; }
-    std::optional<size_t> is_head_tracking_allowed_for_world_index()const  override { return 41; }
-};
-
-class IXRCameraVT : public detail::IXRCameraVT {
-public:
-    static IXRCameraVT& get() {
-        static IXRCameraVT instance;
-        return instance;
-    }
-
-    bool implemented() const override { return true; }
-
-    std::optional<size_t> get_system_name_index() const override { return 0; }
-    std::optional<size_t> get_system_device_id_index() const override { return 1; }
-    std::optional<size_t> use_implicit_hmd_position_index() const override { return 2; }
-    std::optional<size_t> get_implicit_hmd_position_index() const override { return 3; }
-    std::optional<size_t> apply_hmd_rotation_index() const override { return 4; }
-    std::optional<size_t> update_player_camera_index() const override { return 5; }
-    std::optional<size_t> override_fov_index() const override { return 6; }
-    std::optional<size_t> setup_late_update_index() const override { return 7; }
-    std::optional<size_t> calculate_stereo_camera_offset_index() const override { return 8; }
-    std::optional<size_t> get_passthrough_camera_uvs_index() const override { return 9; }
-};
-}
-
-namespace ue_427 {
-class IXRTrackingSystemVT : public detail::IXRTrackingSystemVT {
-public:
-    static IXRTrackingSystemVT& get() {
-        static IXRTrackingSystemVT instance;
-        return instance;
-    }
-
-    bool implemented() const override { return true; }
-
-    std::optional<size_t> get_xr_camera_index() const override { return 36; }
-    std::optional<size_t> is_head_tracking_allowed_index() const override { return 41; }
-    std::optional<size_t> is_head_tracking_allowed_for_world_index()const  override { return 42; }
-};
-
-class IXRCameraVT : public detail::IXRCameraVT {
-public:
-    static IXRCameraVT& get() {
-        static IXRCameraVT instance;
-        return instance;
-    }
-
-    bool implemented() const override { return true; }
-
-    std::optional<size_t> get_system_name_index() const override { return 0; }
-    std::optional<size_t> get_system_device_id_index() const override { return 1; }
-    std::optional<size_t> use_implicit_hmd_position_index() const override { return 2; }
-    std::optional<size_t> get_implicit_hmd_position_index() const override { return 3; }
-    std::optional<size_t> apply_hmd_rotation_index() const override { return 4; }
-    std::optional<size_t> update_player_camera_index() const override { return 5; }
-    std::optional<size_t> override_fov_index() const override { return 6; }
-    std::optional<size_t> setup_late_update_index() const override { return 7; }
-    std::optional<size_t> calculate_stereo_camera_offset_index() const override { return 8; }
-    std::optional<size_t> get_passthrough_camera_uvs_index() const override { return 9; }
-};
-}
-
-namespace ue_426 {
-class IXRTrackingSystemVT : public detail::IXRTrackingSystemVT {
-public:
-    static IXRTrackingSystemVT& get() {
-        static IXRTrackingSystemVT instance;
-        return instance;
-    }
-
-    bool implemented() const override { return true; }
-
-    std::optional<size_t> get_xr_camera_index() const override { return 34; }
-    std::optional<size_t> is_head_tracking_allowed_index() const override { return 39; }
-    std::optional<size_t> is_head_tracking_allowed_for_world_index()const  override { return 40; }
-};
-
-class IXRCameraVT : public detail::IXRCameraVT {
-public:
-    static IXRCameraVT& get() {
-        static IXRCameraVT instance;
-        return instance;
-    }
-
-    bool implemented() const override { return true; }
-
-    std::optional<size_t> get_system_name_index() const override { return 0; }
-    std::optional<size_t> get_system_device_id_index() const override { return 1; }
-    std::optional<size_t> use_implicit_hmd_position_index() const override { return 2; }
-    std::optional<size_t> get_implicit_hmd_position_index() const override { return 3; }
-    std::optional<size_t> apply_hmd_rotation_index() const override { return 4; }
-    std::optional<size_t> update_player_camera_index() const override { return 5; }
-    std::optional<size_t> override_fov_index() const override { return 6; }
-    std::optional<size_t> setup_late_update_index() const override { return 7; }
-    std::optional<size_t> calculate_stereo_camera_offset_index() const override { return 8; }
-    std::optional<size_t> get_passthrough_camera_uvs_index() const override { return 9; }
-};
-}
-
-namespace ue_425 {
-class IXRTrackingSystemVT : public detail::IXRTrackingSystemVT {
-public:
-    static IXRTrackingSystemVT& get() {
-        static IXRTrackingSystemVT instance;
-        return instance;
-    }
-
-    bool implemented() const override { return true; }
-
-    std::optional<size_t> get_xr_camera_index() const override { return 31; }
-    std::optional<size_t> is_head_tracking_allowed_index() const override { return 36; }
-};
-
-class IXRCameraVT : public detail::IXRCameraVT {
-public:
-    static IXRCameraVT& get() {
-        static IXRCameraVT instance;
-        return instance;
-    }
-
-    bool implemented() const override { return true; }
-
-    std::optional<size_t> get_system_name_index() const override { return 0; }
-    std::optional<size_t> get_system_device_id_index() const override { return 1; }
-    std::optional<size_t> use_implicit_hmd_position_index() const override { return 2; }
-    std::optional<size_t> get_implicit_hmd_position_index() const override { return 3; }
-    std::optional<size_t> apply_hmd_rotation_index() const override { return 4; }
-    std::optional<size_t> update_player_camera_index() const override { return 5; }
-    std::optional<size_t> override_fov_index() const override { return 6; }
-    std::optional<size_t> setup_late_update_index() const override { return 7; }
-    std::optional<size_t> calculate_stereo_camera_offset_index() const override { return 8; }
-    std::optional<size_t> get_passthrough_camera_uvs_index() const override { return 9; }
-};
-}
 
 detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
     const auto version = sdk::get_file_version_info();
 
     // >= 5.1
     if (version.dwFileVersionMS >= 0x50001) {
-        return ue_510::IXRTrackingSystemVT::get();
+        return ue5_1::IXRTrackingSystemVT::get();
     }
 
     // >= 5.0
-    if (version.dwFileVersionMS >= 0x50000) {
-        return ue_503::IXRTrackingSystemVT::get();
+    if (version.dwFileVersionMS == 0x50000) {
+        return ue5_00::IXRTrackingSystemVT::get();
     }
 
     // 4.27
     if (version.dwFileVersionMS == 0x4001B) {
-        return ue_427::IXRTrackingSystemVT::get();
+        return ue4_27::IXRTrackingSystemVT::get();
     }
 
     // 4.26
     if (version.dwFileVersionMS == 0x4001A) {
-        return ue_426::IXRTrackingSystemVT::get();
+        return ue4_26::IXRTrackingSystemVT::get();
     }
     
     // 4.25
-    if (version.dwFileVersionMS <= 0x40019) {
-        return ue_425::IXRTrackingSystemVT::get();
+    if (version.dwFileVersionMS == 0x40019) {
+        return ue4_25::IXRTrackingSystemVT::get();
+    }
+
+    // 4.24
+    if (version.dwFileVersionMS == 0x40018) {
+        return ue4_24::IXRTrackingSystemVT::get();
+    }
+
+    // 4.23
+    if (version.dwFileVersionMS == 0x40017) {
+        return ue4_23::IXRTrackingSystemVT::get();
+    }
+
+    // 4.22
+    if (version.dwFileVersionMS == 0x40016) {
+        return ue4_22::IXRTrackingSystemVT::get();
+    }
+
+    // 4.21
+    if (version.dwFileVersionMS == 0x40015) {
+        return ue4_21::IXRTrackingSystemVT::get();
+    }
+
+    // 4.20
+    if (version.dwFileVersionMS == 0x40014) {
+        return ue4_20::IXRTrackingSystemVT::get();
+    }
+
+    // 4.19
+    if (version.dwFileVersionMS == 0x40013) {
+        return ue4_19::IXRTrackingSystemVT::get();
+    }
+
+    // <= 4.18
+    if (version.dwFileVersionMS <= 0x40012) {
+        return ue4_18::IXRTrackingSystemVT::get();
     }
 
     return detail::IXRTrackingSystemVT::get();
@@ -270,27 +85,62 @@ detail::IXRCameraVT& get_camera_vtable() {
 
     // >= 5.1
     if (version.dwFileVersionMS >= 0x50001) {
-        return ue_510::IXRCameraVT::get();
+        return ue5_1::IXRCameraVT::get();
     }
 
     // >= 5.0
-    if (version.dwFileVersionMS >= 0x50000) {
-        return ue_503::IXRCameraVT::get();
+    if (version.dwFileVersionMS == 0x50000) {
+        return ue5_00::IXRCameraVT::get();
     }
 
     // 4.27
     if (version.dwFileVersionMS == 0x4001B) {
-        return ue_427::IXRCameraVT::get();
+        return ue4_27::IXRCameraVT::get();
     }
 
     // 4.26
     if (version.dwFileVersionMS == 0x4001A) {
-        return ue_426::IXRCameraVT::get();
+        return ue4_26::IXRCameraVT::get();
     }
 
     // 4.25
-    if (version.dwFileVersionMS <= 0x40019) {
-        return ue_425::IXRCameraVT::get();
+    if (version.dwFileVersionMS == 0x40019) {
+        return ue4_25::IXRCameraVT::get();
+    }
+
+    // 4.24
+    if (version.dwFileVersionMS == 0x40018) {
+        return ue4_24::IXRCameraVT::get();
+    }
+
+    // 4.23
+    if (version.dwFileVersionMS == 0x40017) {
+        return ue4_23::IXRCameraVT::get();
+    }
+
+    // 4.22
+    if (version.dwFileVersionMS == 0x40016) {
+        return ue4_22::IXRCameraVT::get();
+    }
+
+    // 4.21
+    if (version.dwFileVersionMS == 0x40015) {
+        return ue4_21::IXRCameraVT::get();
+    }
+
+    // 4.20
+    if (version.dwFileVersionMS == 0x40014) {
+        return ue4_20::IXRCameraVT::get();
+    }
+
+    // 4.19
+    if (version.dwFileVersionMS == 0x40013) {
+        return ue4_19::IXRCameraVT::get();
+    }
+
+    // <= 4.18
+    if (version.dwFileVersionMS <= 0x40012) {
+        return ue4_18::IXRCameraVT::get();
     }
 
     return detail::IXRCameraVT::get();
@@ -380,20 +230,20 @@ void IXRTrackingSystemHook::initialize() {
     const auto& vt = get_tracking_system_vtable();
 
     if (vt.implemented()) {
-        if (vt.get_xr_camera_index().has_value()) {
-            m_vtable[vt.get_xr_camera_index().value()] = (uintptr_t)&get_xr_camera;
+        if (vt.GetXRCamera_index().has_value()) {
+            m_vtable[vt.GetXRCamera_index().value()] = (uintptr_t)&get_xr_camera;
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_xr_camera_index not implemented");
         }
 
-        if (vt.is_head_tracking_allowed_index().has_value()) {
-            m_vtable[vt.is_head_tracking_allowed_index().value()] = (uintptr_t)&is_head_tracking_allowed;
+        if (vt.IsHeadTrackingAllowed_index().has_value()) {
+            m_vtable[vt.IsHeadTrackingAllowed_index().value()] = (uintptr_t)&is_head_tracking_allowed;
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: is_head_tracking_allowed_index not implemented");
         }
 
-        if (vt.is_head_tracking_allowed_for_world_index().has_value()) {
-            m_vtable[vt.is_head_tracking_allowed_for_world_index().value()] = (uintptr_t)&is_head_tracking_allowed_for_world;
+        if (vt.IsHeadTrackingAllowedForWorld_index().has_value()) {
+            m_vtable[vt.IsHeadTrackingAllowedForWorld_index().value()] = (uintptr_t)&is_head_tracking_allowed_for_world;
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: is_head_tracking_allowed_for_world_index not implemented");
         }
@@ -402,14 +252,14 @@ void IXRTrackingSystemHook::initialize() {
     }
 
     if (camera_vt.implemented()) {
-        if (camera_vt.apply_hmd_rotation_index().has_value()) {
-            m_camera_vtable[camera_vt.apply_hmd_rotation_index().value()] = (uintptr_t)&apply_hmd_rotation;
+        if (camera_vt.ApplyHMDRotation_index().has_value()) {
+            m_camera_vtable[camera_vt.ApplyHMDRotation_index().value()] = (uintptr_t)&apply_hmd_rotation;
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: apply_hmd_rotation_index not implemented");
         }
 
-        if (camera_vt.update_player_camera_index().has_value()) {
-            m_camera_vtable[camera_vt.update_player_camera_index().value()] = (uintptr_t)&update_player_camera;
+        if (camera_vt.UpdatePlayerCamera_index().has_value()) {
+            m_camera_vtable[camera_vt.UpdatePlayerCamera_index().value()] = (uintptr_t)&update_player_camera;
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: update_player_camera_index not implemented");
         }
