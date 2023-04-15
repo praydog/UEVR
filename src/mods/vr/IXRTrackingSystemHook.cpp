@@ -332,6 +332,17 @@ IXRTrackingSystemHook::IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_ho
         };
     }
 
+    struct FName {
+        int32_t a1{};
+        int32_t a2{0};
+    };
+
+    // GetSystemName
+    m_vtable[0] = (uintptr_t)+[](void* this_ptr, FName* out) -> FName* {
+        static FName fake_name{};
+        return &fake_name;
+    };
+
     const auto version = sdk::get_file_version_info();
 
     if (version.dwFileVersionMS >= 0x40000 && version.dwFileVersionMS <= 0x40019) {
