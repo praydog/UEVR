@@ -1,3 +1,4 @@
+// Generated with the help of Narknon and UE4SS using PDBs
 #pragma once
 
 #include <cstdint>

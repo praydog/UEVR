@@ -65,9 +65,19 @@ private:
         void* vtable;
     } m_xr_camera;
 
+    struct HMDDevice {
+        void* vtable;
+        void* stereo_rendering_vtable;
+        void* unk{nullptr};
+    } m_hmd_device;
+
     std::unique_ptr<ReferenceController> m_ref_controller{std::make_unique<ReferenceController>()};
-    std::array<uintptr_t, 200> m_vtable{};
+    std::unique_ptr<ReferenceController> m_ref_controller2{std::make_unique<ReferenceController>()};
+    std::array<uintptr_t, 200> m_xrtracking_vtable{}; // >= 4.18
     std::array<uintptr_t, 200> m_camera_vtable{};
+    std::array<uintptr_t, 200> m_hmd_vtable{}; // < 4.18
+    std::array<uintptr_t, 200> m_stereo_rendering_vtable{}; // Placeholder for now, we have a real one in FFakeStereoRenderingHook
+
 
     SharedPtr m_xr_camera_shared{};
 
@@ -77,6 +87,7 @@ private:
     bool m_attempted_hook_view_rotation{false};
     bool m_initialized{false};
     bool m_is_leq_4_25{false}; // <= 4.25, IsHeadTrackingAllowedForWorld does not exist
+    bool m_is_leq_4_17{false}; // <= 4.17, IXRTrackingSystem and IXRCamera do not exist
 
     size_t m_offset_in_engine{0};
 

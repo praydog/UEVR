@@ -71,11 +71,12 @@ detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
         return ue4_19::IXRTrackingSystemVT::get();
     }
 
-    // <= 4.18
-    if (version.dwFileVersionMS <= 0x40012) {
+    // 4.18
+    if (version.dwFileVersionMS == 0x40012) {
         return ue4_18::IXRTrackingSystemVT::get();
     }
 
+    // versions lower than 4.18 do not have IXRTrackingSystem
     return detail::IXRTrackingSystemVT::get();
 }
 
@@ -138,12 +139,114 @@ detail::IXRCameraVT& get_camera_vtable() {
         return ue4_19::IXRCameraVT::get();
     }
 
-    // <= 4.18
-    if (version.dwFileVersionMS <= 0x40012) {
+    // 4.18
+    if (version.dwFileVersionMS == 0x40012) {
         return ue4_18::IXRCameraVT::get();
     }
 
+    // Versions lower than 4.18 do not have IXRCamera
     return detail::IXRCameraVT::get();
+}
+
+detail::IHeadMountedDisplayVT& get_hmd_vtable() {
+    const auto version = sdk::get_file_version_info();
+
+    // >= 5.1
+    if (version.dwFileVersionMS >= 0x50001) {
+        return ue5_1::IHeadMountedDisplayVT::get();
+    }
+
+    // >= 5.0
+    if (version.dwFileVersionMS == 0x50000) {
+        return ue5_00::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.27
+    if (version.dwFileVersionMS == 0x4001B) {
+        return ue4_27::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.26
+    if (version.dwFileVersionMS == 0x4001A) {
+        return ue4_26::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.25
+    if (version.dwFileVersionMS == 0x40019) {
+        return ue4_25::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.24
+    if (version.dwFileVersionMS == 0x40018) {
+        return ue4_24::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.23
+    if (version.dwFileVersionMS == 0x40017) {
+        return ue4_23::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.22
+    if (version.dwFileVersionMS == 0x40016) {
+        return ue4_22::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.21
+    if (version.dwFileVersionMS == 0x40015) {
+        return ue4_21::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.20
+    if (version.dwFileVersionMS == 0x40014) {
+        return ue4_20::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.19
+    if (version.dwFileVersionMS == 0x40013) {
+        return ue4_19::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.18
+    if (version.dwFileVersionMS == 0x40012) {
+        return ue4_18::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.17
+    if (version.dwFileVersionMS == 0x40011) {
+        return ue4_17::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.16
+    if (version.dwFileVersionMS == 0x40010) {
+        return ue4_16::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.15
+    if (version.dwFileVersionMS == 0x4000F) {
+        return ue4_15::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.14
+    if (version.dwFileVersionMS == 0x4000E) {
+        return ue4_14::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.13
+    if (version.dwFileVersionMS == 0x4000D) {
+        return ue4_13::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.12
+    if (version.dwFileVersionMS == 0x4000C) {
+        return ue4_12::IHeadMountedDisplayVT::get();
+    }
+
+    // 4.11
+    if (version.dwFileVersionMS == 0x4000B) {
+        return ue4_11::IHeadMountedDisplayVT::get();
+    }
+
+    return detail::IHeadMountedDisplayVT::get();
 }
 
 IXRTrackingSystemHook* g_hook = nullptr;
@@ -171,8 +274,8 @@ IXRTrackingSystemHook::IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_ho
 
     g_hook = this;
 
-    for (auto i = 0; i < m_vtable.size(); ++i) {
-        m_vtable[i] = (uintptr_t)+[](void*) {
+    for (auto i = 0; i < m_xrtracking_vtable.size(); ++i) {
+        m_xrtracking_vtable[i] = (uintptr_t)+[](void*) {
             return nullptr;
         };
     }
@@ -183,13 +286,25 @@ IXRTrackingSystemHook::IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_ho
         };
     }
 
+    for (auto i = 0; i < m_hmd_vtable.size(); ++i) {
+        m_hmd_vtable[i] = (uintptr_t)+[](void*) {
+            return nullptr;
+        };
+    }
+
+    for (auto i = 0; i < m_stereo_rendering_vtable.size(); ++i) {
+        m_stereo_rendering_vtable[i] = (uintptr_t)+[](void*) {
+            return nullptr;
+        };
+    }
+
     struct FName {
         int32_t a1{};
         int32_t a2{0};
     };
 
     // GetSystemName
-    m_vtable[0] = (uintptr_t)+[](void* this_ptr, FName* out) -> FName* {
+    m_xrtracking_vtable[0] = (uintptr_t)+[](void* this_ptr, FName* out) -> FName* {
         static FName fake_name{};
         return &fake_name;
     };
@@ -199,6 +314,11 @@ IXRTrackingSystemHook::IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_ho
     if (version.dwFileVersionMS >= 0x40000 && version.dwFileVersionMS <= 0x40019) {
         SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook: version <= 4.25");
         m_is_leq_4_25 = true;
+    }
+
+    if (version.dwFileVersionMS >= 0x40000 && version.dwFileVersionMS <= 0x40011) {
+        SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook: version <= 4.17");
+        m_is_leq_4_17 = true;
     }
 }
 
@@ -228,28 +348,33 @@ void IXRTrackingSystemHook::initialize() {
     }
 
     const auto& camera_vt = get_camera_vtable();
-    const auto& vt = get_tracking_system_vtable();
+    const auto& trackvt = get_tracking_system_vtable();
+    const auto& hmdvt = get_hmd_vtable();
 
-    if (vt.implemented()) {
-        if (vt.GetXRCamera_index().has_value()) {
-            m_vtable[vt.GetXRCamera_index().value()] = (uintptr_t)&get_xr_camera;
+    if (trackvt.implemented()) {
+        if (trackvt.GetXRCamera_index().has_value()) {
+            m_xrtracking_vtable[trackvt.GetXRCamera_index().value()] = (uintptr_t)&get_xr_camera;
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_xr_camera_index not implemented");
         }
 
-        if (vt.IsHeadTrackingAllowed_index().has_value()) {
-            m_vtable[vt.IsHeadTrackingAllowed_index().value()] = (uintptr_t)&is_head_tracking_allowed;
+        if (trackvt.IsHeadTrackingAllowed_index().has_value()) {
+            m_xrtracking_vtable[trackvt.IsHeadTrackingAllowed_index().value()] = (uintptr_t)&is_head_tracking_allowed;
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: is_head_tracking_allowed_index not implemented");
         }
 
-        if (vt.IsHeadTrackingAllowedForWorld_index().has_value()) {
-            m_vtable[vt.IsHeadTrackingAllowedForWorld_index().value()] = (uintptr_t)&is_head_tracking_allowed_for_world;
+        if (trackvt.IsHeadTrackingAllowedForWorld_index().has_value()) {
+            m_xrtracking_vtable[trackvt.IsHeadTrackingAllowedForWorld_index().value()] = (uintptr_t)&is_head_tracking_allowed_for_world;
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: is_head_tracking_allowed_for_world_index not implemented");
         }
+    } else if (hmdvt.implemented()) {
+        SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook: IXRTrackingSystemVT not implemented, using IHeadMountedDisplayVT");
+
+        // TODO
     } else {
-        SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: IXRTrackingSystemVT not implemented");
+        SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: IXRTrackingSystemVT and IXRHeadMountedDisplayVT not implemented");
     }
 
     if (camera_vt.implemented()) {
@@ -273,13 +398,20 @@ void IXRTrackingSystemHook::initialize() {
         m_xr_camera_shared.obj = &m_xr_camera;
     }
 
-    if (vt.implemented()) {
+    if (trackvt.implemented()) { // >= 4.18
         auto tracking_system = (SharedPtr*)((uintptr_t)sdk::UGameEngine::get() + m_offset_in_engine);
 
-        m_xr_tracking_system.vtable = m_vtable.data();
+        m_xr_tracking_system.vtable = m_xrtracking_vtable.data();
         tracking_system->obj = &m_xr_tracking_system;
         tracking_system->ref_controller = nullptr;
         //tracking_system->ref_controller = m_ref_controller.get();
+    } else if (hmdvt.implemented()) { // <= 4.17
+        auto hmd_device = (SharedPtr*)((uintptr_t)sdk::UGameEngine::get() + m_offset_in_engine);
+
+        m_hmd_device.vtable = m_hmd_vtable.data();
+        m_hmd_device.stereo_rendering_vtable = m_stereo_rendering_vtable.data();
+        hmd_device->obj = &m_hmd_device;
+        hmd_device->ref_controller = nullptr;
     }
 
     SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook done");
@@ -573,7 +705,10 @@ void IXRTrackingSystemHook::process_view_rotation(
     }
 
     vr->set_decoupled_pitch(true);
-    vr->recenter_view();
+
+    if (!vr->is_controller_based_headlocked_aim_enabled()) {
+        vr->recenter_view();
+    }
 
     call_orig();
 
@@ -628,7 +763,8 @@ void IXRTrackingSystemHook::process_view_rotation(
             vqi_norm = utility::math::flatten(vqi_norm);
         }
 
-        const auto current_hmd_rotation = glm::normalize(glm::quat{vr->get_rotation(0)});
+        const auto wants_controller = vr->is_controller_based_headlocked_aim_enabled();
+        const auto current_hmd_rotation = glm::normalize(glm::quat{vr->get_rotation(wants_controller ? 2 : 0)});
         const auto new_rotation = glm::normalize(vqi_norm * current_hmd_rotation);
         const auto euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
 
