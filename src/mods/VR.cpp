@@ -657,6 +657,11 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
 
     *retval = ERROR_SUCCESS;
 
+    const auto joysticks = std::array<vr::VRInputValueHandle_t, 2> {
+        m_right_joystick,
+        m_left_joystick
+    };
+
     const auto a_button_action = get_action_handle("/actions/default/in/AButton");
     const auto is_right_a_button_down = is_action_active(a_button_action, m_right_joystick);
     const auto is_left_a_button_down = is_action_active(a_button_action, m_left_joystick);
@@ -715,6 +720,37 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
 
     if (is_left_grip_down) {
         state->Gamepad.wButtons |= XINPUT_GAMEPAD_LEFT_SHOULDER;
+    }
+
+    const auto dpad_up_action = get_action_handle("/actions/default/in/DPad_Up");
+    const auto dpad_right_action = get_action_handle("/actions/default/in/DPad_Right");
+    const auto dpad_down_action = get_action_handle("/actions/default/in/DPad_Down");
+    const auto dpad_left_action = get_action_handle("/actions/default/in/DPad_Left");
+
+    for (auto joystick : joysticks) {
+        const auto is_dpad_up_down = is_action_active(dpad_up_action, joystick);
+
+        if (is_dpad_up_down) {
+            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_UP;
+        }
+
+        const auto is_dpad_right_down = is_action_active(dpad_right_action, joystick);
+
+        if (is_dpad_right_down) {
+            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
+        }
+
+        const auto is_dpad_down_down = is_action_active(dpad_down_action, joystick);
+
+        if (is_dpad_down_down) {
+            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
+        }
+
+        const auto is_dpad_left_down = is_action_active(dpad_left_action, joystick);
+
+        if (is_dpad_left_down) {
+            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
+        }
     }
 
     const auto left_joystick_axis = get_joystick_axis(m_left_joystick);
