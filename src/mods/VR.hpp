@@ -316,6 +316,10 @@ public:
         return m_headlocked_aim->value();
     }
 
+    bool is_controller_based_headlocked_aim_enabled() const {
+        return m_headlocked_aim_controller_based->value();
+    }
+
     auto& get_fake_stereo_hook() {
         return m_fake_stereo_hook;
     }
@@ -503,6 +507,7 @@ private:
     const ModToggle::Ptr m_decoupled_pitch{ ModToggle::create(generate_name("DecoupledPitch"), false) };
     const ModToggle::Ptr m_decoupled_pitch_ui_adjust{ ModToggle::create(generate_name("DecoupledPitchUIAdjust"), true) };
     const ModToggle::Ptr m_headlocked_aim{ ModToggle::create(generate_name("HeadLockedAim"), false) };
+    const ModToggle::Ptr m_headlocked_aim_controller_based{ ModToggle::create(generate_name("HeadLockedAimControllerBased"), false) };
     const ModSlider::Ptr m_motion_controls_inactivity_timer{ ModSlider::create(generate_name("MotionControlsInactivityTimer"), 30.0f, 100.0f, 30.0f) };
     const ModSlider::Ptr m_joystick_deadzone{ ModSlider::create(generate_name("JoystickDeadzone"), 0.01f, 0.9f, 0.15f) };
     const ModSlider::Ptr m_camera_forward_offset{ ModSlider::create(generate_name("CameraForwardOffset"), -4000.0f, 4000.0f, 0.0f) };
@@ -545,6 +550,7 @@ private:
         *m_decoupled_pitch,
         *m_decoupled_pitch_ui_adjust,
         *m_headlocked_aim,
+        *m_headlocked_aim_controller_based,
         *m_motion_controls_inactivity_timer,
         *m_joystick_deadzone,
         *m_camera_forward_offset,

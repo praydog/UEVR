@@ -1703,6 +1703,7 @@ void VR::on_draw_ui() {
     if (ImGui::TreeNode("Head Locked Aim")) {
         ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Experimental, may crash");
         m_headlocked_aim->draw("Enabled");
+        m_headlocked_aim_controller_based->draw("Controller Based");
 
         ImGui::TreePop();
     }
