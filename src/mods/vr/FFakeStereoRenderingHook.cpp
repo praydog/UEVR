@@ -297,14 +297,14 @@ bool FFakeStereoRenderingHook::hook() {
 
         auto check_file_version = [](uint32_t ms, uint32_t ls) {
             try {
-                const auto full_path = utility::get_module_path(utility::get_executable());
+                const auto full_path = utility::get_module_pathw(utility::get_executable());
 
                 if (!full_path) {
                     SPDLOG_ERROR("Failed to get executable path, falling back");
                     return false;
                 }
 
-                const auto file_version_size = GetFileVersionInfoSizeA(full_path->c_str(), nullptr);
+                const auto file_version_size = GetFileVersionInfoSizeW(full_path->c_str(), nullptr);
 
                 if (file_version_size == 0) {
                     SPDLOG_ERROR("Failed to get file version info size, falling back");
@@ -312,7 +312,7 @@ bool FFakeStereoRenderingHook::hook() {
                 }
 
                 std::vector<uint8_t> file_version_data(file_version_size);
-                GetFileVersionInfoA(full_path->c_str(), 0, file_version_size, file_version_data.data());
+                GetFileVersionInfoW(full_path->c_str(), 0, file_version_size, file_version_data.data());
 
                 UINT size{};
                 VS_FIXEDFILEINFO* fixed_file_info{};
