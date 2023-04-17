@@ -789,6 +789,17 @@ void VR::on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRA
 
 // Allows imgui navigation to work with the controllers
 void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_controller) {
+    bool is_using_this_controller = true;
+
+    const auto is_using_vr_controller_recently = is_using_controllers_within(std::chrono::seconds(1));
+    const auto is_gamepad = !is_vr_controller;
+
+    if (is_vr_controller && !is_using_vr_controller_recently) {
+        is_using_this_controller = false;
+    } else if (is_gamepad && is_using_vr_controller_recently) { // dont allow gamepad navigation if using vr controllers
+        is_using_this_controller = false;
+    }
+
     // L3 + R3 to open the menu
     if ((state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0 && (state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0) {
         if (!FrameworkConfig::get()->is_enable_l3_r3_toggle()) {
@@ -797,12 +808,14 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
 
         const auto now = std::chrono::steady_clock::now();
 
-        if (now - m_last_xinput_l3_r3_menu_open > std::chrono::seconds(1)) {
+        if (now - m_last_xinput_l3_r3_menu_open >= std::chrono::seconds(1)) {
             m_last_xinput_l3_r3_menu_open = std::chrono::steady_clock::now();
             g_framework->set_draw_ui(!g_framework->is_drawing_ui());
 
             state.Gamepad.wButtons &= ~(XINPUT_GAMEPAD_LEFT_THUMB | XINPUT_GAMEPAD_RIGHT_THUMB); // so input doesn't go through to the game
         }
+    } else if (is_using_this_controller) {
+        m_xinput_context.headlocked_begin_held = false;
     }
 
     if (!g_framework->is_drawing_ui()) {
@@ -810,12 +823,7 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
         return;
     }
 
-    const auto is_using_vr_controller_recently = is_using_controllers_within(std::chrono::seconds(1));
-    const auto is_gamepad = !is_vr_controller;
-
-    if (is_vr_controller && !is_using_vr_controller_recently) {
-        return;
-    } else if (is_gamepad && is_using_vr_controller_recently) { // dont allow gamepad navigation if using vr controllers
+    if (!is_using_this_controller) {
         return;
     }
 
@@ -831,6 +839,16 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
 
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
         io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
+
+        // Headlocked aim toggle
+        if ((state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0 && (state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0) {
+            if (!m_xinput_context.headlocked_begin_held) {
+                m_xinput_context.headlocked_begin = std::chrono::steady_clock::now();
+                m_xinput_context.headlocked_begin_held = true;
+            }
+        } else {
+            m_xinput_context.headlocked_begin_held = false;
+        }
 
         // Now that we're drawing the UI, check for special button combos the user can use as shortcuts
         // like recenter view, set standing origin, camera offset modification, etc.
@@ -1359,6 +1377,27 @@ void VR::on_frame() {
 
     if (!is_allowed_draw_window) {
         m_rt_modifier.draw = false;
+    }
+
+    if (is_allowed_draw_window && m_xinput_context.headlocked_begin_held) {
+        const auto rt_size = g_framework->get_rt_size();
+
+        ImGui::Begin("Headlocked Notification", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav);
+
+        ImGui::Text("Continue holding down L3 + R3 to toggle headlocked aim");
+
+        if (std::chrono::steady_clock::now() - m_xinput_context.headlocked_begin >= std::chrono::seconds(1)) {
+            m_headlocked_aim->toggle();
+            m_xinput_context.headlocked_begin_held = false;
+        }
+
+        const auto window_size = ImGui::GetWindowSize();
+
+        const auto centered_x = (rt_size.x / 2) - (window_size.x / 2);
+        const auto centered_y = (rt_size.y / 2) - (window_size.y / 2);
+        ImGui::SetWindowPos(ImVec2(centered_x, centered_y), ImGuiCond_Always);
+
+        ImGui::End();
     }
 
     if (m_rt_modifier.draw) {

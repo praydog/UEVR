@@ -664,6 +664,9 @@ private:
                 gamepad.update.reset();
             }
         }
+
+        bool headlocked_begin_held{false};
+        std::chrono::steady_clock::time_point headlocked_begin{};
     } m_xinput_context{};
 
     static std::string actions_json;
