@@ -372,7 +372,17 @@ void IXRTrackingSystemHook::initialize() {
     } else if (hmdvt.implemented()) {
         SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook: IXRTrackingSystemVT not implemented, using IHeadMountedDisplayVT");
 
-        // TODO
+        if (hmdvt.IsHeadTrackingAllowed_index().has_value()) {
+            m_hmd_vtable[hmdvt.IsHeadTrackingAllowed_index().value()] = (uintptr_t)&is_head_tracking_allowed;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: is_head_tracking_allowed_index not implemented");
+        }
+
+        if (hmdvt.ApplyHmdRotation_index().has_value()) {
+            m_hmd_vtable[hmdvt.ApplyHmdRotation_index().value()] = (uintptr_t)&apply_hmd_rotation;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: apply_hmd_rotation_index not implemented");
+        }
     } else {
         SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: IXRTrackingSystemVT and IXRHeadMountedDisplayVT not implemented");
     }
@@ -491,6 +501,10 @@ bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
         return false;
     }
 
+    if (g_hook->m_is_leq_4_17) {
+        return true;
+    }
+
     if (!g_hook->m_process_view_rotation_hook && !g_hook->m_attempted_hook_view_rotation) {
         const auto return_address = (uintptr_t)_ReturnAddress();
 
@@ -591,6 +605,8 @@ void IXRTrackingSystemHook::apply_hmd_rotation(sdk::IXRCamera*, void* player_con
             auto& func = detail::functions[it->second];
             func.calls_apply_hmd_rotation = true;
         }
+
+        g_hook->update_view_rotation(rot);
     }
 
     /*if (g_hook->m_stereo_hook == nullptr) {
@@ -696,21 +712,33 @@ void IXRTrackingSystemHook::process_view_rotation(
         return;
     }
 
-    if (g_hook->m_stereo_hook->has_double_precision()) {
+    //g_hook->pre_update_view_rotation(rot);
+
+    call_orig();
+
+    g_hook->update_view_rotation(rot);
+}
+
+void IXRTrackingSystemHook::pre_update_view_rotation(Rotator<float>* rot) {
+    auto& vr = VR::get();
+
+    if (m_stereo_hook->has_double_precision()) {
         //*(Rotator<double>*)rot = g_hook->m_stereo_hook->m_last_rotation_double;
         *(Rotator<double>*)rot = g_hook->m_last_view_rotation_double;
     } else {
         //*rot = g_hook->m_stereo_hook->m_last_rotation;
         *rot = g_hook->m_last_view_rotation;
     }
+}
 
-    vr->set_decoupled_pitch(true);
+void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
+    auto& vr = VR::get();
 
-    if (!vr->is_controller_based_headlocked_aim_enabled()) {
-        vr->recenter_view();
+    if (!vr->is_hmd_active() || !vr->is_headlocked_aim_enabled()) {
+        return;
     }
 
-    call_orig();
+    vr->set_decoupled_pitch(true);
 
     if (g_hook->m_stereo_hook->has_double_precision()) {
         auto rot_d = (Rotator<double>*)rot;
@@ -735,7 +763,8 @@ void IXRTrackingSystemHook::process_view_rotation(
             vqi_norm = utility::math::flatten(vqi_norm);
         }
 
-        const auto current_hmd_rotation = glm::normalize(glm::quat{vr->get_rotation(0)});
+        const auto rotation_offset = vr->get_rotation_offset();
+        const auto current_hmd_rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(0)});
         const auto new_rotation = glm::normalize(vqi_norm * current_hmd_rotation);
         const auto euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
 
@@ -764,12 +793,17 @@ void IXRTrackingSystemHook::process_view_rotation(
         }
 
         const auto wants_controller = vr->is_controller_based_headlocked_aim_enabled();
-        const auto current_hmd_rotation = glm::normalize(glm::quat{vr->get_rotation(wants_controller ? 2 : 0)});
+        const auto rotation_offset = vr->get_rotation_offset();
+        const auto current_hmd_rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(0)});
         const auto new_rotation = glm::normalize(vqi_norm * current_hmd_rotation);
         const auto euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
 
         rot->pitch = euler.x;
         rot->yaw = euler.y;
         rot->roll = euler.z;
+    }
+
+    if (!vr->is_controller_based_headlocked_aim_enabled()) {
+        vr->recenter_view();
     }
 }

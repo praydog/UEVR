@@ -55,6 +55,9 @@ private:
     static void* process_view_rotation_analyzer(void*, size_t, size_t, size_t, size_t, size_t);
     static void process_view_rotation(void* player_controller, float delta_time, Rotator<float>* rot, Rotator<float>* delta_rot);
 
+    void pre_update_view_rotation(Rotator<float>* rot);
+    void update_view_rotation(Rotator<float>* rot);
+
     FFakeStereoRenderingHook* m_stereo_hook{nullptr};
 
     struct TrackingSystem {

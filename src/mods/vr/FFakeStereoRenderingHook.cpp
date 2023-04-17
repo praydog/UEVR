@@ -3201,9 +3201,19 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     vr->set_world_to_meters(world_to_meters);
 
     static bool index_starts_from_one = true;
+    static bool index_was_ever_two = false;
+
+    // This is eSSP_FULL, we don't care. It will cause the view to become monoscopic if we do anything.
+    if (index_was_ever_two && view_index == 0) {
+        SPDLOG_INFO_ONCE("calculate stereo view offset called with view index 0 after 2, ignoring.");
+        return;
+    }
+
+    vr->set_world_to_meters(world_to_meters);
 
     if (view_index == 2) {
         index_starts_from_one = true;
+        index_was_ever_two = true;
     } else if (view_index == 0) {
         index_starts_from_one = false;
     }
