@@ -206,6 +206,8 @@ std::optional<std::string> VR::initialize_openvr_input() {
     m_active_action_set.ulRestrictedToDevice = vr::k_ulInvalidInputValueHandle;
     m_active_action_set.nPriority = 0;
 
+    m_openvr->pose_action = m_action_pose;
+
     detect_controllers();
 
     return std::nullopt;
@@ -543,6 +545,9 @@ bool VR::detect_controllers() {
             return false;
         }
 
+        m_openvr->left_controller_handle = m_left_joystick;
+        m_openvr->right_controller_handle = m_right_joystick;
+
         left_joystick_origin_info = {};
         right_joystick_origin_info = {};
 
@@ -563,6 +568,9 @@ bool VR::detect_controllers() {
 
         spdlog::info("Left Hand: {}", left_joystick_origin_info.trackedDeviceIndex);
         spdlog::info("Right Hand: {}", right_joystick_origin_info.trackedDeviceIndex);
+
+        m_openvr->left_controller_index = left_joystick_origin_info.trackedDeviceIndex;
+        m_openvr->right_controller_index = right_joystick_origin_info.trackedDeviceIndex;
     } else if (get_runtime()->is_openxr()) {
         // ezpz
         m_controllers.push_back(1);
@@ -903,7 +911,7 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
                     } else {
                         m_rt_modifier.page = 0;
                     }
-                    
+
                     m_rt_modifier.was_moving_right = true;
                 }
             } else {

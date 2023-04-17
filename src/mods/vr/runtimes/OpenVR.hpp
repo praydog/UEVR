@@ -25,8 +25,8 @@ struct OpenVR final : public VRRuntime {
 
     bool ready() const override {
         return VRRuntime::ready() && this->is_hmd_active && this->got_first_poses;
-    }
 
+    }
     VRRuntime::Error synchronize_frame(std::optional<uint32_t> frame_count = std::nullopt) override;
     VRRuntime::Error update_poses(bool from_view_extensions = false, uint32_t frame_count = 0) override;
     VRRuntime::Error update_render_target_size() override;
@@ -77,5 +77,13 @@ struct OpenVR final : public VRRuntime {
     std::chrono::system_clock::time_point last_hmd_active_time{};
 
     std::array<vr::HmdMatrix34_t, 3> pose_queue{};
+
+    vr::VRActionHandle_t pose_action{};
+    std::array<vr::InputPoseActionData_t, 2> controller_poses{};
+
+    vr::TrackedDeviceIndex_t left_controller_index{vr::k_unTrackedDeviceIndexInvalid};
+    vr::TrackedDeviceIndex_t right_controller_index{vr::k_unTrackedDeviceIndexInvalid};
+    vr::VRInputValueHandle_t left_controller_handle{vr::k_ulInvalidInputValueHandle};
+    vr::VRInputValueHandle_t right_controller_handle{vr::k_ulInvalidInputValueHandle};
 };
 }

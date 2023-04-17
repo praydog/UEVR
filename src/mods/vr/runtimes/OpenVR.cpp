@@ -32,6 +32,24 @@ VRRuntime::Error OpenVR::update_poses(bool from_view_extensions, uint32_t frame_
     std::unique_lock _{ this->pose_mtx };
 
     memcpy(this->render_poses.data(), this->real_render_poses.data(), sizeof(this->render_poses));
+    
+    if (this->pose_action != 0 && this->left_controller_handle != vr::k_ulInvalidInputValueHandle && this->right_controller_handle != vr::k_ulInvalidInputValueHandle &&
+        this->left_controller_index != 0 && this->right_controller_index != 0) 
+    {
+        vr::InputPoseActionData_t left_pose_data{};
+        vr::InputPoseActionData_t right_pose_data{};
+
+        const auto res1 = vr::VRInput()->GetPoseActionDataForNextFrame(this->pose_action, vr::TrackingUniverseStanding, &left_pose_data, sizeof(left_pose_data), this->left_controller_handle);
+        const auto res2 = vr::VRInput()->GetPoseActionDataForNextFrame(this->pose_action, vr::TrackingUniverseStanding, &right_pose_data, sizeof(right_pose_data), this->right_controller_handle);
+
+        if (res1 == vr::VRInputError_None) {
+            this->render_poses[this->left_controller_index] = left_pose_data.pose;
+        }
+
+        if (res2 == vr::VRInputError_None) {
+            this->render_poses[this->right_controller_index] = right_pose_data.pose;
+        }
+    }
 
     bool should_enqueue = false;
     if (frame_count == 0) {

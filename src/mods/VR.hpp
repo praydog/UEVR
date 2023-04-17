@@ -438,6 +438,7 @@ private:
     vr::VRActiveActionSet_t m_active_action_set{};
 
     // Action handles
+    vr::VRActionHandle_t m_action_pose{ };
     vr::VRActionHandle_t m_action_trigger{ };
     vr::VRActionHandle_t m_action_grip{ };
     vr::VRActionHandle_t m_action_joystick{};
@@ -452,6 +453,7 @@ private:
     vr::VRActionHandle_t m_action_haptic{};
 
     std::unordered_map<std::string, std::reference_wrapper<vr::VRActionHandle_t>> m_action_handles {
+        { "/actions/default/in/Pose", m_action_pose },
         { "/actions/default/in/Trigger", m_action_trigger },
         { "/actions/default/in/Grip", m_action_grip },
         { "/actions/default/in/Joystick", m_action_joystick },
