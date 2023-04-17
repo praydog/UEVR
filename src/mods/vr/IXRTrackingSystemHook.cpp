@@ -766,20 +766,43 @@ void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
         vqi_norm = utility::math::flatten(vqi_norm);
     }
 
-    const auto wants_controller = vr->is_controller_based_headlocked_aim_enabled();
+    const auto wants_controller = vr->is_controller_based_headlocked_aim_enabled() && vr->is_using_controllers();
     const auto rotation_offset = vr->get_rotation_offset();
+    const auto og_hmd_pos = vr->get_position(0);
     const auto og_hmd_rot = glm::quat{vr->get_rotation(0)};
 
     glm::vec3 euler{};
 
     if (wants_controller) {
-        const auto og_controller_rot = vr->get_rotation(vr->get_right_controller_index());
-        const auto right_controller_forward_rot = utility::math::to_quat(og_controller_rot[2]);
+        const auto controller_index = vr->get_right_controller_index();
+        const auto og_controller_rot = vr->get_rotation(controller_index);
+        const auto og_controller_pos = vr->get_position(controller_index);
+        const auto right_controller_forward = og_controller_rot[2];
+        // We need to construct a sightline from the standing origin to the direction the controller is facing
+        // This is so the camera will be facing a more correct direction
+        // rather than the raw controller rotation
+        const auto right_controller_end = og_controller_pos + (right_controller_forward * 1000.0f);
+        const auto adjusted_forward = glm::normalize(glm::vec3{right_controller_end - vr->get_standing_origin()});
+        const auto right_controller_forward_rot = utility::math::to_quat(adjusted_forward);
+        
         const auto wanted_rotation = glm::normalize(rotation_offset * right_controller_forward_rot);
         const auto new_rotation = glm::normalize(vqi_norm * wanted_rotation);
         euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
 
         vr->set_rotation_offset(glm::inverse(utility::math::flatten(right_controller_forward_rot)));
+
+        /*const auto previous_standing_origin = glm::vec3{vr->get_standing_origin()};
+        static auto last_delta = glm::vec3{og_controller_pos};
+        static auto last_rot_delta = utility::math::flatten(right_controller_forward_rot);
+        const auto current_delta = glm::vec3{og_controller_pos};
+        const auto current_rot_delta = utility::math::flatten(right_controller_forward_rot);
+        const auto delta_delta = current_delta - last_delta;
+        const auto rot_delta_delta = glm::normalize(current_rot_delta * glm::inverse(last_rot_delta));
+        const auto new_standing_origin = previous_standing_origin + delta_delta;
+        vr->set_standing_origin(glm::vec4{new_standing_origin.x, new_standing_origin.y, new_standing_origin.z, 1.0f});
+
+        last_delta = current_delta;
+        last_rot_delta = current_rot_delta;*/
     } else {
         const auto current_hmd_rotation = glm::normalize(rotation_offset * og_hmd_rot);
         const auto new_rotation = glm::normalize(vqi_norm * current_hmd_rotation);
