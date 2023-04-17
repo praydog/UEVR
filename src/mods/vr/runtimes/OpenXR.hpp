@@ -394,7 +394,7 @@ public:
     };
 
     static inline std::vector<InteractionBinding> s_bindings_map {
-        {"/user/hand/*/input/grip/pose", "pose"},
+        {"/user/hand/*/input/aim/pose", "pose"},
         {"/user/hand/*/input/trigger", "trigger"}, // oculus?
         {"/user/hand/*/input/squeeze", "grip"}, // oculus/vive/index
         {"/user/hand/*/input/x/click", "abutton"}, // oculus?
