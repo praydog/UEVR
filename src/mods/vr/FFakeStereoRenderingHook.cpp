@@ -3198,8 +3198,6 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     auto vr = VR::get();
     std::scoped_lock _{vr->get_vr_mutex()};
 
-    vr->set_world_to_meters(world_to_meters);
-
     static bool index_starts_from_one = true;
     static bool index_was_ever_two = false;
 
