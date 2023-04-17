@@ -769,11 +769,24 @@ void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
     const auto wants_controller = vr->is_controller_based_headlocked_aim_enabled();
     const auto rotation_offset = vr->get_rotation_offset();
     const auto og_hmd_rot = glm::quat{vr->get_rotation(0)};
-    const auto og_right_controller_rot = utility::math::to_quat(vr->get_rotation(2)[2]);
-    const auto& device_rot = wants_controller ? og_right_controller_rot : og_hmd_rot;
-    const auto current_hmd_rotation = glm::normalize(rotation_offset * device_rot);
-    const auto new_rotation = glm::normalize(vqi_norm * current_hmd_rotation);
-    const auto euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
+
+    glm::vec3 euler{};
+
+    if (wants_controller) {
+        const auto og_controller_rot = vr->get_rotation(vr->get_right_controller_index());
+        const auto right_controller_forward_rot = utility::math::to_quat(og_controller_rot[2]);
+        const auto wanted_rotation = glm::normalize(rotation_offset * right_controller_forward_rot);
+        const auto new_rotation = glm::normalize(vqi_norm * wanted_rotation);
+        euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
+
+        vr->set_rotation_offset(glm::inverse(utility::math::flatten(right_controller_forward_rot)));
+    } else {
+        const auto current_hmd_rotation = glm::normalize(rotation_offset * og_hmd_rot);
+        const auto new_rotation = glm::normalize(vqi_norm * current_hmd_rotation);
+        euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
+
+        vr->recenter_view();
+    }
 
     if (has_double) {
         rot_d->pitch = euler.x;
@@ -783,11 +796,5 @@ void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
         rot->pitch = euler.x;
         rot->yaw = euler.y;
         rot->roll = euler.z;
-    }
-
-    if (wants_controller) {
-        vr->set_rotation_offset(glm::inverse(utility::math::flatten(og_right_controller_rot)));
-    } else {
-        vr->recenter_view();
     }
 }
