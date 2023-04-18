@@ -323,6 +323,10 @@ public:
     AimMethod get_aim_method() const {
         return (AimMethod)m_aim_method->value();
     }
+
+    AimMethod get_movement_orientation() const {
+        return (AimMethod)m_movement_orientation->value();
+    }
     
     bool is_any_aim_method_active() const {
         return m_aim_method->value() > AimMethod::GAME;
@@ -334,6 +338,11 @@ public:
 
     bool is_controller_aim_enabled() const {
         const auto value = m_aim_method->value();
+        return value == AimMethod::LEFT_CONTROLLER || value == AimMethod::RIGHT_CONTROLLER;
+    }
+
+    bool is_controller_movement_enabled() const {
+        const auto value = m_movement_orientation->value();
         return value == AimMethod::LEFT_CONTROLLER || value == AimMethod::RIGHT_CONTROLLER;
     }
 
