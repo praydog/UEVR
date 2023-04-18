@@ -327,7 +327,7 @@ void IXRTrackingSystemHook::on_pre_engine_tick(sdk::UGameEngine* engine, float d
         return;
     }
 
-    if (VR::get()->is_headlocked_aim_enabled()) {
+    if (VR::get()->is_any_aim_method_active()) {
         initialize();
     }
 }
@@ -493,11 +493,11 @@ bool IXRTrackingSystemHook::analyze_head_tracking_allowed(uintptr_t return_addre
 }
 
 bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
-    SPDLOG_INFO_ONCE("is_head_tracking_allowed");
+    SPDLOG_INFO_ONCE("is_head_tracking_allowed {:x}", (uintptr_t)_ReturnAddress());
 
     auto& vr = VR::get();
 
-    if (!vr->is_hmd_active() || !vr->is_headlocked_aim_enabled()) {
+    if (!vr->is_hmd_active() || !vr->is_any_aim_method_active()) {
         return false;
     }
 
@@ -518,11 +518,11 @@ bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
 }
 
 bool IXRTrackingSystemHook::is_head_tracking_allowed_for_world(sdk::IXRTrackingSystem*, void*) {
-    SPDLOG_INFO_ONCE("is_head_tracking_allowed_for_world");
+    SPDLOG_INFO_ONCE("is_head_tracking_allowed_for_world {:x}", (uintptr_t)_ReturnAddress());
 
     auto& vr = VR::get();
 
-    if (!vr->is_hmd_active() || !vr->is_headlocked_aim_enabled()) {
+    if (!vr->is_hmd_active() || !vr->is_any_aim_method_active()) {
         return false;
     }
 
@@ -543,7 +543,7 @@ bool IXRTrackingSystemHook::is_head_tracking_allowed_for_world(sdk::IXRTrackingS
 }
 
 IXRTrackingSystemHook::SharedPtr* IXRTrackingSystemHook::get_xr_camera(sdk::IXRTrackingSystem*, IXRTrackingSystemHook::SharedPtr* out, size_t device_id) {
-    SPDLOG_INFO_ONCE("get_xr_camera");
+    SPDLOG_INFO_ONCE("get_xr_camera {:x}", (uintptr_t)_ReturnAddress());
 
     if (out != nullptr) {
         *out = g_hook->m_xr_camera_shared;
@@ -579,7 +579,7 @@ IXRTrackingSystemHook::SharedPtr* IXRTrackingSystemHook::get_xr_camera(sdk::IXRT
 }
 
 void IXRTrackingSystemHook::apply_hmd_rotation(sdk::IXRCamera*, void* player_controller, Rotator<float>* rot) {
-    SPDLOG_INFO_ONCE("apply_hmd_rotation");
+    SPDLOG_INFO_ONCE("apply_hmd_rotation {:x}", (uintptr_t)_ReturnAddress());
 
     if (VR::get()->is_hmd_active() && !g_hook->m_process_view_rotation_hook && !g_hook->m_attempted_hook_view_rotation) {
         const auto return_address = (uintptr_t)_ReturnAddress();
@@ -627,7 +627,7 @@ void IXRTrackingSystemHook::apply_hmd_rotation(sdk::IXRCamera*, void* player_con
 }
 
 bool IXRTrackingSystemHook::update_player_camera(sdk::IXRCamera*, glm::quat* rel_rot, glm::vec3* rel_pos) {
-    SPDLOG_INFO_ONCE("update_player_camera");
+    SPDLOG_INFO_ONCE("update_player_camera {:x}", (uintptr_t)_ReturnAddress());
 
     if (VR::get()->is_hmd_active() && !g_hook->m_process_view_rotation_hook && !g_hook->m_attempted_hook_view_rotation) {
         ++detail::total_times_funcs_called;
@@ -662,7 +662,7 @@ bool IXRTrackingSystemHook::update_player_camera(sdk::IXRCamera*, glm::quat* rel
 }
 
 void* IXRTrackingSystemHook::process_view_rotation_analyzer(void* a1, size_t a2, size_t a3, size_t a4, size_t a5, size_t a6) {
-    SPDLOG_INFO_ONCE("process_view_rotation_analyzer");
+    SPDLOG_INFO_ONCE("process_view_rotation_analyzer {:x}", (uintptr_t)_ReturnAddress());
 
     std::scoped_lock _{detail::return_address_to_functions_mutex};
 
@@ -699,7 +699,7 @@ void* IXRTrackingSystemHook::process_view_rotation_analyzer(void* a1, size_t a2,
 
 void IXRTrackingSystemHook::process_view_rotation(
     void* player_controller, float delta_time, Rotator<float>* rot, Rotator<float>* delta_rot) {
-    SPDLOG_INFO_ONCE("process_view_rotation");
+    SPDLOG_INFO_ONCE("process_view_rotation {:x}", (uintptr_t)_ReturnAddress());
 
     auto call_orig = [&]() {
         g_hook->m_process_view_rotation_hook.call<void>(player_controller, delta_time, rot, delta_rot);
@@ -707,7 +707,7 @@ void IXRTrackingSystemHook::process_view_rotation(
 
     auto& vr = VR::get();
 
-    if (!vr->is_hmd_active() || !vr->is_headlocked_aim_enabled()) {
+    if (!vr->is_hmd_active() || !vr->is_any_aim_method_active()) {
         call_orig();
         return;
     }
@@ -734,7 +734,7 @@ void IXRTrackingSystemHook::pre_update_view_rotation(Rotator<float>* rot) {
 void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
     auto& vr = VR::get();
 
-    if (!vr->is_hmd_active() || !vr->is_headlocked_aim_enabled()) {
+    if (!vr->is_hmd_active() || !vr->is_any_aim_method_active()) {
         return;
     }
 
@@ -766,7 +766,7 @@ void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
         vqi_norm = utility::math::flatten(vqi_norm);
     }
 
-    const auto wants_controller = vr->is_controller_based_headlocked_aim_enabled() && vr->is_using_controllers();
+    const auto wants_controller = vr->is_controller_aim_enabled() && vr->is_using_controllers();
     const auto rotation_offset = vr->get_rotation_offset();
     const auto og_hmd_pos = vr->get_position(0);
     const auto og_hmd_rot = glm::quat{vr->get_rotation(0)};
@@ -774,7 +774,8 @@ void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
     glm::vec3 euler{};
 
     if (wants_controller) {
-        const auto controller_index = vr->get_right_controller_index();
+        const auto aim_type = (VR::AimMethod)vr->get_aim_method();
+        const auto controller_index = aim_type == VR::AimMethod::RIGHT_CONTROLLER ? vr->get_right_controller_index() : vr->get_left_controller_index();
         const auto og_controller_rot = vr->get_rotation(controller_index);
         const auto og_controller_pos = vr->get_position(controller_index);
         const auto right_controller_forward = og_controller_rot[2];

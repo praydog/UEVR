@@ -1390,13 +1390,24 @@ void VR::on_frame() {
     if (is_allowed_draw_window && m_xinput_context.headlocked_begin_held) {
         const auto rt_size = g_framework->get_rt_size();
 
-        ImGui::Begin("Headlocked Notification", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav);
+        ImGui::Begin("AimMethod Notification", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav);
 
-        ImGui::Text("Continue holding down L3 + R3 to toggle headlocked aim");
+        ImGui::Text("Continue holding down L3 + R3 to toggle aim method");
 
         if (std::chrono::steady_clock::now() - m_xinput_context.headlocked_begin >= std::chrono::seconds(1)) {
-            m_headlocked_aim->toggle();
+            if (m_aim_method->value() == VR::AimMethod::GAME) {
+                m_aim_method->value() = m_previous_aim_method;
+            } else {
+                m_aim_method->value() = VR::AimMethod::GAME; // turns it off
+            }
+
             m_xinput_context.headlocked_begin_held = false;
+        } else {
+            if (m_aim_method->value() != VR::AimMethod::GAME) {
+                m_previous_aim_method = (VR::AimMethod)m_aim_method->value();
+            } else if (m_previous_aim_method == VR::AimMethod::GAME) {
+                m_previous_aim_method = VR::AimMethod::HEAD; // so it will at least be something
+            }
         }
 
         const auto window_size = ImGui::GetWindowSize();
@@ -1747,10 +1758,18 @@ void VR::on_draw_ui() {
     ImGui::BeginGroup();
 
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
-    if (ImGui::TreeNode("Head Locked Aim")) {
+    if (ImGui::TreeNode("Aim Method")) {
         ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Experimental, may crash");
-        m_headlocked_aim->draw("Enabled");
-        m_headlocked_aim_controller_based->draw("Controller Based");
+        ImGui::TextWrapped("Some games may not work with this enabled.");
+        if (m_aim_method->draw("Type")) {
+            m_previous_aim_method = (AimMethod)m_aim_method->value();
+        }
+
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Movement Orientation")) {
+        m_movement_orientation->draw("Type");
 
         ImGui::TreePop();
     }

@@ -31,6 +31,14 @@ public:
         SKIP_DRAW = 1,
     };
 
+    enum AimMethod : int32_t {
+        GAME,
+        HEAD,
+        RIGHT_CONTROLLER,
+        LEFT_CONTROLLER,
+    };
+
+
 public:
     static std::shared_ptr<VR>& get();
 
@@ -312,12 +320,21 @@ public:
         m_decoupled_pitch->value() = value;
     }
 
-    bool is_headlocked_aim_enabled() const {
-        return m_headlocked_aim->value();
+    AimMethod get_aim_method() const {
+        return (AimMethod)m_aim_method->value();
+    }
+    
+    bool is_any_aim_method_active() const {
+        return m_aim_method->value() > AimMethod::GAME;
     }
 
-    bool is_controller_based_headlocked_aim_enabled() const {
-        return m_headlocked_aim_controller_based->value();
+    bool is_headlocked_aim_enabled() const {
+        return m_aim_method->value() == AimMethod::HEAD;
+    }
+
+    bool is_controller_aim_enabled() const {
+        const auto value = m_aim_method->value();
+        return value == AimMethod::LEFT_CONTROLLER || value == AimMethod::RIGHT_CONTROLLER;
     }
 
     auto& get_fake_stereo_hook() {
@@ -496,6 +513,13 @@ private:
         "Skip Draw",
     };
 
+    static const inline std::vector<std::string> s_aim_method_names {
+        "Game",
+        "Head/HMD",
+        "Right Controller",
+        "Left Controller",
+    };
+
     const ModCombo::Ptr m_rendering_method{ ModCombo::create(generate_name("RenderingMethod"), s_rendering_method_names) };
     const ModCombo::Ptr m_synced_afr_method{ ModCombo::create(generate_name("SyncedSequentialMethod"), s_synced_afr_method_names, 1) };
     const ModToggle::Ptr m_uncap_framerate{ ModToggle::create(generate_name("UncapFramerate"), true) };
@@ -508,8 +532,13 @@ private:
     const ModToggle::Ptr m_enable_depth{ ModToggle::create(generate_name("EnableDepth"), false) };
     const ModToggle::Ptr m_decoupled_pitch{ ModToggle::create(generate_name("DecoupledPitch"), false) };
     const ModToggle::Ptr m_decoupled_pitch_ui_adjust{ ModToggle::create(generate_name("DecoupledPitchUIAdjust"), true) };
-    const ModToggle::Ptr m_headlocked_aim{ ModToggle::create(generate_name("HeadLockedAim"), false) };
-    const ModToggle::Ptr m_headlocked_aim_controller_based{ ModToggle::create(generate_name("HeadLockedAimControllerBased"), false) };
+
+    // Aim method and movement orientation are not the same thing, but they can both have the same options
+    const ModCombo::Ptr m_aim_method{ ModCombo::create(generate_name("AimMethod"), s_aim_method_names, AimMethod::GAME) };
+    const ModCombo::Ptr m_movement_orientation{ ModCombo::create(generate_name("MovementOrientation"), s_aim_method_names, AimMethod::GAME) };
+    AimMethod m_previous_aim_method{ AimMethod::GAME };
+    //const ModToggle::Ptr m_headlocked_aim{ ModToggle::create(generate_name("HeadLockedAim"), false) };
+    //const ModToggle::Ptr m_headlocked_aim_controller_based{ ModToggle::create(generate_name("HeadLockedAimControllerBased"), false) };
     const ModSlider::Ptr m_motion_controls_inactivity_timer{ ModSlider::create(generate_name("MotionControlsInactivityTimer"), 30.0f, 100.0f, 30.0f) };
     const ModSlider::Ptr m_joystick_deadzone{ ModSlider::create(generate_name("JoystickDeadzone"), 0.01f, 0.9f, 0.15f) };
     const ModSlider::Ptr m_camera_forward_offset{ ModSlider::create(generate_name("CameraForwardOffset"), -4000.0f, 4000.0f, 0.0f) };
@@ -551,8 +580,8 @@ private:
         *m_enable_depth,
         *m_decoupled_pitch,
         *m_decoupled_pitch_ui_adjust,
-        *m_headlocked_aim,
-        *m_headlocked_aim_controller_based,
+        *m_aim_method,
+        *m_movement_orientation,
         *m_motion_controls_inactivity_timer,
         *m_joystick_deadzone,
         *m_camera_forward_offset,
