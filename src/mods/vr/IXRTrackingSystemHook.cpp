@@ -790,16 +790,23 @@ void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
         const auto right_controller_end = og_controller_pos + (right_controller_forward * 1000.0f);
         const auto adjusted_forward = glm::normalize(glm::vec3{right_controller_end - vr->get_standing_origin()});
         const auto target_forward = utility::math::to_quat(adjusted_forward);
-        // quaternion distance between target_forward and last_aim_rot
-        auto spherical_distance = glm::dot(target_forward, m_process_view_rotation_data.last_aim_rot);
 
-        if (spherical_distance < 0.0f) {
-            // we do this because we want to rotate the shortest distance
-            spherical_distance = -spherical_distance;
+        glm::quat right_controller_forward_rot{};
+
+        if (vr->is_aim_interpolation_enabled()) {
+            // quaternion distance between target_forward and last_aim_rot
+            auto spherical_distance = glm::dot(target_forward, m_process_view_rotation_data.last_aim_rot);
+
+            if (spherical_distance < 0.0f) {
+                // we do this because we want to rotate the shortest distance
+                spherical_distance = -spherical_distance;
+            }
+
+            right_controller_forward_rot = glm::slerp(m_process_view_rotation_data.last_aim_rot, target_forward, delta_float * vr->get_aim_speed() * spherical_distance);
+        } else {
+            right_controller_forward_rot = target_forward;
         }
 
-        const auto right_controller_forward_rot = glm::slerp(m_process_view_rotation_data.last_aim_rot, target_forward, delta_float * vr->get_aim_speed() * spherical_distance);
-        
         const auto wanted_rotation = glm::normalize(rotation_offset * right_controller_forward_rot);
         const auto new_rotation = glm::normalize(vqi_norm * wanted_rotation);
         euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));

@@ -1808,9 +1808,13 @@ void VR::on_draw_ui() {
             m_previous_aim_method = (AimMethod)m_aim_method->value();
         }
 
+        m_aim_interp->draw("Smoothing");
+        m_aim_speed->draw("Speed");
+
         ImGui::TreePop();
     }
 
+    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
     if (ImGui::TreeNode("Movement Orientation")) {
         m_movement_orientation->draw("Type");
 
