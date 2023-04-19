@@ -603,6 +603,7 @@ private:
         *m_aim_method,
         *m_movement_orientation,
         *m_aim_speed,
+        *m_aim_interp,
         *m_motion_controls_inactivity_timer,
         *m_joystick_deadzone,
         *m_camera_forward_offset,
