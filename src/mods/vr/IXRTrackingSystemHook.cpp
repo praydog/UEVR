@@ -732,6 +732,11 @@ void IXRTrackingSystemHook::pre_update_view_rotation(Rotator<float>* rot) {
 }
 
 void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
+    const auto now = std::chrono::high_resolution_clock::now();
+    const auto delta_time = now - m_process_view_rotation_data.last_update;
+    const auto delta_float = std::chrono::duration_cast<std::chrono::duration<float>>(delta_time).count();
+    m_process_view_rotation_data.last_update = now;
+
     auto& vr = VR::get();
 
     if (!vr->is_hmd_active() || !vr->is_any_aim_method_active()) {
@@ -784,13 +789,24 @@ void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
         // rather than the raw controller rotation
         const auto right_controller_end = og_controller_pos + (right_controller_forward * 1000.0f);
         const auto adjusted_forward = glm::normalize(glm::vec3{right_controller_end - vr->get_standing_origin()});
-        const auto right_controller_forward_rot = utility::math::to_quat(adjusted_forward);
+        const auto target_forward = utility::math::to_quat(adjusted_forward);
+        // quaternion distance between target_forward and last_aim_rot
+        auto spherical_distance = glm::dot(target_forward, m_process_view_rotation_data.last_aim_rot);
+
+        if (spherical_distance < 0.0f) {
+            // we do this because we want to rotate the shortest distance
+            spherical_distance = -spherical_distance;
+        }
+
+        const auto right_controller_forward_rot = glm::slerp(m_process_view_rotation_data.last_aim_rot, target_forward, delta_float * vr->get_aim_speed() * spherical_distance);
         
         const auto wanted_rotation = glm::normalize(rotation_offset * right_controller_forward_rot);
         const auto new_rotation = glm::normalize(vqi_norm * wanted_rotation);
         euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
 
         vr->set_rotation_offset(glm::inverse(utility::math::flatten(right_controller_forward_rot)));
+
+        m_process_view_rotation_data.last_aim_rot = right_controller_forward_rot;
 
         /*const auto previous_standing_origin = glm::vec3{vr->get_standing_origin()};
         static auto last_delta = glm::vec3{og_controller_pos};

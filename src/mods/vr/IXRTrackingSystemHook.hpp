@@ -74,6 +74,11 @@ private:
         void* unk{nullptr};
     } m_hmd_device;
 
+    struct ProcessViewRotationData {
+        std::chrono::high_resolution_clock::time_point last_update{std::chrono::high_resolution_clock::now()};
+        glm::quat last_aim_rot{glm::identity<glm::quat>()};
+    } m_process_view_rotation_data;
+
     std::unique_ptr<ReferenceController> m_ref_controller{std::make_unique<ReferenceController>()};
     std::unique_ptr<ReferenceController> m_ref_controller2{std::make_unique<ReferenceController>()};
     std::array<uintptr_t, 200> m_xrtracking_vtable{}; // >= 4.18

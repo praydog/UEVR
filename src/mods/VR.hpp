@@ -327,6 +327,14 @@ public:
     AimMethod get_movement_orientation() const {
         return (AimMethod)m_movement_orientation->value();
     }
+
+    float get_aim_speed() const {
+        return m_aim_speed->value();
+    }
+
+    bool is_aim_interpolation_enabled() const {
+        return m_aim_interp->value();
+    }
     
     bool is_any_aim_method_active() const {
         return m_aim_method->value() > AimMethod::GAME;
@@ -546,6 +554,9 @@ private:
     const ModCombo::Ptr m_aim_method{ ModCombo::create(generate_name("AimMethod"), s_aim_method_names, AimMethod::GAME) };
     const ModCombo::Ptr m_movement_orientation{ ModCombo::create(generate_name("MovementOrientation"), s_aim_method_names, AimMethod::GAME) };
     AimMethod m_previous_aim_method{ AimMethod::GAME };
+    const ModToggle::Ptr m_aim_interp{ ModToggle::create(generate_name("AimInterp"), true) };
+    const ModSlider::Ptr m_aim_speed{ ModSlider::create(generate_name("AimSpeed"), 0.01f, 25.0f, 15.0f) };
+
     //const ModToggle::Ptr m_headlocked_aim{ ModToggle::create(generate_name("HeadLockedAim"), false) };
     //const ModToggle::Ptr m_headlocked_aim_controller_based{ ModToggle::create(generate_name("HeadLockedAimControllerBased"), false) };
     const ModSlider::Ptr m_motion_controls_inactivity_timer{ ModSlider::create(generate_name("MotionControlsInactivityTimer"), 30.0f, 100.0f, 30.0f) };
@@ -591,6 +602,7 @@ private:
         *m_decoupled_pitch_ui_adjust,
         *m_aim_method,
         *m_movement_orientation,
+        *m_aim_speed,
         *m_motion_controls_inactivity_timer,
         *m_joystick_deadzone,
         *m_camera_forward_offset,
