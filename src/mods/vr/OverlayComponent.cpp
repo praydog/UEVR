@@ -545,7 +545,19 @@ void OverlayComponent::update_overlay_openvr() {
         vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, &pose, 1);
 
         //auto glm_matrix = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
-        auto glm_matrix = Matrix4x4f{glm::inverse(vr->get_rotation_offset())};
+        auto rotation_offset = glm::inverse(vr->get_rotation_offset());
+
+        // If we're not drawing the UI, this means we want to draw the cursor all the time
+        // So we need to rotate the UI's pitch as well
+        if (!g_framework->is_drawing_ui() && vr->is_decoupled_pitch_enabled() && vr->is_decoupled_pitch_ui_adjust_enabled()) {
+            const auto pre_flat_rotation = vr->get_pre_flattened_rotation();
+            const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
+
+            // Add the inverse of the pitch rotation to the rotation offset
+            rotation_offset = glm::normalize(glm::inverse(pre_flat_pitch * vr->get_rotation_offset()));
+        }
+
+        auto glm_matrix = Matrix4x4f{rotation_offset};
 
         if (m_framework_ui_follows_view->value()) {
             // todo
@@ -672,7 +684,19 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>>  OverlayComponent:
     if (vr->m_overlay_component.m_framework_ui_follows_view->value()) {
         layer.space = vr->m_openxr->view_space;
     } else {
-        glm_matrix = Matrix4x4f{glm::inverse(vr->get_rotation_offset())};   
+        auto rotation_offset = glm::inverse(vr->get_rotation_offset());
+
+        // If we're not drawing the UI, this means we want to draw the cursor all the time
+        // So we need to rotate the UI's pitch as well
+        if (!g_framework->is_drawing_ui() && vr->is_decoupled_pitch_enabled() && vr->is_decoupled_pitch_ui_adjust_enabled()) {
+            const auto pre_flat_rotation = vr->get_pre_flattened_rotation();
+            const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
+
+            // Add the inverse of the pitch rotation to the rotation offset
+            rotation_offset = glm::normalize(glm::inverse(pre_flat_pitch * vr->get_rotation_offset()));
+        }
+
+        glm_matrix = Matrix4x4f{rotation_offset};
         glm_matrix[3] += vr->get_standing_origin();
         layer.space = vr->m_openxr->stage_space;
     }
