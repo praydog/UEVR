@@ -323,12 +323,24 @@ IXRTrackingSystemHook::IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_ho
 }
 
 void IXRTrackingSystemHook::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
-    if (m_initialized) {
-        return;
-    }
+    auto& vr = VR::get();
 
-    if (VR::get()->is_any_aim_method_active()) {
-        initialize();
+    if (vr->is_any_aim_method_active()) {
+        if (!m_initialized) {
+            initialize();
+        }
+
+        auto& data = m_process_view_rotation_data;
+
+        // This can happen if player logic stops running (e.g. player has died or entered a loading screen)
+        // so we dont want the UI off in nowhere land
+        if (data.was_called && std::chrono::high_resolution_clock::now() - data.last_update >= std::chrono::seconds(2)) {
+            data.was_called = false;
+            vr->recenter_view();
+            vr->set_pre_flattened_rotation(glm::identity<glm::quat>());
+
+            SPDLOG_INFO("IXRTrackingSystemHook: Recentering view because of timeout");
+        }
     }
 }
 
@@ -736,6 +748,7 @@ void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
     const auto delta_time = now - m_process_view_rotation_data.last_update;
     const auto delta_float = std::chrono::duration_cast<std::chrono::duration<float>>(delta_time).count();
     m_process_view_rotation_data.last_update = now;
+    m_process_view_rotation_data.was_called = true;
 
     auto& vr = VR::get();
 

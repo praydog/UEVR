@@ -19,9 +19,18 @@ class FFakeStereoRenderingHook;
 
 class IXRTrackingSystemHook : public ModComponent {
 public:
+    struct ProcessViewRotationData {
+        std::chrono::high_resolution_clock::time_point last_update{std::chrono::high_resolution_clock::now()};
+        glm::quat last_aim_rot{glm::identity<glm::quat>()};
+        bool was_called{false};
+    };
+
+public:
     IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_hook, size_t offset_in_engine);
 
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
+
+    auto& get_process_view_rotation_data() { return m_process_view_rotation_data; }
 
 private:
     struct ReferenceController {
@@ -74,10 +83,7 @@ private:
         void* unk{nullptr};
     } m_hmd_device;
 
-    struct ProcessViewRotationData {
-        std::chrono::high_resolution_clock::time_point last_update{std::chrono::high_resolution_clock::now()};
-        glm::quat last_aim_rot{glm::identity<glm::quat>()};
-    } m_process_view_rotation_data;
+    ProcessViewRotationData m_process_view_rotation_data{};
 
     std::unique_ptr<ReferenceController> m_ref_controller{std::make_unique<ReferenceController>()};
     std::unique_ptr<ReferenceController> m_ref_controller2{std::make_unique<ReferenceController>()};
