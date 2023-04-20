@@ -759,6 +759,28 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
 
     state->Gamepad.sThumbRX = (int16_t)(right_joystick_axis.x * 32767.0f);
     state->Gamepad.sThumbRY = (int16_t)(right_joystick_axis.y * 32767.0f);
+
+    // Touching the thumbrest allows us to use the thumbstick as a dpad
+    if (m_thumbrest_shifting->value()) {
+        const auto a_b_touch_inactive = !is_action_active(m_action_a_button_touch, m_right_joystick) && !is_action_active(m_action_b_button_touch, m_right_joystick);
+        const auto thumbrest_active = a_b_touch_inactive && is_action_active(m_action_thumbrest_touch, m_right_joystick);
+
+        if (state->Gamepad.sThumbLY >= (32767.0f / 2.0f) && thumbrest_active) {
+            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_UP;
+        }
+
+        if (state->Gamepad.sThumbLY <= -(32767.0f / 2.0f) && thumbrest_active) {
+            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
+        }
+
+        if (state->Gamepad.sThumbLX >= (32767.0f / 2.0f) && thumbrest_active) {
+            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
+        }
+
+        if (state->Gamepad.sThumbLX <= -(32767.0f / 2.0f) && thumbrest_active) {
+            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
+        }
+    }
     
     // Do it again after all the VR buttons have been spoofed
     update_imgui_state_from_xinput_state(*state, true);
@@ -1793,6 +1815,7 @@ void VR::on_draw_ui() {
     m_uncap_framerate->draw("Uncap Framerate");
     m_enable_gui->draw("Enable GUI");
     m_enable_depth->draw("Enable Depth");
+    m_thumbrest_shifting->draw("Thumbrest DPad Shifting");
     ImGui::EndGroup();
 
     ImGui::NextColumn();
@@ -2235,6 +2258,10 @@ Matrix4x4f VR::get_current_projection_matrix(bool flip) {
 
 bool VR::is_action_active(vr::VRActionHandle_t action, vr::VRInputValueHandle_t source) const {
     if (!get_runtime()->loaded) {
+        return false;
+    }
+
+    if (action == vr::k_ulInvalidActionHandle) {
         return false;
     }
     

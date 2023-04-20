@@ -480,13 +480,16 @@ private:
     vr::VRActionHandle_t m_action_joystick{};
     vr::VRActionHandle_t m_action_joystick_click{};
     vr::VRActionHandle_t m_action_a_button{};
+    vr::VRActionHandle_t m_action_a_button_touch{};
     vr::VRActionHandle_t m_action_b_button{};
+    vr::VRActionHandle_t m_action_b_button_touch{};
     vr::VRActionHandle_t m_action_dpad_up{};
     vr::VRActionHandle_t m_action_dpad_right{};
     vr::VRActionHandle_t m_action_dpad_down{};
     vr::VRActionHandle_t m_action_dpad_left{};
     vr::VRActionHandle_t m_action_system_button{};
     vr::VRActionHandle_t m_action_haptic{};
+    vr::VRActionHandle_t m_action_thumbrest_touch{};
 
     std::unordered_map<std::string, std::reference_wrapper<vr::VRActionHandle_t>> m_action_handles {
         { "/actions/default/in/Pose", m_action_pose },
@@ -496,11 +499,14 @@ private:
         { "/actions/default/in/JoystickClick", m_action_joystick_click },
         { "/actions/default/in/AButton", m_action_a_button },
         { "/actions/default/in/BButton", m_action_b_button },
+        { "/actions/default/in/AButtonTouch", m_action_a_button_touch },
+        { "/actions/default/in/BButtonTouch", m_action_b_button_touch },
         { "/actions/default/in/DPad_Up", m_action_dpad_up },
         { "/actions/default/in/DPad_Right", m_action_dpad_right },
         { "/actions/default/in/DPad_Down", m_action_dpad_down },
         { "/actions/default/in/DPad_Left", m_action_dpad_left },
         { "/actions/default/in/SystemButton", m_action_system_button },
+        { "/actions/default/in/ThumbrestTouch", m_action_thumbrest_touch },
 
         // Out
         { "/actions/default/out/Haptic", m_action_haptic },
@@ -560,6 +566,7 @@ private:
     AimMethod m_previous_aim_method{ AimMethod::GAME };
     const ModToggle::Ptr m_aim_interp{ ModToggle::create(generate_name("AimInterp"), true) };
     const ModSlider::Ptr m_aim_speed{ ModSlider::create(generate_name("AimSpeed"), 0.01f, 25.0f, 15.0f) };
+    const ModToggle::Ptr m_thumbrest_shifting{ ModToggle::create(generate_name("ThumbrestShifting"), true) };
 
     //const ModToggle::Ptr m_headlocked_aim{ ModToggle::create(generate_name("HeadLockedAim"), false) };
     //const ModToggle::Ptr m_headlocked_aim_controller_based{ ModToggle::create(generate_name("HeadLockedAimControllerBased"), false) };
@@ -608,6 +615,7 @@ private:
         *m_movement_orientation,
         *m_aim_speed,
         *m_aim_interp,
+        *m_thumbrest_shifting,
         *m_motion_controls_inactivity_timer,
         *m_joystick_deadzone,
         *m_camera_forward_offset,
