@@ -670,9 +670,8 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         m_left_joystick
     };
 
-    const auto a_button_action = get_action_handle("/actions/default/in/AButton");
-    const auto is_right_a_button_down = is_action_active(a_button_action, m_right_joystick);
-    const auto is_left_a_button_down = is_action_active(a_button_action, m_left_joystick);
+    const auto is_right_a_button_down = is_action_active(m_action_a_button, m_right_joystick);
+    const auto is_left_a_button_down = is_action_active(m_action_a_button, m_left_joystick);
 
     if (is_right_a_button_down) {
         state->Gamepad.wButtons |= XINPUT_GAMEPAD_A;
@@ -682,9 +681,8 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         state->Gamepad.wButtons |= XINPUT_GAMEPAD_B;
     }
 
-    const auto b_button_action = get_action_handle("/actions/default/in/BButton");
-    const auto is_right_b_button_down = is_action_active(b_button_action, m_right_joystick);
-    const auto is_left_b_button_down = is_action_active(b_button_action, m_left_joystick);
+    const auto is_right_b_button_down = is_action_active(m_action_b_button, m_right_joystick);
+    const auto is_left_b_button_down = is_action_active(m_action_b_button, m_left_joystick);
 
     if (is_right_b_button_down) {
         state->Gamepad.wButtons |= XINPUT_GAMEPAD_X;
@@ -694,9 +692,8 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         state->Gamepad.wButtons |= XINPUT_GAMEPAD_Y;
     }
 
-    const auto joystick_click_action = get_action_handle("/actions/default/in/JoystickClick");
-    const auto is_left_joystick_click_down = is_action_active(joystick_click_action, m_left_joystick);
-    const auto is_right_joystick_click_down = is_action_active(joystick_click_action, m_right_joystick);
+    const auto is_left_joystick_click_down = is_action_active(m_action_joystick_click, m_left_joystick);
+    const auto is_right_joystick_click_down = is_action_active(m_action_joystick_click, m_right_joystick);
 
     if (is_left_joystick_click_down) {
         state->Gamepad.wButtons |= XINPUT_GAMEPAD_LEFT_THUMB;
@@ -706,9 +703,8 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         state->Gamepad.wButtons |= XINPUT_GAMEPAD_RIGHT_THUMB;
     }
 
-    const auto trigger_action = get_action_handle("/actions/default/in/Trigger");
-    const auto is_left_trigger_down = is_action_active(trigger_action, m_left_joystick);
-    const auto is_right_trigger_down = is_action_active(trigger_action, m_right_joystick);
+    const auto is_left_trigger_down = is_action_active(m_action_trigger, m_left_joystick);
+    const auto is_right_trigger_down = is_action_active(m_action_trigger, m_right_joystick);
 
     if (is_left_trigger_down) {
         state->Gamepad.bLeftTrigger = 255;
@@ -718,9 +714,8 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         state->Gamepad.bRightTrigger = 255;
     }
 
-    const auto grip_action = get_action_handle("/actions/default/in/Grip");
-    const auto is_right_grip_down = is_action_active(grip_action, m_right_joystick);
-    const auto is_left_grip_down = is_action_active(grip_action, m_left_joystick);
+    const auto is_right_grip_down = is_action_active(m_action_grip, m_right_joystick);
+    const auto is_left_grip_down = is_action_active(m_action_grip, m_left_joystick);
 
     if (is_right_grip_down) {
         state->Gamepad.wButtons |= XINPUT_GAMEPAD_RIGHT_SHOULDER;
@@ -730,31 +725,26 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         state->Gamepad.wButtons |= XINPUT_GAMEPAD_LEFT_SHOULDER;
     }
 
-    const auto dpad_up_action = get_action_handle("/actions/default/in/DPad_Up");
-    const auto dpad_right_action = get_action_handle("/actions/default/in/DPad_Right");
-    const auto dpad_down_action = get_action_handle("/actions/default/in/DPad_Down");
-    const auto dpad_left_action = get_action_handle("/actions/default/in/DPad_Left");
-
     for (auto joystick : joysticks) {
-        const auto is_dpad_up_down = is_action_active(dpad_up_action, joystick);
+        const auto is_dpad_up_down = is_action_active(m_action_dpad_up, joystick);
 
         if (is_dpad_up_down) {
             state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_UP;
         }
 
-        const auto is_dpad_right_down = is_action_active(dpad_right_action, joystick);
+        const auto is_dpad_right_down = is_action_active(m_action_dpad_right, joystick);
 
         if (is_dpad_right_down) {
             state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
         }
 
-        const auto is_dpad_down_down = is_action_active(dpad_down_action, joystick);
+        const auto is_dpad_down_down = is_action_active(m_action_dpad_down, joystick);
 
         if (is_dpad_down_down) {
             state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
         }
 
-        const auto is_dpad_left_down = is_action_active(dpad_left_action, joystick);
+        const auto is_dpad_left_down = is_action_active(m_action_dpad_left, joystick);
 
         if (is_dpad_left_down) {
             state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
@@ -1052,21 +1042,29 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
             const auto left_stick_left = gamepad.sThumbLX < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
             if (m_xinput_context.vr.left_stick_left.was_pressed(left_stick_left)) {
                 io.AddKeyEvent(ImGuiKey_GamepadDpadLeft, true);
+            } else if (!left_stick_left) {
+                io.AddKeyEvent(ImGuiKey_GamepadDpadLeft, false);
             }
 
             const auto left_stick_right = gamepad.sThumbLX > +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
             if (m_xinput_context.vr.left_stick_right.was_pressed(left_stick_right)) {
                 io.AddKeyEvent(ImGuiKey_GamepadDpadRight, true);
+            } else if (!left_stick_right) {
+                io.AddKeyEvent(ImGuiKey_GamepadDpadRight, false);
             }
 
             const auto left_stick_up = gamepad.sThumbLY > +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
             if (m_xinput_context.vr.left_stick_up.was_pressed(left_stick_up)) {
                 io.AddKeyEvent(ImGuiKey_GamepadDpadUp, true);
+            } else if (!left_stick_up) {
+                io.AddKeyEvent(ImGuiKey_GamepadDpadUp, false);
             }
 
             const auto left_stick_down = gamepad.sThumbLY < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
             if (m_xinput_context.vr.left_stick_down.was_pressed(left_stick_down)) {
                 io.AddKeyEvent(ImGuiKey_GamepadDpadDown, true);
+            } else if (!left_stick_down) {
+                io.AddKeyEvent(ImGuiKey_GamepadDpadDown, false);
             }
         }
 
