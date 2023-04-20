@@ -765,20 +765,24 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         const auto a_b_touch_inactive = !is_action_active(m_action_a_button_touch, m_right_joystick) && !is_action_active(m_action_b_button_touch, m_right_joystick);
         const auto thumbrest_active = a_b_touch_inactive && is_action_active(m_action_thumbrest_touch, m_right_joystick);
 
-        if (state->Gamepad.sThumbLY >= (32767.0f / 2.0f) && thumbrest_active) {
+        if (state->Gamepad.sThumbLY >= 16383 && thumbrest_active) {
             state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_UP;
+            state->Gamepad.sThumbLY = 0;
         }
 
-        if (state->Gamepad.sThumbLY <= -(32767.0f / 2.0f) && thumbrest_active) {
+        if (state->Gamepad.sThumbLY <= -16383 && thumbrest_active) {
             state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
+            state->Gamepad.sThumbLY = 0;
         }
 
-        if (state->Gamepad.sThumbLX >= (32767.0f / 2.0f) && thumbrest_active) {
+        if (state->Gamepad.sThumbLX >= 16383 && thumbrest_active) {
             state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
+            state->Gamepad.sThumbLX = 0;
         }
 
-        if (state->Gamepad.sThumbLX <= -(32767.0f / 2.0f) && thumbrest_active) {
+        if (state->Gamepad.sThumbLX <= -16383 && thumbrest_active) {
             state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
+            state->Gamepad.sThumbLX = 0;
         }
     }
     
