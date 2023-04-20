@@ -36,6 +36,8 @@ public:
         HEAD,
         RIGHT_CONTROLLER,
         LEFT_CONTROLLER,
+        TWO_HANDED_RIGHT,
+        TWO_HANDED_LEFT,
     };
 
 
@@ -346,12 +348,12 @@ public:
 
     bool is_controller_aim_enabled() const {
         const auto value = m_aim_method->value();
-        return value == AimMethod::LEFT_CONTROLLER || value == AimMethod::RIGHT_CONTROLLER;
+        return value == AimMethod::LEFT_CONTROLLER || value == AimMethod::RIGHT_CONTROLLER || value == AimMethod::TWO_HANDED_LEFT || value == AimMethod::TWO_HANDED_RIGHT;
     }
 
     bool is_controller_movement_enabled() const {
         const auto value = m_movement_orientation->value();
-        return value == AimMethod::LEFT_CONTROLLER || value == AimMethod::RIGHT_CONTROLLER;
+        return value == AimMethod::LEFT_CONTROLLER || value == AimMethod::RIGHT_CONTROLLER || value == AimMethod::TWO_HANDED_LEFT || value == AimMethod::TWO_HANDED_RIGHT;
     }
 
     auto& get_fake_stereo_hook() {
@@ -535,6 +537,8 @@ private:
         "Head/HMD",
         "Right Controller",
         "Left Controller",
+        "Two Handed (Right)",
+        "Two Handed (Left)",
     };
 
     const ModCombo::Ptr m_rendering_method{ ModCombo::create(generate_name("RenderingMethod"), s_rendering_method_names) };

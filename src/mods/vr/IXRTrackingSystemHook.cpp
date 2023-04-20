@@ -792,16 +792,37 @@ void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
     glm::vec3 euler{};
 
     if (wants_controller) {
+        glm::vec3 right_controller_forward{};
+        glm::vec3 og_controller_pos{};
+        glm::quat og_controller_rot{};
+
         const auto aim_type = (VR::AimMethod)vr->get_aim_method();
-        const auto controller_index = aim_type == VR::AimMethod::RIGHT_CONTROLLER ? vr->get_right_controller_index() : vr->get_left_controller_index();
-        const auto og_controller_rot = vr->get_rotation(controller_index);
-        const auto og_controller_pos = vr->get_position(controller_index);
-        const auto right_controller_forward = og_controller_rot[2];
+
+        if (aim_type == VR::AimMethod::RIGHT_CONTROLLER || aim_type == VR::AimMethod::LEFT_CONTROLLER) {
+            const auto controller_index = aim_type == VR::AimMethod::RIGHT_CONTROLLER ? vr->get_right_controller_index() : vr->get_left_controller_index();
+            og_controller_rot = glm::quat{vr->get_rotation(controller_index)};
+            og_controller_pos = glm::vec3{vr->get_position(controller_index)};
+            right_controller_forward = og_controller_rot * glm::vec3{0.0f, 0.0f, 1.0f};
+        } else if (aim_type == VR::AimMethod::TWO_HANDED_RIGHT) { // two handed modes are for imitating rifle aiming
+            const auto right_controller_index = vr->get_right_controller_index();
+            const auto left_controller_index = vr->get_left_controller_index();
+            const auto pos_delta = glm::normalize(glm::vec3{vr->get_position(left_controller_index) - vr->get_position(right_controller_index)});
+            og_controller_rot = utility::math::to_quat(pos_delta);
+            og_controller_pos = glm::vec3{vr->get_position(right_controller_index)};
+            right_controller_forward = og_controller_rot * glm::vec3{0.0f, 0.0f, -1.0f};
+        } else if (aim_type == VR::AimMethod::TWO_HANDED_LEFT) {
+            const auto right_controller_index = vr->get_right_controller_index();
+            const auto left_controller_index = vr->get_left_controller_index();
+            const auto pos_delta = glm::normalize(glm::vec3{vr->get_position(right_controller_index) - vr->get_position(left_controller_index)});
+            og_controller_rot = utility::math::to_quat(pos_delta);
+            og_controller_pos = glm::vec3{vr->get_position(left_controller_index)};
+            right_controller_forward = og_controller_rot * glm::vec3{0.0f, 0.0f, -1.0f};
+        }
         // We need to construct a sightline from the standing origin to the direction the controller is facing
         // This is so the camera will be facing a more correct direction
         // rather than the raw controller rotation
         const auto right_controller_end = og_controller_pos + (right_controller_forward * 1000.0f);
-        const auto adjusted_forward = glm::normalize(glm::vec3{right_controller_end - vr->get_standing_origin()});
+        const auto adjusted_forward = glm::normalize(right_controller_end - glm::vec3{vr->get_standing_origin()});
         const auto target_forward = utility::math::to_quat(adjusted_forward);
 
         glm::quat right_controller_forward_rot{};
