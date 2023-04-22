@@ -43,6 +43,7 @@ struct FXRDeviceId {
     int32_t DeviceID{};
 };
 
+#pragma pack(push, 1)
 struct FXRMotionControllerData {
     bool bValid; // 0x0
     char pad_1[0x3];
@@ -61,4 +62,5 @@ struct FXRMotionControllerData {
     char pad_60[0x30];
     char pad_91[0xf];
 }; // Size: 0xa0
+#pragma pack(pop)
 }
