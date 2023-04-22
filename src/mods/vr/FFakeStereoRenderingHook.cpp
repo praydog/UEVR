@@ -83,6 +83,10 @@ void FFakeStereoRenderingHook::on_draw_ui() {
     m_recreate_textures_on_reset->draw("Recreate Textures on Reset");
     m_frame_delay_compensation->draw("Frame Delay Compensation");
 
+    if (m_tracking_system_hook != nullptr) {
+        m_tracking_system_hook->on_draw_ui();
+    }
+
     ImGui::Separator();
 }
 

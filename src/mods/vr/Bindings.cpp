@@ -54,6 +54,18 @@ std::string VR::actions_json = R"(
       "type": "boolean"
     },
     {
+      "name": "/actions/default/in/AButtonTouch",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/default/in/BButtonTouch",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/default/in/ThumbRestTouch",
+      "type": "boolean"
+    },
+    {
       "name": "/actions/default/in/SystemButton",
       "type": "boolean"
     },

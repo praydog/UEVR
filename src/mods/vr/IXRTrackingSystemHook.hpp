@@ -28,6 +28,7 @@ public:
 public:
     IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_hook, size_t offset_in_engine);
 
+    void on_draw_ui() override;
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
 
     auto& get_process_view_rotation_data() { return m_process_view_rotation_data; }
@@ -53,10 +54,11 @@ private:
     static bool is_head_tracking_allowed(sdk::IXRTrackingSystem*);
     static bool is_head_tracking_allowed_for_world(sdk::IXRTrackingSystem*, void* world);
     static SharedPtr* get_xr_camera(sdk::IXRTrackingSystem*, SharedPtr* out, size_t device_id);
+    static void get_motion_controller_data(sdk::IXRTrackingSystem*, void* world, uint32_t hand, void* motion_controller_data);
+    static void get_current_pose(sdk::IXRTrackingSystem*, int32_t device_id, Quat<float>* out_rot, glm::vec3* out_pos);
 
     static void apply_hmd_rotation(sdk::IXRCamera*, void* player_controller, Rotator<float>* rot);
-    static bool update_player_camera(sdk::IXRCamera*, glm::quat* rel_rot, glm::vec3* rel_pos);
-
+    static bool update_player_camera(sdk::IXRCamera*, Quat<float>* rel_rot, glm::vec3* rel_pos);
     // This function is the precursor to actually hooking ProcessViewRotation
     // Because there's a very real possibility that we can accidentally hook the wrong function
     // We need to verify that arg 2 and 3 are on the stack

@@ -98,7 +98,11 @@ struct OpenXR final : public VRRuntime {
 public:
     // openxr quaternions are xyzw and glm is wxyz
     static glm::quat to_glm(const XrQuaternionf& q) {
+    #ifndef GLM_FORCE_QUAT_DATA_XYZW
         return glm::quat{ q.w, q.x, q.y, q.z };
+    #else
+        return glm::quat{ q.x, q.y, q.z, q.w };
+    #endif
     }
 
     static XrQuaternionf to_openxr(const glm::quat& q) {

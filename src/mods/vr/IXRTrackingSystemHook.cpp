@@ -11,6 +11,7 @@
 #include "../VR.hpp"
 
 #include "vtables/IXRTrackingSystemVTables.hpp"
+#include "structures/FXRMotionControllerData.hpp"
 #include "IXRTrackingSystemHook.hpp"
 
 detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
@@ -322,6 +323,9 @@ IXRTrackingSystemHook::IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_ho
     }
 }
 
+void IXRTrackingSystemHook::on_draw_ui() {
+}
+
 void IXRTrackingSystemHook::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     auto& vr = VR::get();
 
@@ -380,6 +384,18 @@ void IXRTrackingSystemHook::initialize() {
             m_xrtracking_vtable[trackvt.IsHeadTrackingAllowedForWorld_index().value()] = (uintptr_t)&is_head_tracking_allowed_for_world;
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: is_head_tracking_allowed_for_world_index not implemented");
+        }
+
+        if (trackvt.GetMotionControllerData_index().has_value()) {
+            m_xrtracking_vtable[trackvt.GetMotionControllerData_index().value()] = (uintptr_t)&get_motion_controller_data;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_motion_controller_data_index not implemented");
+        }
+
+        if (trackvt.GetCurrentPose_index().has_value()) {
+            m_xrtracking_vtable[trackvt.GetCurrentPose_index().value()] = (uintptr_t)&get_current_pose;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_current_pose_index not implemented");
         }
     } else if (hmdvt.implemented()) {
         SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook: IXRTrackingSystemVT not implemented, using IHeadMountedDisplayVT");
@@ -590,6 +606,93 @@ IXRTrackingSystemHook::SharedPtr* IXRTrackingSystemHook::get_xr_camera(sdk::IXRT
     return out;
 }
 
+void IXRTrackingSystemHook::get_motion_controller_data(sdk::IXRTrackingSystem*, void* world, uint32_t hand, void* motion_controller_data) {
+    SPDLOG_INFO_ONCE("get_motion_controller_data {:x}", (uintptr_t)_ReturnAddress());
+
+    const auto e_hand = (ue427::EControllerHand)hand;
+    const auto data = (ue427::FXRMotionControllerData*)motion_controller_data;
+
+    const auto vr = VR::get();
+
+    const auto world_scale = vr->get_world_to_meters();
+
+    auto rotation_offset = vr->get_rotation_offset();
+
+    if (vr->is_decoupled_pitch_enabled()) {
+        const auto pre_flat_rotation = vr->get_pre_flattened_rotation();
+        const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
+        rotation_offset = glm::normalize(pre_flat_pitch * vr->get_rotation_offset());
+    }
+
+    switch (e_hand) {
+    case ue427::EControllerHand::Left: {
+        data->bValid = true;
+        const auto position = rotation_offset * glm::vec3{vr->get_position(vr->get_left_controller_index()) - vr->get_standing_origin()};
+        const auto rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(vr->get_left_controller_index())});
+
+        const auto final_position = utility::math::glm_to_ue4(position * world_scale);
+        const auto final_rotation = utility::math::glm_to_ue4(rotation);
+        //data->GripRotation = { -final_rotation.z, final_rotation.x, final_rotation.y, -final_rotation.w };
+        data->GripRotation = { final_rotation.x, final_rotation.y, final_rotation.z, final_rotation.w };
+        data->GripPosition = final_position;
+
+        data->AimRotation = data->GripRotation;
+        data->AimPosition = data->GripPosition;
+        
+        break;
+    }
+    case ue427::EControllerHand::Right: {
+        data->bValid = true;
+        const auto position = rotation_offset * glm::vec3{vr->get_position(vr->get_right_controller_index()) - vr->get_standing_origin()};
+        const auto rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(vr->get_right_controller_index())});
+
+        const auto final_position = utility::math::glm_to_ue4(position * world_scale);
+        const auto final_rotation = utility::math::glm_to_ue4(rotation);
+        //data->GripRotation = { -final_rotation.z, final_rotation.x, final_rotation.y, -final_rotation.w };
+        data->GripRotation = { final_rotation.x, final_rotation.y, final_rotation.z, final_rotation.w };
+        data->GripPosition = final_position;
+
+        data->AimRotation = data->GripRotation;
+        data->AimPosition = data->GripPosition;
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+void IXRTrackingSystemHook::get_current_pose(sdk::IXRTrackingSystem*, int32_t device_id, Quat<float>* out_rot, glm::vec3* out_pos) {
+    SPDLOG_INFO_ONCE("get_current_pose {:x}", (uintptr_t)_ReturnAddress());
+
+    const auto vr = VR::get();
+    const auto world_scale = vr->get_world_to_meters();
+
+    auto rotation_offset = vr->get_rotation_offset();
+
+    if (vr->is_decoupled_pitch_enabled()) {
+        const auto pre_flat_rotation = vr->get_pre_flattened_rotation();
+        const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
+        rotation_offset = glm::normalize(pre_flat_pitch * vr->get_rotation_offset());
+    }
+
+    switch (device_id) {
+    // Todo: motion controllers? Don't know how BP can pass through a valid device id
+    case 0: 
+    default: {
+        const auto position = rotation_offset * glm::vec3{vr->get_position(vr->get_hmd_index()) - vr->get_standing_origin()};
+        const auto rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(vr->get_hmd_index())});
+
+        // TODO: UE5
+        *out_pos = utility::math::glm_to_ue4(position * world_scale);
+
+        const auto q = utility::math::glm_to_ue4(rotation);
+        *out_rot = { q.x, q.y, q.z, q.w };
+
+        break;
+    }
+    }
+}
+
 void IXRTrackingSystemHook::apply_hmd_rotation(sdk::IXRCamera*, void* player_controller, Rotator<float>* rot) {
     SPDLOG_INFO_ONCE("apply_hmd_rotation {:x}", (uintptr_t)_ReturnAddress());
 
@@ -638,7 +741,7 @@ void IXRTrackingSystemHook::apply_hmd_rotation(sdk::IXRCamera*, void* player_con
     VR::get()->recenter_view();*/
 }
 
-bool IXRTrackingSystemHook::update_player_camera(sdk::IXRCamera*, glm::quat* rel_rot, glm::vec3* rel_pos) {
+bool IXRTrackingSystemHook::update_player_camera(sdk::IXRCamera*, Quat<float>* rel_rot, glm::vec3* rel_pos) {
     SPDLOG_INFO_ONCE("update_player_camera {:x}", (uintptr_t)_ReturnAddress());
 
     if (VR::get()->is_hmd_active() && !g_hook->m_process_view_rotation_hook && !g_hook->m_attempted_hook_view_rotation) {

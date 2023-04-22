@@ -13,6 +13,11 @@ struct Rotator {
     T pitch, yaw, roll;
 };
 
+template<typename T>
+struct Quat {
+    T x, y, z, w;
+};
+
 struct FRHIResource {
     virtual ~FRHIResource(){};
 
