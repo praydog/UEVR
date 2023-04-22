@@ -51,7 +51,7 @@ tag = "ba66ffaeecfd201ac66310ddf0a4a98140f1441f"
 
 [fetch-content.safetyhook]
 git = "https://github.com/cursey/safetyhook"
-tag = "v0.1.0-pre"
+tag = "d0b3e864a7246d530d22818b7707af879c0ebd1e"
 cmake-before="""
 set(SAFETYHOOK_FETCH_ZYDIS ON)
 """
