@@ -1412,7 +1412,7 @@ void* IXRTrackingSystemHook::process_view_rotation_analyzer(void* a1, size_t a2,
     if (std::abs((intptr_t)a3 - stack_pointer) > 0x1000 || std::abs((intptr_t)a4 - stack_pointer) > 0x1000 || a3 == a4) {
         SPDLOG_ERROR("Function we hooked for ProcessViewRotation is not the correct one. Analyzing next function.");
 
-        const auto function_addr = g_hook->m_process_view_rotation_hook.target();
+        const auto function_addr = g_hook->m_process_view_rotation_hook.target_address();
         detail::functions[function_addr].process_view_rotation_analysis_failed = true;
 
         g_hook->m_process_view_rotation_hook.reset();
@@ -1422,7 +1422,7 @@ void* IXRTrackingSystemHook::process_view_rotation_analyzer(void* a1, size_t a2,
         const auto target = g_hook->m_process_view_rotation_hook.target();
         g_hook->m_process_view_rotation_hook.reset();
         //g_hook->m_process_view_rotation_hook = std::make_unique<PointerHook>((void**)g_hook->m_addr_of_process_view_rotation_ptr, &IXRTrackingSystemHook::process_view_rotation);
-        g_hook->m_process_view_rotation_hook = safetyhook::create_inline((void*)target, &IXRTrackingSystemHook::process_view_rotation);
+        g_hook->m_process_view_rotation_hook = safetyhook::create_inline(target, &IXRTrackingSystemHook::process_view_rotation);
     }
 
     return result;

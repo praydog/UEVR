@@ -294,17 +294,17 @@ bool D3D12Hook::hook() {
     }
 
     try {
-        safetyhook::ThreadFreezer suspender{};
-        spdlog::info("Initializing hooks");
+        safetyhook::execute_while_frozen([&] {
+            spdlog::info("Initializing hooks");
+            m_present_hook.reset();
+            m_swapchain_hook.reset();
 
-        m_present_hook.reset();
-        m_swapchain_hook.reset();
+            m_is_phase_1 = true;
 
-        m_is_phase_1 = true;
-
-        auto& present_fn = (*(void***)swap_chain)[8]; // Present
-        m_present_hook = std::make_unique<PointerHook>(&present_fn, (void*)&D3D12Hook::present);
-        m_hooked = true;
+            auto& present_fn = (*(void***)swap_chain)[8]; // Present
+            m_present_hook = std::make_unique<PointerHook>(&present_fn, (void*)&D3D12Hook::present);
+            m_hooked = true;
+        });
     } catch (const std::exception& e) {
         spdlog::error("Failed to initialize hooks: {}", e.what());
         m_hooked = false;

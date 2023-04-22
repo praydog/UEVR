@@ -4556,7 +4556,7 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
         return;
     }
 
-    auto vfunc = utility::find_virtual_function_start(g_hook->m_calculate_stereo_projection_matrix_post_hook.target());
+    auto vfunc = utility::find_virtual_function_start(g_hook->m_calculate_stereo_projection_matrix_post_hook.target_address());
 
     if (!vfunc) {
         // attempt to hook GetProjectionData instead to get the localplayer
@@ -4613,7 +4613,7 @@ void FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix(safetyhoo
     if (!vfunc) {
         SPDLOG_INFO("Could not find function via normal means, scanning for int3s...");
 
-        const auto ref = utility::scan_reverse(g_hook->m_calculate_stereo_projection_matrix_post_hook.target(), 0x2000, "CC CC CC");
+        const auto ref = utility::scan_reverse(g_hook->m_calculate_stereo_projection_matrix_post_hook.target_address(), 0x2000, "CC CC CC");
 
         if (ref) {
             vfunc = *ref + 3;
@@ -5264,7 +5264,7 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         SPDLOG_INFO("Emu landed at {:x}", emu_ctx.ctx->Registers.RegRip);
         func_ptr = emu_ctx.ctx->Registers.RegRip;
     } else {
-        const auto target = g_hook->get_render_target_manager()->pre_texture_hook.target();
+        const auto target = g_hook->get_render_target_manager()->pre_texture_hook.target_address();
         func_ptr = target + 5 + *(int32_t*)&rtm->texture_create_insn_bytes.data()[1];
     }
 
