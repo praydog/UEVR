@@ -1,3 +1,5 @@
+#include <regex>
+
 #include <utility/Scan.hpp>
 #include <utility/Module.hpp>
 #include <utility/Emulation.hpp>
@@ -126,5 +128,35 @@ bool check_file_version(uint32_t ms, uint32_t ls) {
     }
 
     return false;
+}
+
+std::optional<std::wstring> search_for_version(const std::wstring& input) {
+    std::wregex regex_pattern(LR"(\+\+ue[4|5].*([4|5]\.\d+))", std::regex::icase);
+    std::wsmatch matches;
+
+    if (std::regex_search(input, matches, regex_pattern)) {
+        return matches[1].str();
+    }
+
+    return std::nullopt;
+}
+
+std::optional<std::wstring> search_for_version(HMODULE h) {
+    const auto module_size = utility::get_module_size(h).value_or(0);
+    const auto module_start = (const wchar_t*)h;
+
+    for (size_t i = 0; i < module_size / 2; ++i) try {
+        const wchar_t* ptr = module_start + i;
+
+        if (ptr[0] == L'+' && ptr[1] == L'+') {
+            if (auto version = search_for_version(ptr)) {
+                return version;
+            }
+        }
+    } catch(...) {
+
+    }
+
+    return std::nullopt;
 }
 }

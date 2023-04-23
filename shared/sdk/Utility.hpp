@@ -17,4 +17,7 @@ bool is_vfunc_pattern(uintptr_t addr, std::string_view pattern);
 
 VS_FIXEDFILEINFO get_file_version_info();
 bool check_file_version(uint32_t ms, uint32_t ls);
+
+std::optional<std::wstring> search_for_version(const std::string& input);
+std::optional<std::wstring> search_for_version(HMODULE h);
 }
