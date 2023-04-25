@@ -13,6 +13,7 @@ namespace sdk {
 class UEngine;
 class IXRTrackingSystem;
 class IXRCamera;
+class IHeadMountedDisplay;
 }
 
 class FFakeStereoRenderingHook;
@@ -51,11 +52,17 @@ private:
     void initialize();
     bool analyze_head_tracking_allowed(uintptr_t return_address);
 
+    // IXRTrackingSystem
     static bool is_head_tracking_allowed(sdk::IXRTrackingSystem*);
     static bool is_head_tracking_allowed_for_world(sdk::IXRTrackingSystem*, void* world);
     static SharedPtr* get_xr_camera(sdk::IXRTrackingSystem*, SharedPtr* out, size_t device_id);
     static void get_motion_controller_data(sdk::IXRTrackingSystem*, void* world, uint32_t hand, void* motion_controller_data);
     static void get_current_pose(sdk::IXRTrackingSystem*, int32_t device_id, Quat<float>* out_rot, glm::vec3* out_pos);
+    static int32_t get_xr_system_flags(sdk::IXRTrackingSystem*);
+
+    // IHeadMountedDisplay
+    static bool is_hmd_connected(sdk::IHeadMountedDisplay*);
+    static int32_t* get_ideal_debug_canvas_render_target_size(sdk::IHeadMountedDisplay*, int32_t* out);
 
     static void apply_hmd_rotation(sdk::IXRCamera*, void* player_controller, Rotator<float>* rot);
     static bool update_player_camera(sdk::IXRCamera*, Quat<float>* rel_rot, glm::vec3* rel_pos);

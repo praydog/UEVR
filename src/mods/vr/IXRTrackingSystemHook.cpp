@@ -315,6 +315,7 @@ IXRTrackingSystemHook::IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_ho
     };
 
     const auto version = sdk::get_file_version_info();
+    const auto str_version = utility::narrow(sdk::search_for_version(utility::get_executable()).value_or(L"0.00"));
 
     if (version.dwFileVersionMS >= 0x40000 && version.dwFileVersionMS <= 0x40019) {
         SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook: version <= 4.25");
@@ -400,6 +401,35 @@ void IXRTrackingSystemHook::initialize() {
             m_xrtracking_vtable[trackvt.GetCurrentPose_index().value()] = (uintptr_t)&get_current_pose;
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_current_pose_index not implemented");
+        }
+
+        if (trackvt.GetXRSystemFlags_index().has_value()) {
+            m_xrtracking_vtable[trackvt.GetXRSystemFlags_index().value()] = (uintptr_t)&get_xr_system_flags;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_xr_system_flags_index not implemented");
+        }
+
+        if (hmdvt.implemented() && trackvt.GetHMDDevice_index().has_value()) {
+            m_xrtracking_vtable[trackvt.GetHMDDevice_index().value()] = (uintptr_t)+[]() -> void* {
+                SPDLOG_INFO_ONCE("GetHMDDevice called");
+
+                return &g_hook->m_hmd_device;
+            };
+
+            if (hmdvt.IsHMDConnected_index().has_value()) {
+                m_hmd_vtable[hmdvt.IsHMDConnected_index().value()] = (uintptr_t)&is_hmd_connected;
+            } else {
+                SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: is_hmd_connected_index not implemented");
+            }
+
+            if (hmdvt.GetIdealDebugCanvasRenderTargetSize_index().has_value()) {
+                m_hmd_vtable[hmdvt.GetIdealDebugCanvasRenderTargetSize_index().value()] = (uintptr_t)&get_ideal_debug_canvas_render_target_size;
+            } else {
+                SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_ideal_debug_canvas_render_target_size_index not implemented");
+            }
+
+            m_hmd_device.vtable = m_hmd_vtable.data();
+            m_hmd_device.stereo_rendering_vtable = m_stereo_rendering_vtable.data();
         }
     } else if (hmdvt.implemented()) {
         SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook: IXRTrackingSystemVT not implemented, using IHeadMountedDisplayVT");
@@ -695,6 +725,77 @@ void IXRTrackingSystemHook::get_current_pose(sdk::IXRTrackingSystem*, int32_t de
         break;
     }
     }
+}
+
+enum ECustomSystemFlags : int32_t {
+    SYSTEMFLAG_NONE = 0,
+    SYSTEMFLAG_HMD_ACTIVE = 1 << 0,
+    SYSTEMFLAG_DECOUPLED_PITCH = 1 << 1,
+    SYSTEMFLAG_OPENXR = 1 << 2,
+    SYSTEMFLAG_OPENVR = 1 << 3,
+    SYSTEMFLAG_MOTION_CONTROLLERS_ACTIVE = 1 << 4,
+    SYSTEMFLAG_LEFT_THUMBREST_ACTIVE = 1 << 5,
+    SYSTEMFLAG_RIGHT_THUMBREST_ACTIVE = 1 << 6,
+};
+
+int32_t IXRTrackingSystemHook::get_xr_system_flags(sdk::IXRTrackingSystem* system) {
+    SPDLOG_INFO_ONCE("get_xr_system_flags {:x}", (uintptr_t)_ReturnAddress());
+
+    const auto& vr = VR::get();
+
+    if (!vr->is_hmd_active()) {
+        return ECustomSystemFlags::SYSTEMFLAG_NONE;
+    }
+
+    int32_t out = ECustomSystemFlags::SYSTEMFLAG_HMD_ACTIVE;
+
+    if (vr->is_decoupled_pitch_enabled()) {
+        out |= ECustomSystemFlags::SYSTEMFLAG_DECOUPLED_PITCH;
+    }
+
+    if (vr->is_using_controllers()) {
+        out |= ECustomSystemFlags::SYSTEMFLAG_MOTION_CONTROLLERS_ACTIVE;
+    }
+
+    const auto runtime = vr->get_runtime();
+
+    if (runtime->is_openvr()) {
+        out |= ECustomSystemFlags::SYSTEMFLAG_OPENVR;
+    } else if (runtime->is_openxr()) {
+        out |= ECustomSystemFlags::SYSTEMFLAG_OPENXR;
+    }
+
+    static const auto left_thumbrest_handle = vr->get_action_handle(VR::s_action_thumbrest_touch_left);
+    static const auto right_thumbrest_handle = vr->get_action_handle(VR::s_action_thumbrest_touch_right);
+
+    if (vr->is_action_active_any_joystick(left_thumbrest_handle)) {
+        out |= ECustomSystemFlags::SYSTEMFLAG_LEFT_THUMBREST_ACTIVE;
+    }
+
+    if (vr->is_action_active_any_joystick(right_thumbrest_handle)) {
+        out |= ECustomSystemFlags::SYSTEMFLAG_RIGHT_THUMBREST_ACTIVE;
+    }
+
+    return out;
+}
+
+bool IXRTrackingSystemHook::is_hmd_connected(sdk::IHeadMountedDisplay*) {
+    SPDLOG_INFO_ONCE("is_hmd_connected {:x}", (uintptr_t)_ReturnAddress());
+
+    return VR::get()->is_hmd_active();
+}
+
+int32_t* IXRTrackingSystemHook::get_ideal_debug_canvas_render_target_size(sdk::IHeadMountedDisplay*, int32_t* out) {
+    SPDLOG_INFO_ONCE("get_ideal_debug_canvas_render_target_size {:x}", (uintptr_t)_ReturnAddress());
+
+    if (out != nullptr) {
+        // This is what the engine does... I guess? I don't see any VR plugins implementing this function
+        // look into it later to see if it's even useful
+        out[0] = 1024;
+        out[1] = 1024;
+    }
+
+    return out;
 }
 
 void IXRTrackingSystemHook::apply_hmd_rotation(sdk::IXRCamera*, void* player_controller, Rotator<float>* rot) {
