@@ -40,6 +40,29 @@ public:
         TWO_HANDED_LEFT,
     };
 
+    static const inline std::string s_action_pose = "/actions/default/in/Pose";
+    static const inline std::string s_action_trigger = "/actions/default/in/Trigger";
+    static const inline std::string s_action_grip = "/actions/default/in/Grip";
+    static const inline std::string s_action_joystick = "/actions/default/in/Joystick";
+    static const inline std::string s_action_joystick_click = "/actions/default/in/JoystickClick";
+
+    static const inline std::string s_action_a_button_left = "/actions/default/in/AButtonLeft";
+    static const inline std::string s_action_b_button_left = "/actions/default/in/BButtonLeft";
+    static const inline std::string s_action_a_button_touch_left = "/actions/default/in/AButtonTouchLeft";
+    static const inline std::string s_action_b_button_touch_left = "/actions/default/in/BButtonTouchLeft";
+
+    static const inline std::string s_action_a_button_right = "/actions/default/in/AButtonRight";
+    static const inline std::string s_action_b_button_right = "/actions/default/in/BButtonRight";
+    static const inline std::string s_action_a_button_touch_right = "/actions/default/in/AButtonTouchRight";
+    static const inline std::string s_action_b_button_touch_right = "/actions/default/in/BButtonTouchRight";
+
+    static const inline std::string s_action_dpad_up = "/actions/default/in/DPad_Up";
+    static const inline std::string s_action_dpad_right = "/actions/default/in/DPad_Right";
+    static const inline std::string s_action_dpad_down = "/actions/default/in/DPad_Down";
+    static const inline std::string s_action_dpad_left = "/actions/default/in/DPad_Left";
+    static const inline std::string s_action_system_button = "/actions/default/in/SystemButton";
+    static const inline std::string s_action_thumbrest_touch_left = "/actions/default/in/ThumbrestTouchLeft";
+    static const inline std::string s_action_thumbrest_touch_right = "/actions/default/in/ThumbrestTouchRight";
 
 public:
     static std::shared_ptr<VR>& get();
@@ -111,6 +134,18 @@ public:
     Matrix4x4f get_current_projection_matrix(bool flip = false);
 
     bool is_action_active(vr::VRActionHandle_t action, vr::VRInputValueHandle_t source = vr::k_ulInvalidInputValueHandle) const;
+
+    bool is_action_active_any_joystick(vr::VRActionHandle_t action) const {
+        if (is_action_active(action, m_left_joystick)) {
+            return true;
+        }
+
+        if (is_action_active(action, m_right_joystick)) {
+            return true;
+        }
+
+        return false;
+    }
     Vector2f get_joystick_axis(vr::VRInputValueHandle_t handle) const;
 
     vr::VRActionHandle_t get_action_handle(std::string_view action_path) {
@@ -185,7 +220,8 @@ public:
     }
 
     bool is_using_controllers() const {
-        return is_hmd_active() && !m_controllers.empty() && (std::chrono::steady_clock::now() - m_last_controller_update) <= std::chrono::seconds((int32_t)m_motion_controls_inactivity_timer->value());
+        return m_controller_test_mode || (m_controllers_allowed &&
+        is_hmd_active() && !m_controllers.empty() && (std::chrono::steady_clock::now() - m_last_controller_update) <= std::chrono::seconds((int32_t)m_motion_controls_inactivity_timer->value()));
     }
 
     bool is_using_controllers_within(std::chrono::seconds seconds) const {
@@ -479,34 +515,52 @@ private:
     vr::VRActionHandle_t m_action_grip{ };
     vr::VRActionHandle_t m_action_joystick{};
     vr::VRActionHandle_t m_action_joystick_click{};
-    vr::VRActionHandle_t m_action_a_button{};
-    vr::VRActionHandle_t m_action_a_button_touch{};
-    vr::VRActionHandle_t m_action_b_button{};
-    vr::VRActionHandle_t m_action_b_button_touch{};
+
+    vr::VRActionHandle_t m_action_a_button_right{};
+    vr::VRActionHandle_t m_action_a_button_touch_right{};
+    vr::VRActionHandle_t m_action_b_button_right{};
+    vr::VRActionHandle_t m_action_b_button_touch_right{};
+
+    vr::VRActionHandle_t m_action_a_button_left{};
+    vr::VRActionHandle_t m_action_a_button_touch_left{};
+    vr::VRActionHandle_t m_action_b_button_left{};
+    vr::VRActionHandle_t m_action_b_button_touch_left{};
+
     vr::VRActionHandle_t m_action_dpad_up{};
     vr::VRActionHandle_t m_action_dpad_right{};
     vr::VRActionHandle_t m_action_dpad_down{};
     vr::VRActionHandle_t m_action_dpad_left{};
+
     vr::VRActionHandle_t m_action_system_button{};
     vr::VRActionHandle_t m_action_haptic{};
-    vr::VRActionHandle_t m_action_thumbrest_touch{};
+    vr::VRActionHandle_t m_action_thumbrest_touch_left{};
+    vr::VRActionHandle_t m_action_thumbrest_touch_right{};
 
     std::unordered_map<std::string, std::reference_wrapper<vr::VRActionHandle_t>> m_action_handles {
-        { "/actions/default/in/Pose", m_action_pose },
-        { "/actions/default/in/Trigger", m_action_trigger },
-        { "/actions/default/in/Grip", m_action_grip },
-        { "/actions/default/in/Joystick", m_action_joystick },
-        { "/actions/default/in/JoystickClick", m_action_joystick_click },
-        { "/actions/default/in/AButton", m_action_a_button },
-        { "/actions/default/in/BButton", m_action_b_button },
-        { "/actions/default/in/AButtonTouch", m_action_a_button_touch },
-        { "/actions/default/in/BButtonTouch", m_action_b_button_touch },
-        { "/actions/default/in/DPad_Up", m_action_dpad_up },
-        { "/actions/default/in/DPad_Right", m_action_dpad_right },
-        { "/actions/default/in/DPad_Down", m_action_dpad_down },
-        { "/actions/default/in/DPad_Left", m_action_dpad_left },
-        { "/actions/default/in/SystemButton", m_action_system_button },
-        { "/actions/default/in/ThumbrestTouch", m_action_thumbrest_touch },
+        { s_action_pose, m_action_pose },
+        { s_action_trigger, m_action_trigger },
+        { s_action_grip, m_action_grip },
+        { s_action_joystick, m_action_joystick },
+        { s_action_joystick_click, m_action_joystick_click },
+
+        { s_action_a_button_left, m_action_a_button_left },
+        { s_action_b_button_left, m_action_b_button_left },
+        { s_action_a_button_touch_left, m_action_a_button_touch_left },
+        { s_action_b_button_touch_left, m_action_b_button_touch_left },
+
+        { s_action_a_button_right, m_action_a_button_right },
+        { s_action_b_button_right, m_action_b_button_right },
+        { s_action_a_button_touch_right, m_action_a_button_touch_right },
+        { s_action_b_button_touch_right, m_action_b_button_touch_right },
+
+        { s_action_dpad_up, m_action_dpad_up },
+        { s_action_dpad_right, m_action_dpad_right },
+        { s_action_dpad_down, m_action_dpad_down },
+        { s_action_dpad_left, m_action_dpad_left },
+
+        { s_action_system_button, m_action_system_button },
+        { s_action_thumbrest_touch_left, m_action_thumbrest_touch_left },
+        { s_action_thumbrest_touch_right, m_action_thumbrest_touch_right },
 
         // Out
         { "/actions/default/out/Haptic", m_action_haptic },
@@ -598,6 +652,8 @@ private:
 
     bool m_stereo_emulation_mode{false}; // not a good config option, just for debugging
     bool m_wait_for_present{true};
+    bool m_controllers_allowed{true};
+    bool m_controller_test_mode{false};
 
     ValueList m_options{
         *m_rendering_method,

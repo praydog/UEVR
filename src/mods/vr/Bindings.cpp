@@ -46,23 +46,43 @@ std::string VR::actions_json = R"(
       "type": "boolean"
     },
     {
-      "name": "/actions/default/in/AButton",
+      "name": "/actions/default/in/AButtonRight",
       "type": "boolean"
     },
     {
-      "name": "/actions/default/in/BButton",
+      "name": "/actions/default/in/BButtonRight",
       "type": "boolean"
     },
     {
-      "name": "/actions/default/in/AButtonTouch",
+      "name": "/actions/default/in/AButtonLeft",
       "type": "boolean"
     },
     {
-      "name": "/actions/default/in/BButtonTouch",
+      "name": "/actions/default/in/BButtonLeft",
       "type": "boolean"
     },
     {
-      "name": "/actions/default/in/ThumbRestTouch",
+      "name": "/actions/default/in/AButtonTouchLeft",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/default/in/BButtonTouchLeft",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/default/in/AButtonTouchRight",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/default/in/BButtonTouchRight",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/default/in/ThumbRestTouchLeft",
+      "type": "boolean"
+    },
+   {
+      "name": "/actions/default/in/ThumbRestTouchRight",
       "type": "boolean"
     },
     {
@@ -253,7 +273,7 @@ std::string VR::bindings_oculus_touch_json = R"(
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/default/in/abutton"
+                     "output" : "/actions/default/in/abuttonleft"
                   }
                },
                "mode" : "button",
@@ -262,7 +282,7 @@ std::string VR::bindings_oculus_touch_json = R"(
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/default/in/abutton"
+                     "output" : "/actions/default/in/abuttonright"
                   }
                },
                "mode" : "button",
@@ -271,7 +291,7 @@ std::string VR::bindings_oculus_touch_json = R"(
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/default/in/bbutton"
+                     "output" : "/actions/default/in/bbuttonleft"
                   }
                },
                "mode" : "button",
@@ -280,7 +300,7 @@ std::string VR::bindings_oculus_touch_json = R"(
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/default/in/bbutton"
+                     "output" : "/actions/default/in/bbuttonright"
                   }
                },
                "mode" : "button",
@@ -289,7 +309,7 @@ std::string VR::bindings_oculus_touch_json = R"(
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/default/in/abutton"
+                     "output" : "/actions/default/in/abuttonright"
                   }
                },
                "mode" : "button",
@@ -322,7 +342,7 @@ std::string VR::bindings_oculus_touch_json = R"(
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/default/in/bbutton"
+                     "output" : "/actions/default/in/bbuttonright"
                   }
                },
                "mode" : "button",
@@ -435,7 +455,7 @@ std::string VR::bindings_vive_controller = R"(
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/default/in/bbutton"
+                     "output" : "/actions/default/in/bbuttonleft"
                   }
                },
                "mode" : "button",
@@ -465,7 +485,7 @@ std::string VR::bindings_vive_controller = R"(
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/default/in/bbutton"
+                     "output" : "/actions/default/in/bbuttonleft"
                   }
                },
                "mode" : "button",
@@ -618,7 +638,7 @@ std::string VR::bindings_knuckles = R"(
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/default/in/bbutton"
+                     "output" : "/actions/default/in/bbuttonleft"
                   }
                },
                "mode" : "button",
@@ -627,7 +647,7 @@ std::string VR::bindings_knuckles = R"(
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/default/in/abutton"
+                     "output" : "/actions/default/in/abuttonleft"
                   }
                },
                "mode" : "button",
@@ -651,7 +671,7 @@ std::string VR::bindings_knuckles = R"(
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/default/in/abutton"
+                     "output" : "/actions/default/in/abuttonright"
                   }
                },
                "mode" : "button",
@@ -660,7 +680,7 @@ std::string VR::bindings_knuckles = R"(
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/default/in/bbutton"
+                     "output" : "/actions/default/in/bbuttonright"
                   }
                },
                "mode" : "button",

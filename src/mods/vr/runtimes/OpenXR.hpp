@@ -402,23 +402,37 @@ public:
         {"/user/hand/*/input/trigger", "trigger"}, // oculus?
         {"/user/hand/*/input/squeeze", "grip"}, // oculus/vive/index
 
-        {"/user/hand/*/input/x/click", "abutton"}, // oculus?
-        {"/user/hand/*/input/x/touch", "abuttontouch"}, // oculus?
+        {"/user/hand/left/input/x/click", "abuttonleft"}, // oculus?
+        {"/user/hand/left/input/x/touch", "abuttontouchleft"}, // oculus?
 
-        {"/user/hand/*/input/y/click", "bbutton"}, // oculus?
-        {"/user/hand/*/input/y/touch", "bbuttontouch"}, // oculus?
+        {"/user/hand/right/input/x/click", "abuttonright"}, // oculus?
+        {"/user/hand/right/input/x/touch", "abuttontouchright"}, // oculus?
 
-        {"/user/hand/*/input/a/click", "abutton"}, // oculus?
-        {"/user/hand/*/input/a/touch", "abuttontouch"}, // oculus?
+        {"/user/hand/left/input/y/click", "bbuttonleft"}, // oculus?
+        {"/user/hand/left/input/y/touch", "bbuttontouchleft"}, // oculus?
 
-        {"/user/hand/*/input/b/click", "bbutton"}, // oculus?
-        {"/user/hand/*/input/b/touch", "bbuttontouch"}, // oculus?
+        {"/user/hand/right/input/y/click", "bbuttonright"}, // oculus?
+        {"/user/hand/right/input/y/touch", "bbuttontouchright"}, // oculus?
+
+        {"/user/hand/left/input/a/click", "abuttonleft"}, // oculus?
+        {"/user/hand/left/input/a/touch", "abuttontouchleft"}, // oculus?
+
+        {"/user/hand/right/input/a/click", "abuttonright"}, // oculus?
+        {"/user/hand/right/input/a/touch", "abuttontouchright"}, // oculus?
+
+        {"/user/hand/left/input/b/click", "bbuttonleft"}, // oculus?
+        {"/user/hand/left/input/b/touch", "bbuttontouchleft"}, // oculus?
+
+        {"/user/hand/right/input/b/click", "bbuttonright"}, // oculus?
+        {"/user/hand/right/input/b/touch", "bbuttontouchright"}, // oculus?
 
         {"/user/hand/*/input/thumbstick", "joystick"}, // oculus?
         {"/user/hand/*/input/thumbstick/click", "joystickclick"}, // oculus?
         {"/user/hand/*/input/system/click", "systembutton"}, // oculus/vive/index
         {"/user/hand/*/input/menu/click", "systembutton"}, // oculus/vive/index
-        {"/user/hand/*/input/thumbrest/touch", "thumbresttouch"}, // cv1/quest pro
+
+        {"/user/hand/left/input/thumbrest/touch", "thumbresttouchleft"}, // cv1/quest pro
+        {"/user/hand/right/input/thumbrest/touch", "thumbresttouchright"}, // cv1/quest pro
 
         {"/user/hand/*/input/trackpad", "touchpad"}, // vive & others
         {"/user/hand/*/input/trackpad/click", "touchpadclick"}, // vive & others
@@ -428,14 +442,14 @@ public:
     static inline std::vector<ActionVectorAssociation> s_action_vector_associations {
         { 
             VRRuntime::Hand::LEFT, "touchpad", "touchpadclick", {
-            { {0.0, -1.0f}, "abutton" },
-            { {1.0f, 0.0f}, "bbutton" },
+            { {0.0, -1.0f}, "abuttonleft" },
+            { {1.0f, 0.0f}, "bbuttonleft" },
             { {0.0f, 1.0f}, "joystickclick" }
         }},
         { 
             VRRuntime::Hand::RIGHT, "touchpad", "touchpadclick", {
-            { {0.0, -1.0f}, "abutton" },
-            { {-1.0f, 0.0f}, "bbutton" },
+            { {0.0, -1.0f}, "abuttonright" },
+            { {-1.0f, 0.0f}, "bbuttonright" },
             { {0.0f, 1.0f}, "joystickclick" }
         }},
     };

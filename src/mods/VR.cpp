@@ -670,8 +670,8 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         m_left_joystick
     };
 
-    const auto is_right_a_button_down = is_action_active(m_action_a_button, m_right_joystick);
-    const auto is_left_a_button_down = is_action_active(m_action_a_button, m_left_joystick);
+    const auto is_right_a_button_down = is_action_active_any_joystick(m_action_a_button_right);
+    const auto is_left_a_button_down = is_action_active_any_joystick(m_action_a_button_left);
 
     if (is_right_a_button_down) {
         state->Gamepad.wButtons |= XINPUT_GAMEPAD_A;
@@ -681,8 +681,8 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         state->Gamepad.wButtons |= XINPUT_GAMEPAD_B;
     }
 
-    const auto is_right_b_button_down = is_action_active(m_action_b_button, m_right_joystick);
-    const auto is_left_b_button_down = is_action_active(m_action_b_button, m_left_joystick);
+    const auto is_right_b_button_down = is_action_active_any_joystick(m_action_b_button_right);
+    const auto is_left_b_button_down = is_action_active_any_joystick(m_action_b_button_left);
 
     if (is_right_b_button_down) {
         state->Gamepad.wButtons |= XINPUT_GAMEPAD_X;
@@ -725,30 +725,28 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         state->Gamepad.wButtons |= XINPUT_GAMEPAD_LEFT_SHOULDER;
     }
 
-    for (auto joystick : joysticks) {
-        const auto is_dpad_up_down = is_action_active(m_action_dpad_up, joystick);
+    const auto is_dpad_up_down = is_action_active_any_joystick(m_action_dpad_up);
 
-        if (is_dpad_up_down) {
-            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_UP;
-        }
+    if (is_dpad_up_down) {
+        state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_UP;
+    }
 
-        const auto is_dpad_right_down = is_action_active(m_action_dpad_right, joystick);
+    const auto is_dpad_right_down = is_action_active_any_joystick(m_action_dpad_right);
 
-        if (is_dpad_right_down) {
-            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
-        }
+    if (is_dpad_right_down) {
+        state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
+    }
 
-        const auto is_dpad_down_down = is_action_active(m_action_dpad_down, joystick);
+    const auto is_dpad_down_down = is_action_active_any_joystick(m_action_dpad_down);
 
-        if (is_dpad_down_down) {
-            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
-        }
+    if (is_dpad_down_down) {
+        state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
+    }
 
-        const auto is_dpad_left_down = is_action_active(m_action_dpad_left, joystick);
+    const auto is_dpad_left_down = is_action_active_any_joystick(m_action_dpad_left);
 
-        if (is_dpad_left_down) {
-            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
-        }
+    if (is_dpad_left_down) {
+        state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
     }
 
     const auto left_joystick_axis = get_joystick_axis(m_left_joystick);
@@ -762,26 +760,27 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
 
     // Touching the thumbrest allows us to use the thumbstick as a dpad
     if (m_thumbrest_shifting->value()) {
-        const auto a_b_touch_inactive = !is_action_active(m_action_a_button_touch, m_right_joystick) && !is_action_active(m_action_b_button_touch, m_right_joystick);
-        const auto thumbrest_active = a_b_touch_inactive && is_action_active(m_action_thumbrest_touch, m_right_joystick);
+        const auto a_b_touch_inactive = !is_action_active_any_joystick(m_action_a_button_touch_right) && !is_action_active_any_joystick(m_action_b_button_touch_right);
+        const auto thumbrest_active = a_b_touch_inactive && is_action_active_any_joystick(m_action_thumbrest_touch_right);
 
-        if (state->Gamepad.sThumbLY >= 16383 && thumbrest_active) {
-            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_UP;
+        if (thumbrest_active) {
+            if (state->Gamepad.sThumbLY >= 16383) {
+                state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_UP;
+            }
+
+            if (state->Gamepad.sThumbLY <= -16383) {
+                state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
+            }
+
+            if (state->Gamepad.sThumbLX >= 16383) {
+                state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
+            }
+
+            if (state->Gamepad.sThumbLX <= -16383) {
+                state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
+            }
+
             state->Gamepad.sThumbLY = 0;
-        }
-
-        if (state->Gamepad.sThumbLY <= -16383 && thumbrest_active) {
-            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
-            state->Gamepad.sThumbLY = 0;
-        }
-
-        if (state->Gamepad.sThumbLX >= 16383 && thumbrest_active) {
-            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
-            state->Gamepad.sThumbLX = 0;
-        }
-
-        if (state->Gamepad.sThumbLX <= -16383 && thumbrest_active) {
-            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
             state->Gamepad.sThumbLX = 0;
         }
     }
@@ -1917,6 +1916,8 @@ void VR::on_draw_ui() {
     ImGui::Checkbox("Disable VR Overlay", &m_disable_overlay);
     ImGui::Checkbox("Stereo Emulation Mode", &m_stereo_emulation_mode);
     ImGui::Checkbox("Wait for Present", &m_wait_for_present);
+    ImGui::Checkbox("Controllers allowed", &m_controllers_allowed);
+    ImGui::Checkbox("Controller test mode", &m_controller_test_mode);
 
     const double min_ = 0.0;
     const double max_ = 25.0;
