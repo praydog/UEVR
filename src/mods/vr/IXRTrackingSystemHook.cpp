@@ -409,6 +409,12 @@ void IXRTrackingSystemHook::initialize() {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_xr_system_flags_index not implemented");
         }
 
+        if (trackvt.GetAudioListenerOffset_index().has_value()) {
+            m_xrtracking_vtable[trackvt.GetAudioListenerOffset_index().value()] = (uintptr_t)&get_audio_listener_offset;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_audio_listener_offset_index not implemented");
+        }
+
         if (hmdvt.implemented() && trackvt.GetHMDDevice_index().has_value()) {
             m_xrtracking_vtable[trackvt.GetHMDDevice_index().value()] = (uintptr_t)+[]() -> void* {
                 SPDLOG_INFO_ONCE("GetHMDDevice called");
@@ -444,6 +450,12 @@ void IXRTrackingSystemHook::initialize() {
             m_hmd_vtable[hmdvt.ApplyHmdRotation_index().value()] = (uintptr_t)&apply_hmd_rotation;
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: apply_hmd_rotation_index not implemented");
+        }
+
+        if (hmdvt.GetAudioListenerOffset_index().has_value()) {
+            m_hmd_vtable[hmdvt.GetAudioListenerOffset_index().value()] = (uintptr_t)&get_audio_listener_offset;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_audio_listener_offset_index not implemented");
         }
     } else {
         SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: IXRTrackingSystemVT and IXRHeadMountedDisplayVT not implemented");
@@ -777,6 +789,44 @@ int32_t IXRTrackingSystemHook::get_xr_system_flags(sdk::IXRTrackingSystem* syste
     }
 
     return out;
+}
+
+void* IXRTrackingSystemHook::get_audio_listener_offset(sdk::IXRTrackingSystem*, void* a2, void* a3) {
+    SPDLOG_INFO_ONCE("get_audio_listener_offset {:x}", (uintptr_t)_ReturnAddress());
+
+    static bool is_a2_stack = !IsBadReadPtr(a2, sizeof(void*));
+
+    if (is_a2_stack) {
+        float* foffset = (float*)a2;
+        double* doffset = (double*)a2;
+
+        if (g_hook->m_stereo_hook->has_double_precision()) {
+            doffset[0] = 0.0;
+            doffset[1] = 0.0;
+            doffset[2] = 0.0;
+        } else {
+            foffset[0] = 0.0f;
+            foffset[1] = 0.0f;
+            foffset[2] = 0.0f;
+        }
+
+        return a2;
+    }
+
+    float* foffset = (float*)a3;
+    double* doffset = (double*)a3;
+
+    if (g_hook->m_stereo_hook->has_double_precision()) {
+        doffset[0] = 0.0;
+        doffset[1] = 0.0;
+        doffset[2] = 0.0;
+    } else {
+        foffset[0] = 0.0f;
+        foffset[1] = 0.0f;
+        foffset[2] = 0.0f;
+    }
+
+    return a3;
 }
 
 bool IXRTrackingSystemHook::is_hmd_connected(sdk::IHeadMountedDisplay*) {

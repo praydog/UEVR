@@ -59,6 +59,7 @@ private:
     static void get_motion_controller_data(sdk::IXRTrackingSystem*, void* world, uint32_t hand, void* motion_controller_data);
     static void get_current_pose(sdk::IXRTrackingSystem*, int32_t device_id, Quat<float>* out_rot, glm::vec3* out_pos);
     static int32_t get_xr_system_flags(sdk::IXRTrackingSystem*);
+    static void* get_audio_listener_offset(sdk::IXRTrackingSystem*, void* a2, void* a3);
 
     // IHeadMountedDisplay
     static bool is_hmd_connected(sdk::IHeadMountedDisplay*);
@@ -84,6 +85,7 @@ private:
 
     struct Camera {
         void* vtable;
+        uint8_t padding[0x100]{};
     } m_xr_camera;
 
     struct HMDDevice {
