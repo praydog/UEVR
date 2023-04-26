@@ -13,6 +13,7 @@
 
 #include "vtables/IXRTrackingSystemVTables.hpp"
 #include "structures/FXRMotionControllerData.hpp"
+#include "structures/FXRHMDData.hpp"
 #include "IXRTrackingSystemHook.hpp"
 
 detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
@@ -315,14 +316,9 @@ IXRTrackingSystemHook::IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_ho
         };
     }
 
-    struct FName {
-        int32_t a1{};
-        int32_t a2{0};
-    };
-
     // GetSystemName
-    m_xrtracking_vtable[0] = (uintptr_t)+[](void* this_ptr, FName* out) -> FName* {
-        static FName fake_name{};
+    m_xrtracking_vtable[0] = (uintptr_t)+[](void* this_ptr, ue::FName* out) -> ue::FName* {
+        static ue::FName fake_name{};
         return &fake_name;
     };
 
@@ -426,6 +422,12 @@ void IXRTrackingSystemHook::initialize() {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_motion_controller_data_index not implemented");
         }
 
+        if (trackvt.GetHMDData_index().has_value()) {
+            m_xrtracking_vtable[trackvt.GetHMDData_index().value()] = (uintptr_t)&get_hmd_data;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_hmd_data_index not implemented");
+        }
+
         if (trackvt.GetCurrentPose_index().has_value()) {
             m_xrtracking_vtable[trackvt.GetCurrentPose_index().value()] = (uintptr_t)&get_current_pose;
         } else {
@@ -438,6 +440,7 @@ void IXRTrackingSystemHook::initialize() {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_xr_system_flags_index not implemented");
         }
 
+        // Doesn't cause a crash, but must be implemented to fix audio bugs
         if (trackvt.GetAudioListenerOffset_index().has_value()) {
             m_xrtracking_vtable[trackvt.GetAudioListenerOffset_index().value()] = (uintptr_t)&get_audio_listener_offset;
         } else {
@@ -498,6 +501,12 @@ void IXRTrackingSystemHook::initialize() {
             m_hmd_vtable[hmdvt.ApplyHmdRotation_index().value()] = (uintptr_t)&apply_hmd_rotation;
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: apply_hmd_rotation_index not implemented");
+        }
+
+        if (hmdvt.IsHMDConnected_index().has_value()) {
+            m_hmd_vtable[hmdvt.IsHMDConnected_index().value()] = (uintptr_t)&is_hmd_connected;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: is_hmd_connected_index not implemented");
         }
 
         if (hmdvt.GetAudioListenerOffset_index().has_value()) {
@@ -703,8 +712,8 @@ IXRTrackingSystemHook::SharedPtr* IXRTrackingSystemHook::get_xr_camera(sdk::IXRT
 void IXRTrackingSystemHook::get_motion_controller_data(sdk::IXRTrackingSystem*, void* world, uint32_t hand, void* motion_controller_data) {
     SPDLOG_INFO_ONCE("get_motion_controller_data {:x}", (uintptr_t)_ReturnAddress());
 
-    const auto e_hand = (ue427::EControllerHand)hand;
-    const auto data = (ue427::FXRMotionControllerData*)motion_controller_data;
+    const auto e_hand = (ue::EControllerHand)hand;
+    const auto data = (ue4_27::FXRMotionControllerData*)motion_controller_data;
 
     const auto vr = VR::get();
 
@@ -719,7 +728,7 @@ void IXRTrackingSystemHook::get_motion_controller_data(sdk::IXRTrackingSystem*, 
     }
 
     switch (e_hand) {
-    case ue427::EControllerHand::Left: {
+    case ue::EControllerHand::Left: {
         data->bValid = true;
         const auto position = rotation_offset * glm::vec3{vr->get_position(vr->get_left_controller_index()) - vr->get_standing_origin()};
         const auto rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(vr->get_left_controller_index())});
@@ -735,7 +744,7 @@ void IXRTrackingSystemHook::get_motion_controller_data(sdk::IXRTrackingSystem*, 
         
         break;
     }
-    case ue427::EControllerHand::Right: {
+    case ue::EControllerHand::Right: {
         data->bValid = true;
         const auto position = rotation_offset * glm::vec3{vr->get_position(vr->get_right_controller_index()) - vr->get_standing_origin()};
         const auto rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(vr->get_right_controller_index())});
@@ -753,6 +762,31 @@ void IXRTrackingSystemHook::get_motion_controller_data(sdk::IXRTrackingSystem*, 
     default:
         break;
     }
+}
+
+void IXRTrackingSystemHook::get_hmd_data(sdk::IXRTrackingSystem*, void* world, void* hmd_data) {
+    SPDLOG_INFO_ONCE("get_hmd_data {:x}", (uintptr_t)_ReturnAddress());
+
+    const auto& vr = VR::get();
+    const auto data = (ue4_27::FXRHMDData*)hmd_data;
+    const auto world_scale = vr->get_world_to_meters();
+
+    auto rotation_offset = vr->get_rotation_offset();
+
+    if (vr->is_decoupled_pitch_enabled()) {
+        const auto pre_flat_rotation = vr->get_pre_flattened_rotation();
+        const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
+        rotation_offset = glm::normalize(pre_flat_pitch * vr->get_rotation_offset());
+    }
+
+    const auto position = rotation_offset * glm::vec3{vr->get_position(vr->get_hmd_index()) - vr->get_standing_origin()};
+    const auto rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(vr->get_hmd_index())});
+
+    // TODO: UE5
+    data->Position = utility::math::glm_to_ue4(position * world_scale);
+
+    const auto q = utility::math::glm_to_ue4(rotation);
+    data->Rotation = { q.x, q.y, q.z, q.w };
 }
 
 void IXRTrackingSystemHook::get_current_pose(sdk::IXRTrackingSystem*, int32_t device_id, Quat<float>* out_rot, glm::vec3* out_pos) {
@@ -825,8 +859,8 @@ int32_t IXRTrackingSystemHook::get_xr_system_flags(sdk::IXRTrackingSystem* syste
         out |= ECustomSystemFlags::SYSTEMFLAG_OPENXR;
     }
 
-    static const auto left_thumbrest_handle = vr->get_action_handle(VR::s_action_thumbrest_touch_left);
-    static const auto right_thumbrest_handle = vr->get_action_handle(VR::s_action_thumbrest_touch_right);
+    const auto left_thumbrest_handle = vr->get_action_handle(VR::s_action_thumbrest_touch_left);
+    const auto right_thumbrest_handle = vr->get_action_handle(VR::s_action_thumbrest_touch_right);
 
     if (vr->is_action_active_any_joystick(left_thumbrest_handle)) {
         out |= ECustomSystemFlags::SYSTEMFLAG_LEFT_THUMBREST_ACTIVE;
