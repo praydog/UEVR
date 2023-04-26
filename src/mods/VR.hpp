@@ -392,6 +392,10 @@ public:
         return value == AimMethod::LEFT_CONTROLLER || value == AimMethod::RIGHT_CONTROLLER || value == AimMethod::TWO_HANDED_LEFT || value == AimMethod::TWO_HANDED_RIGHT;
     }
 
+    bool wants_blueprint_load() const {
+        return m_load_blueprint_code->value();
+    }
+
     auto& get_fake_stereo_hook() {
         return m_fake_stereo_hook;
     }
@@ -613,6 +617,7 @@ private:
     const ModToggle::Ptr m_enable_depth{ ModToggle::create(generate_name("EnableDepth"), false) };
     const ModToggle::Ptr m_decoupled_pitch{ ModToggle::create(generate_name("DecoupledPitch"), false) };
     const ModToggle::Ptr m_decoupled_pitch_ui_adjust{ ModToggle::create(generate_name("DecoupledPitchUIAdjust"), true) };
+    const ModToggle::Ptr m_load_blueprint_code{ ModToggle::create(generate_name("LoadBlueprintCode"), false) };
 
     // Aim method and movement orientation are not the same thing, but they can both have the same options
     const ModCombo::Ptr m_aim_method{ ModCombo::create(generate_name("AimMethod"), s_aim_method_names, AimMethod::GAME) };
@@ -667,6 +672,7 @@ private:
         *m_enable_depth,
         *m_decoupled_pitch,
         *m_decoupled_pitch_ui_adjust,
+        *m_load_blueprint_code,
         *m_aim_method,
         *m_movement_orientation,
         *m_aim_speed,

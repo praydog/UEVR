@@ -1819,6 +1819,7 @@ void VR::on_draw_ui() {
     m_enable_gui->draw("Enable GUI");
     m_enable_depth->draw("Enable Depth");
     m_thumbrest_shifting->draw("Thumbrest DPad Shifting");
+    m_load_blueprint_code->draw("Load Blueprint Code");
     ImGui::EndGroup();
 
     ImGui::NextColumn();

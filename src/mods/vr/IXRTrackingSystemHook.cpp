@@ -359,11 +359,13 @@ void IXRTrackingSystemHook::on_draw_ui() {
 void IXRTrackingSystemHook::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     auto& vr = VR::get();
 
-    if (vr->is_any_aim_method_active()) {
+    if (!m_initialized && (vr->is_any_aim_method_active() || vr->wants_blueprint_load())) {
         if (!m_initialized) {
             initialize();
         }
+    }
 
+    if (vr->is_any_aim_method_active()) {
         auto& data = m_process_view_rotation_data;
 
         // This can happen if player logic stops running (e.g. player has died or entered a loading screen)
