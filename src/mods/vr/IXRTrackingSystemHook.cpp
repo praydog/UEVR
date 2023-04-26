@@ -17,7 +17,11 @@
 
 detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
     const auto str_version = utility::narrow(sdk::search_for_version(utility::get_executable()).value_or(L"0.00"));
-    const auto version = sdk::get_file_version_info();
+    auto version = sdk::get_file_version_info();
+
+    if (str_version != "0.00") {
+        version.dwFileVersionMS = 0;
+    }
 
     // >= 5.1
     if (version.dwFileVersionMS == 0x50001 || str_version.starts_with("5.1")) {
@@ -86,7 +90,11 @@ detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
 
 detail::IXRCameraVT& get_camera_vtable() {
     const auto str_version = utility::narrow(sdk::search_for_version(utility::get_executable()).value_or(L"0.00"));
-    const auto version = sdk::get_file_version_info();
+    auto version = sdk::get_file_version_info();
+
+    if (str_version != "0.00") {
+        version.dwFileVersionMS = 0;
+    }
 
     // >= 5.1
     if (version.dwFileVersionMS == 0x50001 || str_version.starts_with("5.1")) {
@@ -154,7 +162,11 @@ detail::IXRCameraVT& get_camera_vtable() {
 
 detail::IHeadMountedDisplayVT& get_hmd_vtable() {
     const auto str_version = utility::narrow(sdk::search_for_version(utility::get_executable()).value_or(L"0.00"));
-    const auto version = sdk::get_file_version_info();
+    auto version = sdk::get_file_version_info();
+
+    if (str_version != "0.00") {
+        version.dwFileVersionMS = 0;
+    }
 
     // >= 5.1
     if (version.dwFileVersionMS == 0x50001 || str_version.starts_with("5.1")) {
@@ -316,13 +328,30 @@ IXRTrackingSystemHook::IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_ho
 
     const auto version = sdk::get_file_version_info();
     const auto str_version = utility::narrow(sdk::search_for_version(utility::get_executable()).value_or(L"0.00"));
+    
+    try {
+        const auto first_half = std::stoi(str_version.substr(0, str_version.find('.')));
+        const auto second_half = std::stoi(str_version.substr(str_version.find('.') + 1, str_version.size() - 1));
 
-    if (version.dwFileVersionMS >= 0x40000 && version.dwFileVersionMS <= 0x40019) {
+        if (first_half == 4 && second_half <= 25) {
+            SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook: version <= 4.25");
+            m_is_leq_4_25 = true;
+        }
+
+        if (first_half == 4 && second_half <= 17) {
+            SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook: version <= 4.17");
+            m_is_leq_4_17 = true;
+        }
+    } catch(...) {
+        SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: failed to convert second half of version string to number");
+    }
+
+    if (!m_is_leq_4_25 && version.dwFileVersionMS >= 0x40000 && version.dwFileVersionMS <= 0x40019) {
         SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook: version <= 4.25");
         m_is_leq_4_25 = true;
     }
 
-    if (version.dwFileVersionMS >= 0x40000 && version.dwFileVersionMS <= 0x40011) {
+    if (!m_is_leq_4_17 && version.dwFileVersionMS >= 0x40000 && version.dwFileVersionMS <= 0x40011) {
         SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook: version <= 4.17");
         m_is_leq_4_17 = true;
     }
@@ -413,6 +442,25 @@ void IXRTrackingSystemHook::initialize() {
             m_xrtracking_vtable[trackvt.GetAudioListenerOffset_index().value()] = (uintptr_t)&get_audio_listener_offset;
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_audio_listener_offset_index not implemented");
+        }
+
+        // Some games calls this for some reason so it needs to be implemented so we dont crash
+        if (trackvt.GetBaseOrientation_index().has_value()) {
+            m_xrtracking_vtable[trackvt.GetBaseOrientation_index().value()] = (uintptr_t)&get_base_orientation;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_base_orientation_index not implemented");
+        }
+
+        if (trackvt.GetBasePosition_index().has_value()) {
+            m_xrtracking_vtable[trackvt.GetBasePosition_index().value()] = (uintptr_t)&get_base_position;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_base_position_index not implemented");
+        }
+
+        if (trackvt.GetBaseRotation_index().has_value()) {
+            m_xrtracking_vtable[trackvt.GetBaseRotation_index().value()] = (uintptr_t)&get_base_rotation;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_base_rotation_index not implemented");
         }
 
         if (hmdvt.implemented() && trackvt.GetHMDDevice_index().has_value()) {
@@ -710,7 +758,7 @@ void IXRTrackingSystemHook::get_motion_controller_data(sdk::IXRTrackingSystem*, 
 void IXRTrackingSystemHook::get_current_pose(sdk::IXRTrackingSystem*, int32_t device_id, Quat<float>* out_rot, glm::vec3* out_pos) {
     SPDLOG_INFO_ONCE("get_current_pose {:x}", (uintptr_t)_ReturnAddress());
 
-    const auto vr = VR::get();
+    const auto& vr = VR::get();
     const auto world_scale = vr->get_world_to_meters();
 
     auto rotation_offset = vr->get_rotation_offset();
@@ -827,6 +875,71 @@ void* IXRTrackingSystemHook::get_audio_listener_offset(sdk::IXRTrackingSystem*, 
     }
 
     return a3;
+}
+
+// Returns quaternion
+void* IXRTrackingSystemHook::get_base_orientation(sdk::IXRTrackingSystem*, void* a2) {
+    SPDLOG_INFO_ONCE("get_base_orientation {:x}", (uintptr_t)_ReturnAddress());
+
+    if (g_hook->m_stereo_hook->has_double_precision()) {
+        Quat<double>* out = (Quat<double>*)a2;
+
+        out->x = 0.0;
+        out->y = 0.0;
+        out->z = 0.0;
+        out->w = 1.0;
+    } else {
+        Quat<float>* out = (Quat<float>*)a2;
+
+        out->x = 0.0f;
+        out->y = 0.0f;
+        out->z = 0.0f;
+        out->w = 1.0f;
+    }
+
+    return a2;
+}
+
+// Returns vec3
+void* IXRTrackingSystemHook::get_base_position(sdk::IXRTrackingSystem*, void* a2) {
+    SPDLOG_INFO_ONCE("get_base_position {:x}", (uintptr_t)_ReturnAddress());
+
+    if (g_hook->m_stereo_hook->has_double_precision()) {
+        double* out = (double*)a2;
+
+        out[0] = 0.0;
+        out[1] = 0.0;
+        out[2] = 0.0;
+    } else {
+        float* out = (float*)a2;
+
+        out[0] = 0.0f;
+        out[1] = 0.0f;
+        out[2] = 0.0f;
+    }
+
+    return a2;
+}
+
+// Returns Rotator
+void* IXRTrackingSystemHook::get_base_rotation(sdk::IXRTrackingSystem*, void* a2) {
+    SPDLOG_INFO_ONCE("get_base_rotation {:x}", (uintptr_t)_ReturnAddress());
+
+    if (g_hook->m_stereo_hook->has_double_precision()) {
+        Rotator<double>* out = (Rotator<double>*)a2;
+
+        out->pitch = 0.0;
+        out->yaw = 0.0;
+        out->roll = 0.0;
+    } else {
+        Rotator<float>* out = (Rotator<float>*)a2;
+
+        out->pitch = 0.0f;
+        out->yaw = 0.0f;
+        out->roll = 0.0f;
+    }
+
+    return a2;
 }
 
 bool IXRTrackingSystemHook::is_hmd_connected(sdk::IHeadMountedDisplay*) {

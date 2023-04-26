@@ -60,6 +60,9 @@ private:
     static void get_current_pose(sdk::IXRTrackingSystem*, int32_t device_id, Quat<float>* out_rot, glm::vec3* out_pos);
     static int32_t get_xr_system_flags(sdk::IXRTrackingSystem*);
     static void* get_audio_listener_offset(sdk::IXRTrackingSystem*, void* a2, void* a3);
+    static void* get_base_orientation(sdk::IXRTrackingSystem*, void* q);
+    static void* get_base_position(sdk::IXRTrackingSystem*, void* pos);
+    static void* get_base_rotation(sdk::IXRTrackingSystem*, void* rot);
 
     // IHeadMountedDisplay
     static bool is_hmd_connected(sdk::IHeadMountedDisplay*);
