@@ -62,12 +62,12 @@ FetchContent_Declare(bddisasm
 )
 FetchContent_MakeAvailable(bddisasm)
 
-message(STATUS "Fetching kananlib (19776b59a52285862cb1fbf483cd113b6b3dd642)...")
+message(STATUS "Fetching kananlib (ba3b36ca92795ecc98fc5c06658e9d2c2831936c)...")
 FetchContent_Declare(kananlib
 	GIT_REPOSITORY
 		"https://github.com/cursey/kananlib"
 	GIT_TAG
-		19776b59a52285862cb1fbf483cd113b6b3dd642
+		ba3b36ca92795ecc98fc5c06658e9d2c2831936c
 )
 FetchContent_MakeAvailable(kananlib)
 
@@ -751,6 +751,9 @@ list(APPEND ue4poc_SOURCES
 	"src/mods/vr/runtimes/VRRuntime.hpp"
 	"src/mods/vr/shaders/ps.hpp"
 	"src/mods/vr/shaders/vs.hpp"
+	"src/mods/vr/structures/Enums.hpp"
+	"src/mods/vr/structures/FGuid.hpp"
+	"src/mods/vr/structures/FName.hpp"
 	"src/mods/vr/structures/FXRHMDData.hpp"
 	"src/mods/vr/structures/FXRMotionControllerData.hpp"
 	"src/mods/vr/vtables/IXRTrackingSystemVTables.hpp"
@@ -891,6 +894,9 @@ list(APPEND ue4poc-nolog_SOURCES
 	"src/mods/vr/runtimes/VRRuntime.hpp"
 	"src/mods/vr/shaders/ps.hpp"
 	"src/mods/vr/shaders/vs.hpp"
+	"src/mods/vr/structures/Enums.hpp"
+	"src/mods/vr/structures/FGuid.hpp"
+	"src/mods/vr/structures/FName.hpp"
 	"src/mods/vr/structures/FXRHMDData.hpp"
 	"src/mods/vr/structures/FXRMotionControllerData.hpp"
 	"src/mods/vr/vtables/IXRTrackingSystemVTables.hpp"
