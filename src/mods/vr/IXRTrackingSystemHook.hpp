@@ -68,6 +68,7 @@ private:
     // IHeadMountedDisplay
     static bool is_hmd_connected(sdk::IHeadMountedDisplay*);
     static int32_t* get_ideal_debug_canvas_render_target_size(sdk::IHeadMountedDisplay*, int32_t* out);
+    static SharedPtr* get_view_extension(sdk::IHeadMountedDisplay*, SharedPtr* out);
 
     // IXRCamera
     static void apply_hmd_rotation(sdk::IXRCamera*, void* player_controller, Rotator<float>* rot);
@@ -99,6 +100,10 @@ private:
         void* unk{nullptr};
     } m_hmd_device;
 
+    struct ViewExtension {
+        void* vtable;
+    } m_view_extension;
+
     ProcessViewRotationData m_process_view_rotation_data{};
 
     std::unique_ptr<ReferenceController> m_ref_controller{std::make_unique<ReferenceController>()};
@@ -107,9 +112,10 @@ private:
     std::array<uintptr_t, 200> m_camera_vtable{};
     std::array<uintptr_t, 200> m_hmd_vtable{}; // < 4.18
     std::array<uintptr_t, 200> m_stereo_rendering_vtable{}; // Placeholder for now, we have a real one in FFakeStereoRenderingHook
-
+    std::array<uintptr_t, 200> m_view_extension_vtable{}; // < 4.18...
 
     SharedPtr m_xr_camera_shared{};
+    SharedPtr m_view_extension_shared{};
 
     uintptr_t m_addr_of_process_view_rotation_ptr{};
     //std::unique_ptr<PointerHook> m_process_view_rotation_hook{};

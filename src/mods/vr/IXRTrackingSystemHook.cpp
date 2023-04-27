@@ -320,6 +320,12 @@ IXRTrackingSystemHook::IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_ho
         };
     }
 
+    for (auto i = 0; i < m_view_extension_vtable.size(); ++i) {
+        m_view_extension_vtable[i] = (uintptr_t)+[](void*) {
+            return nullptr;
+        };
+    }
+
     // GetSystemName
     m_xrtracking_vtable[0] = (uintptr_t)+[](void* this_ptr, ue::FName* out) -> ue::FName* {
         static ue::FName fake_name{};
@@ -520,6 +526,18 @@ void IXRTrackingSystemHook::initialize() {
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_audio_listener_offset_index not implemented");
         }
+
+        if (hmdvt.UpdatePlayerCamera_index().has_value()) {
+            m_hmd_vtable[hmdvt.UpdatePlayerCamera_index().value()] = (uintptr_t)&update_player_camera;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: update_player_camera_index not implemented");
+        }
+
+        if (hmdvt.GetViewExtension_index().has_value()) {
+            m_hmd_vtable[hmdvt.GetViewExtension_index().value()] = (uintptr_t)&get_view_extension;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_view_extension_index not implemented");
+        }
     } else {
         SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: IXRTrackingSystemVT and IXRHeadMountedDisplayVT not implemented");
     }
@@ -539,6 +557,10 @@ void IXRTrackingSystemHook::initialize() {
     } else {
         SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: IXRCameraVT not implemented");
     }
+
+    m_view_extension.vtable = m_view_extension_vtable.data();
+    m_view_extension_shared.obj = &m_view_extension;
+    m_view_extension_shared.ref_controller = nullptr;
 
     if (camera_vt.implemented()) {
         m_xr_camera.vtable = m_camera_vtable.data();
@@ -996,6 +1018,16 @@ int32_t* IXRTrackingSystemHook::get_ideal_debug_canvas_render_target_size(sdk::I
         // look into it later to see if it's even useful
         out[0] = 1024;
         out[1] = 1024;
+    }
+
+    return out;
+}
+
+IXRTrackingSystemHook::SharedPtr* IXRTrackingSystemHook::get_view_extension(sdk::IHeadMountedDisplay*, SharedPtr* out) {
+    SPDLOG_INFO_ONCE("get_view_extension {:x}", (uintptr_t)_ReturnAddress());
+
+    if (out != nullptr) {
+        *out = g_hook->m_view_extension_shared;
     }
 
     return out;
