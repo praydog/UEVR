@@ -1,9 +1,13 @@
 #include <unordered_map>
 
+#include <bdshemu.h>
 #include <spdlog/spdlog.h>
+
 #include <utility/Scan.hpp>
 #include <utility/Module.hpp>
 #include <utility/String.hpp>
+#include <utility/Emulation.hpp>
+#include <utility/Patch.hpp>
 
 #include "utility/Logging.hpp"
 
@@ -1074,10 +1078,51 @@ bool IXRTrackingSystemHook::update_player_camera(sdk::IXRCamera*, Quat<float>* r
         }
     }
 
-    //*rel_pos = glm::vec3{0.0f, 0.0f, 0.0f};
-    //*rel_rot = glm::identity<glm::quat>();
+    if (!g_hook->m_relative_transform_corrected) {
+        g_hook->m_relative_transform_corrected = true;
 
-    return false;
+        const auto return_address = (uintptr_t)_ReturnAddress();
+        const auto module_within = utility::get_module_within(return_address);
+
+        if (module_within) {
+            // We need to emulate from the return address and find the first call
+            // We need to nop out this call because it modifies the relative transform
+            // causing the player to turn into a midget in some games
+            // and also in some games causes strange rotation issues
+            utility::ShemuContext ctx{*module_within};
+
+            ctx.ctx->Registers.RegRip = return_address;
+            ctx.ctx->Registers.RegRax = 1;
+
+            utility::emulate(*module_within, return_address, 100, ctx, [](const utility::ShemuContextExtended& ctx) -> utility::ExhaustionResult {
+                if (ctx.next.writes_to_memory) {
+                    return utility::ExhaustionResult::STEP_OVER;
+                }
+    
+                if (std::string_view{ctx.next.ix.Mnemonic}.starts_with("CALL")) {
+                    SPDLOG_INFO("Creating nop patch at {:x}", ctx.ctx->ctx->Registers.RegRip);
+                    static auto patch = Patch::create_nop(ctx.ctx->ctx->Registers.RegRip, ctx.next.ix.Length);
+                    return utility::ExhaustionResult::BREAK;
+                }
+
+                return utility::ExhaustionResult::CONTINUE;
+            });
+        } else {
+            SPDLOG_WARN("Could not find module within {:x}", return_address);
+        }
+    }
+
+    if (g_hook->m_stereo_hook->has_double_precision()) {
+        *(Quat<double>*)rel_rot = { 0.0, 0.0, 0.0, 1.0};
+        double* rel_pos_d = (double*)rel_pos;
+        rel_pos_d[0] = 0.0;
+        rel_pos_d[1] = 0.0;
+        rel_pos_d[2] = 0.0;
+    } else {
+        *rel_rot = { 0.0f, 0.0f, 0.0f, 1.0f };
+        *rel_pos = { 0.0f, 0.0f, 0.0f };
+    }
+    return true;
 }
 
 void* IXRTrackingSystemHook::process_view_rotation_analyzer(void* a1, size_t a2, size_t a3, size_t a4, size_t a5, size_t a6) {
@@ -1280,9 +1325,11 @@ void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
         rot_d->pitch = euler.x;
         rot_d->yaw = euler.y;
         rot_d->roll = euler.z;
+        g_hook->m_last_view_rotation_double = *rot_d;
     } else {
         rot->pitch = euler.x;
         rot->yaw = euler.y;
         rot->roll = euler.z;
+        g_hook->m_last_view_rotation = *rot;
     }
 }

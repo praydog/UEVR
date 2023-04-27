@@ -69,6 +69,7 @@ private:
     static bool is_hmd_connected(sdk::IHeadMountedDisplay*);
     static int32_t* get_ideal_debug_canvas_render_target_size(sdk::IHeadMountedDisplay*, int32_t* out);
 
+    // IXRCamera
     static void apply_hmd_rotation(sdk::IXRCamera*, void* player_controller, Rotator<float>* rot);
     static bool update_player_camera(sdk::IXRCamera*, Quat<float>* rel_rot, glm::vec3* rel_pos);
     // This function is the precursor to actually hooking ProcessViewRotation
@@ -117,6 +118,7 @@ private:
     bool m_initialized{false};
     bool m_is_leq_4_25{false}; // <= 4.25, IsHeadTrackingAllowedForWorld does not exist
     bool m_is_leq_4_17{false}; // <= 4.17, IXRTrackingSystem and IXRCamera do not exist
+    bool m_relative_transform_corrected{false}; // For UpdatePlayerCamera, causes player to become a midget if not corrected
 
     size_t m_offset_in_engine{0};
 
