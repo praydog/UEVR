@@ -4857,19 +4857,33 @@ void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx)
         }
     }
 
-    auto texture = rtm->texture_hook_ref->texture;
+    FRHITexture2D* texture = nullptr;
 
-    // happens?
-    if (rtm->texture_hook_ref->texture == nullptr) {
-        SPDLOG_INFO(" Texture is null, trying to get it from RAX...");
+    if (rtm->texture_hook_ref != nullptr) {
+        texture = rtm->texture_hook_ref->texture;
 
-        const auto ref = (FTexture2DRHIRef*)ctx.rax;
-        texture = ref->texture;
+        // happens?
+        if (texture == nullptr) {
+            SPDLOG_INFO(" Texture is null, trying to get it from RAX...");
+
+            const auto ref = (FTexture2DRHIRef*)ctx.rax;
+
+            if (!IsBadReadPtr(ref, sizeof(void*)) && !IsBadReadPtr(ref->texture, sizeof(void*))) {
+                texture = ref->texture;
+            } else {
+                SPDLOG_ERROR(" RAX is bad! Can't get texture!");
+            }
+        }
+
+        if (texture != nullptr) {
+            SPDLOG_INFO(" Resulting texture: {:x}", (uintptr_t)texture);
+            SPDLOG_INFO(" Real resource: {:x}", (uintptr_t)texture->get_native_resource());
+        } else {
+            SPDLOG_INFO(" Texture is still null!");
+        }
     }
 
     SPDLOG_INFO(" last texture index: {}", rtm->last_texture_index);
-    SPDLOG_INFO(" Resulting texture: {:x}", (uintptr_t)texture);
-    SPDLOG_INFO(" Real resource: {:x}", (uintptr_t)texture->get_native_resource());
 
     rtm->render_target = texture;
     //rtm->ui_target = texture;
