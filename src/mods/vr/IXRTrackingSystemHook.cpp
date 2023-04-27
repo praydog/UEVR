@@ -1093,9 +1093,11 @@ bool IXRTrackingSystemHook::update_player_camera(sdk::IXRCamera*, Quat<float>* r
 
             ctx.ctx->Registers.RegRip = return_address;
             ctx.ctx->Registers.RegRax = 1;
+            ctx.ctx->MemThreshold = 100;
 
             utility::emulate(*module_within, return_address, 100, ctx, [](const utility::ShemuContextExtended& ctx) -> utility::ExhaustionResult {
                 if (ctx.next.writes_to_memory) {
+                    spdlog::info("Skipping memory write at {:x}", ctx.ctx->ctx->Registers.RegRip);
                     return utility::ExhaustionResult::STEP_OVER;
                 }
     
