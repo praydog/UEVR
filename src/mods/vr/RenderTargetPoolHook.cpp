@@ -17,7 +17,7 @@ RenderTargetPoolHook::RenderTargetPoolHook() {
 }
 
 void RenderTargetPoolHook::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
-    if (!m_attempted_hook) {
+    if (!m_attempted_hook && VR::get()->is_depth_enabled()) {
         m_attempted_hook = true;
         m_hooked = hook();
     }
