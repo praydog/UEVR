@@ -2037,6 +2037,10 @@ struct SceneViewExtensionAnalyzer {
                 return;
             }
 
+            if (vr->is_stereo_emulation_enabled()) {
+                return;
+            }
+
             const auto frame_count = *(uint32_t*)((uintptr_t)&view_family + frame_count_offset);
 
             static bool is_ue5_rdg_builder = false;
@@ -4229,10 +4233,98 @@ bool VRRenderTargetManager_Base::need_reallocate_view_target(const FViewport& Vi
         return false;
     }
 
+    if (!m_attempted_find_force_separate_rt) try {
+        m_attempted_find_force_separate_rt = true;
+
+        // Go up the stack until we find something that isn't in our module.
+        const auto our_module = g_framework->get_framework_module();
+        constexpr auto max_stack_depth = 100;
+        uintptr_t stack[max_stack_depth]{};
+
+        const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
+
+        std::optional<uintptr_t> ret_addr{};
+        std::optional<HMODULE> module_within{};
+
+        for (auto i = 0; i < depth; ++i) {
+            SPDLOG_INFO("Stack[{}]: {:x}", i, stack[i]);
+
+            module_within = utility::get_module_within(stack[i]);
+
+            if (!module_within) {
+                continue;
+            }
+
+            if (*module_within != our_module) {
+                ret_addr = stack[i];
+                break;
+            }
+        }
+
+        // Emulate from the return address and find a memory write
+        // this should contain the offset to the force separate rt bool.
+        if (ret_addr) {
+            SPDLOG_INFO("Found return address: {:x}", *ret_addr);
+
+            utility::ShemuContext ctx{*module_within};
+            ctx.ctx->Registers.RegRip = *ret_addr;
+            ctx.ctx->Registers.RegRax = 1; // As if we're returning true from this function.
+
+            utility::emulate(*module_within, *ret_addr, 100, ctx, [this](const utility::ShemuContextExtended& ctx) -> utility::ExhaustionResult {
+                SPDLOG_INFO("Emulating instruction: {:x}", ctx.ctx->ctx->Registers.RegRip);
+
+                if (ctx.next.writes_to_memory) {
+                    const auto& ix = ctx.next.ix;
+                    if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_MEM && ix.Operands[1].Type == ND_OP_REG) {
+                        // We're looking for a mov [reg1+N], reg2
+                        const auto& op0 = ix.Operands[0];
+
+                        // Needs a register
+                        if (!op0.Info.Memory.HasBase || op0.Info.Memory.IsRipRel) {
+                            return utility::ExhaustionResult::STEP_OVER;
+                        }
+
+                        // Needs a displacement
+                        if (!op0.Info.Memory.HasDisp) {
+                            return utility::ExhaustionResult::STEP_OVER;
+                        }
+
+                        // We don't want a stack based register
+                        if (op0.Info.Memory.Base == NDR_RSP || op0.Info.Memory.Base == NDR_RBP) {
+                            return utility::ExhaustionResult::STEP_OVER;
+                        }
+
+                        if (op0.Info.Memory.Disp > 0 && op0.Info.Memory.Disp < 0x2000) {
+                            m_viewport_force_separate_rt_offset = op0.Info.Memory.Disp;
+                            SPDLOG_INFO("Found force separate rt offset: {:x}", *m_viewport_force_separate_rt_offset);
+                            return utility::ExhaustionResult::BREAK;
+                        }
+                    }
+
+                    SPDLOG_INFO("Stepping over...");
+
+                    return utility::ExhaustionResult::STEP_OVER;
+                }
+
+                if (std::string_view{ctx.next.ix.Mnemonic}.starts_with("CALL")) {
+                    // We need to break out of this, we should've found the offset before the call.
+                    SPDLOG_ERROR("Failed to find force separate rt offset! Encountered call at {:x}", ctx.ctx->ctx->Registers.RegRip);
+                    return utility::ExhaustionResult::BREAK;
+                }
+
+                return utility::ExhaustionResult::CONTINUE;
+            });
+        }
+    } catch(...) { // if we dont find it, it's fine, not very many games require it.
+        SPDLOG_ERROR("Failed to find force separate rt offset! (Exception)");
+    }
+
     const auto w = VR::get()->get_hmd_width();
     const auto h = VR::get()->get_hmd_height();
 
     if (w != this->last_width || h != this->last_height || g_hook->should_recreate_textures()) {
+        SPDLOG_INFO("Reallocating view target! {} {} -> {} {}", this->last_width, this->last_height, w, h);
+
         this->last_width = w;
         this->last_height = h;
         this->wants_depth_reallocate = true;
@@ -4251,6 +4343,8 @@ bool VRRenderTargetManager_Base::need_reallocate_depth_texture(const void* Depth
     }
 
     if (this->wants_depth_reallocate) {
+        SPDLOG_INFO("Reallocating depth texture!");
+
         this->wants_depth_reallocate = false;
         return true;
     }
@@ -4911,8 +5005,6 @@ __declspec(noinline) void FFakeStereoRenderingHook::update_viewport_rhi_hook(voi
         return;
     }
 
-    auto& rtm = g_hook->get_embedded_rtm();
-
     struct FunctionInfo {
         std::vector<uintptr_t> return_addrs{}; // in order of call
         size_t count{0};
@@ -4962,13 +5054,37 @@ __declspec(noinline) void FFakeStereoRenderingHook::update_viewport_rhi_hook(voi
             return;
         }
 
-        // We only want the last function to be called.
-        // We don't need to call the original here because it will get called by the last function.
-        // if we call the original here, it will cause performance issues.
-        if (function_info.return_addrs.back() != return_addr) {
-            return;
+        if (!g_hook->m_rendertarget_manager_embedded_in_stereo_device) {
+            const auto rtm = g_hook->get_render_target_manager();
+
+            if (rtm != nullptr) {
+                if (const auto offset = rtm->get_viewport_force_separate_rt_offset()) {
+                    auto& should_force_separate_rt = *(bool*)((uintptr_t)viewport + *offset);
+
+                    if (!should_force_separate_rt) {
+                        SPDLOG_INFO_ONCE("UpdateViewportRHI was called without should_force_separate_rt being set to true, skipping.");
+                        should_force_separate_rt = true;
+                        return; // NO!!!!!!!!!!!!!!!!!!!
+                    }
+                }
+            }
+        } else {      
+            // We only want the last function to be called.
+            // We don't need to call the original here because it will get called by the last function.
+            // if we call the original here, it will cause performance issues.
+            if (function_info.return_addrs.back() != return_addr) {
+                return;
+            }
         }
     }
+
+    
+    if (!g_hook->m_rendertarget_manager_embedded_in_stereo_device) {
+        call_orig();
+        return;
+    }
+
+    auto& rtm = g_hook->get_embedded_rtm();
 
     static std::chrono::steady_clock::time_point last_time_hmd_active{};
     static bool hmd_was_active = false;
@@ -5018,7 +5134,7 @@ __declspec(noinline) void FFakeStereoRenderingHook::update_viewport_rhi_hook(voi
 }
 
 void FFakeStereoRenderingHook::attempt_hook_update_viewport_rhi(uintptr_t return_address) {
-    if (!m_rendertarget_manager_embedded_in_stereo_device || m_special_detected || m_attempted_hook_update_viewport_rhi) {
+    if (/*!m_rendertarget_manager_embedded_in_stereo_device ||*/ m_special_detected || m_attempted_hook_update_viewport_rhi) {
         return;
     }
 

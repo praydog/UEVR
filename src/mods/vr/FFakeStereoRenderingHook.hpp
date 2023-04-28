@@ -45,6 +45,10 @@ public:
 
     bool is_ue_5_0_3() const { return is_version_5_0_3; }
 
+    std::optional<size_t> get_viewport_force_separate_rt_offset() const { 
+        return m_viewport_force_separate_rt_offset; 
+    }
+
 protected:
     FRHITexture2D* ui_target{};
     FRHITexture2D* render_target{};
@@ -68,6 +72,9 @@ protected:
     uint32_t last_height{0};
 
     std::vector<uint8_t> texture_create_insn_bytes{};
+
+    std::optional<size_t> m_viewport_force_separate_rt_offset{};
+    bool m_attempted_find_force_separate_rt{false};
 };
 
 struct VRRenderTargetManager : IStereoRenderTargetManager, VRRenderTargetManager_Base {
