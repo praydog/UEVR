@@ -177,7 +177,7 @@ std::optional<uintptr_t> resolve_cvar_from_address(uintptr_t start, std::wstring
 
                 if (decoded_ref->OperandsCount == 0 || 
                     decoded_ref->Operands[0].Type != ND_OP_MEM || 
-                    decoded_ref->Operands[0].Info.Memory.Base == ND_REG_NOT_PRESENT)
+                    !decoded_ref->Operands[0].Info.Memory.HasBase)
                 {
                     SPDLOG_INFO("Scanning again, instruction at {:x} doesn't use a register", *raw_cvar_ref);
                     raw_cvar_ref = utility::scan_mnemonic(*raw_cvar_ref + utility::get_insn_size(*raw_cvar_ref), 100, "CALL");
@@ -805,10 +805,30 @@ std::optional<IConsoleVariable::VtableInfo> IConsoleVariable::locate_vtable_indi
             vtable_info.set_vtable_index = destructor_index + 1;
             auto potential_get_int_index = vtable_info.set_vtable_index + 1;
 
+            bool already_skipped = false;
+
             // means this function is GetBool or something like that.
             if (is_vfunc_pattern(vtable[potential_get_int_index], "83 79")) {
                 SPDLOG_INFO("GetBool detected, skipping ahead...");
                 potential_get_int_index += 1;
+            } else {
+                utility::exhaustive_decode((uint8_t*)vtable[potential_get_int_index], 100, [&potential_get_int_index, &already_skipped](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
+                    if (already_skipped) {
+                        return utility::ExhaustionResult::BREAK;
+                    }
+                    
+                    const uint8_t* bytes = (uint8_t*)ip;
+
+                    // setnz al
+                    if (bytes[0] == 0x0F && bytes[1] == 0x95 && bytes[2] == 0xC0) {
+                        SPDLOG_INFO("GetBool detected, skipping ahead...");
+                        potential_get_int_index += 1;
+                        already_skipped = true;
+                        return utility::ExhaustionResult::BREAK;
+                    }
+
+                    return utility::ExhaustionResult::CONTINUE;
+                });
             }
 
             vtable_info.get_int_vtable_index = potential_get_int_index;
