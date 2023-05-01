@@ -8,11 +8,14 @@
 #include <utility/Registry.hpp>
 #include <utility/ScopeGuard.hpp>
 
+#include<sdk/Globals.hpp>
 #include <sdk/CVar.hpp>
 
 #include "sdk/threading/GameThreadWorker.hpp"
 #include "Framework.hpp"
 #include "frameworkConfig.hpp"
+
+#include "utility/Logging.hpp"
 
 #include "VR.hpp"
 
@@ -1123,6 +1126,13 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     update_action_states();
 }
 
+void VR::on_pre_viewport_client_draw(void* viewport_client, void* viewport, void* canvas){
+    if (m_custom_z_near_enabled->value()) {
+        SPDLOG_INFO_ONCE("Attempting to set custom z near");
+        sdk::globals::get_near_clipping_plane() = m_custom_z_near->value();
+    }
+}
+
 void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
     std::scoped_lock _{m_reinitialize_mtx};
 
@@ -1820,6 +1830,22 @@ void VR::on_draw_ui() {
     m_enable_depth->draw("Enable Depth");
     m_thumbrest_shifting->draw("Thumbrest DPad Shifting");
     m_load_blueprint_code->draw("Load Blueprint Code");
+
+    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+    if (ImGui::TreeNode("Near Clip Plane")) {
+        m_custom_z_near_enabled->draw("Enable");
+
+        if (m_custom_z_near_enabled->value()) {
+            m_custom_z_near->draw("Value");
+
+            if (m_custom_z_near->value() <= 0.0f) {
+                m_custom_z_near->value() = 0.01f;
+            }
+        }
+
+        ImGui::TreePop();
+    }
+
     ImGui::EndGroup();
 
     ImGui::NextColumn();

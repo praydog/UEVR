@@ -7,7 +7,7 @@
 
 namespace sdk {
 namespace globals {
-float get_near_clipping_plane() {
+float& get_near_clipping_plane() {
     // There's a few string references we can use here,
     // There's the console command, "r.SetNearClipPlane",
     // But there's also, "bEnableOnScreenDebugMessages", GNearClippingPlane is set shortly after that
@@ -141,7 +141,8 @@ float get_near_clipping_plane() {
     }();
 
     if (result == nullptr) {
-        return 1.0f; // yolo
+        static float dummy = 1.0f;
+        return dummy;
     }
 
     return *result;

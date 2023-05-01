@@ -2,6 +2,6 @@
 
 namespace sdk {
 namespace globals {
-float get_near_clipping_plane(); // GNearClippingPlane
+float& get_near_clipping_plane(); // GNearClippingPlane
 }
 }

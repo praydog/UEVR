@@ -103,6 +103,7 @@ public:
     void update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_controller);
 
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
+    void on_pre_viewport_client_draw(void* viewport_client, void* viewport, void* canvas) override;
 
     void update_hmd_state(bool from_view_extensions = false, uint32_t frame_count = 0);
     void update_action_states();
@@ -638,6 +639,9 @@ private:
     const ModSlider::Ptr m_world_scale{ ModSlider::create(generate_name("WorldScale"), 0.01f, 10.0f, 1.0f) };
     const ModSlider::Ptr m_depth_scale{ ModSlider::create(generate_name("DepthScale"), 0.01f, 1.0f, 1.0f) };
 
+    const ModSlider::Ptr m_custom_z_near{ ModSlider::create(generate_name("CustomZNear"), 0.001f, 100.0f, 0.01f) };
+    const ModToggle::Ptr m_custom_z_near_enabled{ ModToggle::create(generate_name("EnableCustomZNear"), false) };
+
     struct DecoupledPitchData {
         mutable std::shared_mutex mtx{};
         glm::quat pre_flattened_rotation{};
@@ -685,6 +689,8 @@ private:
         *m_camera_up_offset,
         *m_world_scale,
         *m_depth_scale,
+        *m_custom_z_near,
+        *m_custom_z_near_enabled,
     };
     
 
