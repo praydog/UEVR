@@ -4999,8 +4999,23 @@ __declspec(noinline) void FFakeStereoRenderingHook::update_viewport_rhi_hook(voi
     SPDLOG_INFO_ONCE("UpdateViewportRHI (embedded): {:x}", (uintptr_t)_ReturnAddress());
 
     const auto hmd_active = VR::get()->is_hmd_active();
+    static bool modified_use_separate_rt = false;
 
     if (!hmd_active) {
+        if (modified_use_separate_rt) {
+            modified_use_separate_rt = false;
+
+            const auto rtm = g_hook->get_render_target_manager();
+
+            if (rtm != nullptr) {
+                if (const auto offset = rtm->get_viewport_force_separate_rt_offset()) {
+                    SPDLOG_INFO_ONCE("Resetting bUseSeparateRenderTarget to false!");
+                    auto& use_separate_rt = *(bool*)((uintptr_t)viewport + (*offset - 1));
+                    use_separate_rt = false;
+                }
+            }
+        }
+
         call_orig();
         return;
     }
@@ -5046,7 +5061,7 @@ __declspec(noinline) void FFakeStereoRenderingHook::update_viewport_rhi_hook(voi
             return;
         }
 
-        const auto& function_info = function_infos[function_within->second];
+        const auto& function_info = function_infos[function_within->second]; 
 
         // We only care about corrections where UpdateViewportRHI is called more than once in the same function.
         if (function_info.count <= 1 || function_info.return_addrs.empty()) {
@@ -5060,10 +5075,13 @@ __declspec(noinline) void FFakeStereoRenderingHook::update_viewport_rhi_hook(voi
             if (rtm != nullptr) {
                 if (const auto offset = rtm->get_viewport_force_separate_rt_offset()) {
                     auto& should_force_separate_rt = *(bool*)((uintptr_t)viewport + *offset);
+                    auto& use_separate_rt = *(bool*)((uintptr_t)viewport + (*offset - 1));
 
                     if (!should_force_separate_rt) {
                         SPDLOG_INFO_ONCE("UpdateViewportRHI was called without should_force_separate_rt being set to true, skipping.");
                         should_force_separate_rt = true;
+                        use_separate_rt = true;
+                        modified_use_separate_rt = true;
                         return; // NO!!!!!!!!!!!!!!!!!!!
                     }
                 }
