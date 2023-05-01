@@ -656,12 +656,16 @@ bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
 
     auto& vr = VR::get();
 
-    if (!vr->is_hmd_active() || !vr->is_any_aim_method_active()) {
+    if (!vr->is_hmd_active()) {
         return false;
     }
 
     if (g_hook->m_is_leq_4_17) {
         return true;
+    }
+
+    if (!vr->is_any_aim_method_active()) {
+        return false;
     }
 
     if (!g_hook->m_process_view_rotation_hook && !g_hook->m_attempted_hook_view_rotation) {
