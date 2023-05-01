@@ -816,6 +816,11 @@ std::optional<IConsoleVariable::VtableInfo> IConsoleVariable::locate_vtable_indi
                     if (already_skipped) {
                         return utility::ExhaustionResult::BREAK;
                     }
+
+                    // Only care about the main body of the function
+                    if (std::string_view{ix.Mnemonic}.starts_with("CALL")) {
+                        return utility::ExhaustionResult::STEP_OVER;
+                    }
                     
                     const uint8_t* bytes = (uint8_t*)ip;
 
