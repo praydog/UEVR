@@ -157,10 +157,15 @@ private:
 
         // Ints
         std::make_unique<CVarStandard>(L"Renderer", L"r.DefaultFeature.AntiAliasing", CVar::Type::INT, 0, 2),
+        std::make_unique<CVarStandard>(L"Renderer", L"r.TemporalAA.Algorithm", CVar::Type::INT, 0, 1),
+        std::make_unique<CVarStandard>(L"Renderer", L"r.TemporalAA.Upsampling", CVar::Type::INT, 0, 1),
+        std::make_unique<CVarStandard>(L"Renderer", L"r.Upscale.Quality", CVar::Type::INT, 0, 5),
         std::make_unique<CVarStandard>(L"Renderer", L"r.LightCulling.Quality", CVar::Type::INT, 0, 2),
         std::make_unique<CVarStandard>(L"Renderer", L"r.SubsurfaceScattering", CVar::Type::INT, 0, 2),
         
         // Floats
+        std::make_unique<CVarStandard>(L"Renderer", L"r.Upscale.Softness", CVar::Type::FLOAT, 0.0f, 1.0f),
+        std::make_unique<CVarStandard>(L"Renderer", L"r.ScreenPercentage", CVar::Type::FLOAT, 10.0f, 150.0f),
     };
 
     static inline std::vector<std::shared_ptr<CVarData>> s_default_data_cvars {
