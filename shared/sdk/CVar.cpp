@@ -827,6 +827,22 @@ std::optional<IConsoleVariable::VtableInfo> IConsoleVariable::locate_vtable_indi
                         return utility::ExhaustionResult::BREAK;
                     }
 
+                    // xor al, al
+                    if (bytes[0] == 0x32 && bytes[1] == 0xC0) {
+                        SPDLOG_INFO("GetBool detected, skipping ahead...");
+                        potential_get_int_index += 1;
+                        already_skipped = true;
+                        return utility::ExhaustionResult::BREAK;
+                    }
+
+                    // mov al, 01
+                    if (bytes[0] == 0xB0 && bytes[1] == 0x01) {
+                        SPDLOG_INFO("GetBool detected, skipping ahead...");
+                        potential_get_int_index += 1;
+                        already_skipped = true;
+                        return utility::ExhaustionResult::BREAK;
+                    }
+
                     return utility::ExhaustionResult::CONTINUE;
                 });
             }
