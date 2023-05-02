@@ -1563,7 +1563,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
     // Dummy projection layers for Virtual Desktop. If we don't do this, timewarp does not work correctly on VD.
     // the reasoning from ggodin (VD dev) is that VD composites all layers using the top layer's pose (apparently)
     // I am actually not sure why this fixes the issue, but it does. and even makes the SteamVR overlay work completely fine.
-    const auto should_push_dummy = this->push_dummy_projection == true;
+    const auto should_push_dummy = this->push_dummy_projection == true && !pipelined_stage_views.empty();
 
     XrCompositionLayerProjection dummy_projection_layer{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
     std::array<XrCompositionLayerProjectionView, 2> dummy_projection_layer_views{};
@@ -1571,7 +1571,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
     if (should_push_dummy) {
         const auto& vd_swapchain = this->swapchains[(uint32_t)OpenXR::SwapchainIndex::DUMMY_VIRTUAL_DESKTOP];
 
-        for (auto i = 0; i < dummy_projection_layer_views.size(); ++i) {
+        for (auto i = 0; i < std::min<size_t>(dummy_projection_layer_views.size(), pipelined_stage_views.size()); ++i) {
             auto& view = dummy_projection_layer_views[i];
             view = {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW};
             view.pose = pipelined_stage_views[i].pose;
@@ -1592,7 +1592,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
 
     // we CANT push the layers every time, it cause some layer error
     // in xrEndFrame, so we must only do it when shouldRender is true
-    if (pipelined_frame_state.shouldRender == XR_TRUE) {
+    if (pipelined_frame_state.shouldRender == XR_TRUE && !pipelined_stage_views.empty()) {
         projection_layer_views.resize(pipelined_stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
         depth_layers.resize(projection_layer_views.size(), {XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR});
 
@@ -1700,7 +1700,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
     }
 
     XrFrameEndInfo frame_end_info{XR_TYPE_FRAME_END_INFO};
-    frame_end_info.displayTime = pipelined_frame_state.predictedDisplayTime;
+    frame_end_info.displayTime = pipelined_frame_state.predictedDisplayTime != 0 ? pipelined_frame_state.predictedDisplayTime : this->frame_state.predictedDisplayTime;
     frame_end_info.environmentBlendMode = this->blend_mode;
     frame_end_info.layerCount = (uint32_t)layers.size();
     frame_end_info.layers = layers.data();
@@ -1718,7 +1718,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
 
         if (result == XR_ERROR_TIME_INVALID) {
              spdlog::error("[VR] xrEndFrame time: submitted: {} vs frame_state: {}", frame_end_info.displayTime, this->frame_state.predictedDisplayTime);
-             spdlog::error("[VR] display time diff: {}", pipelined_frame_state.predictedDisplayTime - this->frame_state.predictedDisplayTime);
+             spdlog::error("[VR] display time diff: {}", frame_end_info.displayTime - this->frame_state.predictedDisplayTime);
         }
     }
     
