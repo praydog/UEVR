@@ -146,6 +146,8 @@ struct VRRuntime {
 
     std::array<Matrix4x4f, 2> projections{};
     std::array<Matrix4x4f, 2> eyes{};
+    std::array<Matrix4x4f, 2> aim_matrices{};
+    std::array<Matrix4x4f, 2> grip_matrices{};
 
     mutable std::shared_mutex projections_mtx{};
     mutable std::shared_mutex eyes_mtx{};

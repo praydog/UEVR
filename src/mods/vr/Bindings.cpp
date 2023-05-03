@@ -21,6 +21,10 @@ std::string VR::actions_json = R"(
       "name": "/actions/default/in/Pose",
       "type": "pose"
     },
+   {
+      "name": "/actions/default/in/GripPose",
+      "type": "pose"
+    },
     {
       "name": "/actions/default/in/Trigger",
       "type": "boolean"

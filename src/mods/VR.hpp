@@ -117,14 +117,33 @@ public:
     }
 
 
-    Vector4f get_position(uint32_t index)  const;
+    Vector4f get_position(uint32_t index, bool grip = true)  const;
     Vector4f get_velocity(uint32_t index)  const;
     Vector4f get_angular_velocity(uint32_t index)  const;
     Matrix4x4f get_hmd_rotation(uint32_t frame_count) const;
     Matrix4x4f get_hmd_transform(uint32_t frame_count) const;
-    Matrix4x4f get_rotation(uint32_t index)  const;
-    Matrix4x4f get_transform(uint32_t index) const;
+    Matrix4x4f get_rotation(uint32_t index, bool grip = true)  const;
+    Matrix4x4f get_transform(uint32_t index, bool grip = true) const;
     vr::HmdMatrix34_t get_raw_transform(uint32_t index) const;
+
+    Vector4f get_grip_position(uint32_t index) const {
+        return get_position(index, true);
+    }
+
+    Vector4f get_aim_position(uint32_t index) const {
+        return get_position(index, false);
+    }
+
+    Matrix4x4f get_grip_rotation(uint32_t index) const {
+        return get_rotation(index, true);
+    }
+
+    Matrix4x4f get_aim_rotation(uint32_t index) const {
+        return get_rotation(index, false);
+    }
+    
+    Matrix4x4f get_grip_transform(uint32_t hand_index) const;
+    Matrix4x4f get_aim_transform(uint32_t hand_index) const;
 
     Vector4f get_eye_offset(VRRuntime::Eye eye) const;
     Vector4f get_current_offset();

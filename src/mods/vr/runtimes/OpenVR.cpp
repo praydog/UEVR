@@ -42,12 +42,22 @@ VRRuntime::Error OpenVR::update_poses(bool from_view_extensions, uint32_t frame_
         const auto res1 = vr::VRInput()->GetPoseActionDataForNextFrame(this->pose_action, vr::TrackingUniverseStanding, &left_pose_data, sizeof(left_pose_data), this->left_controller_handle);
         const auto res2 = vr::VRInput()->GetPoseActionDataForNextFrame(this->pose_action, vr::TrackingUniverseStanding, &right_pose_data, sizeof(right_pose_data), this->right_controller_handle);
 
-        if (res1 == vr::VRInputError_None && this->left_controller_index < this->render_poses.size()) {
-            this->render_poses[this->left_controller_index] = left_pose_data.pose;
+        if (this->left_controller_index < this->render_poses.size()) {
+            if (res1 == vr::VRInputError_None) {
+                const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&left_pose_data.pose.mDeviceToAbsoluteTracking };
+                this->aim_matrices[VRRuntime::Hand::LEFT] = glm::rowMajor4(matrix);
+            }
+
+            this->grip_matrices[VRRuntime::Hand::LEFT] = Matrix4x4f{ *(Matrix3x4f*)&this->render_poses[this->left_controller_index].mDeviceToAbsoluteTracking.m };
         }
 
-        if (res2 == vr::VRInputError_None && this->right_controller_index < this->render_poses.size()) {
-            this->render_poses[this->right_controller_index] = right_pose_data.pose;
+        if (this->right_controller_index < this->render_poses.size()) {
+            if (res2 == vr::VRInputError_None) {
+                const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&right_pose_data.pose.mDeviceToAbsoluteTracking };
+                this->aim_matrices[VRRuntime::Hand::RIGHT] = glm::rowMajor4(matrix);
+            }
+
+            this->grip_matrices[VRRuntime::Hand::RIGHT] = Matrix4x4f{ *(Matrix3x4f*)&this->render_poses[this->right_controller_index].mDeviceToAbsoluteTracking.m };
         }
     }
 

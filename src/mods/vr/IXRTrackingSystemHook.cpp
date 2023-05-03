@@ -762,33 +762,48 @@ void IXRTrackingSystemHook::get_motion_controller_data(sdk::IXRTrackingSystem*, 
     switch (e_hand) {
     case ue::EControllerHand::Left: {
         data->bValid = true;
-        const auto position = rotation_offset * glm::vec3{vr->get_position(vr->get_left_controller_index()) - vr->get_standing_origin()};
-        const auto rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(vr->get_left_controller_index())});
+        const auto left_aim_transform = vr->get_aim_transform(vr->get_left_controller_index());
+        const auto left_grip_transform = vr->get_grip_transform(vr->get_left_controller_index());
 
-        const auto final_position = utility::math::glm_to_ue4(position * world_scale);
-        const auto final_rotation = utility::math::glm_to_ue4(rotation);
-        //data->GripRotation = { -final_rotation.z, final_rotation.x, final_rotation.y, -final_rotation.w };
-        data->GripRotation = { final_rotation.x, final_rotation.y, final_rotation.z, final_rotation.w };
-        data->GripPosition = final_position;
+        const auto aim_position = rotation_offset * glm::vec3{left_aim_transform[3] - vr->get_standing_origin()};
+        const auto aim_rotation = glm::normalize(rotation_offset * glm::quat{left_aim_transform});
+        const auto grip_position = rotation_offset * glm::vec3{left_grip_transform[3] - vr->get_standing_origin()};
+        const auto grip_rotation = glm::normalize(rotation_offset * glm::quat{left_grip_transform});
 
-        data->AimRotation = data->GripRotation;
-        data->AimPosition = data->GripPosition;
+        const auto final_aim_position = utility::math::glm_to_ue4(aim_position * world_scale);
+        const auto final_aim_rotation = utility::math::glm_to_ue4(aim_rotation);
+        const auto final_grip_position = utility::math::glm_to_ue4(grip_position * world_scale);
+        const auto final_grip_rotation = utility::math::glm_to_ue4(grip_rotation);
+
+        data->GripRotation = { final_grip_rotation.x, final_grip_rotation.y, final_grip_rotation.z, final_grip_rotation.w };
+        data->GripPosition = final_grip_position;
+
+        data->AimRotation = { final_aim_rotation.x, final_aim_rotation.y, final_aim_rotation.z, final_aim_rotation.w };
+        data->AimPosition = final_aim_position;
         
         break;
     }
     case ue::EControllerHand::Right: {
         data->bValid = true;
-        const auto position = rotation_offset * glm::vec3{vr->get_position(vr->get_right_controller_index()) - vr->get_standing_origin()};
-        const auto rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(vr->get_right_controller_index())});
+        const auto right_aim_transform = vr->get_aim_transform(vr->get_right_controller_index());
+        const auto right_grip_transform = vr->get_grip_transform(vr->get_right_controller_index());
 
-        const auto final_position = utility::math::glm_to_ue4(position * world_scale);
-        const auto final_rotation = utility::math::glm_to_ue4(rotation);
-        //data->GripRotation = { -final_rotation.z, final_rotation.x, final_rotation.y, -final_rotation.w };
-        data->GripRotation = { final_rotation.x, final_rotation.y, final_rotation.z, final_rotation.w };
-        data->GripPosition = final_position;
+        const auto aim_position = rotation_offset * glm::vec3{right_aim_transform[3] - vr->get_standing_origin()};
+        const auto aim_rotation = glm::normalize(rotation_offset * glm::quat{right_aim_transform});
+        const auto grip_position = rotation_offset * glm::vec3{right_grip_transform[3] - vr->get_standing_origin()};
+        const auto grip_rotation = glm::normalize(rotation_offset * glm::quat{right_grip_transform});
 
-        data->AimRotation = data->GripRotation;
-        data->AimPosition = data->GripPosition;
+        const auto final_aim_position = utility::math::glm_to_ue4(aim_position * world_scale);
+        const auto final_aim_rotation = utility::math::glm_to_ue4(aim_rotation);
+        const auto final_grip_position = utility::math::glm_to_ue4(grip_position * world_scale);
+        const auto final_grip_rotation = utility::math::glm_to_ue4(grip_rotation);
+
+        data->GripRotation = { final_grip_rotation.x, final_grip_rotation.y, final_grip_rotation.z, final_grip_rotation.w };
+        data->GripPosition = final_grip_position;
+
+        data->AimRotation = { final_aim_rotation.x, final_aim_rotation.y, final_aim_rotation.z, final_aim_rotation.w };
+        data->AimPosition = final_aim_position;
+
         break;
     }
     default:
@@ -1290,22 +1305,22 @@ void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
 
         if (aim_type == VR::AimMethod::RIGHT_CONTROLLER || aim_type == VR::AimMethod::LEFT_CONTROLLER) {
             const auto controller_index = aim_type == VR::AimMethod::RIGHT_CONTROLLER ? vr->get_right_controller_index() : vr->get_left_controller_index();
-            og_controller_rot = glm::quat{vr->get_rotation(controller_index)};
-            og_controller_pos = glm::vec3{vr->get_position(controller_index)};
+            og_controller_rot = glm::quat{vr->get_aim_rotation(controller_index)};
+            og_controller_pos = glm::vec3{vr->get_aim_position(controller_index)};
             right_controller_forward = og_controller_rot * glm::vec3{0.0f, 0.0f, 1.0f};
         } else if (aim_type == VR::AimMethod::TWO_HANDED_RIGHT) { // two handed modes are for imitating rifle aiming
             const auto right_controller_index = vr->get_right_controller_index();
             const auto left_controller_index = vr->get_left_controller_index();
-            const auto pos_delta = glm::normalize(glm::vec3{vr->get_position(left_controller_index) - vr->get_position(right_controller_index)});
+            const auto pos_delta = glm::normalize(glm::vec3{vr->get_aim_position(left_controller_index) - vr->get_aim_position(right_controller_index)});
             og_controller_rot = utility::math::to_quat(pos_delta);
-            og_controller_pos = glm::vec3{vr->get_position(right_controller_index)};
+            og_controller_pos = glm::vec3{vr->get_aim_position(right_controller_index)};
             right_controller_forward = og_controller_rot * glm::vec3{0.0f, 0.0f, -1.0f};
         } else if (aim_type == VR::AimMethod::TWO_HANDED_LEFT) {
             const auto right_controller_index = vr->get_right_controller_index();
             const auto left_controller_index = vr->get_left_controller_index();
-            const auto pos_delta = glm::normalize(glm::vec3{vr->get_position(right_controller_index) - vr->get_position(left_controller_index)});
+            const auto pos_delta = glm::normalize(glm::vec3{vr->get_aim_position(right_controller_index) - vr->get_aim_position(left_controller_index)});
             og_controller_rot = utility::math::to_quat(pos_delta);
-            og_controller_pos = glm::vec3{vr->get_position(left_controller_index)};
+            og_controller_pos = glm::vec3{vr->get_aim_position(left_controller_index)};
             right_controller_forward = og_controller_rot * glm::vec3{0.0f, 0.0f, -1.0f};
         }
         // We need to construct a sightline from the standing origin to the direction the controller is facing

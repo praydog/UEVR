@@ -280,14 +280,29 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
 
     pipeline_state.view_space_location = this->view_space_location;
 
-    for (auto& hand : this->hands) {
-        hand.location.next = &hand.velocity;
-        result = xrLocateSpace(hand.space, this->stage_space, display_time, &hand.location);
+    for (auto i = 0; i < this->hands.size(); ++i) {
+        auto& hand = this->hands[i];
+        hand.aim_location.next = &hand.aim_velocity;
+        result = xrLocateSpace(hand.aim_space, this->stage_space, display_time, &hand.aim_location);
 
         if (result != XR_SUCCESS) {
             spdlog::error("[VR] xrLocateSpace for hand space failed: {}", this->get_result_string(result));
             return (VRRuntime::Error)result;
         }
+
+        this->aim_matrices[i] = Matrix4x4f{runtimes::OpenXR::to_glm(hand.aim_location.pose.orientation)};
+        this->aim_matrices[i][3] = Vector4f{*(Vector3f*)&hand.aim_location.pose.position, 1.0f};
+
+        hand.grip_location.next = &hand.grip_velocity;
+        result = xrLocateSpace(hand.grip_space, this->stage_space, display_time, &hand.grip_location);
+
+        if (result != XR_SUCCESS) {
+            spdlog::error("[VR] xrLocateSpace for hand space failed: {}", this->get_result_string(result));
+            return (VRRuntime::Error)result;
+        }
+
+        this->grip_matrices[i] = Matrix4x4f{runtimes::OpenXR::to_glm(hand.grip_location.pose.orientation)};
+        this->grip_matrices[i][3] = Vector4f{*(Vector3f*)&hand.grip_location.pose.position, 1.0f};
     }
 
     this->needs_pose_update = false;
@@ -474,21 +489,39 @@ VRRuntime::Error OpenXR::update_input() {
         hand.forced_actions.clear();
 
         // Update controller pose state
-        XrActionStateGetInfo get_info{XR_TYPE_ACTION_STATE_GET_INFO};
-        get_info.subactionPath = hand.path;
-        get_info.action = this->action_set.action_map["pose"];
+        {
+            XrActionStateGetInfo get_info{XR_TYPE_ACTION_STATE_GET_INFO};
+            get_info.subactionPath = hand.path;
+            get_info.action = this->action_set.action_map["grippose"];
 
-        XrActionStatePose pose_state{XR_TYPE_ACTION_STATE_POSE};
+            XrActionStatePose pose_state{XR_TYPE_ACTION_STATE_POSE};
 
-        result = xrGetActionStatePose(this->session, &get_info, &pose_state);
+            result = xrGetActionStatePose(this->session, &get_info, &pose_state);
 
-        if (result != XR_SUCCESS) {
-            spdlog::error("[VR] Failed to get action state pose {}: {}", i, this->get_result_string(result));
+            if (result != XR_SUCCESS) {
+                spdlog::error("[VR] Failed to get action state pose {}: {}", i, this->get_result_string(result));
 
-            return (VRRuntime::Error)result;
+                return (VRRuntime::Error)result;
+            }
+
+            hand.active = pose_state.isActive;
         }
 
-        hand.active = pose_state.isActive;
+        {
+            XrActionStateGetInfo get_info{XR_TYPE_ACTION_STATE_GET_INFO};
+            get_info.subactionPath = hand.path;
+            get_info.action = this->action_set.action_map["pose"];
+
+            XrActionStatePose pose_state{XR_TYPE_ACTION_STATE_POSE};
+
+            result = xrGetActionStatePose(this->session, &get_info, &pose_state);
+
+            if (result != XR_SUCCESS) {
+                spdlog::error("[VR] Failed to get action state pose {}: {}", i, this->get_result_string(result));
+
+                return (VRRuntime::Error)result;
+            }
+        }
 
         // Handle vector activator stuff
         for (auto& it : hand.profiles[current_interaction_profile].vector_activators) {
@@ -740,7 +773,7 @@ std::optional<std::string> OpenXR::initialize_actions(const std::string& json_st
         action_create_info.countSubactionPaths = (uint32_t)hand_paths.size();
         action_create_info.subactionPaths = hand_paths.data();
 
-        if (action_name == "pose") {
+        if (action_name == "pose" || action_name == "grippose") {
             has_pose_action = true;
         }
 
@@ -955,15 +988,30 @@ std::optional<std::string> OpenXR::initialize_actions(const std::string& json_st
     }
 
     // Create the action spaces for each hand
+    // Grip space
     for (auto i = 0; i < 2; ++i) {
-        spdlog::info("[VR] Creating action space for hand {}", i);
+        spdlog::info("[VR] Creating grip action space for hand {}", i);
+        
+        XrActionSpaceCreateInfo action_space_create_info{XR_TYPE_ACTION_SPACE_CREATE_INFO};
+        action_space_create_info.action = this->action_set.action_map["grippose"];
+        action_space_create_info.subactionPath = this->hands[i].path;
+        action_space_create_info.poseInActionSpace.orientation.w = 1.0f;
+
+        if (auto result = xrCreateActionSpace(this->session, &action_space_create_info, &this->hands[i].grip_space); result != XR_SUCCESS) {
+            return "xrCreateActionSpace failed (" + std::to_string(i) + ")" + this->get_result_string(result);
+        }
+    }
+
+    // Aim space
+    for (auto i = 0; i < 2; ++i) {
+        spdlog::info("[VR] Creating aim action space for hand {}", i);
         
         XrActionSpaceCreateInfo action_space_create_info{XR_TYPE_ACTION_SPACE_CREATE_INFO};
         action_space_create_info.action = this->action_set.action_map["pose"];
         action_space_create_info.subactionPath = this->hands[i].path;
         action_space_create_info.poseInActionSpace.orientation.w = 1.0f;
 
-        if (auto result = xrCreateActionSpace(this->session, &action_space_create_info, &this->hands[i].space); result != XR_SUCCESS) {
+        if (auto result = xrCreateActionSpace(this->session, &action_space_create_info, &this->hands[i].aim_space); result != XR_SUCCESS) {
             return "xrCreateActionSpace failed (" + std::to_string(i) + ")" + this->get_result_string(result);
         }
     }

@@ -352,10 +352,13 @@ public:
     };
 
     struct HandData {
-        XrSpace space{XR_NULL_HANDLE};
+        XrSpace grip_space{XR_NULL_HANDLE};
+        XrSpace aim_space{XR_NULL_HANDLE};
         XrPath path{XR_NULL_PATH};
-        XrSpaceLocation location{XR_TYPE_SPACE_LOCATION};
-        XrSpaceVelocity velocity{XR_TYPE_SPACE_VELOCITY};
+        XrSpaceLocation aim_location{XR_TYPE_SPACE_LOCATION};
+        XrSpaceVelocity aim_velocity{XR_TYPE_SPACE_VELOCITY};
+        XrSpaceLocation grip_location{XR_TYPE_SPACE_LOCATION};
+        XrSpaceVelocity grip_velocity{XR_TYPE_SPACE_VELOCITY};
         
         // interaction profile -> action -> path map
         struct InteractionProfile {
@@ -399,6 +402,7 @@ public:
 
     static inline std::vector<InteractionBinding> s_bindings_map {
         {"/user/hand/*/input/aim/pose", "pose"},
+        {"/user/hand/*/input/grip/pose", "grippose"},
         {"/user/hand/*/input/trigger", "trigger"}, // oculus?
         {"/user/hand/*/input/squeeze", "grip"}, // oculus/vive/index
 
