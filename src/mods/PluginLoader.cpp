@@ -810,7 +810,7 @@ void PluginLoader::attempt_unload_plugins() {
 
 void PluginLoader::reload_plugins() {
     early_init();
-    on_initialize();
+    on_initialize_d3d_thread();
 }
 
 void PluginLoader::on_draw_ui() {
