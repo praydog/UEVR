@@ -11,7 +11,7 @@
 #define UEVR_IN
 #define UEVR_OUT
 
-#define UEVR_PLUGIN_VERSION_MAJOR 1
+#define UEVR_PLUGIN_VERSION_MAJOR 2
 #define UEVR_PLUGIN_VERSION_MINOR 0
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
@@ -248,6 +248,12 @@ typedef struct {
     void (*get_pose)(UEVR_TrackedDeviceIndex index, UEVR_Vector3f* out_position, UEVR_Quaternionf* out_rotation);
     void (*get_transform)(UEVR_TrackedDeviceIndex index, UEVR_Matrix4x4f* out_transform);
 
+    /* For getting grip or aim poses for the controllers */
+    void (*get_grip_pose)(UEVR_TrackedDeviceIndex index, UEVR_Vector3f* out_position, UEVR_Quaternionf* out_rotation);
+    void (*get_aim_pose)(UEVR_TrackedDeviceIndex index, UEVR_Vector3f* out_position, UEVR_Quaternionf* out_rotation);
+    void (*get_grip_transform)(UEVR_TrackedDeviceIndex index, UEVR_Matrix4x4f* out_transform);
+    void (*get_aim_transform)(UEVR_TrackedDeviceIndex index, UEVR_Matrix4x4f* out_transform);
+
     void (*get_eye_offset)(UEVR_Eye eye, UEVR_Vector3f* out_position);
 
     /* Converted to UE projection matrix */
@@ -259,10 +265,14 @@ typedef struct {
     UEVR_ActionHandle (*get_action_handle)(const char* action_path);
 
     bool (*is_action_active)(UEVR_ActionHandle action, UEVR_InputSourceHandle source);
+    bool (*is_action_active_any_joystick)(UEVR_ActionHandle action);
     void (*get_joystick_axis)(UEVR_InputSourceHandle source, UEVR_Vector2f* out_axis);
     void (*trigger_haptic_vibration)(float seconds_from_now, float duration, float frequency, float amplitude, UEVR_InputSourceHandle source);
     /* if any controller action is active or has been active within certain previous timeframe */
     bool (*is_using_controllers)();
+    bool (*is_decoupled_pitch_enabled)();
+    
+    unsigned int (*get_movement_orientation)();
 
     unsigned int (*get_lowest_xinput_index)();
 

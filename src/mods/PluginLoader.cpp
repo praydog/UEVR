@@ -293,10 +293,58 @@ void get_pose(UEVR_TrackedDeviceIndex index, UEVR_Vector3f* out_position, UEVR_Q
     out_rotation->w = rot.w;
 }
 
+void get_grip_pose(UEVR_TrackedDeviceIndex index, UEVR_Vector3f* out_position, UEVR_Quaternionf* out_rotation) {
+    static_assert(sizeof(UEVR_Vector3f) == sizeof(glm::vec3));
+    static_assert(sizeof(UEVR_Quaternionf) == sizeof(glm::quat));
+
+    auto transform = ::VR::get()->get_grip_transform(index);
+
+    out_position->x = transform[3].x;
+    out_position->y = transform[3].y;
+    out_position->z = transform[3].z;
+
+    const auto rot = glm::quat{glm::extractMatrixRotation(transform)};
+    out_rotation->x = rot.x;
+    out_rotation->y = rot.y;
+    out_rotation->z = rot.z;
+    out_rotation->w = rot.w;
+}
+
+void get_aim_pose(UEVR_TrackedDeviceIndex index, UEVR_Vector3f* out_position, UEVR_Quaternionf* out_rotation) {
+    static_assert(sizeof(UEVR_Vector3f) == sizeof(glm::vec3));
+    static_assert(sizeof(UEVR_Quaternionf) == sizeof(glm::quat));
+
+    auto transform = ::VR::get()->get_aim_transform(index);
+
+    out_position->x = transform[3].x;
+    out_position->y = transform[3].y;
+    out_position->z = transform[3].z;
+
+    const auto rot = glm::quat{glm::extractMatrixRotation(transform)};
+    out_rotation->x = rot.x;
+    out_rotation->y = rot.y;
+    out_rotation->z = rot.z;
+    out_rotation->w = rot.w;
+}
+
 void get_transform(UEVR_TrackedDeviceIndex index, UEVR_Matrix4x4f* out_transform) {
     static_assert(sizeof(UEVR_Matrix4x4f) == sizeof(glm::mat4), "UEVR_Matrix4x4f and glm::mat4 must be the same size");
 
     const auto transform = ::VR::get()->get_transform(index);
+    memcpy(out_transform, &transform, sizeof(UEVR_Matrix4x4f));
+}
+
+void get_grip_transform(UEVR_TrackedDeviceIndex index, UEVR_Matrix4x4f* out_transform) {
+    static_assert(sizeof(UEVR_Matrix4x4f) == sizeof(glm::mat4), "UEVR_Matrix4x4f and glm::mat4 must be the same size");
+
+    const auto transform = ::VR::get()->get_grip_transform(index);
+    memcpy(out_transform, &transform, sizeof(UEVR_Matrix4x4f));
+}
+
+void get_aim_transform(UEVR_TrackedDeviceIndex index, UEVR_Matrix4x4f* out_transform) {
+    static_assert(sizeof(UEVR_Matrix4x4f) == sizeof(glm::mat4), "UEVR_Matrix4x4f and glm::mat4 must be the same size");
+
+    const auto transform = ::VR::get()->get_aim_transform(index);
     memcpy(out_transform, &transform, sizeof(UEVR_Matrix4x4f));
 }
 
@@ -329,6 +377,10 @@ bool is_action_active(UEVR_ActionHandle action_handle, UEVR_InputSourceHandle so
     return ::VR::get()->is_action_active((::vr::VRActionHandle_t)action_handle, (::vr::VRInputValueHandle_t)source);
 }
 
+bool is_action_active_any_joystick(UEVR_ActionHandle action_handle) {
+    return ::VR::get()->is_action_active_any_joystick((::vr::VRActionHandle_t)action_handle);
+}
+
 void get_joystick_axis(UEVR_InputSourceHandle source, UEVR_Vector2f* out_axis) {
     const auto axis = ::VR::get()->get_joystick_axis((::vr::VRInputValueHandle_t)source);
 
@@ -342,6 +394,14 @@ void trigger_haptic_vibration(float seconds_from_now, float duration, float freq
 
 bool is_using_controllers() {
     return ::VR::get()->is_using_controllers();
+}
+
+bool is_decoupled_pitch_enabled() {
+    return ::VR::get()->is_decoupled_pitch_enabled();
+}
+
+unsigned int get_movement_orientation() {
+    return ::VR::get()->get_movement_orientation();
 }
 
 unsigned int get_lowest_xinput_index() {
@@ -368,15 +428,22 @@ UEVR_VRData g_vr_data {
     uevr::vr::get_right_controller_index,
     uevr::vr::get_pose,
     uevr::vr::get_transform,
+    uevr::vr::get_grip_pose,
+    uevr::vr::get_aim_pose,
+    uevr::vr::get_grip_transform,
+    uevr::vr::get_aim_transform,
     uevr::vr::get_eye_offset,
     uevr::vr::get_ue_projection_matrix,
     uevr::vr::get_left_joystick_source,
     uevr::vr::get_right_joystick_source,
     uevr::vr::get_action_handle,
     uevr::vr::is_action_active,
+    uevr::vr::is_action_active_any_joystick,
     uevr::vr::get_joystick_axis,
     uevr::vr::trigger_haptic_vibration,
     uevr::vr::is_using_controllers,
+    uevr::vr::is_decoupled_pitch_enabled,
+    uevr::vr::get_movement_orientation,
     uevr::vr::get_lowest_xinput_index,
     uevr::vr::recenter_view,
 };
