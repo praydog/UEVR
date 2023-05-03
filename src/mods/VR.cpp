@@ -210,6 +210,7 @@ std::optional<std::string> VR::initialize_openvr_input() {
     m_active_action_set.nPriority = 0;
 
     m_openvr->pose_action = m_action_pose;
+    m_openvr->grip_pose_action = m_action_grip_pose;
 
     detect_controllers();
 
@@ -2124,11 +2125,11 @@ Matrix4x4f VR::get_transform(uint32_t index, bool grip) const {
             return glm::rowMajor4(matrix);
         }
 
-            if (index == get_left_controller_index()) {
-                return grip ? m_openvr->grip_matrices[VRRuntime::Hand::LEFT] : m_openvr->aim_matrices[VRRuntime::Hand::LEFT];
-            } else if (index == get_right_controller_index()) {
-                return grip ? m_openvr->grip_matrices[VRRuntime::Hand::RIGHT] : m_openvr->aim_matrices[VRRuntime::Hand::RIGHT];
-            }
+        if (index == get_left_controller_index()) {
+            return grip ? m_openvr->grip_matrices[VRRuntime::Hand::LEFT] : m_openvr->aim_matrices[VRRuntime::Hand::LEFT];
+        } else if (index == get_right_controller_index()) {
+            return grip ? m_openvr->grip_matrices[VRRuntime::Hand::RIGHT] : m_openvr->aim_matrices[VRRuntime::Hand::RIGHT];
+        }
 
         const auto& pose = get_openvr_poses()[index];
         const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking };

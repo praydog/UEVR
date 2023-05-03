@@ -207,6 +207,14 @@ std::string VR::bindings_oculus_touch_json = R"(
             {
                "output" : "/actions/default/in/pose",
                "path" : "/user/hand/right/pose/tip"
+            },
+            {
+               "output" : "/actions/default/in/grippose",
+               "path" : "/user/hand/left/pose/grip"
+            },
+            {
+               "output" : "/actions/default/in/grippose",
+               "path" : "/user/hand/right/pose/grip"
             }
          ],
          "skeleton" : [
@@ -434,6 +442,14 @@ std::string VR::bindings_vive_controller = R"(
             {
                "output" : "/actions/default/in/pose",
                "path" : "/user/hand/right/pose/tip"
+            },
+            {
+               "output" : "/actions/default/in/grippose",
+               "path" : "/user/hand/left/pose/grip"
+            },
+            {
+               "output" : "/actions/default/in/grippose",
+               "path" : "/user/hand/right/pose/grip"
             }
          ],
          "skeleton" : [
@@ -578,6 +594,14 @@ std::string VR::bindings_knuckles = R"(
             {
                "output" : "/actions/default/in/pose",
                "path" : "/user/hand/right/pose/tip"
+            },
+            {
+               "output" : "/actions/default/in/grippose",
+               "path" : "/user/hand/left/pose/grip"
+            },
+            {
+               "output" : "/actions/default/in/grippose",
+               "path" : "/user/hand/right/pose/grip"
             }
          ],
          "skeleton" : [

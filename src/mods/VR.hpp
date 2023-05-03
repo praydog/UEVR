@@ -41,6 +41,7 @@ public:
     };
 
     static const inline std::string s_action_pose = "/actions/default/in/Pose";
+    static const inline std::string s_action_grip_pose = "/actions/default/in/GripPose";
     static const inline std::string s_action_trigger = "/actions/default/in/Trigger";
     static const inline std::string s_action_grip = "/actions/default/in/Grip";
     static const inline std::string s_action_joystick = "/actions/default/in/Joystick";
@@ -141,7 +142,7 @@ public:
     Matrix4x4f get_aim_rotation(uint32_t index) const {
         return get_rotation(index, false);
     }
-    
+
     Matrix4x4f get_grip_transform(uint32_t hand_index) const;
     Matrix4x4f get_aim_transform(uint32_t hand_index) const;
 
@@ -537,6 +538,7 @@ private:
     vr::VRActionHandle_t m_action_pose{ };
     vr::VRActionHandle_t m_action_trigger{ };
     vr::VRActionHandle_t m_action_grip{ };
+    vr::VRActionHandle_t m_action_grip_pose{ };
     vr::VRActionHandle_t m_action_joystick{};
     vr::VRActionHandle_t m_action_joystick_click{};
 
@@ -562,6 +564,7 @@ private:
 
     std::unordered_map<std::string, std::reference_wrapper<vr::VRActionHandle_t>> m_action_handles {
         { s_action_pose, m_action_pose },
+        { s_action_grip_pose, m_action_grip_pose },
         { s_action_trigger, m_action_trigger },
         { s_action_grip, m_action_grip },
         { s_action_joystick, m_action_joystick },

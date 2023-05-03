@@ -78,7 +78,8 @@ struct OpenVR final : public VRRuntime {
 
     std::array<vr::HmdMatrix34_t, 3> pose_queue{};
 
-    vr::VRActionHandle_t pose_action{};
+    vr::VRActionHandle_t pose_action{vr::k_ulInvalidActionHandle};
+    vr::VRActionHandle_t grip_pose_action{vr::k_ulInvalidActionHandle};
     std::array<vr::InputPoseActionData_t, 2> controller_poses{};
 
     vr::TrackedDeviceIndex_t left_controller_index{vr::k_unTrackedDeviceIndexInvalid};
