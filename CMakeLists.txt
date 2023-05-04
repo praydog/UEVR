@@ -109,6 +109,18 @@ FetchContent_Declare(asmjit
 )
 FetchContent_MakeAvailable(asmjit)
 
+set(TRACY_STATIC ON CACHE BOOL "" FORCE)
+set(TRACY_ENABLE OFF CACHE BOOL "" FORCE)
+
+message(STATUS "Fetching tracy (897aec5b062664d2485f4f9a213715d2e527e0ca)...")
+FetchContent_Declare(tracy
+	GIT_REPOSITORY
+		"https://github.com/wolfpld/tracy"
+	GIT_TAG
+		897aec5b062664d2485f4f9a213715d2e527e0ca
+)
+FetchContent_MakeAvailable(tracy)
+
 # Target spdlog
 set(CMKR_TARGET spdlog)
 set(spdlog_SOURCES "")
@@ -806,6 +818,7 @@ target_link_libraries(ue4poc PUBLIC
 	openxr_loader
 	nlohmann_json
 	Version
+	TracyClient
 )
 
 target_link_libraries(ue4poc PUBLIC
@@ -949,6 +962,7 @@ target_link_libraries(ue4poc-nolog PUBLIC
 	openxr_loader
 	nlohmann_json
 	Version
+	TracyClient
 )
 
 target_compile_definitions(ue4poc-nolog PUBLIC

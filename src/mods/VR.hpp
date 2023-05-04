@@ -1,5 +1,7 @@
 #pragma once
 
+#define NOMINMAX
+
 #include <memory>
 #include <string>
 
@@ -17,6 +19,9 @@
 #include "vr/CVarManager.hpp"
 
 #include "Mod.hpp"
+
+#undef max
+#include <tracy/Tracy.hpp>
 
 class VR : public Mod {
 public:
@@ -505,8 +510,8 @@ private:
     std::shared_ptr<runtimes::OpenVR> m_openvr{std::make_shared<runtimes::OpenVR>()};
     std::shared_ptr<runtimes::OpenXR> m_openxr{std::make_shared<runtimes::OpenXR>()};
 
-    mutable std::recursive_mutex m_openvr_mtx{};
-    mutable std::recursive_mutex m_reinitialize_mtx{};
+    mutable TracyLockable(std::recursive_mutex, m_openvr_mtx);
+    mutable TracyLockable(std::recursive_mutex, m_reinitialize_mtx);
     mutable std::shared_mutex m_rotation_mtx{};
 
     std::vector<int32_t> m_controllers{};
@@ -759,7 +764,7 @@ private:
         PadContext gamepad{};
         PadContext vr_controller{};
         
-        std::recursive_mutex mtx{};
+        TracyLockable(std::recursive_mutex, mtx);
 
         struct VRState {
             class StickState {
@@ -796,6 +801,8 @@ private:
         } vr;
 
         void enqueue(bool is_vr_controller, const XINPUT_STATE& in_state, PadContext::Func func) {
+            ZoneScopedN(__FUNCTION__);
+
             std::scoped_lock _{mtx};
             if (is_vr_controller) {
                 vr_controller.update = func;
@@ -807,6 +814,8 @@ private:
         }
 
         void update() {
+            ZoneScopedN(__FUNCTION__);
+
             std::scoped_lock _{mtx};
 
             if (vr_controller.update) {

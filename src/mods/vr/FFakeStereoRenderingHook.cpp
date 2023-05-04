@@ -1,3 +1,5 @@
+#define NOMINMAX
+
 #include <windows.h>
 #include <winternl.h>
 
@@ -37,6 +39,8 @@
 #include "../../utility/Logging.hpp"
 
 #include "FFakeStereoRenderingHook.hpp"
+
+#include <tracy/Tracy.hpp>
 
 //#define FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
 
@@ -78,6 +82,8 @@ FFakeStereoRenderingHook::FFakeStereoRenderingHook() {
 }
 
 void FFakeStereoRenderingHook::on_draw_ui() {
+    ZoneScopedN(__FUNCTION__);
+
     ImGui::Text("Stereo Hook Options");
 
     m_recreate_textures_on_reset->draw("Recreate Textures on Reset");
@@ -181,12 +187,16 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
     }
 
     m_tick_hook = safetyhook::create_inline((void*)*func, +[](sdk::UGameEngine* engine, float delta, bool idle) -> void* {
+        ZoneScopedN("UGameEngine::Tick Hook");
+        FrameMarkStart("UGameEngine::Tick");
+
         auto hook = g_hook;
         
         hook->m_in_engine_tick = true;
 
         utility::ScopeGuard _{[]() {
             g_hook->m_in_engine_tick = false;
+            FrameMarkEnd("UGameEngine::Tick");
         }};
         
         static bool once = true;
@@ -1555,7 +1565,10 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
 }
 
 void FFakeStereoRenderingHook::viewport_draw_hook(void* viewport, bool should_present) {
+    ZoneScopedN(__FUNCTION__);
+
     auto call_orig = [&]() {
+        ZoneScopedN("FViewport::Draw");
         g_hook->m_viewport_draw_hook.call(viewport, should_present);
     };
 
@@ -1587,7 +1600,10 @@ void FFakeStereoRenderingHook::viewport_draw_hook(void* viewport, bool should_pr
 }
 
 void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_client, void* viewport, void* canvas, void* a4) {
+    ZoneScopedN(__FUNCTION__);
+
     auto call_orig = [=]() {
+        ZoneScopedN("UGameViewportClient::Draw");
         g_hook->m_gameviewportclient_draw_hook.call(viewport_client, viewport, canvas, a4);
     };
 
@@ -1966,6 +1982,8 @@ struct SceneViewExtensionAnalyzer {
         const auto setup_view_family_index = index_0_called ? 0 : 1;
 
         g_view_extension_vtable[setup_view_family_index] = (uintptr_t)+[](ISceneViewExtension* extension, FSceneViewFamily& view_family) -> void {
+            ZoneScopedN("SetupViewFamily");
+
             static bool once = true;
 
             if (once) {
@@ -1987,6 +2005,8 @@ struct SceneViewExtensionAnalyzer {
         };
 
         g_view_extension_vtable[begin_render_viewfamily_index] = (uintptr_t)+[](ISceneViewExtension* extension, FSceneViewFamily& view_family) -> void {
+            ZoneScopedN("BeginRenderViewFamily");
+
             SPDLOG_INFO_ONCE("Called BeginRenderViewFamily for the first time");
 
             if (!g_framework->is_game_data_intialized()) {
@@ -2021,6 +2041,8 @@ struct SceneViewExtensionAnalyzer {
 
         // PreRenderViewFamily_RenderThread
         g_view_extension_vtable[pre_render_viewfamily_renderthread_index] = (uintptr_t)+[](ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, FSceneViewFamily& view_family) -> void {
+            ZoneScopedN("PreRenderViewFamily_RenderThread");
+
             utility::ScopeGuard _{[]() {
                 RenderThreadWorker::get().execute();
             }};

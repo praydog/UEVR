@@ -1,3 +1,5 @@
+#define NOMINMAX
+
 #include <filesystem>
 
 #include <utility/Config.hpp>
@@ -10,10 +12,14 @@
 
 #include "CVarManager.hpp"
 
+#include <tracy/Tracy.hpp>
+
 constexpr std::string_view cvars_standard_txt_name = "cvars_standard.txt";
 constexpr std::string_view cvars_data_txt_name = "cvars_data.txt";
 
 CVarManager::CVarManager() {
+    ZoneScopedN(__FUNCTION__);
+
     m_displayed_cvars.insert(m_displayed_cvars.end(), s_default_standard_cvars.begin(), s_default_standard_cvars.end());
     m_displayed_cvars.insert(m_displayed_cvars.end(), s_default_data_cvars.begin(), s_default_data_cvars.end());
 
@@ -30,12 +36,16 @@ CVarManager::CVarManager() {
 }
 
 CVarManager::~CVarManager() {
+    ZoneScopedN(__FUNCTION__);
+
     /*for (auto& cvar : m_cvars) {
         cvar->save();
     }*/
 }
 
 void CVarManager::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
+    ZoneScopedN(__FUNCTION__);
+
     for (auto& cvar : m_all_cvars) {
         cvar->update();
         cvar->freeze();
@@ -43,6 +53,8 @@ void CVarManager::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
 }
 
 void CVarManager::on_draw_ui() {
+    ZoneScopedN(__FUNCTION__);
+
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
     if (ImGui::TreeNode("CVars")) {
         ImGui::TextWrapped("Note: Any changes here will be frozen.");
@@ -92,6 +104,8 @@ void CVarManager::on_draw_ui() {
 }
 
 void CVarManager::on_config_load(const utility::Config& cfg, bool set_defaults) {
+    ZoneScopedN(__FUNCTION__);
+
     for (auto& cvar : m_all_cvars) {
         cvar->load(set_defaults);
     }
@@ -100,10 +114,14 @@ void CVarManager::on_config_load(const utility::Config& cfg, bool set_defaults) 
 }
 
 std::string CVarManager::CVar::get_key_name() {
+    ZoneScopedN(__FUNCTION__);
+
     return std::format("{}_{}", utility::narrow(m_module), utility::narrow(m_name));
 }
 
 void CVarManager::CVar::load_internal(const std::string& filename, bool set_defaults) try {
+    ZoneScopedN(__FUNCTION__);
+
     spdlog::info("[CVarManager] Loading {}...", filename);
 
     const auto cvars_txt = Framework::get_persistent_dir(filename);
@@ -144,6 +162,8 @@ void CVarManager::CVar::load_internal(const std::string& filename, bool set_defa
 }
 
 void CVarManager::CVar::save_internal(const std::string& filename) try {
+    ZoneScopedN(__FUNCTION__);
+    
     spdlog::info("[CVarManager] Saving {}...", filename);
 
     const auto cvars_txt = Framework::get_persistent_dir(filename);
@@ -167,10 +187,14 @@ void CVarManager::CVar::save_internal(const std::string& filename) try {
 }
 
 void CVarManager::CVarStandard::load(bool set_defaults) {
+    ZoneScopedN(__FUNCTION__);
+
     load_internal(cvars_standard_txt_name.data(), set_defaults);
 }
 
 void CVarManager::CVarStandard::save() {
+    ZoneScopedN(__FUNCTION__);
+
     if (m_cvar == nullptr || *m_cvar == nullptr) {
         // CVar not found, don't save.
         return;
@@ -196,6 +220,8 @@ void CVarManager::CVarStandard::save() {
 }
 
 void CVarManager::CVarStandard::freeze() {
+    ZoneScopedN(__FUNCTION__);
+
     if (!m_frozen) {
         return;
     }
@@ -227,12 +253,16 @@ void CVarManager::CVarStandard::freeze() {
 }
 
 void CVarManager::CVarStandard::update() {
+    ZoneScopedN(__FUNCTION__);
+
     if (m_cvar == nullptr) {
         m_cvar = sdk::find_cvar_cached(m_module, m_name);
     }
 }
 
 void CVarManager::CVarStandard::draw_ui() try {
+    ZoneScopedN(__FUNCTION__);
+
     if (m_cvar == nullptr || *m_cvar == nullptr) {
         ImGui::TextWrapped("Failed to find cvar: %s", utility::narrow(m_name).c_str());
         return;
@@ -296,10 +326,14 @@ void CVarManager::CVarStandard::draw_ui() try {
 }
 
 void CVarManager::CVarData::load(bool set_defaults) {
+    ZoneScopedN(__FUNCTION__);
+
     load_internal(cvars_data_txt_name.data(), set_defaults);
 }
 
 void CVarManager::CVarData::save() {
+    ZoneScopedN(__FUNCTION__);
+
     if (!m_cvar_data) {
         return;
     }
@@ -330,6 +364,8 @@ void CVarManager::CVarData::save() {
 }
 
 void CVarManager::CVarData::freeze() {
+    ZoneScopedN(__FUNCTION__);
+
     if (!m_frozen) {
         return;
     }
@@ -362,12 +398,16 @@ void CVarManager::CVarData::freeze() {
 }
 
 void CVarManager::CVarData::update() {
+    ZoneScopedN(__FUNCTION__);
+
     if (!m_cvar_data) {
         m_cvar_data = sdk::find_cvar_data_cached(m_module, m_name);
     }
 }
 
 void CVarManager::CVarData::draw_ui() try {
+    ZoneScopedN(__FUNCTION__);
+
     if (!m_cvar_data) {
         ImGui::TextWrapped("Failed to find cvar data: %s", utility::narrow(m_name).c_str());
         return;

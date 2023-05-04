@@ -67,6 +67,14 @@ tag = "bc889afb4c5bf1c0d8ee29ef35eaaf4c8bef8a5d"
 git = "https://github.com/asmjit/asmjit.git"
 tag = "2a706fd2ba355808cada31ac1eed8ce28caa6b37"
 
+[fetch-content.tracy]
+git = "https://github.com/wolfpld/tracy"
+tag = "897aec5b062664d2485f4f9a213715d2e527e0ca"
+cmake-before="""
+set(TRACY_STATIC ON CACHE BOOL "" FORCE)
+set(TRACY_ENABLE OFF CACHE BOOL "" FORCE)
+"""
+
 [target.openvr]
 type = "shared"
 sources = ["dependencies/openvr/src/**.cpp", "dependencies/openvr/src/vrcommon/**.cpp"]
@@ -205,7 +213,8 @@ link-libraries = [
     "openvr_api",
     "openxr_loader",
     "nlohmann_json",
-    "Version"
+    "Version",
+    "TracyClient"
 ]
 
 [template.ue4template.properties]

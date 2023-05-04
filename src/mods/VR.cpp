@@ -1,3 +1,5 @@
+#define NOMINMAX
+
 #include <fstream>
 
 #include <windows.h>
@@ -8,10 +10,12 @@
 #include <utility/Registry.hpp>
 #include <utility/ScopeGuard.hpp>
 
-#include<sdk/Globals.hpp>
+#include <sdk/Globals.hpp>
 #include <sdk/CVar.hpp>
+#include <sdk/threading/GameThreadWorker.hpp>
 
-#include "sdk/threading/GameThreadWorker.hpp"
+#include <tracy/Tracy.hpp>
+
 #include "Framework.hpp"
 #include "frameworkConfig.hpp"
 
@@ -26,6 +30,8 @@ std::shared_ptr<VR>& VR::get() {
 
 // Called when the mod is initialized
 std::optional<std::string> VR::clean_initialize() try {
+    ZoneScopedN(__FUNCTION__);
+
     auto openvr_error = initialize_openvr();
 
     if (openvr_error || !m_openvr->loaded) {
@@ -85,6 +91,8 @@ std::optional<std::string> VR::clean_initialize() try {
 }
 
 std::optional<std::string> VR::initialize_openvr() {
+    ZoneScopedN(__FUNCTION__);
+
     spdlog::info("Attempting to load OpenVR");
 
     m_openvr = std::make_shared<runtimes::OpenVR>();
@@ -165,6 +173,8 @@ std::optional<std::string> VR::initialize_openvr() {
 }
 
 std::optional<std::string> VR::initialize_openvr_input() {
+    ZoneScopedN(__FUNCTION__);
+
     const auto module_directory = Framework::get_persistent_dir();
 
     // write default actions and bindings with the static strings we have
@@ -218,6 +228,8 @@ std::optional<std::string> VR::initialize_openvr_input() {
 }
 
 std::optional<std::string> VR::initialize_openxr() {
+    ZoneScopedN(__FUNCTION__);
+
     m_openxr.reset();
     m_openxr = std::make_shared<runtimes::OpenXR>();
 
@@ -468,6 +480,8 @@ std::optional<std::string> VR::initialize_openxr() {
 }
 
 std::optional<std::string> VR::initialize_openxr_input() {
+    ZoneScopedN(__FUNCTION__);
+
     if (auto err = m_openxr->initialize_actions(VR::actions_json)) {
         m_openxr->error = err.value();
         spdlog::error("[VR] {}", m_openxr->error.value());
@@ -491,6 +505,8 @@ std::optional<std::string> VR::initialize_openxr_input() {
 }
 
 std::optional<std::string> VR::initialize_openxr_swapchains() {
+    ZoneScopedN(__FUNCTION__);
+
     // This depends on the config being loaded.
     if (!m_init_finished) {
         return std::nullopt;
@@ -523,6 +539,8 @@ std::optional<std::string> VR::initialize_openxr_swapchains() {
 }
 
 bool VR::detect_controllers() {
+    ZoneScopedN(__FUNCTION__);
+
     // already detected
     if (!m_controllers.empty()) {
         return true;
@@ -591,6 +609,8 @@ bool VR::detect_controllers() {
 }
 
 bool VR::is_any_action_down() {
+    ZoneScopedN(__FUNCTION__);
+
     if (!m_runtime->ready()) {
         return false;
     }
@@ -616,6 +636,8 @@ bool VR::is_any_action_down() {
 }
 
 bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
+    ZoneScopedN(__FUNCTION__);
+
     if (message == WM_DEVICECHANGE && !m_spoofed_gamepad_connection) {
         spdlog::info("[VR] Received WM_DEVICECHANGE");
         m_last_xinput_spoof_sent = std::chrono::steady_clock::now();
@@ -625,6 +647,8 @@ bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
 }
 
 void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {
+    ZoneScopedN(__FUNCTION__);
+
     if (*retval == ERROR_SUCCESS) {
         // Once here for normal gamepads, and once for the spoofed gamepad at the end
         update_imgui_state_from_xinput_state(*state, false);
@@ -794,6 +818,8 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
 }
 
 void VR::on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) {
+    ZoneScopedN(__FUNCTION__);
+
     if (user_index != m_lowest_xinput_user_index) {
         return;
     }
@@ -816,6 +842,8 @@ void VR::on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRA
 
 // Allows imgui navigation to work with the controllers
 void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_controller) {
+    ZoneScopedN(__FUNCTION__);
+
     bool is_using_this_controller = true;
 
     const auto is_using_vr_controller_recently = is_using_controllers_within(std::chrono::seconds(1));
@@ -1108,6 +1136,8 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
 }
 
 void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
+    ZoneScopedN(__FUNCTION__);
+
     m_cvar_manager->on_pre_engine_tick(engine, delta);
 
     if (!get_runtime()->loaded || !is_hmd_active()) {
@@ -1128,6 +1158,8 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
 }
 
 void VR::on_pre_viewport_client_draw(void* viewport_client, void* viewport, void* canvas){
+    ZoneScopedN(__FUNCTION__);
+
     if (m_custom_z_near_enabled->value()) {
         SPDLOG_INFO_ONCE("Attempting to set custom z near");
         sdk::globals::get_near_clipping_plane() = m_custom_z_near->value();
@@ -1135,6 +1167,8 @@ void VR::on_pre_viewport_client_draw(void* viewport_client, void* viewport, void
 }
 
 void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
+    ZoneScopedN(__FUNCTION__);
+
     std::scoped_lock _{m_reinitialize_mtx};
 
     auto runtime = get_runtime();
@@ -1216,6 +1250,8 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
 }
 
 void VR::update_action_states() {
+    ZoneScopedN(__FUNCTION__);
+
     auto runtime = get_runtime();
 
     if (runtime->wants_reinitialize) {
@@ -1294,6 +1330,8 @@ void VR::update_action_states() {
 }
 
 void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
+    ZoneScopedN(__FUNCTION__);
+
     for (IModValue& option : m_options) {
         option.config_load(cfg, set_defaults);
     }
@@ -1324,6 +1362,8 @@ void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
 }
 
 void VR::on_config_save(utility::Config& cfg) {
+    ZoneScopedN(__FUNCTION__);
+
     for (IModValue& option : m_options) {
         option.config_save(cfg);
     }
@@ -1343,6 +1383,8 @@ void VR::on_config_save(utility::Config& cfg) {
 }
 
 void VR::load_cameras() try {
+    ZoneScopedN(__FUNCTION__);
+
     const auto cameras_txt = Framework::get_persistent_dir("cameras.txt");
 
     if (std::filesystem::exists(cameras_txt)) {
@@ -1383,6 +1425,8 @@ void VR::load_cameras() try {
 }
 
 void VR::load_camera(int index) {
+    ZoneScopedN(__FUNCTION__);
+
     if (index < 0 || index >= m_camera_datas.size()) {
         return;
     }
@@ -1398,6 +1442,8 @@ void VR::load_camera(int index) {
 }
 
 void VR::save_camera(int index) {
+    ZoneScopedN(__FUNCTION__);
+
     if (index < 0 || index >= m_camera_datas.size()) {
         return;
     }
@@ -1418,6 +1464,8 @@ void VR::save_camera(int index) {
 }
 
 void VR::save_cameras() try {
+    ZoneScopedN(__FUNCTION__);
+
     const auto cameras_txt = Framework::get_persistent_dir("cameras.txt");
 
     spdlog::info("[VR] Saving camera offsets to {}", cameras_txt.string());
@@ -1441,6 +1489,8 @@ void VR::save_cameras() try {
 
 
 void VR::on_pre_imgui_frame() {
+    ZoneScopedN(__FUNCTION__);
+
     m_xinput_context.update();
 
     if (!get_runtime()->ready()) {
@@ -1453,6 +1503,8 @@ void VR::on_pre_imgui_frame() {
 }
 
 void VR::on_frame() {
+    ZoneScopedN(__FUNCTION__);
+
     if (!get_runtime()->ready()) {
         return;
     }
@@ -1540,6 +1592,8 @@ void VR::on_frame() {
 }
 
 void VR::on_present() {
+    ZoneScopedN(__FUNCTION__);
+
     utility::ScopeGuard _guard {[&]() {
         if (!is_using_afr() || (m_render_frame_count + 1) % 2 == m_left_eye_interval) {
             SetEvent(m_present_finished_event);
@@ -1674,6 +1728,9 @@ void VR::on_present() {
 }
 
 void VR::on_post_present() {
+    FrameMarkNamed("Present");
+    ZoneScopedN(__FUNCTION__);
+
     const auto is_same_frame = m_render_frame_count > 0 && m_render_frame_count == m_frame_count;
 
     m_render_frame_count = m_frame_count;
@@ -1727,6 +1784,8 @@ void VR::on_post_present() {
 }
 
 void VR::on_draw_ui() {
+    ZoneScopedN(__FUNCTION__);
+
     // create VR tree entry in menu (imgui)
     if (get_runtime()->loaded) {
         ImGui::SetNextItemOpen(m_has_hw_scheduling, ImGuiCond_::ImGuiCond_FirstUseEver);
@@ -2088,6 +2147,8 @@ Matrix4x4f VR::get_hmd_rotation(uint32_t frame_count) const {
 }
 
 Matrix4x4f VR::get_hmd_transform(uint32_t frame_count) const {
+    ZoneScopedN(__FUNCTION__);
+
     if (get_runtime()->is_openvr()) {
         std::shared_lock _{ get_runtime()->pose_mtx };
 
@@ -2112,6 +2173,8 @@ Matrix4x4f VR::get_rotation(uint32_t index, bool grip) const {
 }
 
 Matrix4x4f VR::get_transform(uint32_t index, bool grip) const {
+    ZoneScopedN(__FUNCTION__);
+
     if (get_runtime()->is_openvr()) {
         if (index >= vr::k_unMaxTrackedDeviceCount) {
             return glm::identity<Matrix4x4f>();
@@ -2182,6 +2245,8 @@ vr::HmdMatrix34_t VR::get_raw_transform(uint32_t index) const {
 }
 
 Vector4f VR::get_eye_offset(VRRuntime::Eye eye) const {
+    ZoneScopedN(__FUNCTION__);
+
     if (!is_hmd_active()) {
         return Vector4f{};
     }
@@ -2212,6 +2277,8 @@ Vector4f VR::get_current_offset() {
 }
 
 Matrix4x4f VR::get_eye_transform(uint32_t index) {
+    ZoneScopedN(__FUNCTION__);
+
     if (!is_hmd_active() || index > 2) {
         return glm::identity<Matrix4x4f>();
     }
@@ -2238,6 +2305,8 @@ Matrix4x4f VR::get_current_eye_transform(bool flip) {
 }
 
 Matrix4x4f VR::get_projection_matrix(VRRuntime::Eye eye, bool flip) {
+    ZoneScopedN(__FUNCTION__);
+
     if (!is_hmd_active()) {
         return glm::identity<Matrix4x4f>();
     }
@@ -2268,6 +2337,8 @@ Matrix4x4f VR::get_current_projection_matrix(bool flip) {
 }
 
 bool VR::is_action_active(vr::VRActionHandle_t action, vr::VRInputValueHandle_t source) const {
+    ZoneScopedN(__FUNCTION__);
+
     if (!get_runtime()->loaded) {
         return false;
     }
@@ -2291,6 +2362,8 @@ bool VR::is_action_active(vr::VRActionHandle_t action, vr::VRInputValueHandle_t 
 }
 
 Vector2f VR::get_joystick_axis(vr::VRInputValueHandle_t handle) const {
+    ZoneScopedN(__FUNCTION__);
+
     if (!get_runtime()->loaded) {
         return Vector2f{};
     }
@@ -2325,6 +2398,8 @@ Vector2f VR::get_right_stick_axis() const {
 }
 
 void VR::trigger_haptic_vibration(float seconds_from_now, float duration, float frequency, float amplitude, vr::VRInputValueHandle_t source) {
+    ZoneScopedN(__FUNCTION__);
+
     if (!get_runtime()->loaded || !is_using_controllers()) {
         return;
     }
@@ -2337,36 +2412,48 @@ void VR::trigger_haptic_vibration(float seconds_from_now, float duration, float 
 }
 
 float VR::get_standing_height() {
+    ZoneScopedN(__FUNCTION__);
+
     std::shared_lock _{ get_runtime()->pose_mtx };
 
     return m_standing_origin.y;
 }
 
 Vector4f VR::get_standing_origin() {
+    ZoneScopedN(__FUNCTION__);
+
     std::shared_lock _{ get_runtime()->pose_mtx };
 
     return m_standing_origin;
 }
 
 void VR::set_standing_origin(const Vector4f& origin) {
+    ZoneScopedN(__FUNCTION__);
+
     std::unique_lock _{ get_runtime()->pose_mtx };
     
     m_standing_origin = origin;
 }
 
 glm::quat VR::get_rotation_offset() {
+    ZoneScopedN(__FUNCTION__);
+
     std::shared_lock _{ m_rotation_mtx };
 
     return m_rotation_offset;
 }
 
 void VR::set_rotation_offset(const glm::quat& offset) {
+    ZoneScopedN(__FUNCTION__);
+
     std::unique_lock _{ m_rotation_mtx };
 
     m_rotation_offset = offset;
 }
 
 void VR::recenter_view() {
+    ZoneScopedN(__FUNCTION__);
+
     const auto new_rotation_offset = glm::normalize(glm::inverse(utility::math::flatten(glm::quat{get_rotation(0)})));
 
     set_rotation_offset(new_rotation_offset);
