@@ -2924,3 +2924,104 @@ public:
 };
 }
 
+namespace ue4_10 {
+class IHeadMountedDisplayModuleVT : public detail::IHeadMountedDisplayModuleVT {
+public:
+    static IHeadMountedDisplayModuleVT& get() {
+        static IHeadMountedDisplayModuleVT instance;
+        return instance;
+    }
+
+    bool implemented() const override { return true; }
+
+    std::optional<size_t> __vecDelDtor_index() const override { return 0; }
+    std::optional<size_t> GetModulePriorityKeyName_index() const override { return 8; }
+    std::optional<size_t> PreInit_index() const override { return 9; }
+    std::optional<size_t> CreateHeadMountedDisplay_index() const override { return 10; }
+};
+}
+
+namespace ue4_10 {
+class IHeadMountedDisplayVT : public detail::IHeadMountedDisplayVT {
+public:
+    static IHeadMountedDisplayVT& get() {
+        static IHeadMountedDisplayVT instance;
+        return instance;
+    }
+
+    bool implemented() const override { return true; }
+
+    std::optional<size_t> __vecDelDtor_index() const override { return 0; }
+    std::optional<size_t> IsHMDConnected_index() const override { return 8; }
+    std::optional<size_t> IsHMDEnabled_index() const override { return 9; }
+    std::optional<size_t> EnableHMD_index() const override { return 10; }
+    std::optional<size_t> GetHMDDeviceType_index() const override { return 11; }
+    std::optional<size_t> GetHMDMonitorInfo_index() const override { return 12; }
+    std::optional<size_t> GetFieldOfView_index() const override { return 13; }
+    std::optional<size_t> DoesSupportPositionalTracking_index() const override { return 14; }
+    std::optional<size_t> HasValidTrackingPosition_index() const override { return 15; }
+    std::optional<size_t> GetPositionalTrackingCameraProperties_index() const override { return 16; }
+    std::optional<size_t> SetInterpupillaryDistance_index() const override { return 17; }
+    std::optional<size_t> GetInterpupillaryDistance_index() const override { return 18; }
+    std::optional<size_t> GetCurrentOrientationAndPosition_index() const override { return 19; }
+    std::optional<size_t> RebaseObjectOrientationAndPosition_index() const override { return 20; }
+    std::optional<size_t> GetViewExtension_index() const override { return 21; }
+    std::optional<size_t> ApplyHmdRotation_index() const override { return 22; }
+    std::optional<size_t> UpdatePlayerCamera_index() const override { return 23; }
+    std::optional<size_t> GetDistortionScalingFactor_index() const override { return 24; }
+    std::optional<size_t> GetLensCenterOffset_index() const override { return 25; }
+    std::optional<size_t> GetDistortionWarpValues_index() const override { return 26; }
+    std::optional<size_t> IsChromaAbCorrectionEnabled_index() const override { return 27; }
+    std::optional<size_t> GetChromaAbCorrectionValues_index() const override { return 28; }
+    std::optional<size_t> Exec_index() const override { return 29; }
+    std::optional<size_t> IsFullscreenAllowed_index() const override { return 30; }
+    std::optional<size_t> PushPreFullScreenRect_index() const override { return 31; }
+    std::optional<size_t> PopPreFullScreenRect_index() const override { return 32; }
+    std::optional<size_t> OnScreenModeChange_index() const override { return 33; }
+    std::optional<size_t> IsPositionalTrackingEnabled_index() const override { return 34; }
+    std::optional<size_t> EnablePositionalTracking_index() const override { return 35; }
+    std::optional<size_t> IsHeadTrackingAllowed_index() const override { return 36; }
+    std::optional<size_t> IsInLowPersistenceMode_index() const override { return 37; }
+    std::optional<size_t> EnableLowPersistenceMode_index() const override { return 38; }
+    std::optional<size_t> ResetOrientationAndPosition_index() const override { return 39; }
+    std::optional<size_t> ResetOrientation_index() const override { return 40; }
+    std::optional<size_t> ResetPosition_index() const override { return 41; }
+    std::optional<size_t> SetBaseRotation_index() const override { return 42; }
+    std::optional<size_t> GetBaseRotation_index() const override { return 43; }
+    std::optional<size_t> SetBaseOrientation_index() const override { return 44; }
+    std::optional<size_t> GetBaseOrientation_index() const override { return 45; }
+    std::optional<size_t> SetPositionScale3D_index() const override { return 46; }
+    std::optional<size_t> GetPositionScale3D_index() const override { return 47; }
+    std::optional<size_t> HasHiddenAreaMesh_index() const override { return 48; }
+    std::optional<size_t> HasVisibleAreaMesh_index() const override { return 49; }
+    std::optional<size_t> DrawHiddenAreaMesh_RenderThread_index() const override { return 50; }
+    std::optional<size_t> DrawVisibleAreaMesh_RenderThread_index() const override { return 51; }
+    std::optional<size_t> DrawDistortionMesh_RenderThread_index() const override { return 52; }
+    std::optional<size_t> UpdateScreenSettings_index() const override { return 53; }
+    std::optional<size_t> UpdatePostProcessSettings_index() const override { return 54; }
+    std::optional<size_t> DrawDebug_index() const override { return 55; }
+    std::optional<size_t> HandleInputKey_index() const override { return 56; }
+    std::optional<size_t> OnBeginPlay_index() const override { return 57; }
+    std::optional<size_t> OnEndPlay_index() const override { return 58; }
+    std::optional<size_t> OnStartGameFrame_index() const override { return 59; }
+    std::optional<size_t> OnEndGameFrame_index() const override { return 60; }
+    std::optional<size_t> GetDistortionTextureLeft_index() const override { return 61; }
+    std::optional<size_t> GetDistortionTextureRight_index() const override { return 62; }
+    std::optional<size_t> GetTextureOffsetLeft_index() const override { return 63; }
+    std::optional<size_t> GetTextureOffsetRight_index() const override { return 64; }
+    std::optional<size_t> GetTextureScaleLeft_index() const override { return 65; }
+    std::optional<size_t> GetTextureScaleRight_index() const override { return 66; }
+    std::optional<size_t> GetRedDistortionParameters_index() const override { return 67; }
+    std::optional<size_t> GetGreenDistortionParameters_index() const override { return 68; }
+    std::optional<size_t> GetBlueDistortionParameters_index() const override { return 69; }
+    std::optional<size_t> NeedsUpscalePostProcessPass_index() const override { return 70; }
+    std::optional<size_t> RecordAnalytics_index() const override { return 71; }
+    std::optional<size_t> GetVersionString_index() const override { return 72; }
+    std::optional<size_t> SetTrackingOrigin_index() const override { return 73; }
+    std::optional<size_t> GetTrackingOrigin_index() const override { return 74; }
+    std::optional<size_t> DoesAppUseVRFocus_index() const override { return 75; }
+    std::optional<size_t> DoesAppHaveVRFocus_index() const override { return 76; }
+    std::optional<size_t> SetupLateUpdate_index() const override { return 77; }
+    std::optional<size_t> ApplyLateUpdate_index() const override { return 78; }
+};
+}

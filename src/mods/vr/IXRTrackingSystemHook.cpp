@@ -268,6 +268,11 @@ detail::IHeadMountedDisplayVT& get_hmd_vtable() {
         return ue4_11::IHeadMountedDisplayVT::get();
     }
 
+    // 4.10
+    if (version.dwFileVersionMS == 0x4000A || str_version.starts_with("4.10")) {
+        return ue4_11::IHeadMountedDisplayVT::get();
+    }
+
     return detail::IHeadMountedDisplayVT::get();
 }
 
