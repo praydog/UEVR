@@ -52,6 +52,10 @@ private:
             return true;
         }
 
+        if (sv.find("PimaxXR") != std::string_view::npos) {
+            return true;
+        }
+
         // TODO: more problematic windows
         return false;
     }
