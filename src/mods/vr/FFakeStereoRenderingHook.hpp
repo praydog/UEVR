@@ -67,6 +67,7 @@ protected:
     bool is_version_greq_5_1{false};
     bool is_version_5_0_3{false};
     bool wants_depth_reallocate{false};
+    bool allocate_texture_called{false}; // used to determine if the pretexture hook should go ahead
 
     uint32_t last_width{0};
     uint32_t last_height{0};

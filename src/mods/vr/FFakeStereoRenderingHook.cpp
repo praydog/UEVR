@@ -4385,6 +4385,11 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     // and then just overwrite the registers/stack with our own values
     auto rtm = g_hook->get_render_target_manager();
 
+    if (!rtm->allocate_texture_called) {
+        SPDLOG_ERROR("AllocateTexture not called yet! (PreTextureHook)");
+        return;
+    }
+
     if (!g_hook->has_pixel_format_cvar()) {
         if (g_hook->get_render_target_manager()->is_pre_texture_call_e8) {
             //ctx.r8 = 2; // PF_B8G8R8A8 // decided not to actually set it here, we need to double check when it's actually called
@@ -4964,6 +4969,17 @@ void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx)
     SPDLOG_INFO("Post texture hook called!");
     SPDLOG_INFO(" Ref: {:x}", (uintptr_t)rtm->texture_hook_ref);
 
+    if (!rtm->allocate_texture_called) {
+        g_hook->set_should_recreate_textures(true);
+        rtm->render_target = nullptr;
+        rtm->texture_hook_ref = nullptr;
+
+        SPDLOG_INFO("[Post texture hook] Allocate texture was not called, skipping...");
+        return;
+    }
+
+    rtm->allocate_texture_called = false;
+
     // very rare...
     if (rtm->is_using_texture_desc && !rtm->is_version_greq_5_1) {
         const auto pooled_rt_container = (TRefCountPtr<IPooledRenderTarget>*)rtm->texture_hook_ref;
@@ -5211,6 +5227,7 @@ void FFakeStereoRenderingHook::attempt_hook_update_viewport_rhi(uintptr_t return
 bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return_address, FTexture2DRHIRef* tex, FTexture2DRHIRef* shader_resource) {
     this->texture_hook_ref = tex;
     this->shader_resource_hook_ref = shader_resource;
+    this->allocate_texture_called = true;
 
     if (!this->set_up_texture_hook) {
         SPDLOG_INFO("AllocateRenderTargetTexture retaddr: {:x}", return_address);
