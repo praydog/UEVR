@@ -632,6 +632,14 @@ bool VR::is_any_action_down() {
             continue;
         }
 
+        if (it.second == m_action_a_button_touch_left || it.second == m_action_a_button_touch_right) {
+            continue;
+        }
+
+        if (it.second == m_action_b_button_touch_left || it.second == m_action_b_button_touch_right) {
+            continue;
+        }
+
         if (is_action_active(it.second, m_left_joystick) || is_action_active(it.second, m_right_joystick)) {
             return true;
         }
