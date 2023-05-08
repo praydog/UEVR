@@ -627,6 +627,11 @@ bool VR::is_any_action_down() {
     }
 
     for (auto& it : m_action_handles) {
+        // These are too easy to trigger
+        if (it.second == m_action_thumbrest_touch_left || it.second == m_action_thumbrest_touch_right) {
+            continue;
+        }
+
         if (is_action_active(it.second, m_left_joystick) || is_action_active(it.second, m_right_joystick)) {
             return true;
         }
