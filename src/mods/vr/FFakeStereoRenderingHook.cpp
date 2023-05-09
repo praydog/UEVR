@@ -4,6 +4,7 @@
 #include <winternl.h>
 
 #include <asmjit/asmjit.h>
+#include <future>
 
 #include <spdlog/spdlog.h>
 #include <utility/Memory.hpp>
@@ -81,11 +82,25 @@ FFakeStereoRenderingHook::FFakeStereoRenderingHook() {
     g_hook = this;
 }
 
+void FFakeStereoRenderingHook::on_frame() {
+    attempt_hook_game_engine_tick();
+    attempt_hook_slate_thread();
+
+    // Ideally we want to do all hooking
+    // from game engine tick. if it fails
+    // we will fall back to doing it here.
+    if (!m_hooked_game_engine_tick && m_attempted_hook_game_engine_tick) {
+        attempt_hooking();
+    }
+}
+
+
 void FFakeStereoRenderingHook::on_draw_ui() {
     ZoneScopedN(__FUNCTION__);
 
     ImGui::SetNextItemOpen(true, ImGuiCond_Once);
     if (ImGui::TreeNode("Stereo Hook Options")) {
+        m_asynchronous_scan->draw("Asynchronous Code Scanning");
         m_recreate_textures_on_reset->draw("Recreate Textures on Reset");
         m_frame_delay_compensation->draw("Frame Delay Compensation");
 
@@ -112,7 +127,23 @@ void FFakeStereoRenderingHook::attempt_hooking() {
     m_hooked = hook();
 }
 
+bool pre_find_engine_tick() {
+    sdk::UGameEngine::get_tick_address(); // this takes a LONG time to find
+    return true;
+}
+
 void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_address) {
+    if (m_asynchronous_scan->value()) {
+        static std::future<bool> future = std::async(std::launch::async, pre_find_engine_tick);
+
+        // Wait for the future to be valid before attempting to hook
+        if (future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            future.get();
+        } else if (future.valid()) {
+            return;
+        }
+    }
+
     if (m_hooked_game_engine_tick) {
         return;
     }
@@ -254,7 +285,23 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
     SPDLOG_INFO("Hooked UGameEngine::Tick!");
 }
 
+bool pre_find_slate_thread() {
+    sdk::slate::locate_draw_window_renderthread_fn(); // Can take a while to find
+    return true;
+}
+
 void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_address) {
+    if (m_asynchronous_scan->value()) {
+        static std::future<bool> future = std::async(std::launch::async, pre_find_slate_thread);
+
+        // Wait for the future to be valid before attempting to hook
+        if (future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            future.get();
+        } else if (future.valid()) {
+            return;
+        }
+    }
+
     if (m_hooked_slate_thread) {
         return;
     }

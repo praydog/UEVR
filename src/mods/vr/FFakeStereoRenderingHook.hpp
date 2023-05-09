@@ -209,18 +209,6 @@ public:
         m_wants_texture_recreation = recreate;
     }
 
-    void on_frame() override {
-        attempt_hook_game_engine_tick();
-        attempt_hook_slate_thread();
-
-        // Ideally we want to do all hooking
-        // from game engine tick. if it fails
-        // we will fall back to doing it here.
-        if (!m_hooked_game_engine_tick && m_attempted_hook_game_engine_tick) {
-            attempt_hooking();
-        }
-    }
-
     void on_device_reset() override {
         if (m_recreate_textures_on_reset->value()) {
             m_wants_texture_recreation = true;
@@ -239,6 +227,7 @@ public:
         }
     }
 
+    void on_frame() override;
     void on_draw_ui() override;
 
     auto get_frame_delay_compensation() const {
@@ -416,10 +405,12 @@ private:
 
     const ModToggle::Ptr m_recreate_textures_on_reset{ ModToggle::create("VR_RecreateTexturesOnReset", true) };
     const ModInt32::Ptr m_frame_delay_compensation{ ModInt32::create("VR_FrameDelayCompensation", 0) };
+    const ModToggle::Ptr m_asynchronous_scan{ ModToggle::create("VR_AsynchronousScan", true) };
 
     ValueList m_options{
         *m_recreate_textures_on_reset,
-        *m_frame_delay_compensation
+        *m_frame_delay_compensation,
+        *m_asynchronous_scan
     };
 
     friend class IXRTrackingSystemHook;
