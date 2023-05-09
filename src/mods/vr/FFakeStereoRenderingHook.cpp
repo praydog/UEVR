@@ -5475,6 +5475,7 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
         const std::vector<std::string> bad_patterns_before_call = {
             "B2 32", // mov dl, 32h, (seen in UE5 debug/dev builds)
             "B2 2A", // mov dl, 2Ah, (seen in UE4.23 debug/dev builds)
+            "B2 2B", // mov dl, 2Bh, (seen in UE4.25 debug/dev builds)
             "BA 2F 00 00 00", // mov edx, 2Fh (seen in UE5 debug/dev builds)
             "F6 85 ? ? ? ? 05", // test byte ptr [rbp+?], 5 (seen in UE5 debug/dev builds)
         };
