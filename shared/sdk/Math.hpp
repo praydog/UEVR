@@ -121,4 +121,74 @@ static quat pitch_only(const quat& q) {
     const auto pitch = glm::asin(forward.y);
     return glm::quat(glm::vec3{ pitch, 0.0f, 0.0f });
 }
+
+// Euler must be in degrees
+static glm::mat4 ue_rotation_matrix(const glm::vec3& rot) {
+    const auto radyaw = glm::radians(rot.y);
+    const auto radpitch = glm::radians(rot.x);
+    const auto radroll = glm::radians(rot.z);
+
+    const auto sp = glm::sin(radpitch);
+    const auto sy = glm::sin(radyaw);
+    const auto sr = glm::sin(radroll);
+    const auto cp = glm::cos(radpitch);
+    const auto cy = glm::cos(radyaw);
+    const auto cr = glm::cos(radroll);
+
+    return glm::mat4 {
+        cp * cy, cp * sy, sp, 0,
+        sr * sp * cy - cr * sy, sr * sp * sy + cr * cy, -sr * cp, 0,
+        -(cr * sp * cy + sr * sy), cy * sr - cr * sp * sy, cr * cp, 0,
+        0, 0, 0, 1
+    };
+}
+
+// Euler must be in degrees
+static glm::mat4 ue_inverse_rotation_matrix(const glm::vec3& rot) {
+    const auto radyaw = glm::radians(rot.y);
+    const auto radpitch = glm::radians(rot.x);
+    const auto radroll = glm::radians(rot.z);
+
+    return glm::mat4 {
+        glm::mat4 {
+            1, 0, 0, 0,
+            0, glm::cos(radroll), glm::sin(radroll), 0,
+            0, -glm::sin(radroll), glm::cos(radroll), 0,
+            0, 0, 0, 1
+        } *
+        glm::mat4 {
+            glm::cos(radpitch), 0, -glm::sin(radpitch), 0,
+            0, 1, 0, 0,
+            glm::sin(radpitch), 0, glm::cos(radpitch), 0,
+            0, 0, 0, 1
+        } *
+        glm::mat4 {
+            glm::cos(radyaw), -glm::sin(radyaw), 0, 0,
+            glm::sin(radyaw), glm::cos(radyaw), 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1
+        }
+    };
+};
+
+// Input is UE format rotation matrix
+static glm::vec3 ue_euler_from_rotation_matrix(const glm::mat4& m) {
+    const auto& x_axis = *(glm::vec3*)&m[0];
+    const auto& y_axis = *(glm::vec3*)&m[1];
+    const auto& z_axis = *(glm::vec3*)&m[2];
+
+    auto rotator = glm::vec3{
+        glm::degrees(glm::atan2(x_axis.z, glm::sqrt((x_axis.x * x_axis.x) + (x_axis.y * x_axis.y)))),
+        glm::degrees(glm::atan2(x_axis.y, x_axis.x)),
+        0.0f
+    };
+
+    glm::mat4 rotation_matrix = ue_rotation_matrix(rotator);
+    glm::vec3 sy_axis = glm::vec3(rotation_matrix[1]);
+
+    // Roll
+    rotator.z = glm::degrees(glm::atan2(glm::dot(z_axis, sy_axis), glm::dot(y_axis, sy_axis)));
+
+    return rotator;
+}
 }
