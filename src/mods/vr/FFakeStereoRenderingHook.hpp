@@ -193,6 +193,10 @@ public:
         return m_has_double_precision;
     }
 
+    bool has_attempted_to_hook_engine() const {
+        return m_attempted_hook_game_engine_tick;
+    }
+
     bool has_attempted_to_hook_slate() const {
         return m_attempted_hook_slate_thread;
     }

@@ -1810,9 +1810,22 @@ void VR::on_draw_ui() {
         }
     }
 
-    if (!ImGui::CollapsingHeader(get_name().data())) {
-        return;
+    ImGui::PushID("VR");
+    if (!m_fake_stereo_hook->has_attempted_to_hook_engine() || !m_fake_stereo_hook->has_attempted_to_hook_slate()) {
+        std::string adjusted_name = get_name().data();
+        adjusted_name += " (Loading...)";
+
+        if (!ImGui::CollapsingHeader(adjusted_name.data())) {
+            ImGui::PopID();
+            return;
+        }
+    } else {
+        if (!ImGui::CollapsingHeader(get_name().data())) {
+            ImGui::PopID();
+            return;
+        }
     }
+    ImGui::PopID();
 
     auto display_error = [](auto& runtime, std::string dll_name) {
         if (runtime == nullptr || !runtime->error && runtime->loaded) {
