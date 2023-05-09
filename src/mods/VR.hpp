@@ -426,6 +426,10 @@ public:
         return m_splitscreen_compatibility_mode->value();
     }
 
+    uint32_t get_requested_splitscreen_index() const {
+        return m_splitscreen_view_index->value();
+    }
+
     auto& get_fake_stereo_hook() {
         return m_fake_stereo_hook;
     }
@@ -674,6 +678,7 @@ private:
     const ModToggle::Ptr m_custom_z_near_enabled{ ModToggle::create(generate_name("EnableCustomZNear"), false) };
 
     const ModToggle::Ptr m_splitscreen_compatibility_mode{ ModToggle::create(generate_name("SplitscreenCompatibilityMode"), false) };
+    const ModInt32::Ptr m_splitscreen_view_index{ ModInt32::create(generate_name("SplitscreenViewIndex"), 0) };
 
     struct DecoupledPitchData {
         mutable std::shared_mutex mtx{};
@@ -725,6 +730,7 @@ private:
         *m_custom_z_near,
         *m_custom_z_near_enabled,
         *m_splitscreen_compatibility_mode,
+        *m_splitscreen_view_index,
     };
     
 

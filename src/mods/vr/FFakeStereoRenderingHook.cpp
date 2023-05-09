@@ -2033,14 +2033,6 @@ struct SceneViewExtensionAnalyzer {
             runtime->internal_frame_count = frame_count;
             runtime->on_pre_render_game_thread(frame_count);
 
-            // If we couldn't find GetDesiredNumberOfViews, we need to set the view count to 1 as a workaround
-            // TODO: Check if this can cause a memory leak, I don't know who is resonsible
-            // for destroying the views in the array
-            if (vr->is_using_afr() && (view_family.views.count == 2 || view_family.views.count == 3)) {
-                SPDLOG_INFO_ONCE("Setting view count to 1");
-                view_family.views.count = 1;
-            }
-
             if (vr->is_splitscreen_compatibility_enabled()) {
                 constexpr auto INIT_OPTIONS_OFFSET = 0x50;
                 constexpr auto INIT_OPTIONS_VIEW_ORIGIN_OFFSET = 0;
@@ -2195,11 +2187,15 @@ struct SceneViewExtensionAnalyzer {
                     view->constructor((sdk::FSceneViewInitOptions*)init_options_copy.data());
                 };
 
-                if (!vr->is_using_afr()) {
-                    if (view_family.views.count > 1) {
-                        copy_init_options_from(*view_family.views.data[0], *view_family.views.data[1]);
-                    }
+                const auto requested_index = vr->get_requested_splitscreen_index();
+                const auto final_index = std::min<uint32_t>(view_family.views.count - 1, requested_index);
+                const auto other_index = final_index != 0 ? 0 : 1;
 
+                if (view_family.views.count > 1) {
+                    copy_init_options_from(*view_family.views.data[final_index], *view_family.views.data[other_index]);
+                }
+
+                if (!vr->is_using_afr()) {
                     do_splitscreen(0);
 
                     if (view_family.views.count > 1) {
@@ -2208,6 +2204,14 @@ struct SceneViewExtensionAnalyzer {
                 } else {
                     do_splitscreen(0);
                 }
+            }
+
+            // If we couldn't find GetDesiredNumberOfViews, we need to set the view count to 1 as a workaround
+            // TODO: Check if this can cause a memory leak, I don't know who is resonsible
+            // for destroying the views in the array
+            if (vr->is_using_afr() && (view_family.views.count == 2 || view_family.views.count == 3)) {
+                SPDLOG_INFO_ONCE("Setting view count to 1");
+                view_family.views.count = 1;
             }
         };
 
