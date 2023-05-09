@@ -422,6 +422,10 @@ public:
         return m_load_blueprint_code->value();
     }
 
+    bool is_splitscreen_compatibility_enabled() const {
+        return m_splitscreen_compatibility_mode->value();
+    }
+
     auto& get_fake_stereo_hook() {
         return m_fake_stereo_hook;
     }
@@ -669,6 +673,8 @@ private:
     const ModSlider::Ptr m_custom_z_near{ ModSlider::create(generate_name("CustomZNear"), 0.001f, 100.0f, 0.01f) };
     const ModToggle::Ptr m_custom_z_near_enabled{ ModToggle::create(generate_name("EnableCustomZNear"), false) };
 
+    const ModToggle::Ptr m_splitscreen_compatibility_mode{ ModToggle::create(generate_name("SplitscreenCompatibilityMode"), false) };
+
     struct DecoupledPitchData {
         mutable std::shared_mutex mtx{};
         glm::quat pre_flattened_rotation{};
@@ -718,6 +724,7 @@ private:
         *m_depth_scale,
         *m_custom_z_near,
         *m_custom_z_near_enabled,
+        *m_splitscreen_compatibility_mode,
     };
     
 

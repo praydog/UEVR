@@ -64,6 +64,10 @@ static glm::quat glm_to_ue4(const glm::quat q) {
     return glm::quat{ -q.w, -q.z, q.x, q.y };
 }
 
+static glm::quat ue4_to_glm(const glm::quat q) {
+    return glm::quat{ -q.w, q.y, q.z, -q.x };
+}
+
 static vec3 glm_to_ue4(const glm::vec3 v) {
     return vec3{ -v.z, v.x, v.y };
 }

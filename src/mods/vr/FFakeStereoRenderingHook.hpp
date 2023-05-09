@@ -261,6 +261,10 @@ public:
         return m_embedded_rtm;
     }
 
+    void calculate_stereo_view_offset_(const int32_t view_index, Rotator<float>* view_rotation, const float world_to_meters, Vector3f* view_location) {
+        calculate_stereo_view_offset(nullptr, view_index, view_rotation, world_to_meters, view_location);
+    }
+
 private:
     bool hook();
     bool standard_fake_stereo_hook(uintptr_t vtable);

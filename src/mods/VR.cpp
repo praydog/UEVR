@@ -1903,6 +1903,7 @@ void VR::on_draw_ui() {
     m_enable_depth->draw("Enable Depth");
     m_thumbrest_shifting->draw("Thumbrest DPad Shifting");
     m_load_blueprint_code->draw("Load Blueprint Code");
+    m_splitscreen_compatibility_mode->draw("Splitscreen Compatibility");
 
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
     if (ImGui::TreeNode("Near Clip Plane")) {

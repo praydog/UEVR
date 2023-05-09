@@ -84,13 +84,16 @@ FFakeStereoRenderingHook::FFakeStereoRenderingHook() {
 void FFakeStereoRenderingHook::on_draw_ui() {
     ZoneScopedN(__FUNCTION__);
 
-    ImGui::Text("Stereo Hook Options");
+    ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+    if (ImGui::TreeNode("Stereo Hook Options")) {
+        m_recreate_textures_on_reset->draw("Recreate Textures on Reset");
+        m_frame_delay_compensation->draw("Frame Delay Compensation");
 
-    m_recreate_textures_on_reset->draw("Recreate Textures on Reset");
-    m_frame_delay_compensation->draw("Frame Delay Compensation");
+        if (m_tracking_system_hook != nullptr) {
+            m_tracking_system_hook->on_draw_ui();
+        }
 
-    if (m_tracking_system_hook != nullptr) {
-        m_tracking_system_hook->on_draw_ui();
+        ImGui::TreePop();
     }
 
     ImGui::Separator();
@@ -2036,6 +2039,175 @@ struct SceneViewExtensionAnalyzer {
             if (vr->is_using_afr() && (view_family.views.count == 2 || view_family.views.count == 3)) {
                 SPDLOG_INFO_ONCE("Setting view count to 1");
                 view_family.views.count = 1;
+            }
+
+            if (vr->is_splitscreen_compatibility_enabled()) {
+                constexpr auto INIT_OPTIONS_OFFSET = 0x50;
+                constexpr auto INIT_OPTIONS_VIEW_ORIGIN_OFFSET = 0;
+                constexpr auto INIT_OPTIONS_ROTATION_MATRIX_OFFSET = 0x10;
+                constexpr auto INIT_OPTIONS_VIEW_RECT_OFFSET = 0x90;
+                constexpr auto INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET = 0xA0;
+                constexpr auto INIT_OPTIONS_PROJECTION_MATRIX_OFFSET = 0x50;
+
+                struct FIntRect {
+                    int32_t bounds[4];
+                };
+
+                static auto copy_init_options_from = [](const sdk::FSceneView& a, sdk::FSceneView& b) {
+                    auto init_options_a = (sdk::FSceneViewInitOptions*)((uintptr_t)&a + INIT_OPTIONS_OFFSET);
+                    auto init_options_b = (sdk::FSceneViewInitOptions*)((uintptr_t)&b + INIT_OPTIONS_OFFSET);
+
+                    const auto& view_origin = *(glm::vec3*)((uintptr_t)init_options_a + INIT_OPTIONS_VIEW_ORIGIN_OFFSET);
+                    const auto& rotation_matrix = *(glm::mat4*)((uintptr_t)init_options_a + INIT_OPTIONS_ROTATION_MATRIX_OFFSET);
+                    const auto& view_rect = *(FIntRect*)((uintptr_t)init_options_a + INIT_OPTIONS_VIEW_RECT_OFFSET);
+                    const auto& constrained_view_rect = *(FIntRect*)((uintptr_t)init_options_a + INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET);
+                    const auto& projection_matrix = *(glm::mat4*)((uintptr_t)init_options_a + INIT_OPTIONS_PROJECTION_MATRIX_OFFSET);
+
+                    *(glm::vec3*)((uintptr_t)init_options_b + INIT_OPTIONS_VIEW_ORIGIN_OFFSET) = view_origin;
+                    *(glm::mat4*)((uintptr_t)init_options_b + INIT_OPTIONS_ROTATION_MATRIX_OFFSET) = rotation_matrix;
+                    *(FIntRect*)((uintptr_t)init_options_b + INIT_OPTIONS_VIEW_RECT_OFFSET) = view_rect;
+                    *(FIntRect*)((uintptr_t)init_options_b + INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET) = constrained_view_rect;
+                    *(glm::mat4*)((uintptr_t)init_options_b + INIT_OPTIONS_PROJECTION_MATRIX_OFFSET) = projection_matrix;
+                };
+
+                auto do_splitscreen = [&](int32_t view_index) {
+                    int32_t w = vr->get_hmd_width();
+                    int32_t h = vr->get_hmd_height();
+
+                    int32_t x = 0;
+                    int32_t y = 0;
+
+                    const auto true_index = vr->is_using_afr() ? (frame_count + 1) % 2 : view_index;
+
+                    if (!vr->is_using_afr() && true_index == 1) {
+                        x += w;
+                    }
+
+                    auto view = view_family.views.data[view_index];
+
+                    FIntRect view_rect{x, y, x + w, y + h};
+
+                    auto& vr = VR::get();
+
+                    VR::get()->get_runtime()->update_matrices(0.1f, 10000.0f);
+
+                    const auto proj_mat = VR::get()->get_projection_matrix((VRRuntime::Eye)(true_index));
+
+                    std::array<uint8_t, 0x500> init_options_copy{};
+
+                    auto init_options = (sdk::FSceneViewInitOptions*)((uintptr_t)view + INIT_OPTIONS_OFFSET);
+                    auto& init_options_view_origin = *(glm::vec3*)((uintptr_t)init_options + INIT_OPTIONS_VIEW_ORIGIN_OFFSET);
+                    auto& init_options_view_rotation_matrix = *(Matrix4x4f*)((uintptr_t)init_options + INIT_OPTIONS_ROTATION_MATRIX_OFFSET);
+                    auto& init_options_view_rect = *(FIntRect*)((uintptr_t)init_options + INIT_OPTIONS_VIEW_RECT_OFFSET);
+                    auto& init_options_constrained_view_rect = *(FIntRect*)((uintptr_t)init_options + INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET);
+                    auto& init_options_projection_matrix = *(Matrix4x4f*)((uintptr_t)init_options + INIT_OPTIONS_PROJECTION_MATRIX_OFFSET);
+
+                    const auto conversion_mat = glm::mat4 {
+                        0, 0, 1, 0,
+                        1, 0, 0, 0,
+                        0, 1, 0, 0,
+                        0, 0, 0, 1
+                    };
+
+                    const auto conversion_mat_inverse = glm::inverse(conversion_mat);
+
+                    static auto make_inverse_rot_matrix = [](const Rotator<float>& rot) {
+                        const auto radyaw = glm::radians(rot.yaw);
+                        const auto radpitch = glm::radians(rot.pitch);
+                        const auto radroll = glm::radians(rot.roll);
+
+                        return glm::mat4 {
+                            glm::mat4 {
+                                1, 0, 0, 0,
+                                0, glm::cos(radroll), glm::sin(radroll), 0,
+                                0, -glm::sin(radroll), glm::cos(radroll), 0,
+                                0, 0, 0, 1
+                            } *
+                            glm::mat4 {
+                                glm::cos(radpitch), 0, -glm::sin(radpitch), 0,
+                                0, 1, 0, 0,
+                                glm::sin(radpitch), 0, glm::cos(radpitch), 0,
+                                0, 0, 0, 1
+                            } *
+                            glm::mat4 {
+                                glm::cos(radyaw), -glm::sin(radyaw), 0, 0,
+                                glm::sin(radyaw), glm::cos(radyaw), 0, 0,
+                                0, 0, 1, 0,
+                                0, 0, 0, 1
+                            }
+                        };
+                    };
+
+                    static auto make_rot_matrix = [](const Rotator<float>& rot) {
+                        const auto radyaw = glm::radians(rot.yaw);
+                        const auto radpitch = glm::radians(rot.pitch);
+                        const auto radroll = glm::radians(rot.roll);
+
+                        const auto sp = glm::sin(radpitch);
+                        const auto sy = glm::sin(radyaw);
+                        const auto sr = glm::sin(radroll);
+                        const auto cp = glm::cos(radpitch);
+                        const auto cy = glm::cos(radyaw);
+                        const auto cr = glm::cos(radroll);
+
+                        return glm::mat4 {
+                            cp * cy, cp * sy, sp, 0,
+                            sr * sp * cy - cr * sy, sr * sp * sy + cr * cy, -sr * cp, 0,
+                            -(cr * sp * cy + sr * sy), cy * sr - cr * sp * sy, cr * cp, 0,
+                            0, 0, 0, 1
+                        };
+                    };
+
+                    auto make_rotator = [](const glm::mat4& m) -> Rotator<float> {
+                        const auto& x_axis = *(glm::vec3*)&m[0];
+                        const auto& y_axis = *(glm::vec3*)&m[1];
+                        const auto& z_axis = *(glm::vec3*)&m[2];
+
+                        auto rotator = Rotator<float>{
+                            glm::degrees(glm::atan2(x_axis.z, glm::sqrt((x_axis.x * x_axis.x) + (x_axis.y * x_axis.y)))),
+                            glm::degrees(glm::atan2(x_axis.y, x_axis.x)),
+                            0.0f
+                        };
+
+                        // Make roll
+                        glm::mat4 rotation_matrix = make_rot_matrix(rotator);
+                        glm::vec3 sy_axis = glm::vec3(rotation_matrix[1]);
+
+                        rotator.roll = glm::degrees(glm::atan2(glm::dot(z_axis, sy_axis), glm::dot(y_axis, sy_axis)));
+
+                        return rotator;
+                    };
+
+                    // We need to "undo" the operations done to create the rotation matrix so we can get the original angle
+                    // const auto view_rot_mat = conversion_mat * make_inverse_rot_matrix(euler); <-- this is the result of the conversion
+                    auto euler = make_rotator(glm::inverse(conversion_mat_inverse * init_options_view_rotation_matrix));
+
+                    g_hook->calculate_stereo_view_offset_(true_index + 1, &euler, 100.0f, &init_options_view_origin);
+
+                    const auto view_rot_mat = conversion_mat * make_inverse_rot_matrix(euler);
+
+                    init_options_view_rotation_matrix = view_rot_mat;
+                    init_options_view_rect = view_rect;
+                    init_options_constrained_view_rect = view_rect;
+                    init_options_projection_matrix = proj_mat;
+
+                    memcpy(init_options_copy.data(), init_options, 0x500);
+                    view->constructor((sdk::FSceneViewInitOptions*)init_options_copy.data());
+                };
+
+                if (!vr->is_using_afr()) {
+                    if (view_family.views.count > 1) {
+                        copy_init_options_from(*view_family.views.data[0], *view_family.views.data[1]);
+                    }
+
+                    do_splitscreen(0);
+
+                    if (view_family.views.count > 1) {
+                        do_splitscreen(1);
+                    }
+                } else {
+                    do_splitscreen(0);
+                }
             }
         };
 
