@@ -75,6 +75,10 @@ set(TRACY_STATIC ON CACHE BOOL "" FORCE)
 set(TRACY_ENABLE OFF CACHE BOOL "" FORCE)
 """
 
+[fetch-content.directxtk]
+git = "https://github.com/microsoft/DirectXTK"
+tag = "f5026eb34e7053b1aff325d38db107703f394974"
+
 [target.openvr]
 type = "shared"
 sources = ["dependencies/openvr/src/**.cpp", "dependencies/openvr/src/vrcommon/**.cpp"]
@@ -214,7 +218,8 @@ link-libraries = [
     "openxr_loader",
     "nlohmann_json",
     "Version",
-    "TracyClient"
+    "TracyClient",
+    "DirectXTK"
 ]
 
 [template.ue4template.properties]

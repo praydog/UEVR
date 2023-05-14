@@ -121,6 +121,15 @@ FetchContent_Declare(tracy
 )
 FetchContent_MakeAvailable(tracy)
 
+message(STATUS "Fetching directxtk (f5026eb34e7053b1aff325d38db107703f394974)...")
+FetchContent_Declare(directxtk
+	GIT_REPOSITORY
+		"https://github.com/microsoft/DirectXTK"
+	GIT_TAG
+		f5026eb34e7053b1aff325d38db107703f394974
+)
+FetchContent_MakeAvailable(directxtk)
+
 # Target spdlog
 set(CMKR_TARGET spdlog)
 set(spdlog_SOURCES "")
@@ -823,6 +832,7 @@ target_link_libraries(ue4poc PUBLIC
 	nlohmann_json
 	Version
 	TracyClient
+	DirectXTK
 )
 
 target_link_libraries(ue4poc PUBLIC
@@ -967,6 +977,7 @@ target_link_libraries(ue4poc-nolog PUBLIC
 	nlohmann_json
 	Version
 	TracyClient
+	DirectXTK
 )
 
 target_compile_definitions(ue4poc-nolog PUBLIC
