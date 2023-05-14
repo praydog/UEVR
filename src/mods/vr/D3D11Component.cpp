@@ -30,6 +30,83 @@ namespace pixel_shader1 {
 //#define AFR_DEPTH_TEMP_DISABLED
 
 namespace vrmod {
+class DX11StateBackup {
+public:
+    DX11StateBackup(ID3D11DeviceContext* context) {
+        if (context == nullptr) {
+            throw std::runtime_error("DX11StateBackup: context is null");
+        }
+
+        m_context = context;
+
+        m_old.ScissorRectsCount = m_old.ViewportsCount = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+        m_context->RSGetScissorRects(&m_old.ScissorRectsCount, m_old.ScissorRects);
+        m_context->RSGetViewports(&m_old.ViewportsCount, m_old.Viewports);
+        m_context->RSGetState(&m_old.RS);
+        m_context->OMGetBlendState(&m_old.BlendState, m_old.BlendFactor, &m_old.SampleMask);
+        m_context->OMGetDepthStencilState(&m_old.DepthStencilState, &m_old.StencilRef);
+        m_context->PSGetShaderResources(0, 1, &m_old.PSShaderResource);
+        m_context->PSGetSamplers(0, 1, &m_old.PSSampler);
+        m_old.PSInstancesCount = m_old.VSInstancesCount = m_old.GSInstancesCount = 256;
+        m_context->PSGetShader(&m_old.PS, m_old.PSInstances, &m_old.PSInstancesCount);
+        m_context->VSGetShader(&m_old.VS, m_old.VSInstances, &m_old.VSInstancesCount);
+        m_context->VSGetConstantBuffers(0, 1, &m_old.VSConstantBuffer);
+        m_context->GSGetShader(&m_old.GS, m_old.GSInstances, &m_old.GSInstancesCount);
+
+        m_context->IAGetPrimitiveTopology(&m_old.PrimitiveTopology);
+        m_context->IAGetIndexBuffer(&m_old.IndexBuffer, &m_old.IndexBufferFormat, &m_old.IndexBufferOffset);
+        m_context->IAGetVertexBuffers(0, 1, &m_old.VertexBuffer, &m_old.VertexBufferStride, &m_old.VertexBufferOffset);
+        m_context->IAGetInputLayout(&m_old.InputLayout);
+    }
+
+    virtual ~DX11StateBackup() {
+        m_context->RSSetScissorRects(m_old.ScissorRectsCount, m_old.ScissorRects);
+        m_context->RSSetViewports(m_old.ViewportsCount, m_old.Viewports);
+        m_context->RSSetState(m_old.RS); if (m_old.RS) m_old.RS->Release();
+        m_context->OMSetBlendState(m_old.BlendState, m_old.BlendFactor, m_old.SampleMask); if (m_old.BlendState) m_old.BlendState->Release();
+        m_context->OMSetDepthStencilState(m_old.DepthStencilState, m_old.StencilRef); if (m_old.DepthStencilState) m_old.DepthStencilState->Release();
+        m_context->PSSetShaderResources(0, 1, &m_old.PSShaderResource); if (m_old.PSShaderResource) m_old.PSShaderResource->Release();
+        m_context->PSSetSamplers(0, 1, &m_old.PSSampler); if (m_old.PSSampler) m_old.PSSampler->Release();
+        m_context->PSSetShader(m_old.PS, m_old.PSInstances, m_old.PSInstancesCount); if (m_old.PS) m_old.PS->Release();
+        for (UINT i = 0; i < m_old.PSInstancesCount; i++) if (m_old.PSInstances[i]) m_old.PSInstances[i]->Release();
+        m_context->VSSetShader(m_old.VS, m_old.VSInstances, m_old.VSInstancesCount); if (m_old.VS) m_old.VS->Release();
+        m_context->VSSetConstantBuffers(0, 1, &m_old.VSConstantBuffer); if (m_old.VSConstantBuffer) m_old.VSConstantBuffer->Release();
+        m_context->GSSetShader(m_old.GS, m_old.GSInstances, m_old.GSInstancesCount); if (m_old.GS) m_old.GS->Release();
+        for (UINT i = 0; i < m_old.VSInstancesCount; i++) if (m_old.VSInstances[i]) m_old.VSInstances[i]->Release();
+        m_context->IASetPrimitiveTopology(m_old.PrimitiveTopology);
+        m_context->IASetIndexBuffer(m_old.IndexBuffer, m_old.IndexBufferFormat, m_old.IndexBufferOffset); if (m_old.IndexBuffer) m_old.IndexBuffer->Release();
+        m_context->IASetVertexBuffers(0, 1, &m_old.VertexBuffer, &m_old.VertexBufferStride, &m_old.VertexBufferOffset); if (m_old.VertexBuffer) m_old.VertexBuffer->Release();
+        m_context->IASetInputLayout(m_old.InputLayout); if (m_old.InputLayout) m_old.InputLayout->Release();
+    }
+
+private:
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_context{};
+
+    struct BACKUP_DX11_STATE {
+        UINT                        ScissorRectsCount, ViewportsCount;
+        D3D11_RECT                  ScissorRects[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+        D3D11_VIEWPORT              Viewports[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+        ID3D11RasterizerState*      RS;
+        ID3D11BlendState*           BlendState;
+        FLOAT                       BlendFactor[4];
+        UINT                        SampleMask;
+        UINT                        StencilRef;
+        ID3D11DepthStencilState*    DepthStencilState;
+        ID3D11ShaderResourceView*   PSShaderResource;
+        ID3D11SamplerState*         PSSampler;
+        ID3D11PixelShader*          PS;
+        ID3D11VertexShader*         VS;
+        ID3D11GeometryShader*       GS;
+        UINT                        PSInstancesCount, VSInstancesCount, GSInstancesCount;
+        ID3D11ClassInstance         *PSInstances[256], *VSInstances[256], *GSInstances[256];   // 256 is max according to PSSetShader documentation
+        D3D11_PRIMITIVE_TOPOLOGY    PrimitiveTopology;
+        ID3D11Buffer*               IndexBuffer, *VertexBuffer, *VSConstantBuffer;
+        UINT                        IndexBufferOffset, VertexBufferStride, VertexBufferOffset;
+        DXGI_FORMAT                 IndexBufferFormat;
+        ID3D11InputLayout*          InputLayout;
+    } m_old{};
+};
+
 D3D11Component::TextureContext::TextureContext(ID3D11Resource* in_tex, std::optional<DXGI_FORMAT> rtv_format) {
     set(in_tex, rtv_format);
 }
@@ -143,6 +220,15 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         return vr::VRCompositorError_None;
     }
 
+    bool is_10bit_backbuffer = false;
+
+    if (real_backbuffer != nullptr) {
+        D3D11_TEXTURE2D_DESC real_backbuffer_desc{};
+        real_backbuffer->GetDesc(&real_backbuffer_desc);
+
+        is_10bit_backbuffer = real_backbuffer_desc.Format == DXGI_FORMAT_R10G10B10A2_UNORM;
+    }
+
     auto runtime = vr->get_runtime();
 
     const auto is_same_frame = m_last_rendered_frame > 0 && m_last_rendered_frame == vr->m_render_frame_count;
@@ -241,24 +327,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             }*/
         }
 
-        const auto has_skip_present_fix = vr->m_desktop_fix->value() && vr->m_desktop_fix_skip_present->value();
-
-        // Copy the back buffer to the left eye texture
-        // always do it because are using this for the desktop recording fix
-        bool already_copied = false;
-
-        if (!has_skip_present_fix) {
-            context->CopyResource(m_left_eye_tex.Get(), backbuffer.Get());
-            already_copied = true;
-        }
-
         if (runtime->is_openvr()) {
-            if (has_skip_present_fix && !already_copied) {
-                context->CopyResource(m_left_eye_tex.Get(), backbuffer.Get());
-            }
-
-            const auto submit_pose = vr->m_openvr->get_pose_for_submit();
-
             D3D11_BOX src_box{};
             src_box.left = 0;
             src_box.right = m_backbuffer_size[0] / 2;
@@ -268,6 +337,8 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             src_box.back = 1;
 
             context->CopySubresourceRegion(m_left_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
+
+            const auto submit_pose = vr->m_openvr->get_pose_for_submit();
 
             if (m_is_shader_setup) {
                 ID3D11RenderTargetView* views[] = { m_left_eye_rtv.Get() };
@@ -331,12 +402,30 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                     src_box.back = 1;
                 }
 
+                // Copy right eye for desktop spectator
+                if (vr->m_desktop_fix->value() && m_right_eye_tex != nullptr) {
+                    context->CopySubresourceRegion(m_right_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
+                }
+
                 m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_RIGHT_EYE, backbuffer.Get(), &src_box);
 
                 if (scene_depth_tex != nullptr) {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_DEPTH_RIGHT_EYE, scene_depth_tex.Get(), nullptr);
                 }
             } else {
+                // Copy right eye for desktop spectator
+                if (vr->m_desktop_fix->value() && m_right_eye_tex != nullptr) {
+                    D3D11_BOX src_box{};
+                    src_box.left = m_backbuffer_size[0] / 2;
+                    src_box.right = m_backbuffer_size[0];
+                    src_box.top = 0;
+                    src_box.bottom = m_backbuffer_size[1];
+                    src_box.front = 0;
+                    src_box.back = 1;
+
+                    context->CopySubresourceRegion(m_right_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
+                }
+
                 // Copy over the entire double wide back buffer instead
                 m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DOUBLE_WIDE, backbuffer.Get(), nullptr);
 
@@ -459,6 +548,32 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         }*/
     }
 
+    // Desktop fix
+    if (m_backbuffer_rtv != nullptr && m_right_eye_srv != nullptr && vr->is_hmd_active() && vr->m_desktop_fix->value()) {
+        DX11StateBackup backup{context.Get()};
+        
+        ID3D11RenderTargetView* views[] = { m_backbuffer_rtv.Get() };
+        context->OMSetRenderTargets(1, views, nullptr);
+        m_backbuffer_batch->Begin();
+
+        RECT dest_rect{};
+        dest_rect.left = 0;
+        dest_rect.top = 0;
+        dest_rect.right = m_real_backbuffer_size[0];
+        dest_rect.bottom = m_real_backbuffer_size[1];
+
+        if (is_10bit_backbuffer) {
+            // 8bit -> 10bit
+            constexpr auto CONVERSION_RATIO = (1023.0f / 255.0f);
+            DirectX::XMVECTORF32 color{CONVERSION_RATIO, CONVERSION_RATIO, CONVERSION_RATIO, 1.0f};
+            m_backbuffer_batch->Draw(m_right_eye_srv.Get(), dest_rect, color);
+        } else {
+            m_backbuffer_batch->Draw(m_right_eye_srv.Get(), dest_rect, DirectX::Colors::White);
+        }
+        
+        m_backbuffer_batch->End();
+    }
+
     return vr::VRCompositorError_None;
 }
 
@@ -520,6 +635,7 @@ void D3D11Component::on_reset(VR* vr) {
     m_ps_shader.Reset();
     m_input_layout.Reset();
     m_constant_buffer.Reset();
+    m_backbuffer_batch.reset();
     m_is_shader_setup = false;
 
     if (vr->get_runtime()->is_openxr() && vr->get_runtime()->loaded) {
@@ -599,12 +715,25 @@ bool D3D11Component::setup() {
         return false;
     }
 
+    m_backbuffer_batch = std::make_unique<DirectX::DX11::SpriteBatch>(context.Get());
+
     // Get backbuffer description.
     D3D11_TEXTURE2D_DESC backbuffer_desc{};
     backbuffer->GetDesc(&backbuffer_desc);
 
     m_backbuffer_size[0] = backbuffer_desc.Width;
     m_backbuffer_size[1] = backbuffer_desc.Height;
+
+    D3D11_TEXTURE2D_DESC real_backbuffer_desc{};
+    ComPtr<ID3D11Texture2D> real_backbuffer{};
+    swapchain->GetBuffer(0, IID_PPV_ARGS(&real_backbuffer));
+
+    if (real_backbuffer != nullptr) {
+        real_backbuffer->GetDesc(&real_backbuffer_desc);
+
+        m_real_backbuffer_size[0] = real_backbuffer_desc.Width;
+        m_real_backbuffer_size[1] = real_backbuffer_desc.Height;
+    }
 
     backbuffer_desc.Width = backbuffer_desc.Width / 2;
 

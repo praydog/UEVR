@@ -12,6 +12,7 @@
 #include <openxr/openxr_platform.h>
 
 #include <DirectXMath.h>
+#include <SpriteBatch.h>
 
 class VR;
 
@@ -120,12 +121,15 @@ private:
     ComPtr<ID3D11ShaderResourceView> m_left_eye_srv{};
     ComPtr<ID3D11ShaderResourceView> m_right_eye_srv{};
 
+    std::unique_ptr<DirectX::DX11::SpriteBatch> m_backbuffer_batch{};
+
     vr::HmdMatrix44_t m_left_eye_proj{};
     vr::HmdMatrix44_t m_right_eye_proj{};
 
     ComPtr<ID3D11Texture2D> m_backbuffer{};
     ComPtr<ID3D11RenderTargetView> m_backbuffer_rtv{};
     std::array<uint32_t, 2> m_backbuffer_size{};
+    std::array<uint32_t, 2> m_real_backbuffer_size{};
 
     uint32_t m_last_rendered_frame{0};
     bool m_force_reset{false};

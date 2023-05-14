@@ -647,8 +647,7 @@ private:
     const ModToggle::Ptr m_disable_blur_widgets{ ModToggle::create(generate_name("DisableBlurWidgets"), true) };
     const ModToggle::Ptr m_disable_hdr_compositing{ ModToggle::create(generate_name("DisableHDRCompositing"), true) };
     const ModToggle::Ptr m_disable_hzbocclusion{ ModToggle::create(generate_name("DisableHZBOcclusion"), true) };
-    const ModToggle::Ptr m_desktop_fix{ ModToggle::create(generate_name("DesktopRecordingFix"), false) };
-    const ModToggle::Ptr m_desktop_fix_skip_present{ ModToggle::create(generate_name("DesktopRecordingFixSkipPresent"), false) };
+    const ModToggle::Ptr m_desktop_fix{ ModToggle::create(generate_name("DesktopRecordingFix_V2"), true) };
     const ModToggle::Ptr m_enable_gui{ ModToggle::create(generate_name("EnableGUI"), true) };
     const ModToggle::Ptr m_enable_depth{ ModToggle::create(generate_name("EnableDepth"), false) };
     const ModToggle::Ptr m_decoupled_pitch{ ModToggle::create(generate_name("DecoupledPitch"), false) };
@@ -709,7 +708,6 @@ private:
         *m_disable_hdr_compositing,
         *m_disable_hzbocclusion,
         *m_desktop_fix,
-        *m_desktop_fix_skip_present,
         *m_enable_gui,
         *m_enable_depth,
         *m_decoupled_pitch,
