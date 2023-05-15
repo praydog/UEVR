@@ -63,6 +63,7 @@ private:
     struct TextureContext {
         ComPtr<ID3D11Resource> tex{};
         ComPtr<ID3D11RenderTargetView> rtv{};
+        ComPtr<ID3D11ShaderResourceView> srv{};
 
         TextureContext(ID3D11Resource* in_tex, std::optional<DXGI_FORMAT> rtv_format = std::nullopt);
         TextureContext() = default;
@@ -77,10 +78,19 @@ private:
         void reset() {
             tex.Reset();
             rtv.Reset();
+            srv.Reset();
         }
 
         bool has_texture() const {
             return tex != nullptr;
+        }
+
+        bool has_rtv() const {
+            return rtv != nullptr;
+        }
+
+        bool has_srv() const {
+            return srv != nullptr;
         }
 
         operator bool() const {
@@ -97,6 +107,10 @@ private:
 
         operator ID3D11RenderTargetView*() const {
             return rtv.Get();
+        }
+
+        operator ID3D11ShaderResourceView*() const {
+            return srv.Get();
         }
     };
 

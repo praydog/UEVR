@@ -127,13 +127,19 @@ bool D3D11Component::TextureContext::set(ID3D11Resource* in_tex, std::optional<D
    
     if (!is_same_tex) {
         this->rtv.Reset();
+        this->srv.Reset();
 
         auto device = g_framework->get_d3d11_hook()->get_device();
         bool made_rtv = false;
+        bool made_srv = false;
 
         if (!rtv_format) {
             if (!FAILED(device->CreateRenderTargetView(tex.Get(), nullptr, &rtv))) {
                 made_rtv = true;
+            }
+
+            if (!FAILED(device->CreateShaderResourceView(tex.Get(), nullptr, &srv))) {
+                made_srv = true;
             }
         }
 
@@ -150,11 +156,29 @@ bool D3D11Component::TextureContext::set(ID3D11Resource* in_tex, std::optional<D
             made_rtv = !FAILED(device->CreateRenderTargetView(tex.Get(), &rtv_desc, &this->rtv));
         }
 
+        if (!made_srv) {
+            if (!rtv_format) {
+                rtv_format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+            }
+
+            D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+            srv_desc.Format = *rtv_format;
+            srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            srv_desc.Texture2D.MipLevels = 1;
+            srv_desc.Texture2D.MostDetailedMip = 0;
+
+            made_srv = !FAILED(device->CreateShaderResourceView(tex.Get(), &srv_desc, &this->srv));
+        }
+
         if (!made_rtv) {
             spdlog::error("Failed to create render target view for texture");
         }
 
-        return made_rtv;
+        if (!made_srv) {
+            spdlog::error("Failed to create shader resource view for texture");
+        }
+
+        return made_rtv && made_srv;
     }
 
     return true;
@@ -269,13 +293,15 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 }
             }
         }
-        
-        // clear the game's UI texture
-        float clear_color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-        m_engine_ui_ref.clear_rtv(clear_color);
     } else {
         m_engine_ui_ref.reset();
     }
+
+    utility::ScopeGuard engine_ui_guard([&]() {
+        // clear the game's UI texture
+        float clear_color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+        m_engine_ui_ref.clear_rtv(clear_color);
+    });
 
     ComPtr<ID3D11Texture2D> scene_depth_tex{};
 
@@ -567,8 +593,16 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             constexpr auto CONVERSION_RATIO = (1023.0f / 255.0f);
             DirectX::XMVECTORF32 color{CONVERSION_RATIO, CONVERSION_RATIO, CONVERSION_RATIO, 1.0f};
             m_backbuffer_batch->Draw(m_right_eye_srv.Get(), dest_rect, color);
+
+            if (m_engine_ui_ref.has_srv()) {
+                m_backbuffer_batch->Draw(m_engine_ui_ref, dest_rect, color);
+            }
         } else {
             m_backbuffer_batch->Draw(m_right_eye_srv.Get(), dest_rect, DirectX::Colors::White);
+
+            if (m_engine_ui_ref.has_srv()) {
+                m_backbuffer_batch->Draw(m_engine_ui_ref, dest_rect, DirectX::Colors::White);
+            }
         }
         
         m_backbuffer_batch->End();
