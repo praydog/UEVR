@@ -580,7 +580,13 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         
         ID3D11RenderTargetView* views[] = { m_backbuffer_rtv.Get() };
         context->OMSetRenderTargets(1, views, nullptr);
+
         m_backbuffer_batch->Begin();
+
+        D3D11_VIEWPORT viewport{};
+        viewport.Width = m_real_backbuffer_size[0];
+        viewport.Height = m_real_backbuffer_size[1];
+        m_backbuffer_batch->SetViewport(viewport);
 
         RECT dest_rect{};
         dest_rect.left = 0;
