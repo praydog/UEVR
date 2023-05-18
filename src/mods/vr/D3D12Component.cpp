@@ -77,7 +77,8 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
     // Set up the game tex context
     if (m_game_tex.texture.Get() != backbuffer.Get()) {
-        if (!m_game_tex.setup(device, backbuffer.Get(), DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, L"Game Texture")) {
+        // We use SRGB for the RTV but not for the SRV because it screws up the colors when drawing the spectator view
+        if (!m_game_tex.setup(device, backbuffer.Get(), DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM, L"Game Texture")) {
             spdlog::error("[VR] Failed to fully setup game texture.");
         }
     }
@@ -86,7 +87,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         if (m_game_ui_tex.texture.Get() != ui_target->get_native_resource()) {
             if (!m_game_ui_tex.setup(device, 
                 (ID3D12Resource*)ui_target->get_native_resource(), 
-                DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
+                DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM,
                 L"Game UI Texture"))
             {
                 spdlog::error("[VR] Failed to fully setup game UI texture.");

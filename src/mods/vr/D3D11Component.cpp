@@ -107,11 +107,11 @@ private:
     } m_old{};
 };
 
-D3D11Component::TextureContext::TextureContext(ID3D11Resource* in_tex, std::optional<DXGI_FORMAT> rtv_format) {
-    set(in_tex, rtv_format);
+D3D11Component::TextureContext::TextureContext(ID3D11Resource* in_tex, std::optional<DXGI_FORMAT> rtv_format, std::optional<DXGI_FORMAT> srv_format) {
+    set(in_tex, rtv_format, srv_format);
 }
 
-bool D3D11Component::TextureContext::set(ID3D11Resource* in_tex, std::optional<DXGI_FORMAT> rtv_format) {
+bool D3D11Component::TextureContext::set(ID3D11Resource* in_tex, std::optional<DXGI_FORMAT> rtv_format, std::optional<DXGI_FORMAT> srv_format) {
     bool is_same_tex = this->tex.Get() == in_tex;
 
     if (!is_same_tex) {
@@ -122,6 +122,7 @@ bool D3D11Component::TextureContext::set(ID3D11Resource* in_tex, std::optional<D
 
     if (in_tex == nullptr) {
         this->rtv.Reset();
+        this->srv.Reset();
         return false;
     }
    
@@ -137,7 +138,9 @@ bool D3D11Component::TextureContext::set(ID3D11Resource* in_tex, std::optional<D
             if (!FAILED(device->CreateRenderTargetView(tex.Get(), nullptr, &rtv))) {
                 made_rtv = true;
             }
+        }
 
+        if (!srv_format) {  
             if (!FAILED(device->CreateShaderResourceView(tex.Get(), nullptr, &srv))) {
                 made_srv = true;
             }
@@ -157,12 +160,12 @@ bool D3D11Component::TextureContext::set(ID3D11Resource* in_tex, std::optional<D
         }
 
         if (!made_srv) {
-            if (!rtv_format) {
-                rtv_format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+            if (!srv_format) {
+                srv_format = DXGI_FORMAT_B8G8R8A8_UNORM;
             }
 
             D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-            srv_desc.Format = *rtv_format;
+            srv_desc.Format = *srv_format;
             srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
             srv_desc.Texture2D.MipLevels = 1;
             srv_desc.Texture2D.MostDetailedMip = 0;
@@ -241,16 +244,8 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
     if (backbuffer == nullptr) {
         spdlog::error("[VR] Failed to get back buffer.");
+        m_engine_tex_ref.reset();
         return vr::VRCompositorError_None;
-    }
-
-    bool is_10bit_backbuffer = false;
-
-    if (real_backbuffer != nullptr) {
-        D3D11_TEXTURE2D_DESC real_backbuffer_desc{};
-        real_backbuffer->GetDesc(&real_backbuffer_desc);
-
-        is_10bit_backbuffer = real_backbuffer_desc.Format == DXGI_FORMAT_R10G10B10A2_UNORM;
     }
 
     auto runtime = vr->get_runtime();
@@ -269,12 +264,16 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         runtime->fix_frame();
     }
 
+    // We use SRGB for the RTV but not for the SRV because it screws up the colors when drawing the spectator view
+    m_engine_tex_ref.set(backbuffer.Get(), DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM);
+
     // Update the UI overlay.
     const auto& ffsr = VR::get()->m_fake_stereo_hook;
     const auto ui_target = ffsr->get_render_target_manager()->get_ui_target();
 
     if (ui_target != nullptr) {
-        m_engine_ui_ref.set((ID3D11Texture2D*)ui_target->get_native_resource(), DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
+        // We use SRGB for the RTV but not for the SRV because it screws up the colors when drawing the spectator view
+        m_engine_ui_ref.set((ID3D11Texture2D*)ui_target->get_native_resource(), DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM);
 
         // Duplicate frames can sometimes cause the UI to get stuck on the screen.
         // and can lock up the compositor.
@@ -575,7 +574,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     }
 
     // Desktop fix
-    if (m_backbuffer_rtv != nullptr && m_right_eye_srv != nullptr && vr->is_hmd_active() && vr->m_desktop_fix->value()) {
+    if (is_right_eye_frame && m_backbuffer_rtv != nullptr && vr->is_hmd_active() && vr->m_desktop_fix->value()) {
         DX11StateBackup backup{context.Get()};
         
         ID3D11RenderTargetView* views[] = { m_backbuffer_rtv.Get() };
@@ -603,8 +602,27 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         dest_rect.right = m_real_backbuffer_size[0];
         dest_rect.bottom = m_real_backbuffer_size[1];
 
-        m_backbuffer_batch->Draw(m_right_eye_srv.Get(), dest_rect, DirectX::Colors::White);
+        // Game tex
+        if (m_engine_tex_ref.has_srv()) {
+            RECT source_rect{};
 
+            // left side of double wide tex only on AFR/synced
+            if (vr->is_using_afr()) {
+                source_rect.left = 0;
+                source_rect.top = 0;
+                source_rect.right = m_backbuffer_size[0] / 2;
+                source_rect.bottom = m_backbuffer_size[1];
+            } else {
+                source_rect.left = (LONG)m_backbuffer_size[0] / 2;
+                source_rect.top = 0;
+                source_rect.right = m_backbuffer_size[0];
+                source_rect.bottom = m_backbuffer_size[1];
+            }
+
+            m_backbuffer_batch->Draw(m_engine_tex_ref, dest_rect, &source_rect, DirectX::Colors::White);
+        }
+
+        // UI tex
         if (m_engine_ui_ref.has_srv()) {
             m_backbuffer_batch->Draw(m_engine_ui_ref, dest_rect, DirectX::Colors::White);
         }

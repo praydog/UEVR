@@ -65,14 +65,14 @@ private:
         ComPtr<ID3D11RenderTargetView> rtv{};
         ComPtr<ID3D11ShaderResourceView> srv{};
 
-        TextureContext(ID3D11Resource* in_tex, std::optional<DXGI_FORMAT> rtv_format = std::nullopt);
+        TextureContext(ID3D11Resource* in_tex, std::optional<DXGI_FORMAT> rtv_format = std::nullopt, std::optional<DXGI_FORMAT> srv_format = std::nullopt);
         TextureContext() = default;
 
         virtual ~TextureContext() {
             reset();
         }
 
-        bool set(ID3D11Resource* in_tex, std::optional<DXGI_FORMAT> rtv_format = std::nullopt);
+        bool set(ID3D11Resource* in_tex, std::optional<DXGI_FORMAT> rtv_format = std::nullopt, std::optional<DXGI_FORMAT> srv_format = std::nullopt);
         bool clear_rtv(float* color);
 
         void reset() {
@@ -116,6 +116,7 @@ private:
 
     ComPtr<ID3D11Texture2D> m_ui_tex{};
     TextureContext m_engine_ui_ref{};
+    TextureContext m_engine_tex_ref{};
     ComPtr<ID3D11Texture2D> m_blank_tex{};
     ComPtr<ID3D11Texture2D> m_left_eye_tex{};
     ComPtr<ID3D11Texture2D> m_right_eye_tex{};
