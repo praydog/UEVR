@@ -590,17 +590,39 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         if (m_engine_tex_ref.has_srv()) {
             RECT source_rect{};
 
+            const auto aspect_ratio = (float)m_real_backbuffer_size[0] / (float)m_real_backbuffer_size[1];
+
+            const auto eye_width = ((float)m_backbuffer_size[0] / 2.0f);
+            const auto eye_height = (float)m_backbuffer_size[1];
+            const auto eye_aspect_ratio = eye_width / eye_height;
+
+            const auto original_centerw = (float)eye_width / 2.0f;
+            const auto original_centerh = (float)eye_height / 2.0f;
+
             // left side of double wide tex only on AFR/synced
             if (vr->is_using_afr()) {
                 source_rect.left = 0;
                 source_rect.top = 0;
-                source_rect.right = m_backbuffer_size[0] / 2;
-                source_rect.bottom = m_backbuffer_size[1];
+                source_rect.right = (LONG)eye_width;
+                source_rect.bottom = (LONG)eye_height;
             } else {
-                source_rect.left = (LONG)m_backbuffer_size[0] / 2;
+                source_rect.left = (LONG)eye_width;
                 source_rect.top = 0;
-                source_rect.right = m_backbuffer_size[0];
-                source_rect.bottom = m_backbuffer_size[1];
+                source_rect.right = (LONG)(eye_width * 2);
+                source_rect.bottom = (LONG)eye_height;
+            }
+
+            // Correct left/top/right/bottom to match the aspect ratio of the game
+            if (eye_aspect_ratio > aspect_ratio) {
+                const auto new_width = eye_height * aspect_ratio;
+                const auto new_centerw = new_width / 2.0f;
+                source_rect.left = (LONG)(original_centerw - new_centerw);
+                source_rect.right = (LONG)(original_centerw + new_centerw);
+            } else {
+                const auto new_height = eye_width / aspect_ratio;
+                const auto new_centerh = new_height / 2.0f;
+                source_rect.top = (LONG)(original_centerh - new_centerh);
+                source_rect.bottom = (LONG)(original_centerh + new_centerh);
             }
 
             m_backbuffer_batch->Draw(m_engine_tex_ref, dest_rect, &source_rect, DirectX::Colors::White);

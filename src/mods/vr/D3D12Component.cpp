@@ -512,6 +512,15 @@ void D3D12Component::draw_spectator_view(ID3D12GraphicsCommandList* command_list
 
     RECT dest_rect{ 0, 0, (LONG)desc.Width, (LONG)desc.Height };
 
+    const auto aspect_ratio = (float)desc.Width / (float)desc.Height;
+
+    const auto eye_width = ((float)m_backbuffer_size[0] / 2.0f);
+    const auto eye_height = (float)m_backbuffer_size[1];
+    const auto eye_aspect_ratio = eye_width / eye_height;
+
+    const auto original_centerw = (float)eye_width / 2.0f;
+    const auto original_centerh = (float)eye_height / 2.0f;
+
     ///////////////
     // Eye (game) texture
     ///////////////
@@ -529,6 +538,19 @@ void D3D12Component::draw_spectator_view(ID3D12GraphicsCommandList* command_list
         source_rect.top = 0;
         source_rect.right = m_backbuffer_size[0];
         source_rect.bottom = m_backbuffer_size[1];
+    }
+
+    // Correct left/top/right/bottom to match the aspect ratio of the game
+    if (eye_aspect_ratio > aspect_ratio) {
+        const auto new_width = eye_height * aspect_ratio;
+        const auto new_centerw = new_width / 2.0f;
+        source_rect.left = (LONG)(original_centerw - new_centerw);
+        source_rect.right = (LONG)(original_centerw + new_centerw);
+    } else {
+        const auto new_height = eye_width / aspect_ratio;
+        const auto new_centerh = new_height / 2.0f;
+        source_rect.top = (LONG)(original_centerh - new_centerh);
+        source_rect.bottom = (LONG)(original_centerh + new_centerh);
     }
 
     // Set descriptor heaps
