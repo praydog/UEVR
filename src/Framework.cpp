@@ -1096,7 +1096,7 @@ void Framework::draw_ui() {
     // Center the window
     const auto rt_size = get_rt_size();
     constexpr auto window_w = 500.0f;
-    constexpr auto window_h = 500.0f;
+    constexpr auto window_h = 700.0f;
 
     const auto centered_x = (rt_size.x / 2) - (window_w / 2);
     const auto centered_y = (rt_size.y / 2) - (window_h / 2);
