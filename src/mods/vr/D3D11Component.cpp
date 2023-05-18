@@ -603,23 +603,12 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         dest_rect.right = m_real_backbuffer_size[0];
         dest_rect.bottom = m_real_backbuffer_size[1];
 
-        if (is_10bit_backbuffer) {
-            // 8bit -> 10bit
-            constexpr auto CONVERSION_RATIO = (1023.0f / 255.0f);
-            DirectX::XMVECTORF32 color{CONVERSION_RATIO, CONVERSION_RATIO, CONVERSION_RATIO, 1.0f};
-            m_backbuffer_batch->Draw(m_right_eye_srv.Get(), dest_rect, color);
+        m_backbuffer_batch->Draw(m_right_eye_srv.Get(), dest_rect, DirectX::Colors::White);
 
-            if (m_engine_ui_ref.has_srv()) {
-                m_backbuffer_batch->Draw(m_engine_ui_ref, dest_rect, color);
-            }
-        } else {
-            m_backbuffer_batch->Draw(m_right_eye_srv.Get(), dest_rect, DirectX::Colors::White);
-
-            if (m_engine_ui_ref.has_srv()) {
-                m_backbuffer_batch->Draw(m_engine_ui_ref, dest_rect, DirectX::Colors::White);
-            }
+        if (m_engine_ui_ref.has_srv()) {
+            m_backbuffer_batch->Draw(m_engine_ui_ref, dest_rect, DirectX::Colors::White);
         }
-        
+
         m_backbuffer_batch->End();
     }
 
