@@ -95,8 +95,11 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
         // Draws the spectator view
         auto draw_spec_and_clear_rt = [&](ResourceCopier& copier) {
+            if (is_right_eye_frame) {
+                draw_spectator_view(copier.cmd_list.Get());
+            }
+
             const float clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-            draw_spectator_view(copier.cmd_list.Get());
             copier.clear_rtv(m_game_ui_tex.texture.Get(), m_game_ui_tex.get_rtv(), (float*)&clear_color, ENGINE_SRC_COLOR);  
         };
 
