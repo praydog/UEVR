@@ -130,6 +130,15 @@ FetchContent_Declare(directxtk
 )
 FetchContent_MakeAvailable(directxtk)
 
+message(STATUS "Fetching directxtk12 (528801aa6dd8d628c2f756c41a76d300f47de478)...")
+FetchContent_Declare(directxtk12
+	GIT_REPOSITORY
+		"https://github.com/microsoft/DirectXTK12"
+	GIT_TAG
+		528801aa6dd8d628c2f756c41a76d300f47de478
+)
+FetchContent_MakeAvailable(directxtk12)
+
 # Target spdlog
 set(CMKR_TARGET spdlog)
 set(spdlog_SOURCES "")
@@ -833,6 +842,7 @@ target_link_libraries(ue4poc PUBLIC
 	Version
 	TracyClient
 	DirectXTK
+	DirectXTK12
 )
 
 target_link_libraries(ue4poc PUBLIC
@@ -978,6 +988,7 @@ target_link_libraries(ue4poc-nolog PUBLIC
 	Version
 	TracyClient
 	DirectXTK
+	DirectXTK12
 )
 
 target_compile_definitions(ue4poc-nolog PUBLIC
