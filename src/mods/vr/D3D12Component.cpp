@@ -5,6 +5,9 @@
 #include "Framework.hpp"
 #include "../VR.hpp"
 
+#include <../../directxtk12-src/Inc/ResourceUploadBatch.h>
+#include <../../directxtk12-src/Inc/RenderTargetState.h>
+
 #include "D3D12Component.hpp"
 
 //#define AFR_DEPTH_TEMP_DISABLED
@@ -37,7 +40,6 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     // get swapchain
     auto swapchain = hook->get_swap_chain();
 
-    // get back buffer
     // get back buffer
     ComPtr<ID3D12Resource> backbuffer{};
     auto ue4_texture = VR::get()->m_fake_stereo_hook->get_render_target_manager()->get_render_target();
@@ -73,16 +75,30 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
     const auto frame_count = vr->m_render_frame_count;
 
+    // Set up the game tex context
+    if (m_game_tex.texture.Get() != backbuffer.Get()) {
+        if (!m_game_tex.setup(device, backbuffer.Get(), DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, L"Game Texture")) {
+            spdlog::error("[VR] Failed to fully setup game texture.");
+        }
+    }
+
     if (ui_target != nullptr) {
         if (m_game_ui_tex.texture.Get() != ui_target->get_native_resource()) {
-            m_game_ui_tex.reset();
-            m_game_ui_tex.copier.setup(L"Game UI Texture Copier");
-
-            m_game_ui_tex.texture.Reset();
-            m_game_ui_tex.texture = (ID3D12Resource*)ui_target->get_native_resource();
-
-            m_game_ui_tex.create_rtv(device, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
+            if (!m_game_ui_tex.setup(device, 
+                (ID3D12Resource*)ui_target->get_native_resource(), 
+                DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
+                L"Game UI Texture"))
+            {
+                spdlog::error("[VR] Failed to fully setup game UI texture.");
+            }
         }
+
+        // Draws the spectator view
+        auto draw_spec_and_clear_rt = [&](ResourceCopier& copier) {
+            const float clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+            draw_spectator_view(copier.cmd_list.Get());
+            copier.clear_rtv(m_game_ui_tex.texture.Get(), m_game_ui_tex.get_rtv(), (float*)&clear_color, ENGINE_SRC_COLOR);  
+        };
 
         if (runtime->is_openvr() && m_ui_tex.texture.Get() != nullptr) {
             m_ui_tex.copier.wait(INFINITE);
@@ -91,18 +107,11 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 m_ui_tex.copier.copy((ID3D12Resource*)ui_target->get_native_resource(), m_ui_tex.texture.Get(), ENGINE_SRC_COLOR);
             }
 
-            //m_ui_tex.copier.copy(m_blank_tex.texture.Get(), (ID3D12Resource*)ui_target->get_native_resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-            const float clear[4]{0.0f, 0.0f, 0.0f, 0.0f};
-            m_ui_tex.copier.clear_rtv(m_game_ui_tex.texture.Get(), m_game_ui_tex.get_rtv(), (float*)&clear, ENGINE_SRC_COLOR);
-            //m_ui_tex.copier.clear_rtv(m_blank_tex.texture.Get(), m_blank_tex.get_rtv(), (float*)&clear, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            draw_spec_and_clear_rt(m_ui_tex.copier);
             m_ui_tex.copier.execute();
         } else if (runtime->is_openxr() && runtime->ready() && vr->m_openxr->frame_began) {
-            auto clear_rt = [&](ResourceCopier& copier) {
-                copier.copy(m_blank_tex.texture.Get(), (ID3D12Resource*)ui_target->get_native_resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, ENGINE_SRC_COLOR);   
-            };
-
             if (is_right_eye_frame) {
-                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, (ID3D12Resource*)ui_target->get_native_resource(), clear_rt, ENGINE_SRC_COLOR);
+                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, (ID3D12Resource*)ui_target->get_native_resource(), draw_spec_and_clear_rt, ENGINE_SRC_COLOR);
 
                 auto fw_rt = g_framework->get_rendertarget_d3d12();
 
@@ -111,10 +120,14 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 }
             } else {
                 m_game_ui_tex.copier.wait(INFINITE);
-                clear_rt(m_game_ui_tex.copier);
+                draw_spec_and_clear_rt(m_game_ui_tex.copier);
                 m_game_ui_tex.copier.execute();
             }
         }
+    } else if (m_game_tex.texture.Get() != nullptr) {
+        m_game_tex.copier.wait(INFINITE);
+        draw_spectator_view(m_game_tex.copier.cmd_list.Get());
+        m_game_tex.copier.execute();
     }
 
     ComPtr<ID3D12Resource> scene_depth_tex{};
@@ -376,6 +389,163 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     return e;
 }
 
+void D3D12Component::setup_sprite_batch_pso(DXGI_FORMAT output_format) {
+    spdlog::info("[D3D12] Setting up sprite batch PSO");
+
+    auto& hook = g_framework->get_d3d12_hook();
+
+    auto device = hook->get_device();
+    auto command_queue = hook->get_command_queue();
+    auto swapchain = hook->get_swap_chain();
+
+    DirectX::ResourceUploadBatch upload{ device };
+    upload.Begin();
+
+    DirectX::RenderTargetState output_state{output_format, DXGI_FORMAT_UNKNOWN};
+    DirectX::SpriteBatchPipelineStateDescription pd{output_state};
+
+    m_backbuffer_batch = std::make_unique<DirectX::DX12::SpriteBatch>(device, upload, pd);
+
+    auto result = upload.End(command_queue);
+    result.wait();
+
+    spdlog::info("[D3D12] Sprite batch PSO setup complete");
+}
+
+void D3D12Component::draw_spectator_view(ID3D12GraphicsCommandList* command_list) {
+    if (command_list == nullptr || m_game_ui_tex.texture == nullptr) {
+        return;
+    }
+
+    if (m_game_ui_tex.srv_heap == nullptr | m_game_ui_tex.srv_heap->Heap() == nullptr) {
+        return;
+    }
+
+    if (m_game_tex.texture == nullptr || m_game_tex.srv_heap == nullptr || m_game_tex.srv_heap->Heap() == nullptr) {
+        return;
+    }
+
+    const auto& vr = VR::get();
+
+    if (!vr->is_hmd_active() || !vr->m_desktop_fix->value()) {
+        return;
+    }
+
+    auto& hook = g_framework->get_d3d12_hook();
+
+    auto device = hook->get_device();
+    auto command_queue = hook->get_command_queue();
+    auto swapchain = hook->get_swap_chain();
+
+    ComPtr<ID3D12Resource> backbuffer{};
+    const auto index = swapchain->GetCurrentBackBufferIndex();
+
+    if (FAILED(swapchain->GetBuffer(index, IID_PPV_ARGS(&backbuffer)))) {
+        return;
+    }
+
+    auto& backbuffer_ctx = m_backbuffer_textures[index];
+    const auto desc = backbuffer->GetDesc();
+
+    if (backbuffer_ctx.texture.Get() != backbuffer.Get()) {
+        if (!backbuffer_ctx.setup(device, backbuffer.Get(), std::nullopt, std::nullopt, L"Backbuffer")) {
+            spdlog::error("[VR] Failed to setup backbuffer RTV (D3D12)");
+            return;
+        }
+
+        spdlog::info("[VR] Created backbuffer RTV (D3D12)");
+    }
+
+    if (backbuffer_ctx.rtv_heap == nullptr || backbuffer_ctx.rtv_heap->Heap() == nullptr) {
+        spdlog::error("[VR] Backbuffer RTV heap is null (D3D12)");
+        return;
+    }
+
+    auto& batch = m_backbuffer_batch;
+
+    D3D12_VIEWPORT viewport{};
+    viewport.Width = (float)desc.Width;
+    viewport.Height = (float)desc.Height;
+    viewport.MaxDepth = 1.0f;
+    
+    batch->SetViewport(viewport);
+
+    D3D12_RECT scissor_rect{};
+    scissor_rect.left = 0;
+    scissor_rect.top = 0;
+    scissor_rect.right = (LONG)desc.Width;
+    scissor_rect.bottom = (LONG)desc.Height;
+
+    // Transition backbuffer to D3D12_RESOURCE_STATE_RENDER_TARGET
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = backbuffer.Get();
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    command_list->ResourceBarrier(1, &barrier);
+
+    // Set RTV to backbuffer
+    D3D12_CPU_DESCRIPTOR_HANDLE rtv_heaps[] = { backbuffer_ctx.get_rtv() };
+    command_list->OMSetRenderTargets(1, rtv_heaps, FALSE, nullptr);
+
+    // Setup viewport and scissor rects
+    command_list->RSSetViewports(1, &viewport);
+    command_list->RSSetScissorRects(1, &scissor_rect);
+
+    batch->Begin(command_list, DirectX::DX12::SpriteSortMode::SpriteSortMode_Immediate);
+
+    RECT dest_rect{ 0, 0, (LONG)desc.Width, (LONG)desc.Height };
+
+    ///////////////
+    // Eye (game) texture
+    ///////////////
+    // only show one half of the double wide texture (right side)
+    RECT source_rect{};
+
+    // Show left side when using AFR
+    if (vr->is_using_afr()) {
+        source_rect.left = 0;
+        source_rect.top = 0;
+        source_rect.right = m_backbuffer_size[0] / 2;
+        source_rect.bottom = m_backbuffer_size[1];
+    } else {
+        source_rect.left = (LONG)m_backbuffer_size[0] / 2;
+        source_rect.top = 0;
+        source_rect.right = m_backbuffer_size[0];
+        source_rect.bottom = m_backbuffer_size[1];
+    }
+
+    // Set descriptor heaps
+    ID3D12DescriptorHeap* game_heaps[] = { m_game_tex.srv_heap->Heap() };
+    command_list->SetDescriptorHeaps(1, game_heaps);
+
+    batch->Draw(m_game_tex.get_srv_gpu(), 
+        DirectX::XMUINT2{ (uint32_t)m_backbuffer_size[0], (uint32_t)m_backbuffer_size[1] },
+        dest_rect,
+        &source_rect, 
+        DirectX::Colors::White);
+
+    //////
+    // UI
+    //////
+    // Set descriptor heaps
+    ID3D12DescriptorHeap* ui_heaps[] = { m_game_ui_tex.srv_heap->Heap() };
+    command_list->SetDescriptorHeaps(1, ui_heaps);
+
+    batch->Draw(m_game_ui_tex.get_srv_gpu(), 
+        DirectX::XMUINT2{ (uint32_t)desc.Width, (uint32_t)desc.Height },
+        dest_rect, 
+        DirectX::Colors::White);
+
+    batch->End();
+
+    // Transition backbuffer to D3D12_RESOURCE_STATE_PRESENT
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+    command_list->ResourceBarrier(1, &barrier);
+}
+
 void D3D12Component::clear_backbuffer() {
     auto& hook = g_framework->get_d3d12_hook();
     auto device = hook->get_device();
@@ -404,18 +574,11 @@ void D3D12Component::clear_backbuffer() {
     auto& backbuffer_ctx = m_backbuffer_textures[index];
 
     if (backbuffer_ctx.texture.Get() != backbuffer.Get()) {
-        backbuffer_ctx.copier.reset();
-        backbuffer_ctx.copier.setup(L"Backbuffer Clear");
-
-        backbuffer_ctx.rtv_heap.Reset();
-        backbuffer_ctx.texture.Reset();
-        backbuffer_ctx.texture = backbuffer.Get();
-
         // Get backbuffer desc
         const auto desc = backbuffer->GetDesc();
-        
-        if (!backbuffer_ctx.create_rtv(device, desc.Format)) {
-            spdlog::error("[VR] Failed to create backbuffer RTV...");
+
+        if (!backbuffer_ctx.setup(device, backbuffer.Get(), std::nullopt, std::nullopt, L"Backbuffer")) {
+            spdlog::error("[VR] Failed to setup backbuffer RTV (D3D12)");
             return;
         }
 
@@ -423,7 +586,7 @@ void D3D12Component::clear_backbuffer() {
     }
 
     // oh well
-    if (backbuffer_ctx.rtv_heap == nullptr) {
+    if (backbuffer_ctx.rtv_heap == nullptr || backbuffer_ctx.rtv_heap->Heap() == nullptr) {
         return;
     }
 
@@ -435,6 +598,15 @@ void D3D12Component::clear_backbuffer() {
 }
 
 void D3D12Component::on_post_present(VR* vr) {
+    if (m_graphics_memory != nullptr) {
+        auto& hook = g_framework->get_d3d12_hook();
+
+        auto device = hook->get_device();
+        auto command_queue = hook->get_command_queue();
+
+        m_graphics_memory->Commit(command_queue);
+    }
+
     // Clear the (real) backbuffer if VR is enabled. Otherwise it will flicker and all sorts of nasty things.
     if (vr->is_hmd_active()) {
         clear_backbuffer();
@@ -463,6 +635,8 @@ void D3D12Component::on_reset(VR* vr) {
     m_ui_tex.reset();
     m_blank_tex.reset();
     m_game_ui_tex.reset();
+    m_backbuffer_batch.reset();
+    m_graphics_memory.reset();
 
     if (runtime->is_openxr() && runtime->loaded) {
         m_openxr.wait_for_all_copies();
@@ -528,6 +702,18 @@ bool D3D12Component::setup() {
         spdlog::error("[VR] Failed to get back buffer (D3D12).");
         return false;
     }
+
+    if (m_graphics_memory == nullptr) {
+        m_graphics_memory = std::make_unique<DirectX::DX12::GraphicsMemory>(device);
+    }
+
+    ComPtr<ID3D12Resource> real_backbuffer{};
+    if (FAILED(swapchain->GetBuffer(0, IID_PPV_ARGS(&real_backbuffer)))) {
+        spdlog::error("[VR] Failed to get back buffer (D3D12).");
+        return false;
+    }
+
+    const auto real_backbuffer_desc = real_backbuffer->GetDesc();
 
     auto backbuffer_desc = backbuffer->GetDesc();
 
@@ -611,6 +797,8 @@ bool D3D12Component::setup() {
     m_blank_tex.copier.clear_rtv(m_blank_tex.texture.Get(), m_blank_tex.get_rtv(), clear, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     m_blank_tex.copier.execute();
     m_blank_tex.copier.wait(1);
+
+    setup_sprite_batch_pso(real_backbuffer_desc.Format);
 
     spdlog::info("[VR] d3d12 textures have been setup");
     m_force_reset = false;
@@ -732,14 +920,6 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
             }
 
             ctx.textures[j].texture->SetName(L"OpenXR Swapchain Texture");
-            ctx.texture_contexts[j]->texture = ctx.textures[j].texture;
-
-            // Depth stencil textures don't need an RTV.
-            if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) == 0) {
-                if (!ctx.texture_contexts[j]->create_rtv(device, (DXGI_FORMAT)swapchain_create_info.format)) {
-                    spdlog::error("[VR] Failed to create swapchain RTV {} {}", i, j);
-                }
-            }
 
             ctx.textures[j].texture->AddRef();
             const auto ref_count = ctx.textures[j].texture->Release();
@@ -773,10 +953,22 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
                 xrWaitSwapchainImage(swapchain.handle, &wait_info);
 
                 auto& texture_ctx = ctx.texture_contexts[index];
-                const float clear_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-                texture_ctx->copier.clear_rtv(ctx.textures[index].texture, texture_ctx->get_rtv(), clear_color, D3D12_RESOURCE_STATE_RENDER_TARGET);
-                texture_ctx->copier.execute();
-                texture_ctx->copier.wait(16);
+                texture_ctx->texture = ctx.textures[index].texture;
+
+                // Depth stencil textures don't need an RTV.
+                if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) == 0) {
+                    if (ctx.texture_contexts[index]->create_rtv(device, (DXGI_FORMAT)swapchain_create_info.format)) {
+                        const float clear_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                        texture_ctx->copier.clear_rtv(ctx.textures[index].texture, texture_ctx->get_rtv(), clear_color, D3D12_RESOURCE_STATE_RENDER_TARGET);
+                        texture_ctx->copier.execute();
+                        texture_ctx->copier.wait(100);
+                    } else {
+                        spdlog::error("[VR] Failed to create RTV for swapchain image {}.", index);
+                    }
+                }
+
+                texture_ctx->texture.Reset();
+                texture_ctx->rtv_heap.reset();
 
                 xrReleaseSwapchainImage(swapchain.handle, &release_info);
             }
