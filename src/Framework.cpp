@@ -1602,7 +1602,7 @@ bool Framework::init_d3d11() {
     {
         // Create our blank render target.
         auto d3d11_rt_desc = backbuffer_desc;
-        d3d11_rt_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB; // For VR
+        d3d11_rt_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; // For VR
 
         if (FAILED(device->CreateTexture2D(&d3d11_rt_desc, nullptr, &m_d3d11.blank_rt))) {
             spdlog::error("[D3D11] Failed to create render target texture!");
@@ -1753,7 +1753,7 @@ bool Framework::init_d3d12() {
         props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
 
         auto d3d12_rt_desc = desc;
-        d3d12_rt_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB; // For VR
+        d3d12_rt_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; // For VR
 
         D3D12_CLEAR_VALUE clear_value{};
         clear_value.Format = d3d12_rt_desc.Format;
