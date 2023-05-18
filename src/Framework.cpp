@@ -1203,13 +1203,15 @@ void Framework::draw_about() {
             std::string text;
         };
 
-        static std::array<License, 6> licenses{
+        static std::array<License, 8> licenses{
             License{ "glm", license::glm },
             License{ "imgui", license::imgui },
             License{ "safetyhook", license::safetyhook },
             License{ "spdlog", license::spdlog },
             License{ "json", license::json },
-            License{ "bddisasm", utility::narrow(license::bddisasm) }
+            License{ "bddisasm", utility::narrow(license::bddisasm) },
+            License{ "directxtk", license::directxtk },
+            License{ "directxtk12", license::directxtk }
         };
 
         for (const auto& license : licenses) {
