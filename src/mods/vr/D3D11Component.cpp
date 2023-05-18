@@ -588,6 +588,15 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         viewport.Height = m_real_backbuffer_size[1];
         m_backbuffer_batch->SetViewport(viewport);
 
+        context->RSSetViewports(1, &viewport);
+        
+        D3D11_RECT scissor_rect{};
+        scissor_rect.left = 0;
+        scissor_rect.top = 0;
+        scissor_rect.right = m_real_backbuffer_size[0];
+        scissor_rect.bottom = m_real_backbuffer_size[1];
+        context->RSSetScissorRects(1, &scissor_rect);
+
         RECT dest_rect{};
         dest_rect.left = 0;
         dest_rect.top = 0;
