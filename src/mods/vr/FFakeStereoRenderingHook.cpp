@@ -2458,7 +2458,7 @@ struct SceneViewExtensionAnalyzer {
 
         if (last_command == nullptr || *(void**)last_command == nullptr) {
             SPDLOG_INFO("Cannot hook command with no vtable, falling back to passing current frame count to runtime");
-            VR::get()->get_runtime()->enqueue_render_poses(frame_count);
+            runtime->enqueue_render_poses(frame_count);
             return;
         }
 
@@ -3382,7 +3382,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     }
 
     auto vr = VR::get();
-    std::scoped_lock _{vr->get_vr_mutex()};
+    //std::scoped_lock _{vr->get_vr_mutex()};
 
     static bool index_starts_from_one = true;
     static bool index_was_ever_two = false;
@@ -3398,15 +3398,17 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     if (view_index == 2) {
         index_starts_from_one = true;
         index_was_ever_two = true;
-    } else if (view_index == 0) {
+    } else if (view_index == 0 && !index_was_ever_two) {
         index_starts_from_one = false;
     }
+
+    const auto is_full_pass = view_index == 0 && !index_was_ever_two;
 
     auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
     const auto has_double_precision = g_hook->m_has_double_precision;
     const auto rot_d = (Rotator<double>*)view_rotation;
 
-    if (vr->is_using_afr()) {
+    if (vr->is_using_afr() && !is_full_pass) {
         true_index = g_frame_count % 2;
 
         if (!vr->is_using_synchronized_afr()) {
@@ -3426,7 +3428,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         }
     }
 
-    if (true_index == 0) {
+    if (true_index == 0 && !is_full_pass) {
         //vr->wait_for_present();
         
         if (!g_hook->m_has_view_extension_hook && !g_hook->m_has_game_viewport_client_draw_hook) {
@@ -3442,14 +3444,16 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     }*/
 
     // if we were unable to hook UGameEngine::Tick, we can run our game thread jobs here instead.
-    if (!g_hook->m_has_view_extension_hook && g_hook->m_attempted_hook_game_engine_tick && !g_hook->m_hooked_game_engine_tick) {
+    if (!is_full_pass && !g_hook->m_has_view_extension_hook && g_hook->m_attempted_hook_game_engine_tick && !g_hook->m_hooked_game_engine_tick) {
         GameThreadWorker::get().execute();
     }
 
     const auto& mods = g_framework->get_mods()->get_mods();
 
-    for (auto& mod : mods) {
-        mod->on_pre_calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location, g_hook->m_has_double_precision);
+    if (!is_full_pass) {
+        for (auto& mod : mods) {
+            mod->on_pre_calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location, g_hook->m_has_double_precision);
+        }
     }
 
     const auto view_d = (Vector3d*)view_location;
@@ -3553,15 +3557,17 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         }
     }
 
-    for (auto& mod : mods) {
-        mod->on_post_calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location, g_hook->m_has_double_precision);
-    }
+    if (!is_full_pass) {
+        for (auto& mod : mods) {
+            mod->on_post_calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location, g_hook->m_has_double_precision);
+        }
 
-    if (true_index == 0) {
-        if (has_double_precision) {
-            g_hook->m_last_rotation_double = *rot_d;
-        } else {
-            g_hook->m_last_rotation = *view_rotation;
+        if (true_index == 0) {
+            if (has_double_precision) {
+                g_hook->m_last_rotation_double = *rot_d;
+            } else {
+                g_hook->m_last_rotation = *view_rotation;
+            }
         }
     }
 
@@ -3615,9 +3621,18 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
     }
 
     static bool index_starts_from_one = true;
+    static bool index_was_ever_two = false;
+
+    // This is eSSP_FULL, we don't care. It will cause the view to become monoscopic if we do anything.
+    // or maybe we should, this could be used for WorldToScreen.
+    /*if (index_was_ever_two && view_index == 0) {
+        SPDLOG_INFO_ONCE("Index was ever two, and now it's zero. This is eSSP_FULL, we don't care. It will cause the view to become monoscopic if we do anything.");
+        return out;
+    }*/
 
     if (view_index == 2) {
         index_starts_from_one = true;
+        index_was_ever_two = true;
     } else if (view_index == 0) {
         index_starts_from_one = false;
     }

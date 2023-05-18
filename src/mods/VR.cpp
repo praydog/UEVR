@@ -1811,6 +1811,7 @@ void VR::on_draw_ui() {
     }
 
     ImGui::PushID("VR");
+    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
     if (!m_fake_stereo_hook->has_attempted_to_hook_engine() || !m_fake_stereo_hook->has_attempted_to_hook_slate()) {
         std::string adjusted_name = get_name().data();
         adjusted_name += " (Loading...)";
@@ -1844,8 +1845,10 @@ void VR::on_draw_ui() {
         ImGui::Separator();
     };
 
-    display_error(m_openxr, "openxr_loader.dll");
-    display_error(m_openvr, "openvr_api.dll");
+    if (!get_runtime()->loaded || get_runtime()->error) {
+        display_error(m_openxr, "openxr_loader.dll");
+        display_error(m_openvr, "openvr_api.dll");
+    }
 
     if (!get_runtime()->loaded) {
         ImGui::TextWrapped("No runtime loaded.");
@@ -1869,7 +1872,8 @@ void VR::on_draw_ui() {
 
     ImGui::Separator();
 
-    {
+    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+    if (ImGui::TreeNode((std::string{"Runtime Information ("} + get_runtime()->name().data() + ")").c_str())) {
         if (ImGui::Button("Set Standing Height")) {
             m_standing_origin.y = get_position(0).y;
         }
@@ -1880,6 +1884,8 @@ void VR::on_draw_ui() {
             m_standing_origin = get_position(0);
         }
 
+        ImGui::SameLine();
+
         if (ImGui::Button("Recenter View")) {
             recenter_view();
         }
@@ -1887,6 +1893,21 @@ void VR::on_draw_ui() {
         if (ImGui::Button("Reinitialize Runtime")) {
             get_runtime()->wants_reinitialize = true;
         }
+
+        m_desktop_fix->draw("Desktop Spectator View");
+
+        ImGui::TextWrapped("Render Resolution (per-eye): %d x %d", get_runtime()->get_width(), get_runtime()->get_height());
+        ImGui::TextWrapped("Total Render Resolution: %d x %d", get_runtime()->get_width() * 2, get_runtime()->get_height());
+
+        if (get_runtime()->is_openvr()) {
+            ImGui::TextWrapped("Resolution can be changed in SteamVR");
+        }
+
+        get_runtime()->on_draw_ui();
+
+        m_overlay_component.on_draw_ui();
+
+        ImGui::TreePop();
     }
 
     ImGui::Text("Unreal Options");
@@ -1998,38 +2019,12 @@ void VR::on_draw_ui() {
         m_fake_stereo_hook->on_draw_ui();
     }
 
-    ImGui::Text("Runtime Information");
-
-    ImGui::TextWrapped("VR Runtime: %s", get_runtime()->name().data());
-    ImGui::TextWrapped("Render Resolution (per-eye): %d x %d", get_runtime()->get_width(), get_runtime()->get_height());
-    ImGui::TextWrapped("Total Render Resolution: %d x %d", get_runtime()->get_width() * 2, get_runtime()->get_height());
-
-    if (get_runtime()->is_openvr()) {
-        ImGui::TextWrapped("Resolution can be changed in SteamVR");
-    }
-
-    get_runtime()->on_draw_ui();
+    ImGui::Separator();
+    ImGui::Text("Debug info");
 
     ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
     ImGui::DragFloat4("Right Bounds", (float*)&m_right_bounds, 0.005f, -2.0f, 2.0f);
     ImGui::DragFloat4("Left Bounds", (float*)&m_left_bounds, 0.005f, -2.0f, 2.0f);
-
-    m_overlay_component.on_draw_ui();
-
-    /*ImGui::Separator();
-
-    ImGui::Text("Graphical Options");
-
-    if (ImGui::TreeNode("Desktop Recording Fix")) {
-        ImGui::PushID("Desktop");
-        m_desktop_fix->draw("Enabled");
-        m_desktop_fix_skip_present->draw("Skip Present");
-        ImGui::PopID();
-        ImGui::TreePop();
-    }*/
-
-    ImGui::Separator();
-    ImGui::Text("Debug info");
     ImGui::Checkbox("Disable Projection Matrix Override", &m_disable_projection_matrix_override);
     ImGui::Checkbox("Disable View Matrix Override", &m_disable_view_matrix_override);
     ImGui::Checkbox("Disable Backbuffer Size Override", &m_disable_backbuffer_size_override);
