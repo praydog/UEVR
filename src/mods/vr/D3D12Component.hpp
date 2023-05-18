@@ -43,7 +43,7 @@ public:
 private:
     bool setup();
     void setup_sprite_batch_pso(DXGI_FORMAT output_format);
-    void draw_spectator_view(ID3D12GraphicsCommandList* command_list);
+    void draw_spectator_view(ID3D12GraphicsCommandList* command_list, bool is_right_eye_frame);
     void clear_backbuffer();
 
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;

@@ -427,30 +427,12 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                     src_box.back = 1;
                 }
 
-                // Copy right eye for desktop spectator
-                if (vr->m_desktop_fix->value() && m_right_eye_tex != nullptr) {
-                    context->CopySubresourceRegion(m_right_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
-                }
-
                 m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_RIGHT_EYE, backbuffer.Get(), &src_box);
 
                 if (scene_depth_tex != nullptr) {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_DEPTH_RIGHT_EYE, scene_depth_tex.Get(), nullptr);
                 }
             } else {
-                // Copy right eye for desktop spectator
-                if (vr->m_desktop_fix->value() && m_right_eye_tex != nullptr) {
-                    D3D11_BOX src_box{};
-                    src_box.left = m_backbuffer_size[0] / 2;
-                    src_box.right = m_backbuffer_size[0];
-                    src_box.top = 0;
-                    src_box.bottom = m_backbuffer_size[1];
-                    src_box.front = 0;
-                    src_box.back = 1;
-
-                    context->CopySubresourceRegion(m_right_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
-                }
-
                 // Copy over the entire double wide back buffer instead
                 m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DOUBLE_WIDE, backbuffer.Get(), nullptr);
 
@@ -573,8 +555,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         }*/
     }
 
+    const auto should_draw_desktop = m_backbuffer_rtv != nullptr && vr->is_hmd_active() && vr->m_desktop_fix->value();
+
     // Desktop fix
-    if (is_right_eye_frame && m_backbuffer_rtv != nullptr && vr->is_hmd_active() && vr->m_desktop_fix->value()) {
+    if (is_right_eye_frame && should_draw_desktop) {
         DX11StateBackup backup{context.Get()};
         
         ID3D11RenderTargetView* views[] = { m_backbuffer_rtv.Get() };
@@ -628,6 +612,37 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         }
 
         m_backbuffer_batch->End();
+
+        // Create a copy of the backbuffer if we're using AFR
+        if (is_actually_afr) {
+            ComPtr<ID3D11Texture2D> real_backbuffer{};
+            swapchain->GetBuffer(0, IID_PPV_ARGS(&real_backbuffer));
+
+            if (m_copied_backbuffer == nullptr && real_backbuffer != nullptr) {
+                D3D11_TEXTURE2D_DESC real_backbuffer_desc{};
+                real_backbuffer->GetDesc(&real_backbuffer_desc);
+                if (FAILED(device->CreateTexture2D(&real_backbuffer_desc, nullptr, &m_copied_backbuffer))) {
+                    spdlog::error("[VR] Failed to create copied backbuffer for desktop view");
+                }
+            }
+
+            // Copy over the backbuffer every other frame
+            if (real_backbuffer != nullptr && m_copied_backbuffer != nullptr) {
+                context->CopyResource(m_copied_backbuffer.Get(), real_backbuffer.Get());
+            }
+        } else {
+            m_copied_backbuffer.Reset(); // Free as we have no use for it
+        }
+    }
+
+    // Copy the previous right eye frame to the backbuffer if we're using AFR on an non-right eye frame
+    if (is_actually_afr && !is_right_eye_frame && should_draw_desktop && m_copied_backbuffer != nullptr) {
+        ComPtr<ID3D11Texture2D> real_backbuffer{};
+        swapchain->GetBuffer(0, IID_PPV_ARGS(&real_backbuffer));
+
+        if (real_backbuffer != nullptr) {
+            context->CopyResource(real_backbuffer.Get(), m_copied_backbuffer.Get());
+        }
     }
 
     return vr::VRCompositorError_None;
@@ -675,6 +690,7 @@ void D3D11Component::on_post_present(VR* vr) {
 void D3D11Component::on_reset(VR* vr) {
     m_backbuffer_rtv.Reset();
     m_backbuffer.Reset();
+    m_copied_backbuffer.Reset();
     m_left_eye_tex.Reset();
     m_right_eye_tex.Reset();
     m_left_eye_rtv.Reset();

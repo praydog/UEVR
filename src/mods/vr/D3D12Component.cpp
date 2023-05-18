@@ -96,12 +96,10 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
         // Draws the spectator view
         auto draw_spec_and_clear_rt = [&](ResourceCopier& copier) {
-            if (is_right_eye_frame) {
-                draw_spectator_view(copier.cmd_list.Get());
-            }
+            draw_spectator_view(copier.cmd_list.Get(), is_right_eye_frame);
 
             const float clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-            copier.clear_rtv(m_game_ui_tex.texture.Get(), m_game_ui_tex.get_rtv(), (float*)&clear_color, ENGINE_SRC_COLOR);  
+            copier.clear_rtv(m_game_ui_tex.texture.Get(), m_game_ui_tex.get_rtv(), (float*)&clear_color, ENGINE_SRC_COLOR);
         };
 
         if (runtime->is_openvr() && m_ui_tex.texture.Get() != nullptr) {
@@ -130,7 +128,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         }
     } else if (m_game_tex.texture.Get() != nullptr) {
         m_game_tex.copier.wait(INFINITE);
-        draw_spectator_view(m_game_tex.copier.cmd_list.Get());
+        draw_spectator_view(m_game_tex.copier.cmd_list.Get(), is_right_eye_frame);
         m_game_tex.copier.execute();
     }
 
@@ -416,7 +414,7 @@ void D3D12Component::setup_sprite_batch_pso(DXGI_FORMAT output_format) {
     spdlog::info("[D3D12] Sprite batch PSO setup complete");
 }
 
-void D3D12Component::draw_spectator_view(ID3D12GraphicsCommandList* command_list) {
+void D3D12Component::draw_spectator_view(ID3D12GraphicsCommandList* command_list, bool is_right_eye_frame) {
     if (command_list == nullptr || m_game_ui_tex.texture == nullptr) {
         return;
     }
@@ -463,6 +461,19 @@ void D3D12Component::draw_spectator_view(ID3D12GraphicsCommandList* command_list
     if (backbuffer_ctx.rtv_heap == nullptr || backbuffer_ctx.rtv_heap->Heap() == nullptr) {
         spdlog::error("[VR] Backbuffer RTV heap is null (D3D12)");
         return;
+    }
+
+    // Copy the previous right eye frame to the left eye frame
+    if (vr->is_using_afr() && !is_right_eye_frame && m_backbuffer_textures[(index + 2) % 3].texture != nullptr) {
+        const auto& last_right_eye_buffer = m_backbuffer_textures[(index + 2) % 3].texture;
+
+        if (backbuffer.Get() != last_right_eye_buffer.Get()) {
+            m_generic_copiers[index % 3].wait(INFINITE);
+            m_generic_copiers[index % 3].copy(last_right_eye_buffer.Get(), backbuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PRESENT);
+            m_generic_copiers[index % 3].execute();
+
+            return;
+        }
     }
 
     auto& batch = m_backbuffer_batch;
@@ -687,7 +698,7 @@ bool D3D12Component::setup() {
     auto vr = VR::get();
     on_reset(vr.get());
     
-    m_prev_backbuffer = nullptr;
+    m_prev_backbuffer.Reset();
 
     auto& hook = g_framework->get_d3d12_hook();
 

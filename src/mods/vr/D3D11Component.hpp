@@ -143,6 +143,7 @@ private:
 
     ComPtr<ID3D11Texture2D> m_backbuffer{};
     ComPtr<ID3D11RenderTargetView> m_backbuffer_rtv{};
+    ComPtr<ID3D11Texture2D> m_copied_backbuffer{};
     std::array<uint32_t, 2> m_backbuffer_size{};
     std::array<uint32_t, 2> m_real_backbuffer_size{};
 
