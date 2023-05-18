@@ -11,6 +11,10 @@
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
+#include <../../directxtk12-src/Inc/GraphicsMemory.h>
+#include <../../directxtk12-src/Inc/SpriteBatch.h>
+#include <../../directxtk12-src/Inc/DescriptorHeap.h>
+
 class VR;
 
 namespace vrmod {
@@ -38,6 +42,8 @@ public:
 
 private:
     bool setup();
+    void setup_sprite_batch_pso(DXGI_FORMAT output_format);
+    void draw_spectator_view(ID3D12GraphicsCommandList* command_list);
     void clear_backbuffer();
 
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
@@ -78,38 +84,93 @@ private:
     struct TextureContext {
         ResourceCopier copier{};
         ComPtr<ID3D12Resource> texture{};
-        ComPtr<ID3D12DescriptorHeap> rtv_heap{};
+        std::unique_ptr<DirectX::DescriptorHeap> rtv_heap{};
+        std::unique_ptr<DirectX::DescriptorHeap> srv_heap{};
 
-        bool create_rtv(ID3D12Device* device, DXGI_FORMAT format) {
-            rtv_heap.Reset();
+        bool setup(ID3D12Device* device, ID3D12Resource* rsrc, std::optional<DXGI_FORMAT> rtv_format, std::optional<DXGI_FORMAT> srv_format, const wchar_t* name = L"TextureContext object") {
+            reset();
+
+            copier.setup(name);
+
+            texture.Reset();
+            texture = rsrc;
+
+            return create_rtv(device, rtv_format) && create_srv(device, srv_format);
+        }
+
+        bool create_rtv(ID3D12Device* device, std::optional<DXGI_FORMAT> format = std::nullopt) {
+            rtv_heap.reset();
 
             // create descriptor heap
-            D3D12_DESCRIPTOR_HEAP_DESC rtv_heap_desc{};
-            rtv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-            rtv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-            rtv_heap_desc.NumDescriptors = 1;
-            rtv_heap_desc.NodeMask = 1;
+            rtv_heap = std::make_unique<DirectX::DescriptorHeap>(device,
+                D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+                1);
 
-            if (!FAILED(device->CreateDescriptorHeap(&rtv_heap_desc, IID_PPV_ARGS(&rtv_heap))) && rtv_heap.Get() != nullptr) {
+            if (rtv_heap->Heap() == nullptr) {
+                return false;
+            }
+
+            if (format) {
                 D3D12_RENDER_TARGET_VIEW_DESC rtv_desc{};
-                rtv_desc.Format = (DXGI_FORMAT)format;
+                rtv_desc.Format = (DXGI_FORMAT)*format;
                 rtv_desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
                 rtv_desc.Texture2D.MipSlice = 0;
                 rtv_desc.Texture2D.PlaneSlice = 0;
                 device->CreateRenderTargetView(texture.Get(), &rtv_desc, get_rtv());
-                return true;
+            } else {
+                device->CreateRenderTargetView(texture.Get(), nullptr, get_rtv());
             }
 
-            return false;
+            return true;
+        }
+
+        bool create_srv(ID3D12Device* device, std::optional<DXGI_FORMAT> format = std::nullopt) {
+            srv_heap.reset();
+
+            // create descriptor heap
+            srv_heap = std::make_unique<DirectX::DescriptorHeap>(device,
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+                1);
+
+            if (srv_heap->Heap() == nullptr) {
+                return false;
+            }
+
+            if (format) {
+                D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+                srv_desc.Format = (DXGI_FORMAT)*format;
+                srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                srv_desc.Texture2D.MipLevels = 1;
+                srv_desc.Texture2D.MostDetailedMip = 0;
+                srv_desc.Texture2D.PlaneSlice = 0;
+                srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
+                device->CreateShaderResourceView(texture.Get(), &srv_desc, get_srv_cpu());
+            } else {
+                device->CreateShaderResourceView(texture.Get(), nullptr, get_srv_cpu());
+            }
+
+            return true;
         }
 
         D3D12_CPU_DESCRIPTOR_HANDLE get_rtv() {
-            return D3D12_CPU_DESCRIPTOR_HANDLE{rtv_heap->GetCPUDescriptorHandleForHeapStart().ptr};
+            return rtv_heap->GetCpuHandle(0);
+        }
+
+        D3D12_GPU_DESCRIPTOR_HANDLE get_srv_gpu() {
+            return srv_heap->GetGpuHandle(0);
+        }
+
+        D3D12_CPU_DESCRIPTOR_HANDLE get_srv_cpu() {
+            return srv_heap->GetCpuHandle(0);
         }
 
         void reset() {
             copier.reset();
-            rtv_heap.Reset();
+            rtv_heap.reset();
+            srv_heap.reset();
             texture.Reset();
         }
     };
@@ -117,7 +178,11 @@ private:
     TextureContext m_ui_tex{};
     TextureContext m_blank_tex{};
     TextureContext m_game_ui_tex{};
+    TextureContext m_game_tex{};
     std::array<TextureContext, 3> m_backbuffer_textures{};
+
+    std::unique_ptr<DirectX::DX12::GraphicsMemory> m_graphics_memory{};
+    std::unique_ptr<DirectX::DX12::SpriteBatch> m_backbuffer_batch{};
 
     // Mimicking what OpenXR does.
     struct OpenVR {
@@ -226,6 +291,7 @@ private:
             std::vector<XrSwapchainImageD3D12KHR> textures{};
             std::vector<std::unique_ptr<D3D12Component::TextureContext>> texture_contexts{};
             uint32_t num_textures_acquired{0};
+            uint32_t last_acquired_texture{0};
         };
 
         std::unordered_map<uint32_t, SwapchainContext> contexts{};
