@@ -711,7 +711,7 @@ std::optional<IConsoleVariable::VtableInfo> IConsoleVariable::locate_vtable_indi
     SPDLOG_INFO("Locating IConsoleVariable vtable indices...");
     std::optional<uint32_t> previous_nullptr_index{};
 
-    SPDLOG_INFO("Vtable: {:x}", (uintptr_t)vtable);
+    SPDLOG_INFO("Vtable: {:x} (cvar {:x})", (uintptr_t)vtable, (uintptr_t)this);
 
     for (auto i = 0; i < 20; ++i) {
         const auto func = vtable[i];
@@ -779,7 +779,8 @@ std::optional<IConsoleVariable::VtableInfo> IConsoleVariable::locate_vtable_indi
                         break;
                     }
 
-                    if (decoded->MemoryAccess & ND_ACCESS_ANY_WRITE) {
+                    // Dont skip any calls as it could be the destructor
+                    if (decoded->MemoryAccess & ND_ACCESS_ANY_WRITE && !std::string_view{decoded->Mnemonic}.starts_with("CALL")) {
                         SPDLOG_INFO("Skipping write to memory instruction at {:x} ({:x} bytes, landing at {:x})", ip, decoded->Length, ip + decoded->Length);
                         emu.ctx->Registers.RegRip += decoded->Length;
                         emu.ctx->Instruction = *decoded; // pseudo-emulate the instruction
