@@ -670,7 +670,6 @@ void D3D12Component::on_reset(VR* vr) {
     }
 
     m_ui_tex.reset();
-    m_blank_tex.reset();
     m_game_ui_tex.reset();
     m_backbuffer_batch.reset();
     m_graphics_memory.reset();
@@ -810,30 +809,9 @@ bool D3D12Component::setup() {
 
     m_ui_tex.texture->SetName(L"VR UI Texture");
 
-    if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &backbuffer_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
-            IID_PPV_ARGS(&m_blank_tex.texture)))) {
-        spdlog::error("[VR] Failed to create blank UI texture.");
-        return false;
-    }
-
-    m_blank_tex.texture->SetName(L"VR Blank Texture");
-
     if (!m_ui_tex.copier.setup(L"VR UI")) {
         return false;
     }
-
-    if (!m_blank_tex.create_rtv(device, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)) {
-        return false;
-    }
-
-    if (!m_blank_tex.copier.setup(L"VR Blank")) {
-        return false;
-    }
-
-    const float clear[4]{0.0f, 0.0f, 0.0f, 0.0f};
-    m_blank_tex.copier.clear_rtv(m_blank_tex.texture.Get(), m_blank_tex.get_rtv(), clear, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    m_blank_tex.copier.execute();
-    m_blank_tex.copier.wait(1);
 
     setup_sprite_batch_pso(real_backbuffer_desc.Format);
 

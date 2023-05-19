@@ -38,7 +38,6 @@ public:
 
     auto& openxr() { return m_openxr; }
     auto& get_ui_tex() { return m_ui_tex; }
-    auto& get_blank_tex() { return m_blank_tex; }
 
 private:
     bool setup();
@@ -176,7 +175,6 @@ private:
     };
 
     TextureContext m_ui_tex{};
-    TextureContext m_blank_tex{};
     TextureContext m_game_ui_tex{};
     TextureContext m_game_tex{};
     std::array<TextureContext, 3> m_backbuffer_textures{};
