@@ -178,11 +178,11 @@ private:
         std::make_unique<CVarData>(L"Engine", L"r.AmbientOcclusionLevels", CVar::Type::INT, 0, 4),
         std::make_unique<CVarData>(L"Engine", L"r.DepthOfFieldQuality", CVar::Type::INT, 0, 2),
         std::make_unique<CVarData>(L"Engine", L"r.MotionBlurQuality", CVar::Type::INT, 0, 4),
+        std::make_unique<CVarData>(L"Engine", L"r.SceneColorFringeQuality", CVar::Type::INT, 0, 1),
 
         // Floats
         std::make_unique<CVarData>(L"Engine", L"r.MotionBlur.Max", CVar::Type::FLOAT, -1.0f, 100.0f),
         std::make_unique<CVarData>(L"Engine", L"r.SceneColorFringe.Max", CVar::Type::FLOAT, -1.0f, 100.0f),
-        std::make_unique<CVarData>(L"Engine", L"r.SceneColorFringe.Quality", CVar::Type::FLOAT, 0.0f, 1.0f),
         std::make_unique<CVarData>(L"Renderer", L"r.Color.Min", CVar::Type::FLOAT, -1.0f, 1.0f),
         std::make_unique<CVarData>(L"Renderer", L"r.Color.Mid", CVar::Type::FLOAT, 0.0f, 1.0f),
         std::make_unique<CVarData>(L"Renderer", L"r.Color.Max", CVar::Type::FLOAT, -1.0f, 2.0f),
