@@ -80,6 +80,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         // We use SRGB for the RTV but not for the SRV because it screws up the colors when drawing the spectator view
         if (!m_game_tex.setup(device, backbuffer.Get(), DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM, L"Game Texture")) {
             spdlog::error("[VR] Failed to fully setup game texture.");
+            m_game_tex.reset();
         }
     }
 
@@ -91,9 +92,12 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 L"Game UI Texture"))
             {
                 spdlog::error("[VR] Failed to fully setup game UI texture.");
+                m_game_ui_tex.reset();
             }
         }
+    }
 
+    if (ui_target != nullptr && m_game_ui_tex.srv_heap != nullptr && m_game_ui_tex.rtv_heap != nullptr) {
         // Draws the spectator view
         auto draw_spec_and_clear_rt = [&](ResourceCopier& copier) {
             draw_spectator_view(copier.cmd_list.Get(), is_right_eye_frame);

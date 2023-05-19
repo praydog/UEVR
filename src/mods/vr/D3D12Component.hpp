@@ -94,6 +94,10 @@ private:
             texture.Reset();
             texture = rsrc;
 
+            if (rsrc == nullptr) {
+                return false;
+            }
+
             return create_rtv(device, rtv_format) && create_srv(device, srv_format);
         }
 
@@ -101,10 +105,15 @@ private:
             rtv_heap.reset();
 
             // create descriptor heap
-            rtv_heap = std::make_unique<DirectX::DescriptorHeap>(device,
-                D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-                D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-                1);
+            try {
+                rtv_heap = std::make_unique<DirectX::DescriptorHeap>(device,
+                    D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                    D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+                    1);
+            } catch(...) {
+                spdlog::error("Failed to create RTV descriptor heap");
+                return false;
+            }
 
             if (rtv_heap->Heap() == nullptr) {
                 return false;
@@ -128,10 +137,15 @@ private:
             srv_heap.reset();
 
             // create descriptor heap
-            srv_heap = std::make_unique<DirectX::DescriptorHeap>(device,
-                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-                1);
+            try {
+                srv_heap = std::make_unique<DirectX::DescriptorHeap>(device,
+                    D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                    D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+                    1);
+            } catch(...) {
+                spdlog::error("Failed to create SRV descriptor heap");
+                return false;
+            }
 
             if (srv_heap->Heap() == nullptr) {
                 return false;
