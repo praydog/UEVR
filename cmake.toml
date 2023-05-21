@@ -78,10 +78,26 @@ set(TRACY_ENABLE OFF CACHE BOOL "" FORCE)
 [fetch-content.directxtk]
 git = "https://github.com/microsoft/DirectXTK"
 tag = "f5026eb34e7053b1aff325d38db107703f394974"
+cmake-before="""
+set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+"""
+cmake-after="""
+if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.35)
+    target_compile_options(DirectXTK PRIVATE /Zc:templateScope-)
+endif()
+"""
 
 [fetch-content.directxtk12]
 git = "https://github.com/microsoft/DirectXTK12"
 tag = "528801aa6dd8d628c2f756c41a76d300f47de478"
+cmake-before="""
+set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+"""
+cmake-after="""
+if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.35)
+    target_compile_options(DirectXTK12 PRIVATE /Zc:templateScope-)
+endif()
+"""
 
 [target.openvr]
 type = "shared"

@@ -121,6 +121,8 @@ FetchContent_Declare(tracy
 )
 FetchContent_MakeAvailable(tracy)
 
+set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+
 message(STATUS "Fetching directxtk (f5026eb34e7053b1aff325d38db107703f394974)...")
 FetchContent_Declare(directxtk
 	GIT_REPOSITORY
@@ -130,6 +132,12 @@ FetchContent_Declare(directxtk
 )
 FetchContent_MakeAvailable(directxtk)
 
+if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.35)
+    target_compile_options(DirectXTK PRIVATE /Zc:templateScope-)
+endif()
+
+set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+
 message(STATUS "Fetching directxtk12 (528801aa6dd8d628c2f756c41a76d300f47de478)...")
 FetchContent_Declare(directxtk12
 	GIT_REPOSITORY
@@ -138,6 +146,10 @@ FetchContent_Declare(directxtk12
 		528801aa6dd8d628c2f756c41a76d300f47de478
 )
 FetchContent_MakeAvailable(directxtk12)
+
+if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.35)
+    target_compile_options(DirectXTK12 PRIVATE /Zc:templateScope-)
+endif()
 
 # Target spdlog
 set(CMKR_TARGET spdlog)
