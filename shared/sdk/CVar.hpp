@@ -22,7 +22,9 @@ struct TConsoleVariableData {
             if (!s_valid_states.contains(this)) {
                 // What we're doing here is double checking that this cvar "data" does not actually point to a vtable or something
                 // because if it does, we will unintentionally corrupt the memory
-                s_valid_states[this] = IsBadReadPtr(*(void**)this, sizeof(void*)) == TRUE;
+                const auto is_not_vtable = IsBadReadPtr(*(void**)this, sizeof(void*)) == TRUE;
+                s_valid_states[this] = is_not_vtable
+                                        || (*(uint32_t*)this <= 8 && *(uint32_t*)((uintptr_t)this + 4) <= 8);
 
                 if (!s_valid_states[this]) {
                     spdlog::error("TConsoleVariableData::set: Prevented corruption of memory at {:x}", (uintptr_t)this);
