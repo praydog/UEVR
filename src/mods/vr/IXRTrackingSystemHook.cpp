@@ -25,7 +25,10 @@ detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
     auto version = sdk::get_file_version_info();
 
     if (str_version != "0.00") {
+        SPDLOG_INFO("Found version {} from executable", str_version);
         version.dwFileVersionMS = 0;
+    } else {
+        SPDLOG_INFO("Found version {}.{} from executable (disk version)", HIWORD(version.dwFileVersionMS), LOWORD(version.dwFileVersionMS));
     }
 
     // >= 5.1
@@ -497,7 +500,10 @@ void IXRTrackingSystemHook::initialize() {
             }
 
             if (hmdvt.GetIdealDebugCanvasRenderTargetSize_index().has_value()) {
+                // This one is a bit tricky. In very rare cases this index can be off by one. We need to make the hook
+                // verify that the return address is within UGameViewportClient::Draw. We will not just hook this function, but one index ahead as well.
                 m_hmd_vtable[hmdvt.GetIdealDebugCanvasRenderTargetSize_index().value()] = (uintptr_t)&get_ideal_debug_canvas_render_target_size;
+                m_hmd_vtable[hmdvt.GetIdealDebugCanvasRenderTargetSize_index().value() + 1] = (uintptr_t)&get_ideal_debug_canvas_render_target_size;
             } else {
                 SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_ideal_debug_canvas_render_target_size_index not implemented");
             }
@@ -1035,16 +1041,112 @@ bool IXRTrackingSystemHook::is_hmd_connected(sdk::IHeadMountedDisplay*) {
 }
 
 int32_t* IXRTrackingSystemHook::get_ideal_debug_canvas_render_target_size(sdk::IHeadMountedDisplay*, int32_t* out) {
-    SPDLOG_INFO_ONCE("get_ideal_debug_canvas_render_target_size {:x}", (uintptr_t)_ReturnAddress());
+    const auto return_address = (uintptr_t)_ReturnAddress();
+    SPDLOG_INFO_ONCE("get_ideal_debug_canvas_render_target_size {:x}", return_address);
 
     if (out != nullptr) {
+        // Verify first that this function dereferences RAX at some point afterwards
+        static std::mutex mtx{};
+        static std::unordered_set<uintptr_t> valid_return_addresses{};
+        static std::unordered_set<uintptr_t> invalid_return_addresses{};
+
+        std::scoped_lock _{mtx};
+
+        if (invalid_return_addresses.contains(return_address)) {
+            return nullptr;
+        }
+
+        if (valid_return_addresses.contains(return_address)) {     
+            // This is what the engine does... I guess? I don't see any VR plugins implementing this function
+            // look into it later to see if it's even useful
+            out[0] = 1024;
+            out[1] = 1024;
+
+            return out;
+        }
+
+        // Setup the emulator. Set RAX to magic value. If RAX changes at any point, abort.
+        const auto module_within = utility::get_module_within(return_address);
+
+        if (!module_within) {
+            SPDLOG_ERROR("get_ideal_debug_canvas_render_target_size: invalid module within");
+            invalid_return_addresses.insert(return_address);
+
+            return nullptr;
+        }
+
+        static auto check_ix = [](const INSTRUX& ix) {
+            for (auto i = 0; i < ix.OperandsCount; ++i) {
+                const auto& op = ix.Operands[i];
+
+                if (op.Type != ND_OPERAND_TYPE::ND_OP_MEM) {
+                    continue;
+                }
+
+                if (op.Info.Memory.HasBase && op.Info.Memory.Base == NDR_RAX) {
+                    SPDLOG_INFO("Found dereference of RAX");
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        const auto retdecode = utility::decode_one((uint8_t*)return_address);
+
+        if (!retdecode) {
+            SPDLOG_ERROR("get_ideal_debug_canvas_render_target_size: invalid retdecode");
+            invalid_return_addresses.insert(return_address);
+
+            return nullptr;
+        }
+
+        bool is_valid = check_ix(*retdecode);
+
+        if (!is_valid) {
+            utility::ShemuContext base_context{*module_within};
+
+            base_context.ctx->Registers.RegRip = return_address;
+            base_context.ctx->Registers.RegRax = 0xdeadbeef;
+            base_context.ctx->MemThreshold = 10;
+
+            utility::emulate(*module_within, return_address, 10, [&is_valid](const utility::ShemuContextExtended& ctx) -> utility::ExhaustionResult {
+                if (check_ix(ctx.ctx->ctx->Instruction) || check_ix(ctx.next.ix)) {
+                    is_valid = true;
+                    return utility::ExhaustionResult::BREAK;
+                }
+
+                if (ctx.next.ix.BranchInfo.IsBranch) {
+                    return utility::ExhaustionResult::BREAK;
+                }
+
+                if (ctx.ctx->ctx->Registers.RegRax != 0xdeadbeef) {
+                    return utility::ExhaustionResult::BREAK;
+                }
+
+                if (ctx.next.writes_to_memory) {
+                    return utility::ExhaustionResult::STEP_OVER;
+                }
+
+                return utility::ExhaustionResult::CONTINUE;
+            });
+        }
+
+        if (!is_valid) {
+            SPDLOG_ERROR("get_ideal_debug_canvas_render_target_size: invalid emulation result");
+            invalid_return_addresses.insert(return_address);
+            return nullptr;
+        }
+
         // This is what the engine does... I guess? I don't see any VR plugins implementing this function
         // look into it later to see if it's even useful
         out[0] = 1024;
         out[1] = 1024;
+
+        return out;
     }
 
-    return out;
+    return nullptr;
 }
 
 IXRTrackingSystemHook::SharedPtr* IXRTrackingSystemHook::get_view_extension(sdk::IHeadMountedDisplay*, SharedPtr* out) {
