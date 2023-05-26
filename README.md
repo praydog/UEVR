@@ -2,7 +2,10 @@
 
 Universal Unreal Engine VR Mod (4/5)
 
-[Documentation](https://praydog.github.io/uuvr-docs)
+# Links
+
+- [Documentation](https://praydog.github.io/uuvr-docs)
+- [Flat2VR Discord](https://flat2vr.com)
 
 ## Features
 
