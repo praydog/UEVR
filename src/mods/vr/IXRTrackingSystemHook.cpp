@@ -1138,6 +1138,8 @@ int32_t* IXRTrackingSystemHook::get_ideal_debug_canvas_render_target_size(sdk::I
             return nullptr;
         }
 
+        valid_return_addresses.insert(return_address);
+
         // This is what the engine does... I guess? I don't see any VR plugins implementing this function
         // look into it later to see if it's even useful
         out[0] = 1024;
