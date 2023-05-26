@@ -11,6 +11,18 @@
 
 namespace sdk {
 void FSceneView::constructor(const FSceneViewInitOptions* options) {
+    const auto fn_addr = get_constructor_address();
+
+    if (!fn_addr) {
+        return;
+    }
+
+    const auto fn = (void* (*)(FSceneView*, const FSceneViewInitOptions*))*fn_addr;
+
+    fn(this, options);
+}
+
+std::optional<uintptr_t> FSceneView::get_constructor_address() {
     static auto fn_addr = []() -> std::optional<uintptr_t> {
         SPDLOG_INFO("Searching for FSceneView constructor...");
 
@@ -72,12 +84,6 @@ void FSceneView::constructor(const FSceneViewInitOptions* options) {
         return std::nullopt;
     }();
 
-    if (!fn_addr) {
-        return;
-    }
-
-    const auto fn = (void* (*)(FSceneView*, const FSceneViewInitOptions*))*fn_addr;
-
-    fn(this, options);
+    return fn_addr;
 }
 }
