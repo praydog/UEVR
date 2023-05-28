@@ -34,10 +34,10 @@ std::optional<uintptr_t> FSceneView::get_constructor_address() {
 
         // We need to find the string references "vr.InstancedStereo" and "r.TranslucentSortPolicy"
         // These two strings will reside together within the same function (the constructor)
-        const auto instanced_string = utility::scan_string(module, L"vr.InstancedStereo");
-        const auto translucent_string = utility::scan_string(module, L"r.TranslucentSortPolicy");
+        const auto instanced_strings = utility::scan_strings(module, L"vr.InstancedStereo");
+        const auto translucent_strings = utility::scan_strings(module, L"r.TranslucentSortPolicy");
 
-        if (!instanced_string || !translucent_string) {
+        if (instanced_strings.empty() || translucent_strings.empty()) {
             SPDLOG_ERROR("[FSceneView] Failed to find string references for FSceneView constructor");
             return std::nullopt;
         }
@@ -45,8 +45,22 @@ std::optional<uintptr_t> FSceneView::get_constructor_address() {
         SPDLOG_INFO("[FSceneView] Found string references for FSceneView constructor");
 
         // We need to find the function that contains both of these strings
-        const auto instanced_string_refs = utility::scan_displacement_references(module, *instanced_string);
-        const auto translucent_string_refs = utility::scan_displacement_references(module, *translucent_string);
+        std::vector<uintptr_t> instanced_string_refs{};
+        std::vector<uintptr_t> translucent_string_refs{};
+        //const auto instanced_string_refs = utility::scan_displacement_references(module, *instanced_string);
+        //const auto translucent_string_refs = utility::scan_displacement_references(module, *translucent_string);
+
+        for (const auto& instanced_string : instanced_strings) {
+            const auto instanced_string_refs_ = utility::scan_displacement_references(module, instanced_string);
+
+            instanced_string_refs.insert(instanced_string_refs.end(), instanced_string_refs_.begin(), instanced_string_refs_.end());
+        }
+
+        for (const auto& translucent_string : translucent_strings) {
+            const auto translucent_string_refs_ = utility::scan_displacement_references(module, translucent_string);
+
+            translucent_string_refs.insert(translucent_string_refs.end(), translucent_string_refs_.begin(), translucent_string_refs_.end());
+        }
 
         if (instanced_string_refs.empty() || translucent_string_refs.empty()) {
             SPDLOG_ERROR("[FSceneView] Failed to find references for FSceneView constructor");
