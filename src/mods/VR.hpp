@@ -430,6 +430,10 @@ public:
         return m_splitscreen_view_index->value();
     }
 
+    bool is_ghosting_fix_enabled() const {
+        return m_ghosting_fix->value();
+    }
+
     auto& get_fake_stereo_hook() {
         return m_fake_stereo_hook;
     }
@@ -673,6 +677,8 @@ private:
     const ModSlider::Ptr m_world_scale{ ModSlider::create(generate_name("WorldScale"), 0.01f, 10.0f, 1.0f) };
     const ModSlider::Ptr m_depth_scale{ ModSlider::create(generate_name("DepthScale"), 0.01f, 1.0f, 1.0f) };
 
+    const ModToggle::Ptr m_ghosting_fix{ ModToggle::create(generate_name("GhostingFix"), false) };
+
     const ModSlider::Ptr m_custom_z_near{ ModSlider::create(generate_name("CustomZNear"), 0.001f, 100.0f, 0.01f) };
     const ModToggle::Ptr m_custom_z_near_enabled{ ModToggle::create(generate_name("EnableCustomZNear"), false) };
 
@@ -727,6 +733,7 @@ private:
         *m_depth_scale,
         *m_custom_z_near,
         *m_custom_z_near_enabled,
+        *m_ghosting_fix,
         *m_splitscreen_compatibility_mode,
         *m_splitscreen_view_index,
     };

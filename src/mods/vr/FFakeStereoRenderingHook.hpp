@@ -10,6 +10,7 @@
 #include <sdk/StereoStuff.hpp>
 #include <sdk/FViewportInfo.hpp>
 #include <sdk/threading/ThreadWorker.hpp>
+#include <sdk/RHICommandList.hpp>
 
 #include "IXRTrackingSystemHook.hpp"
 
@@ -20,6 +21,7 @@ struct VRRenderTargetManager_418;
 struct FSceneView;
 struct UCanvas;
 struct IStereoLayers;
+struct FSceneViewFamily;
 
 // Injector-specific structure for VRRenderTargetManager that they will all secondarily inherit from
 // because different engine versions can have a different IStereoRenderTargetManager virtual table
@@ -187,6 +189,7 @@ public:
     void attempt_hook_game_engine_tick(uintptr_t return_address = 0);
     void attempt_hook_slate_thread(uintptr_t return_address = 0);
     void attempt_hook_update_viewport_rhi(uintptr_t return_address);
+    void attempt_hook_fsceneview_constructor();
     
 
     bool has_double_precision() const {
@@ -199,6 +202,10 @@ public:
 
     bool has_attempted_to_hook_slate() const {
         return m_attempted_hook_slate_thread;
+    }
+
+    bool has_attempted_to_hook_fsceneview() const {
+        return m_attempted_hook_fsceneview_constructor;
     }
 
     bool is_slate_hooked() const {
@@ -258,6 +265,15 @@ public:
         calculate_stereo_view_offset(nullptr, view_index, view_rotation, world_to_meters, view_location);
     }
 
+    bool is_in_viewport_client_draw() const {
+        return m_in_viewport_client_draw;
+    }
+
+    // Do not call these directly
+    static void setup_view_family(ISceneViewExtension* extension, FSceneViewFamily& view_family);
+    static void begin_render_viewfamily(ISceneViewExtension* extension, FSceneViewFamily& view_family);
+    static void pre_render_viewfamily_renderthread(ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, FSceneViewFamily& view_family);
+
 private:
     bool hook();
     bool standard_fake_stereo_hook(uintptr_t vtable);
@@ -281,6 +297,10 @@ private:
     void post_init_properties(uintptr_t localplayer);
 
     // Hooks
+    // FSceneView
+    static sdk::FSceneView* sceneview_constructor(sdk::FSceneView* sceneview, sdk::FSceneViewInitOptions* init_options);
+    
+    // IStereoRendering
     static bool is_stereo_enabled(FFakeStereoRendering* stereo);
     static void adjust_view_rect(FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h);
     static void calculate_stereo_view_offset(FFakeStereoRendering* stereo, const int32_t view_index, Rotator<float>* view_rotation,
@@ -295,18 +315,29 @@ private:
     static IStereoRenderTargetManager* get_render_target_manager_hook(FFakeStereoRendering* stereo);
     static IStereoLayers* get_stereo_layers_hook(FFakeStereoRendering* stereo);
 
+    // LocalPlayer
     static void post_calculate_stereo_projection_matrix(safetyhook::Context& ctx);
     static void pre_get_projection_data(safetyhook::Context& ctx);
 
+    // Slate
     static void* slate_draw_window_render_thread(void* renderer, void* command_list, sdk::FViewportInfo* viewport_info, 
                                                  void* elements, void* params, void* unk1, void* unk2);
 
+    // FViewport
     static void viewport_draw_hook(void* viewport, bool should_present);
+
+    // UGameViewportClient
     static void game_viewport_client_draw_hook(void* gameviewportclient, void* viewport, void* canvas, void* a4);
 
+    // FSceneViewport
     static void update_viewport_rhi_hook(void* viewport, size_t destroyed, size_t new_size_x, size_t new_size_y, size_t new_window_mode, size_t preferred_pixel_format);
 
     std::unique_ptr<ThreadWorker<FRHICommandListImmediate*>> m_slate_thread_worker{std::make_unique<ThreadWorker<FRHICommandListImmediate*>>()};
+
+    struct {
+        safetyhook::InlineHook constructor_hook{};
+        std::unordered_set<void*> known_scene_states;
+    } m_sceneview_data;
 
     safetyhook::InlineHook m_tick_hook{};
     safetyhook::InlineHook m_adjust_view_rect_hook{};
@@ -355,6 +386,7 @@ private:
     bool m_attempted_hook_game_engine_tick{false};
     bool m_attempted_hook_slate_thread{false};
     bool m_attempted_hook_update_viewport_rhi{false};
+    bool m_attempted_hook_fsceneview_constructor{false};
     bool m_uses_old_rendertarget_manager{false};
     bool m_rendertarget_manager_embedded_in_stereo_device{false}; // 4.17 and below...?
     bool m_special_detected{false};

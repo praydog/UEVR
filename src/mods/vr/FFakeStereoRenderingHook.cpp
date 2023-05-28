@@ -85,6 +85,7 @@ FFakeStereoRenderingHook::FFakeStereoRenderingHook() {
 void FFakeStereoRenderingHook::on_frame() {
     attempt_hook_game_engine_tick();
     attempt_hook_slate_thread();
+    attempt_hook_fsceneview_constructor();
 
     // Ideally we want to do all hooking
     // from game engine tick. if it fails
@@ -127,14 +128,16 @@ void FFakeStereoRenderingHook::attempt_hooking() {
     m_hooked = hook();
 }
 
+namespace detail{
 bool pre_find_engine_tick() {
     sdk::UGameEngine::get_tick_address(); // this takes a LONG time to find
     return true;
 }
+}
 
 void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_address) {
     if (m_asynchronous_scan->value()) {
-        static std::future<bool> future = std::async(std::launch::async, pre_find_engine_tick);
+        static std::future<bool> future = std::async(std::launch::async, detail::pre_find_engine_tick);
 
         // Wait for the future to be valid before attempting to hook
         if (future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
@@ -285,14 +288,16 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
     SPDLOG_INFO("Hooked UGameEngine::Tick!");
 }
 
+namespace detail{
 bool pre_find_slate_thread() {
     sdk::slate::locate_draw_window_renderthread_fn(); // Can take a while to find
     return true;
 }
+}
 
 void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_address) {
     if (m_asynchronous_scan->value()) {
-        static std::future<bool> future = std::async(std::launch::async, pre_find_slate_thread);
+        static std::future<bool> future = std::async(std::launch::async, detail::pre_find_slate_thread);
 
         // Wait for the future to be valid before attempting to hook
         if (future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
@@ -341,6 +346,54 @@ void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_addres
     }
 
     SPDLOG_INFO("Hooked FSlateRHIRenderer::DrawWindow_RenderThread!");
+}
+
+namespace detail{
+bool pre_find_fsceneview_constructor() {
+    sdk::FSceneView::get_constructor_address(); // Can take a while to find
+    return true;
+}
+}
+
+void FFakeStereoRenderingHook::attempt_hook_fsceneview_constructor() {
+    if (m_attempted_hook_fsceneview_constructor) {
+        return;
+    }
+    
+    auto& vr = VR::get();
+
+    if (!vr->is_ghosting_fix_enabled()) {
+        return;
+    }
+
+    if (m_asynchronous_scan->value()) {
+        static std::future<bool> future = std::async(std::launch::async, detail::pre_find_fsceneview_constructor);
+
+        // Wait for the future to be valid before attempting to hook
+        if (future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            future.get();
+        } else if (future.valid()) {
+            return;
+        }
+    }
+
+    utility::ScopeGuard _{[&]() {
+        m_attempted_hook_fsceneview_constructor = true;
+    }};
+
+    SPDLOG_INFO("Attempting to hook FSceneView::FSceneView constructor!");
+    const auto constructor = sdk::FSceneView::get_constructor_address();
+
+    if (!constructor) {
+        SPDLOG_ERROR("Cannot hook FSceneView::FSceneView constructor");
+        return;
+    }
+
+    g_hook->m_sceneview_data.constructor_hook = safetyhook::create_inline(*constructor, (uintptr_t)&sceneview_constructor);
+
+    if (!g_hook->m_sceneview_data.constructor_hook) {
+        SPDLOG_ERROR("Failed to hook FSceneView::FSceneView constructor!");
+    }
 }
 
 bool FFakeStereoRenderingHook::hook() {
@@ -2031,169 +2084,8 @@ struct SceneViewExtensionAnalyzer {
 
         const auto setup_view_family_index = index_0_called ? 0 : 1;
 
-        g_view_extension_vtable[setup_view_family_index] = (uintptr_t)+[](ISceneViewExtension* extension, FSceneViewFamily& view_family) -> void {
-            ZoneScopedN("SetupViewFamily");
-
-            static bool once = true;
-
-            if (once) {
-                SPDLOG_INFO("Called SetupViewFamily for the first time");
-                once = false;
-            }
-
-            if (!g_framework->is_game_data_intialized()) {
-                return;
-            }
-
-            auto& vr = VR::get();
-
-            if (!vr->is_hmd_active()) {
-                return;
-            }
-
-            //vr->update_hmd_state(true, vr->get_runtime()->internal_frame_count + 1);
-        };
-
-        g_view_extension_vtable[begin_render_viewfamily_index] = (uintptr_t)+[](ISceneViewExtension* extension, FSceneViewFamily& view_family) -> void {
-            ZoneScopedN("BeginRenderViewFamily");
-
-            SPDLOG_INFO_ONCE("Called BeginRenderViewFamily for the first time");
-
-            if (!g_framework->is_game_data_intialized()) {
-                return;
-            }
-
-            if (!g_hook->has_engine_tick_hook()) {
-                // Alternative place of running game thread work.
-                GameThreadWorker::get().execute();
-            }
-
-            auto& vr = VR::get();
-
-            if (!vr->is_hmd_active()) {
-                return;
-            }
-
-            const auto frame_count = *(uint32_t*)((uintptr_t)&view_family + frame_count_offset);
-            //vr->update_hmd_state(true, frame_count);
-            auto runtime = vr->get_runtime();
-            runtime->internal_frame_count = frame_count;
-            runtime->on_pre_render_game_thread(frame_count);
-
-            if (vr->is_splitscreen_compatibility_enabled()) {
-                constexpr auto INIT_OPTIONS_OFFSET = 0x50;
-                constexpr auto INIT_OPTIONS_VIEW_ORIGIN_OFFSET = 0;
-                constexpr auto INIT_OPTIONS_ROTATION_MATRIX_OFFSET = 0x10;
-                constexpr auto INIT_OPTIONS_VIEW_RECT_OFFSET = 0x90;
-                constexpr auto INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET = 0xA0;
-                constexpr auto INIT_OPTIONS_PROJECTION_MATRIX_OFFSET = 0x50;
-
-                struct FIntRect {
-                    int32_t bounds[4];
-                };
-
-                static auto copy_init_options_from = [](const sdk::FSceneView& a, sdk::FSceneView& b) {
-                    auto init_options_a = (sdk::FSceneViewInitOptions*)((uintptr_t)&a + INIT_OPTIONS_OFFSET);
-                    auto init_options_b = (sdk::FSceneViewInitOptions*)((uintptr_t)&b + INIT_OPTIONS_OFFSET);
-
-                    const auto& view_origin = *(glm::vec3*)((uintptr_t)init_options_a + INIT_OPTIONS_VIEW_ORIGIN_OFFSET);
-                    const auto& rotation_matrix = *(glm::mat4*)((uintptr_t)init_options_a + INIT_OPTIONS_ROTATION_MATRIX_OFFSET);
-                    const auto& view_rect = *(FIntRect*)((uintptr_t)init_options_a + INIT_OPTIONS_VIEW_RECT_OFFSET);
-                    const auto& constrained_view_rect = *(FIntRect*)((uintptr_t)init_options_a + INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET);
-                    const auto& projection_matrix = *(glm::mat4*)((uintptr_t)init_options_a + INIT_OPTIONS_PROJECTION_MATRIX_OFFSET);
-
-                    *(glm::vec3*)((uintptr_t)init_options_b + INIT_OPTIONS_VIEW_ORIGIN_OFFSET) = view_origin;
-                    *(glm::mat4*)((uintptr_t)init_options_b + INIT_OPTIONS_ROTATION_MATRIX_OFFSET) = rotation_matrix;
-                    *(FIntRect*)((uintptr_t)init_options_b + INIT_OPTIONS_VIEW_RECT_OFFSET) = view_rect;
-                    *(FIntRect*)((uintptr_t)init_options_b + INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET) = constrained_view_rect;
-                    *(glm::mat4*)((uintptr_t)init_options_b + INIT_OPTIONS_PROJECTION_MATRIX_OFFSET) = projection_matrix;
-                };
-
-                auto do_splitscreen = [&](int32_t view_index) {
-                    int32_t w = vr->get_hmd_width();
-                    int32_t h = vr->get_hmd_height();
-
-                    int32_t x = 0;
-                    int32_t y = 0;
-
-                    const auto true_index = vr->is_using_afr() ? (frame_count + 1) % 2 : view_index;
-
-                    if (!vr->is_using_afr() && true_index == 1) {
-                        x += w;
-                    }
-
-                    auto view = view_family.views.data[view_index];
-
-                    FIntRect view_rect{x, y, x + w, y + h};
-
-                    auto& vr = VR::get();
-
-                    VR::get()->get_runtime()->update_matrices(0.1f, 10000.0f);
-
-                    const auto proj_mat = VR::get()->get_projection_matrix((VRRuntime::Eye)(true_index));
-
-                    std::array<uint8_t, 0x500> init_options_copy{};
-
-                    auto init_options = (sdk::FSceneViewInitOptions*)((uintptr_t)view + INIT_OPTIONS_OFFSET);
-                    auto& init_options_view_origin = *(glm::vec3*)((uintptr_t)init_options + INIT_OPTIONS_VIEW_ORIGIN_OFFSET);
-                    auto& init_options_view_rotation_matrix = *(Matrix4x4f*)((uintptr_t)init_options + INIT_OPTIONS_ROTATION_MATRIX_OFFSET);
-                    auto& init_options_view_rect = *(FIntRect*)((uintptr_t)init_options + INIT_OPTIONS_VIEW_RECT_OFFSET);
-                    auto& init_options_constrained_view_rect = *(FIntRect*)((uintptr_t)init_options + INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET);
-                    auto& init_options_projection_matrix = *(Matrix4x4f*)((uintptr_t)init_options + INIT_OPTIONS_PROJECTION_MATRIX_OFFSET);
-
-                    const auto conversion_mat = glm::mat4 {
-                        0, 0, 1, 0,
-                        1, 0, 0, 0,
-                        0, 1, 0, 0,
-                        0, 0, 0, 1
-                    };
-
-                    const auto conversion_mat_inverse = glm::inverse(conversion_mat);
-
-                    // We need to "undo" the operations done to create the rotation matrix so we can get the original angle
-                    // const auto view_rot_mat = conversion_mat * make_inverse_rot_matrix(euler); <-- this is the result of the conversion
-                    auto euler = utility::math::ue_euler_from_rotation_matrix(glm::inverse(conversion_mat_inverse * init_options_view_rotation_matrix));
-
-                    g_hook->calculate_stereo_view_offset_(true_index + 1, (Rotator<float>*)&euler, 100.0f, &init_options_view_origin);
-
-                    const auto view_rot_mat = conversion_mat * utility::math::ue_inverse_rotation_matrix(euler);
-
-                    init_options_view_rotation_matrix = view_rot_mat;
-                    init_options_view_rect = view_rect;
-                    init_options_constrained_view_rect = view_rect;
-                    init_options_projection_matrix = proj_mat;
-
-                    memcpy(init_options_copy.data(), init_options, 0x500);
-                    view->constructor((sdk::FSceneViewInitOptions*)init_options_copy.data());
-                };
-
-                const auto requested_index = vr->get_requested_splitscreen_index();
-                const auto final_index = std::min<uint32_t>(view_family.views.count - 1, requested_index);
-                const auto other_index = final_index != 0 ? 0 : 1;
-
-                if (view_family.views.count > 1) {
-                    copy_init_options_from(*view_family.views.data[final_index], *view_family.views.data[other_index]);
-                }
-
-                if (!vr->is_using_afr()) {
-                    do_splitscreen(0);
-
-                    if (view_family.views.count > 1) {
-                        do_splitscreen(1);
-                    }
-                } else {
-                    do_splitscreen(0);
-                }
-            }
-
-            // If we couldn't find GetDesiredNumberOfViews, we need to set the view count to 1 as a workaround
-            // TODO: Check if this can cause a memory leak, I don't know who is resonsible
-            // for destroying the views in the array
-            if (vr->is_using_afr() && (view_family.views.count == 2 || view_family.views.count == 3)) {
-                SPDLOG_INFO_ONCE("Setting view count to 1");
-                view_family.views.count = 1;
-            }
-        };
+        g_view_extension_vtable[setup_view_family_index] = (uintptr_t)&FFakeStereoRenderingHook::setup_view_family;
+        g_view_extension_vtable[begin_render_viewfamily_index] = (uintptr_t)&FFakeStereoRenderingHook::begin_render_viewfamily;
 
         // PreRenderViewFamily_RenderThread
         g_view_extension_vtable[pre_render_viewfamily_renderthread_index] = (uintptr_t)+[](ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, FSceneViewFamily& view_family) -> void {
@@ -2281,8 +2173,14 @@ struct SceneViewExtensionAnalyzer {
                 });
             };
 
+            const auto has_good_root = 
+                cmd_list != nullptr &&
+                ((uintptr_t)cmd_list & 1 == 0) &&
+                cmd_list->root != nullptr &&
+                ((uintptr_t)cmd_list->root & 1 == 0);
+
             // Hijack the top command in the command list so we can enqueue the render poses on the RHI thread
-            if (cmd_list->root != nullptr) {
+            if (has_good_root) {
                 if (!analyzed_root_already) try {
                     auto root = cmd_list->root;
 
@@ -2581,6 +2479,465 @@ template<int N>
 void SceneViewExtensionAnalyzer::FillVtable<N>::fill2(std::array<uintptr_t, 50>& table) {
     table[N] = (uintptr_t)&SceneViewExtensionAnalyzer::analysis_dummy_stage2<N>;
     FillVtable<N - 1>::fill2(table);
+}
+
+// 4.25something to 4.27
+// TODO: Add support for all versions via PDB dumps
+constexpr auto INIT_OPTIONS_OFFSET = 0x50;
+constexpr auto INIT_OPTIONS_VIEW_ORIGIN_OFFSET = 0;
+constexpr auto INIT_OPTIONS_ROTATION_MATRIX_OFFSET = 0x10;
+constexpr auto INIT_OPTIONS_VIEW_RECT_OFFSET = 0x90;
+constexpr auto INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET = 0xA0;
+constexpr auto INIT_OPTION_SCENE_STATE_INTERFACE_OFFSET = 0xB8;
+constexpr auto INIT_OPTIONS_PROJECTION_MATRIX_OFFSET = 0x50;
+constexpr auto INIT_OPTIONS_STEREO_PASS_OFFSET = 0x108;
+
+// FSceneView constructor hook
+sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView* view, sdk::FSceneViewInitOptions* init_options) {
+    SPDLOG_INFO_ONCE("Called FSceneView constructor for the first time");
+
+    auto& vr = VR::get();
+
+    if (!g_hook->is_in_viewport_client_draw() || !vr->is_hmd_active()) {
+        return g_hook->m_sceneview_data.constructor_hook.call<sdk::FSceneView*>(view, init_options);
+    }
+
+    auto& known_scene_states = g_hook->m_sceneview_data.known_scene_states;
+
+    static uint32_t last_frame_count = 0;
+    static uint32_t last_index = 0;
+
+    if (last_frame_count != g_frame_count || last_index > 1) {
+        last_index = 0;
+    }
+
+    last_frame_count = g_frame_count;
+
+    const auto true_index = vr->is_using_afr() ? (g_frame_count + last_index) % 2 : last_index;
+
+    if (vr->is_splitscreen_compatibility_enabled()) {
+        int32_t w = vr->get_hmd_width();
+        int32_t h = vr->get_hmd_height();
+
+        int32_t x = 0;
+        int32_t y = 0;
+
+        if (!vr->is_using_afr() && true_index == 1) {
+            x += w;
+        }
+
+        FIntRect view_rect{x, y, x + w, y + h};
+
+        vr->get_runtime()->update_matrices(0.1f, 10000.0f);
+
+        const auto proj_mat = vr->get_projection_matrix((VRRuntime::Eye)(true_index));
+
+        auto& init_options_view_origin = *(glm::vec3*)((uintptr_t)init_options + INIT_OPTIONS_VIEW_ORIGIN_OFFSET);
+        auto& init_options_view_rotation_matrix = *(Matrix4x4f*)((uintptr_t)init_options + INIT_OPTIONS_ROTATION_MATRIX_OFFSET);
+        auto& init_options_view_rect = *(FIntRect*)((uintptr_t)init_options + INIT_OPTIONS_VIEW_RECT_OFFSET);
+        auto& init_options_constrained_view_rect = *(FIntRect*)((uintptr_t)init_options + INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET);
+        auto& init_options_projection_matrix = *(Matrix4x4f*)((uintptr_t)init_options + INIT_OPTIONS_PROJECTION_MATRIX_OFFSET);
+
+        const auto conversion_mat = glm::mat4 {
+            0, 0, 1, 0,
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 0, 1
+        };
+
+        const auto conversion_mat_inverse = glm::inverse(conversion_mat);
+
+        // We need to "undo" the operations done to create the rotation matrix so we can get the original angle
+        // const auto view_rot_mat = conversion_mat * make_inverse_rot_matrix(euler); <-- this is the result of the conversion
+        auto euler = utility::math::ue_euler_from_rotation_matrix(glm::inverse(conversion_mat_inverse * init_options_view_rotation_matrix));
+
+        g_hook->calculate_stereo_view_offset_(true_index + 1, (Rotator<float>*)&euler, 100.0f, &init_options_view_origin);
+
+        const auto view_rot_mat = conversion_mat * utility::math::ue_inverse_rotation_matrix(euler);
+
+        init_options_view_rotation_matrix = view_rot_mat;
+        init_options_view_rect = view_rect;
+        init_options_constrained_view_rect = view_rect;
+        init_options_projection_matrix = proj_mat;
+        //init_options_stereo_pass = 0;
+    }
+
+    auto& init_options_scene_state = *(void**)((uintptr_t)init_options + INIT_OPTION_SCENE_STATE_INTERFACE_OFFSET);
+    auto& init_options_stereo_pass = *(uint8_t*)((uintptr_t)init_options + INIT_OPTIONS_STEREO_PASS_OFFSET);
+
+    if (!g_hook->m_sceneview_data.known_scene_states.contains(init_options_scene_state)) {
+        SPDLOG_INFO_ONCE("Inserting new scene state {:x}", (uintptr_t)init_options_scene_state);
+        known_scene_states.insert(init_options_scene_state);
+    }
+
+    if (vr->is_ghosting_fix_enabled() && known_scene_states.size() > 1 && vr->is_using_afr() && true_index == 1) {
+        init_options_stereo_pass = 1;
+
+        // Set the scene state to the one that isn't the current one
+        for (auto scene_state : known_scene_states) {
+            if (scene_state != init_options_scene_state) {
+                SPDLOG_INFO_ONCE("Setting scene state to {:x}", (uintptr_t)scene_state);
+                init_options_scene_state = scene_state;
+                break;
+            }
+        }
+    }
+
+    last_index++;
+
+    return g_hook->m_sceneview_data.constructor_hook.call<sdk::FSceneView*>(view, init_options);
+}
+
+void FFakeStereoRenderingHook::setup_view_family(ISceneViewExtension* extension, FSceneViewFamily& view_family) {
+    ZoneScopedN("SetupViewFamily");
+
+    static bool once = true;
+
+    if (once) {
+        SPDLOG_INFO("Called SetupViewFamily for the first time");
+        once = false;
+    }
+
+    if (!g_framework->is_game_data_intialized()) {
+        return;
+    }
+
+    auto& vr = VR::get();
+
+    if (!vr->is_hmd_active()) {
+        return;
+    }
+
+    //vr->update_hmd_state(true, vr->get_runtime()->internal_frame_count + 1);
+}
+
+void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* extension, FSceneViewFamily& view_family) {
+    ZoneScopedN("BeginRenderViewFamily");
+
+    SPDLOG_INFO_ONCE("Called BeginRenderViewFamily for the first time");
+
+    if (!g_framework->is_game_data_intialized()) {
+        return;
+    }
+
+    if (!g_hook->has_engine_tick_hook()) {
+        // Alternative place of running game thread work.
+        GameThreadWorker::get().execute();
+    }
+
+    auto& vr = VR::get();
+
+    if (!vr->is_hmd_active()) {
+        return;
+    }
+
+    const auto frame_count = *(uint32_t*)((uintptr_t)&view_family + SceneViewExtensionAnalyzer::frame_count_offset);
+    //vr->update_hmd_state(true, frame_count);
+    auto runtime = vr->get_runtime();
+    runtime->internal_frame_count = frame_count;
+    runtime->on_pre_render_game_thread(frame_count);
+
+    if (vr->is_splitscreen_compatibility_enabled()) {
+        // B = dst, A = src
+        static auto copy_init_options_from = [](const sdk::FSceneView& a, sdk::FSceneView& b) {
+            auto init_options_a = (sdk::FSceneViewInitOptions*)((uintptr_t)&a + INIT_OPTIONS_OFFSET);
+            auto init_options_b = (sdk::FSceneViewInitOptions*)((uintptr_t)&b + INIT_OPTIONS_OFFSET);
+
+            const auto& view_origin = *(glm::vec3*)((uintptr_t)init_options_a + INIT_OPTIONS_VIEW_ORIGIN_OFFSET);
+            const auto& rotation_matrix = *(glm::mat4*)((uintptr_t)init_options_a + INIT_OPTIONS_ROTATION_MATRIX_OFFSET);
+            const auto& view_rect = *(FIntRect*)((uintptr_t)init_options_a + INIT_OPTIONS_VIEW_RECT_OFFSET);
+            const auto& constrained_view_rect = *(FIntRect*)((uintptr_t)init_options_a + INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET);
+            const auto& projection_matrix = *(glm::mat4*)((uintptr_t)init_options_a + INIT_OPTIONS_PROJECTION_MATRIX_OFFSET);
+
+            *(glm::vec3*)((uintptr_t)init_options_b + INIT_OPTIONS_VIEW_ORIGIN_OFFSET) = view_origin;
+            *(glm::mat4*)((uintptr_t)init_options_b + INIT_OPTIONS_ROTATION_MATRIX_OFFSET) = rotation_matrix;
+            *(FIntRect*)((uintptr_t)init_options_b + INIT_OPTIONS_VIEW_RECT_OFFSET) = view_rect;
+            *(FIntRect*)((uintptr_t)init_options_b + INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET) = constrained_view_rect;
+            *(glm::mat4*)((uintptr_t)init_options_b + INIT_OPTIONS_PROJECTION_MATRIX_OFFSET) = projection_matrix;
+        };
+
+        auto do_splitscreen = [&](int32_t view_index) {
+            int32_t w = vr->get_hmd_width();
+            int32_t h = vr->get_hmd_height();
+
+            int32_t x = 0;
+            int32_t y = 0;
+
+            const auto true_index = vr->is_using_afr() ? (frame_count + 1) % 2 : view_index;
+
+            if (!vr->is_using_afr() && true_index == 1) {
+                x += w;
+            }
+
+            auto view = view_family.views.data[view_index];
+
+            FIntRect view_rect{x, y, x + w, y + h};
+
+            auto& vr = VR::get();
+
+            VR::get()->get_runtime()->update_matrices(0.1f, 10000.0f);
+
+            const auto proj_mat = VR::get()->get_projection_matrix((VRRuntime::Eye)(true_index));
+
+            std::array<uint8_t, 0x500> init_options_copy{};
+
+            auto init_options = (sdk::FSceneViewInitOptions*)((uintptr_t)view + INIT_OPTIONS_OFFSET);
+
+            auto& init_options_view_origin = *(glm::vec3*)((uintptr_t)init_options + INIT_OPTIONS_VIEW_ORIGIN_OFFSET);
+            auto& init_options_view_rotation_matrix = *(Matrix4x4f*)((uintptr_t)init_options + INIT_OPTIONS_ROTATION_MATRIX_OFFSET);
+            auto& init_options_view_rect = *(FIntRect*)((uintptr_t)init_options + INIT_OPTIONS_VIEW_RECT_OFFSET);
+            auto& init_options_constrained_view_rect = *(FIntRect*)((uintptr_t)init_options + INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET);
+            auto& init_options_projection_matrix = *(Matrix4x4f*)((uintptr_t)init_options + INIT_OPTIONS_PROJECTION_MATRIX_OFFSET);
+            auto& init_options_stereo_pass = *(uint8_t*)((uintptr_t)init_options + INIT_OPTIONS_STEREO_PASS_OFFSET);
+
+            const auto conversion_mat = glm::mat4 {
+                0, 0, 1, 0,
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 0, 1
+            };
+
+            const auto conversion_mat_inverse = glm::inverse(conversion_mat);
+
+            // We need to "undo" the operations done to create the rotation matrix so we can get the original angle
+            // const auto view_rot_mat = conversion_mat * make_inverse_rot_matrix(euler); <-- this is the result of the conversion
+            auto euler = utility::math::ue_euler_from_rotation_matrix(glm::inverse(conversion_mat_inverse * init_options_view_rotation_matrix));
+
+            g_hook->calculate_stereo_view_offset_(true_index + 1, (Rotator<float>*)&euler, 100.0f, &init_options_view_origin);
+
+            const auto view_rot_mat = conversion_mat * utility::math::ue_inverse_rotation_matrix(euler);
+
+            init_options_view_rotation_matrix = view_rot_mat;
+            init_options_view_rect = view_rect;
+            init_options_constrained_view_rect = view_rect;
+            init_options_projection_matrix = proj_mat;
+
+            memcpy(init_options_copy.data(), init_options, 0x500);
+            view->constructor((sdk::FSceneViewInitOptions*)init_options_copy.data());
+        };
+
+        const auto requested_index = vr->get_requested_splitscreen_index();
+        const auto final_index = std::min<uint32_t>(view_family.views.count - 1, requested_index);
+        const auto other_index = final_index != 0 ? 0 : 1;
+
+        if (final_index > 0) {
+            if (view_family.views.count > 1) {
+                copy_init_options_from(*view_family.views.data[final_index], *view_family.views.data[other_index]);
+            }
+
+            if (!vr->is_using_afr()) {
+                do_splitscreen(0);
+
+                if (view_family.views.count > 1) {
+                    do_splitscreen(1);
+                }
+            } else {
+                do_splitscreen(0);
+            }
+        }
+    }
+
+    // If we couldn't find GetDesiredNumberOfViews, we need to set the view count to 1 as a workaround
+    // TODO: Check if this can cause a memory leak, I don't know who is resonsible
+    // for destroying the views in the array
+    if (vr->is_using_afr() && (view_family.views.count == 2 || view_family.views.count == 3)) {
+        SPDLOG_INFO_ONCE("Setting view count to 1");
+        view_family.views.count = 1;
+    }
+}
+
+void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, FSceneViewFamily& view_family) {
+    ZoneScopedN("PreRenderViewFamily_RenderThread");
+
+    utility::ScopeGuard _{[]() {
+        RenderThreadWorker::get().execute();
+    }};
+    
+    SPDLOG_INFO_ONCE("Called PreRenderViewFamily_RenderThread for the first time");
+    
+    if (!g_framework->is_game_data_intialized()) {
+        return;
+    }
+
+    auto& vr = VR::get();
+
+    if (!vr->is_hmd_active()) {
+        return;
+    }
+
+    if (vr->is_stereo_emulation_enabled()) {
+        return;
+    }
+
+    const auto frame_count = *(uint32_t*)((uintptr_t)&view_family + SceneViewExtensionAnalyzer::frame_count_offset);
+
+    static bool is_ue5_rdg_builder = false;
+    static uint32_t ue5_command_offset = 0;
+    static bool analyzed_root_already = false;
+    static bool is_old_command_base = false;
+
+    if (is_ue5_rdg_builder) {
+        cmd_list = *(sdk::FRHICommandListBase**)((uintptr_t)cmd_list + ue5_command_offset);
+    }
+
+    const auto compensation = g_hook->get_frame_delay_compensation();
+
+    // Using slate's draw window hook is the safest way to do this without
+    // false positives on the command list in this function
+    // otherwise we can attempt to use the command list here and hook it
+    // in the slate hook, a guaranteed proper command list is passed to the function
+    // so we can use that to hook the command list
+    // The main inspiration for this is UE5.0.3 because it passes an FRDGBuilder
+    // which *does* contain the command list in it, but for whatever reason I can't
+    // seem to hook it properly, so I'm using the slate hook instead
+    // ADDENDUM: For now, I'm only using the slate hook for UE5.0.3.
+    // But I'll use it as a fallback as well for when the command list appears to be empty
+    // Reason being the slate hook doesn't appear to run every frame, so it's not a perfect solution
+    auto enqueue_poses_on_slate_thread = [&]() {
+        g_hook->get_slate_thread_worker()->enqueue([=](FRHICommandListImmediate* command_list) {
+            static bool once_slate = true;
+
+            if (once_slate) {
+                SPDLOG_INFO("Called enqueued function on the Slate thread for the first time! Frame count: {}", frame_count);
+                once_slate = false;
+            }
+
+            auto l = (sdk::FRHICommandListBase*)command_list;
+
+            if (l->root != nullptr) {
+                if (!analyzed_root_already) try {
+                    if (utility::get_module_within(*(void**)l->root).value_or(nullptr) == nullptr) {
+                        SPDLOG_INFO("Old FRHICommandBase detected");
+                        is_old_command_base = true;
+                    } else {
+                        SPDLOG_INFO("New FRHICommandBase detected");
+                    }
+
+                    analyzed_root_already = true;
+                } catch(...) {
+                    SPDLOG_ERROR("Failed to analyze FRHICommandBase");
+                    analyzed_root_already = true;
+                }
+
+                if (!is_old_command_base) {
+                    SceneViewExtensionAnalyzer::hook_new_rhi_command((sdk::FRHICommandBase_New*)l->root, frame_count + compensation);
+                } else {
+                    SceneViewExtensionAnalyzer::hook_old_rhi_command((sdk::FRHICommandBase_Old*)l->root, frame_count + compensation);
+                }
+            } else {
+                // welp
+                vr->get_runtime()->enqueue_render_poses(frame_count + compensation);
+            }
+        });
+    };
+
+    const auto has_good_root = 
+        cmd_list != nullptr &&
+        ((uintptr_t)cmd_list & 1 == 0) &&
+        cmd_list->root != nullptr &&
+        ((uintptr_t)cmd_list->root & 1 == 0);
+
+    // Hijack the top command in the command list so we can enqueue the render poses on the RHI thread
+    if (has_good_root) {
+        if (!analyzed_root_already) try {
+            auto root = cmd_list->root;
+
+            auto analyze_for_ue5 = [&]() {
+                // Find the real command list.
+                is_ue5_rdg_builder = true;
+                const auto rdg_builder = (uintptr_t)cmd_list;
+
+                for (auto i = 0x10; i <= 0x100; i += sizeof(void*)) try {
+                    const auto value = *(uintptr_t*)(rdg_builder + i);
+
+                    if (value == 0 || IsBadReadPtr((void*)value, sizeof(void*))) {
+                        continue;
+                    }
+
+                    if (utility::get_module_within((void*)value).has_value()) {
+                        continue;
+                    }
+
+                    const auto value_deref = *(uintptr_t*)value;
+
+                    if (value_deref == 0 || IsBadReadPtr((void*)value_deref, sizeof(void*))) {
+                        continue;
+                    }
+
+                    if (utility::get_module_within((void*)value_deref).has_value()) {
+                        continue;
+                    }
+
+                    const auto root_vtable = *(uintptr_t*)value_deref;
+
+                    if (root_vtable == 0 || IsBadReadPtr((void*)root_vtable, sizeof(void*))) {
+                        continue;
+                    }
+
+                    if (!utility::get_module_within((void*)root_vtable).has_value()) {
+                        continue;
+                    }
+
+                    // Check that there is a valid function in the vtable
+                    const auto first_function = *(uintptr_t*)root_vtable;
+
+                    if (first_function == 0 || IsBadReadPtr((void*)first_function, sizeof(void*))) {
+                        continue;
+                    }
+
+                    if (!utility::get_module_within((void*)first_function).has_value()) {
+                        continue;
+                    }
+
+                    SPDLOG_INFO("Possible UE5 command list found at offset 0x{:x}", i);
+                    ue5_command_offset = i;
+                    cmd_list = (sdk::FRHICommandListBase*)value;
+                    break;
+                } catch(...) {
+                    spdlog::error("Exception occurred while analyzing UE5 command list");
+                }
+            };
+
+            // If we read the pointer at the start of the root and it's not a module, then it's the old FRHICommandBase
+            // this is because all vtables reside within a module
+            if (utility::get_module_within(*(void**)root).value_or(nullptr) == nullptr) {
+                // UE5
+                if (g_hook->has_double_precision()) {
+                    analyze_for_ue5();
+
+                    if (ue5_command_offset == 0) {
+                        SPDLOG_ERROR("Failed to find UE5 command list, trying again next frame");
+                        return;
+                    }
+                } else {
+                    SPDLOG_INFO("Old FRHICommandBase detected");
+                    is_old_command_base = true;
+                }
+            } else {
+                SPDLOG_INFO("New FRHICommandBase detected");
+            }
+
+            analyzed_root_already = true;
+        } catch(...) {
+            SPDLOG_ERROR("Failed to analyze root command");
+            analyzed_root_already = true;
+        }
+
+        if (g_hook->get_render_target_manager()->is_ue_5_0_3() && g_hook->has_slate_hook()) {
+            enqueue_poses_on_slate_thread();
+        } else if (!is_old_command_base) {
+            SceneViewExtensionAnalyzer::hook_new_rhi_command((sdk::FRHICommandBase_New*)cmd_list->root, frame_count + compensation);
+        } else {
+            SceneViewExtensionAnalyzer::hook_old_rhi_command((sdk::FRHICommandBase_Old*)cmd_list->root, frame_count + compensation);
+        }
+    } else {
+        // welp v2
+        if (g_hook->has_slate_hook()) {
+            enqueue_poses_on_slate_thread();
+        } else {
+            vr->get_runtime()->enqueue_render_poses(frame_count + compensation);
+        }
+    }
 }
 
 bool FFakeStereoRenderingHook::setup_view_extensions() try {
@@ -3826,7 +4183,7 @@ uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoR
     SPDLOG_INFO_ONCE("get desired number of views hook called!");
 #endif
 
-    if (!is_stereo_enabled || VR::get()->is_using_afr()) {
+    if (!is_stereo_enabled || (VR::get()->is_using_afr() && !VR::get()->is_splitscreen_compatibility_enabled())) {
         return 1;
     }
 

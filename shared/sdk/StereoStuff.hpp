@@ -80,6 +80,10 @@ struct FIntPoint {
     int32_t x, y;
 };
 
+struct FIntRect {
+    int32_t bounds[4];
+};
+
 struct FViewport {};
 
 // 4.24+ or so only has the NeedReAllocateShadingRateTexture function.
