@@ -362,7 +362,7 @@ void FFakeStereoRenderingHook::attempt_hook_fsceneview_constructor() {
     
     auto& vr = VR::get();
 
-    if (!vr->is_ghosting_fix_enabled()) {
+    if (!vr->is_ghosting_fix_enabled() && !vr->is_splitscreen_compatibility_enabled()) {
         return;
     }
 
@@ -2574,7 +2574,7 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
         known_scene_states.insert(init_options_scene_state);
     }
 
-    if (vr->is_ghosting_fix_enabled() && known_scene_states.size() > 1 && vr->is_using_afr() && true_index == 1) {
+    if (init_options_scene_state != nullptr && vr->is_ghosting_fix_enabled() && known_scene_states.size() > 1 && vr->is_using_afr() && true_index == 1) {
         init_options_stereo_pass = 1;
 
         // Set the scene state to the one that isn't the current one
