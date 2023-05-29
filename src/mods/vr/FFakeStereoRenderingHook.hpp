@@ -270,6 +270,8 @@ public:
     }
 
     // Do not call these directly
+    static void setup_viewpoint(ISceneViewExtension* extension, void* player_controller, void* view_info);
+    static void localplayer_setup_viewpoint(void* localplayer, void* view_info, void* pass);
     static void setup_view_family(ISceneViewExtension* extension, FSceneViewFamily& view_family);
     static void begin_render_viewfamily(ISceneViewExtension* extension, FSceneViewFamily& view_family);
     static void pre_render_viewfamily_renderthread(ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, FSceneViewFamily& view_family);
@@ -339,6 +341,7 @@ private:
         std::unordered_set<void*> known_scene_states;
     } m_sceneview_data;
 
+    safetyhook::InlineHook m_localplayer_get_viewpoint_hook{};
     safetyhook::InlineHook m_tick_hook{};
     safetyhook::InlineHook m_adjust_view_rect_hook{};
     safetyhook::InlineHook m_calculate_stereo_view_offset_hook_inline{};

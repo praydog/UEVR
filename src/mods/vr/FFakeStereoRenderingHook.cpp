@@ -2087,6 +2087,10 @@ struct SceneViewExtensionAnalyzer {
         g_view_extension_vtable[setup_view_family_index] = (uintptr_t)&FFakeStereoRenderingHook::setup_view_family;
         g_view_extension_vtable[begin_render_viewfamily_index] = (uintptr_t)&FFakeStereoRenderingHook::begin_render_viewfamily;
 
+        if (!index_0_called && (setup_view_family_index + 2) != begin_render_viewfamily_index) {
+            g_view_extension_vtable[setup_view_family_index + 2] = (uintptr_t)&FFakeStereoRenderingHook::setup_viewpoint;
+        }
+
         // PreRenderViewFamily_RenderThread
         g_view_extension_vtable[pre_render_viewfamily_renderthread_index] = (uintptr_t)+[](ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, FSceneViewFamily& view_family) -> void {
             ZoneScopedN("PreRenderViewFamily_RenderThread");
@@ -2565,8 +2569,8 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
     auto& init_options_scene_state = *(void**)((uintptr_t)init_options + INIT_OPTION_SCENE_STATE_INTERFACE_OFFSET);
     auto& init_options_stereo_pass = *(uint8_t*)((uintptr_t)init_options + INIT_OPTIONS_STEREO_PASS_OFFSET);
 
-    if (!g_hook->m_sceneview_data.known_scene_states.contains(init_options_scene_state)) {
-        SPDLOG_INFO_ONCE("Inserting new scene state {:x}", (uintptr_t)init_options_scene_state);
+    if (init_options_scene_state != nullptr && !g_hook->m_sceneview_data.known_scene_states.contains(init_options_scene_state)) {
+        SPDLOG_INFO("Inserting new scene state {:x}", (uintptr_t)init_options_scene_state);
         known_scene_states.insert(init_options_scene_state);
     }
 
@@ -2609,6 +2613,66 @@ void FFakeStereoRenderingHook::setup_view_family(ISceneViewExtension* extension,
     }
 
     //vr->update_hmd_state(true, vr->get_runtime()->internal_frame_count + 1);
+}
+
+void FFakeStereoRenderingHook::setup_viewpoint(ISceneViewExtension* extension, void* player_controller, void* view_info) {
+    ZoneScopedN("SetupViewPoint");
+    SPDLOG_INFO_ONCE("Called SetupViewPoint for the first time");
+
+    if (!g_framework->is_game_data_intialized()) {
+        return;
+    }
+
+    auto& vr = VR::get();
+
+    if (!vr->is_ghosting_fix_enabled() || g_hook->m_fixed_localplayer_view_count) {
+        return;
+    }
+
+    // Using this as a way to get to the localplayer
+    static bool attempted_hook{false};
+
+    // Fix localplayer view count
+    if (!attempted_hook) {
+        attempted_hook = true;
+        const auto return_address = (uintptr_t)_ReturnAddress();
+        const auto caller = utility::find_virtual_function_start(return_address);
+
+        if (!caller) {
+            SPDLOG_ERROR("Failed to find caller of ISceneViewExtension::SetupViewPoint");
+            return;
+        }
+
+        g_hook->m_localplayer_get_viewpoint_hook = safetyhook::create_inline(*caller, (uintptr_t)&localplayer_setup_viewpoint);
+        
+        if (!g_hook->m_localplayer_get_viewpoint_hook) {
+            SPDLOG_ERROR("Failed to hook ISceneViewExtension::SetupViewPoint");
+            return;
+        }
+
+        SPDLOG_INFO("Hooked ISceneViewExtension::SetupViewPoint");
+    }
+}
+
+void FFakeStereoRenderingHook::localplayer_setup_viewpoint(void* localplayer, void* view_info, void* pass) {
+    ZoneScopedN("LocalPlayerSetupViewPoint");
+    SPDLOG_INFO_ONCE("Called LocalPlayerSetupViewPoint for the first time");
+
+    if (!g_hook->m_fixed_localplayer_view_count) {
+        static bool attempted = false;
+
+        if (!attempted) {
+            attempted = true;
+
+            if (localplayer != nullptr && !IsBadReadPtr(localplayer, sizeof(void*))) try {
+                g_hook->post_init_properties((uintptr_t)localplayer);
+            } catch(...) {
+                SPDLOG_ERROR("[LocalPlayerSetupViewPoint] Failed to post init properties");
+            }
+        }
+    }
+
+    g_hook->m_localplayer_get_viewpoint_hook.call<void>(localplayer, view_info, pass);
 }
 
 void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* extension, FSceneViewFamily& view_family) {
