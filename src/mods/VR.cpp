@@ -700,11 +700,13 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         get_runtime()->handle_pause = false;
     }
 
+    if (is_using_controllers_within(std::chrono::minutes(5))) {
+        *retval = ERROR_SUCCESS;
+    }
+
     if (!is_using_controllers()) {
         return;
     }
-
-    *retval = ERROR_SUCCESS;
 
     const auto joysticks = std::array<vr::VRInputValueHandle_t, 2> {
         m_right_joystick,
