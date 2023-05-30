@@ -693,12 +693,31 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
     m_last_xinput_update = now;
     m_spoofed_gamepad_connection = true;
 
-    if (get_runtime()->ready() && get_runtime()->handle_pause) {
-        // Spoof the start button being pressed
-        state->Gamepad.wButtons |= XINPUT_GAMEPAD_START;
-        *retval = ERROR_SUCCESS;
-        get_runtime()->handle_pause = false;
-    }
+    auto runtime = get_runtime();
+
+    auto do_pause_select = [&]() {
+        if (!runtime->ready()) {
+            return;
+        }
+
+        if (runtime->handle_pause) {
+            // Spoof the start button being pressed
+            state->Gamepad.wButtons |= XINPUT_GAMEPAD_START;
+            *retval = ERROR_SUCCESS;
+            runtime->handle_pause = false;
+            runtime->handle_select_button = false;
+        }
+
+        if (runtime->handle_select_button) {
+            // Spoof the back button being pressed
+            state->Gamepad.wButtons |= XINPUT_GAMEPAD_BACK;
+            *retval = ERROR_SUCCESS;
+            runtime->handle_select_button = false;
+            runtime->handle_pause = false;
+        }
+    };
+
+    do_pause_select();
 
     if (is_using_controllers_within(std::chrono::minutes(5))) {
         *retval = ERROR_SUCCESS;
@@ -712,6 +731,9 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         m_right_joystick,
         m_left_joystick
     };
+
+    runtime->handle_pause_select(is_action_active_any_joystick(m_action_system_button));
+    do_pause_select();
 
     const auto is_right_a_button_down = is_action_active_any_joystick(m_action_a_button_right);
     const auto is_left_a_button_down = is_action_active_any_joystick(m_action_a_button_left);

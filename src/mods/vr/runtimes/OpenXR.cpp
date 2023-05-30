@@ -540,10 +540,6 @@ VRRuntime::Error OpenXR::update_input() {
                 }
             }
         }
-
-        if (this->is_action_active_once("systembutton", (VRRuntime::Hand)i)) {
-            this->handle_pause = true;
-        }
     }
 
     // TODO: Other non-hand specific inputs

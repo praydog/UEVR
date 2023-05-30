@@ -128,6 +128,29 @@ struct VRRuntime {
         return this->type() == Type::OPENVR;
     }
 
+    void handle_pause_select(bool systembutton_pressed) {
+        const auto now = std::chrono::steady_clock::now();
+
+        if (systembutton_pressed && !this->was_pause_button_pressed) {
+            this->last_pause_press = now;
+        }
+
+        if (systembutton_pressed && this->was_pause_button_pressed) {
+            if (now - this->last_pause_press > std::chrono::milliseconds(500)) {
+                this->handle_select_button = true;
+                this->handle_pause = false;
+                this->last_select_press = now;
+            }
+        }
+
+        if (this->was_pause_button_pressed && !systembutton_pressed && (now - this->last_select_press > std::chrono::milliseconds(500))) {
+            this->handle_pause = true;
+            this->handle_select_button = false;
+        }
+
+        this->was_pause_button_pressed = systembutton_pressed;
+    }
+
     bool loaded{false};
     bool wants_reinitialize{false};
     bool dll_missing{false};
@@ -140,7 +163,12 @@ struct VRRuntime {
     bool got_first_sync{false};
     bool frame_synced{false};
     bool handle_pause{false};
+    bool handle_select_button{false}; // long press on pause button
+    bool was_pause_button_pressed{false};
     bool wants_reset_origin{true};
+
+    std::chrono::steady_clock::time_point last_pause_press{};
+    std::chrono::steady_clock::time_point last_select_press{};
 
     std::optional<std::string> error{};
 

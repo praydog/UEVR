@@ -377,11 +377,11 @@ Framework::~Framework() {
     }
 
     if (m_is_d3d11) {
-        ImGui_ImplDX11_Shutdown();
+        deinit_d3d11();
     }
 
     if (m_is_d3d12) {
-        ImGui_ImplDX12_Shutdown();
+        deinit_d3d12();
     }
 
     ImGui_ImplWin32_Shutdown();
