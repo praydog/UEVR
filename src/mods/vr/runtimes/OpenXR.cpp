@@ -630,7 +630,7 @@ std::vector<DXGI_FORMAT> OpenXR::get_supported_swapchain_formats() const {
     std::vector<DXGI_FORMAT> dxgi_formats(count);
 
     for (auto i = 0; i < count; ++i) {
-        dxgi_formats.push_back((DXGI_FORMAT)formats[i]);
+        dxgi_formats[i] = (DXGI_FORMAT)formats[i];
     }
 
     return dxgi_formats;

@@ -96,6 +96,11 @@ struct OpenXR final : public VRRuntime {
     void enqueue_render_poses_unsafe(uint32_t frame_count);
 
     std::vector<DXGI_FORMAT> get_supported_swapchain_formats() const;
+    bool is_supported_swapchain_format(DXGI_FORMAT format) const {
+        const auto supported = this->get_supported_swapchain_formats();
+
+        return std::find(supported.begin(), supported.end(), format) != supported.end();
+    }
 
 public:
     // openxr quaternions are xyzw and glm is wxyz
