@@ -95,6 +95,8 @@ struct OpenXR final : public VRRuntime {
     void enqueue_render_poses(uint32_t frame_count) override;
     void enqueue_render_poses_unsafe(uint32_t frame_count);
 
+    std::vector<DXGI_FORMAT> get_supported_swapchain_formats() const;
+
 public:
     // openxr quaternions are xyzw and glm is wxyz
     static glm::quat to_glm(const XrQuaternionf& q) {

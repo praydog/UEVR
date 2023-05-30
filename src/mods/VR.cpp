@@ -514,6 +514,13 @@ std::optional<std::string> VR::initialize_openxr_swapchains() {
 
     spdlog::info("[VR] Creating OpenXR swapchain");
 
+    const auto supported_swapchain_formats = m_openxr->get_supported_swapchain_formats();
+
+    // Log
+    for (auto f : supported_swapchain_formats) {
+        spdlog::info("[VR] Supported swapchain format: {}", f);
+    }
+
     if (g_framework->is_dx12()) {
         auto err = m_d3d12.openxr().create_swapchains();
 

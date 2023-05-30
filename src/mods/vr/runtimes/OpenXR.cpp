@@ -608,6 +608,34 @@ void OpenXR::enqueue_render_poses_unsafe(uint32_t frame_count) {
     this->has_render_frame_count = true;
 }
 
+std::vector<DXGI_FORMAT> OpenXR::get_supported_swapchain_formats() const {
+    uint32_t count{};
+    auto result = xrEnumerateSwapchainFormats(this->session, 0, &count, nullptr);
+
+    if (result != XR_SUCCESS) {
+        spdlog::error("[VR] Failed to enumerate swapchain formats: {}", this->get_result_string(result));
+
+        return {};
+    }
+
+    std::vector<int64_t> formats(count);
+    result = xrEnumerateSwapchainFormats(this->session, count, &count, formats.data());
+
+    if (result != XR_SUCCESS) {
+        spdlog::error("[VR] Failed to enumerate swapchain formats: {}", this->get_result_string(result));
+
+        return {};
+    }
+
+    std::vector<DXGI_FORMAT> dxgi_formats(count);
+
+    for (auto i = 0; i < count; ++i) {
+        dxgi_formats.push_back((DXGI_FORMAT)formats[i]);
+    }
+
+    return dxgi_formats;
+}
+
 
 std::string OpenXR::get_result_string(XrResult result) const {
     char result_string[XR_MAX_RESULT_STRING_SIZE]{};
