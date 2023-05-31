@@ -55,6 +55,7 @@ struct TConsoleVariableData {
 // The functions will actually dynamically scan the vtable for the right index
 struct IConsoleObject {
     virtual ~IConsoleObject() {}
+    virtual wchar_t* GetHelp() const = 0;
 };
 
 struct IConsoleVariable : IConsoleObject {

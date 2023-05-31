@@ -6,8 +6,8 @@
 #include "ConsoleManager.hpp"
 
 namespace sdk {
-IConsoleManager* get_console_manager() {
-    static auto result = []() -> IConsoleManager** {
+FConsoleManager* FConsoleManager::get() {
+    static auto result = []() -> FConsoleManager** {
         SPDLOG_INFO("Finding IConsoleManager...");
 
         const auto core_module = sdk::get_ue_module(L"Core");
@@ -81,7 +81,7 @@ IConsoleManager* get_console_manager() {
         SPDLOG_INFO("Found IConsoleManager**: {:x}", (uintptr_t)std::get<0>(*highest_global_variable_reference));
         SPDLOG_INFO("Points to IConsoleManager*: {:x}", *(uintptr_t*)std::get<0>(*highest_global_variable_reference));
 
-        return (IConsoleManager**)std::get<0>(*highest_global_variable_reference);
+        return (FConsoleManager**)std::get<0>(*highest_global_variable_reference);
     }();
 
     if (result == nullptr) {
