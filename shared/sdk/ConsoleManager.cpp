@@ -34,22 +34,6 @@ FConsoleManager* FConsoleManager::get() {
             SPDLOG_ERROR("Failed to find containing function");
             return nullptr;
         }
-
-        // Check how many references there are to this function, if it's greater than say... 20, this is
-        // IConsoleManager::SetupSingleton
-        // If not, we can just disassemble the function looking for references to global variables
-        const auto module_size = utility::get_module_size(core_module);
-        const auto function_references = utility::scan_displacement_references((uintptr_t)core_module, *module_size - 0x1000, *containing_function, 20);
-
-        if (function_references.empty()) {
-            SPDLOG_ERROR("Failed to find any references to containing function");
-            return nullptr;
-        }
-
-        if (function_references.size() < 20) {
-            SPDLOG_ERROR("Found too few references to containing function");
-            return nullptr;
-        }
         
         // Disassemble the function and look for references to global variables
         std::unordered_map<uintptr_t, size_t> global_variable_references{};
