@@ -1,12 +1,15 @@
 #define NOMINMAX
 
 #include <filesystem>
+#include <fstream>
+#include <nlohmann/json.hpp>
 
 #include <utility/Config.hpp>
 #include <utility/String.hpp>
 
 #include <sdk/CVar.hpp>
 #include <sdk/threading/GameThreadWorker.hpp>
+#include <sdk/ConsoleManager.hpp>
 
 #include "Framework.hpp"
 
@@ -69,6 +72,14 @@ void CVarManager::on_draw_ui() {
 
         ImGui::TextWrapped("Frozen CVars: %i", frozen_cvars);
 
+        if (ImGui::Button("Dump All CVars")) {
+            GameThreadWorker::get().enqueue([this]() {
+                dump_commands();
+            });
+        }
+
+        ImGui::SameLine();
+
         if (ImGui::Button("Clear Frozen CVars")) {
             for (auto& cvar : m_all_cvars) {
                 cvar->unfreeze();
@@ -111,6 +122,66 @@ void CVarManager::on_config_load(const utility::Config& cfg, bool set_defaults) 
     }
 
     // TODO: Add arbitrary cvars from the other configs the user can add.
+}
+
+void CVarManager::dump_commands() {
+    const auto console_manager = sdk::FConsoleManager::get();
+
+    if (console_manager == nullptr) {
+        return;
+    }
+
+    nlohmann::json json;
+
+    for (auto obj : console_manager->get_console_objects()) {
+        if (obj.value == nullptr || obj.key == nullptr || IsBadReadPtr(obj.key, sizeof(wchar_t))) {
+            continue;
+        }
+
+        auto& entry = json[utility::narrow(obj.key)];
+        
+        entry["description"] = "";
+        //entry["address"] = (std::stringstream{} << std::hex << (uintptr_t)obj.value).str();
+        //entry["vtable"] = (std::stringstream{} << std::hex << *(uintptr_t*)obj.value).str();
+
+        bool is_command = false;
+
+        try {
+            is_command = obj.value->AsCommand() != nullptr;
+            if (is_command) {
+                entry["command"] = true;
+            } else {
+                entry["value"] = ((sdk::IConsoleVariable*)obj.value)->GetFloat();
+            }
+        } catch(...) {
+            SPDLOG_WARN("Failed to check if CVar is a command: {}", utility::narrow(obj.key));
+        }
+
+        const auto help_string = obj.value->GetHelp();
+
+        if (help_string != nullptr && !IsBadReadPtr(help_string, sizeof(wchar_t))) {
+            try {
+                SPDLOG_INFO("Found CVar: {} {}", utility::narrow(obj.key), utility::narrow(help_string));
+                entry["description"] = utility::narrow(help_string);
+            } catch(...) {
+
+            }
+        }
+        
+        SPDLOG_INFO("Found CVar: {}", utility::narrow(obj.key));
+    }
+
+    const auto persistent_dir = g_framework->get_persistent_dir();
+
+    // Dump all CVars to a JSON file.
+    std::ofstream file(persistent_dir / "cvardump.json");
+
+    if (file.is_open()) {
+        file << json.dump(4);
+        file.close();
+
+        SPDLOG_INFO("Dumped CVars to {}", (persistent_dir / "cvardump.json").string());
+    }
 }
 
 std::string CVarManager::CVar::get_key_name() {

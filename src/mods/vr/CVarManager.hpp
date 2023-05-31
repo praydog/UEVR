@@ -18,6 +18,8 @@ public:
     void on_draw_ui() override;
     void on_config_load(const utility::Config& cfg, bool set_defaults) override;
 
+    void dump_commands();
+
 public:
     class CVar : public std::enable_shared_from_this<CVar> {
     public:
