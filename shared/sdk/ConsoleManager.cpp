@@ -37,7 +37,7 @@ FConsoleManager* FConsoleManager::get() {
         // Check how many references there are to this function, if it's greater than say... 20, this is
         // IConsoleManager::SetupSingleton
         // If not, we can just disassemble the function looking for references to global variables
-        const auto function_references = utility::scan_displacement_references(core_module, *containing_function, 20);
+        const auto function_references = utility::scan_displacement_references(core_module, *containing_function, std::optional<size_t>{20});
 
         if (function_references.empty()) {
             SPDLOG_ERROR("Failed to find any references to containing function");
