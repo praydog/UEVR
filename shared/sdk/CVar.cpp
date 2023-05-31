@@ -727,6 +727,7 @@ std::optional<IConsoleVariable::VtableInfo> IConsoleVariable::locate_vtable_indi
             previous_nullptr_index = i;
         } else if (previous_nullptr_index) {
             auto destructor_index = *previous_nullptr_index + 1;
+            const auto lookahead = 15;
             const auto module_within = utility::get_module_within(func);
 
             // Verify and go forward a bit to look for something that looks like the destructor
@@ -735,7 +736,7 @@ std::optional<IConsoleVariable::VtableInfo> IConsoleVariable::locate_vtable_indi
             // are some games which have modified the cvar vtables
             SPDLOG_INFO("Starting from {}, looking for destructor...", destructor_index);
             SPDLOG_INFO("Looking for {:x}...", vtable[0]);
-            for (auto j = destructor_index; j < destructor_index + 5; ++j) {
+            for (auto j = destructor_index; j < destructor_index + lookahead; ++j) {
                 // Emulate each function and check if instruction pointer lands inside vtable[0]
                 // If it does, then we've found the destructor
                 SPDLOG_INFO("Emulating vtable[{}]...", j);
@@ -779,8 +780,19 @@ std::optional<IConsoleVariable::VtableInfo> IConsoleVariable::locate_vtable_indi
                         break;
                     }
 
+                    // We want to not skip stack writes, but skip writes to external memory
+                    auto any_write_to_non_rsp_reg = [](const INSTRUX& ix) {
+                        if (ix.OperandsCount == 0 || !ix.Operands[0].Info.Memory.HasBase) {
+                            return false;
+                        }
+
+                        return ix.Operands[0].Info.Memory.Base != NDR_RSP;
+                    };
+
+                    const auto writes_to_external_memory = decoded->MemoryAccess & ND_ACCESS_ANY_WRITE && any_write_to_non_rsp_reg(*decoded);
+
                     // Dont skip any calls as it could be the destructor
-                    if (decoded->MemoryAccess & ND_ACCESS_ANY_WRITE && !std::string_view{decoded->Mnemonic}.starts_with("CALL")) {
+                    if (writes_to_external_memory && !std::string_view{decoded->Mnemonic}.starts_with("CALL")) {
                         SPDLOG_INFO("Skipping write to memory instruction at {:x} ({:x} bytes, landing at {:x})", ip, decoded->Length, ip + decoded->Length);
                         emu.ctx->Registers.RegRip += decoded->Length;
                         emu.ctx->Instruction = *decoded; // pseudo-emulate the instruction
