@@ -315,6 +315,7 @@ set(sdk_SOURCES "")
 
 list(APPEND sdk_SOURCES
 	"shared/sdk/CVar.cpp"
+	"shared/sdk/ConsoleManager.cpp"
 	"shared/sdk/DynamicRHI.cpp"
 	"shared/sdk/EngineModule.cpp"
 	"shared/sdk/FRenderTargetPool.cpp"
@@ -328,6 +329,7 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/UGameViewportClient.cpp"
 	"shared/sdk/Utility.cpp"
 	"shared/sdk/CVar.hpp"
+	"shared/sdk/ConsoleManager.hpp"
 	"shared/sdk/DynamicRHI.hpp"
 	"shared/sdk/EngineModule.hpp"
 	"shared/sdk/FRenderTargetPool.hpp"
@@ -393,6 +395,7 @@ set(sdk-nolog_SOURCES "")
 
 list(APPEND sdk-nolog_SOURCES
 	"shared/sdk/CVar.cpp"
+	"shared/sdk/ConsoleManager.cpp"
 	"shared/sdk/DynamicRHI.cpp"
 	"shared/sdk/EngineModule.cpp"
 	"shared/sdk/FRenderTargetPool.cpp"
@@ -406,6 +409,7 @@ list(APPEND sdk-nolog_SOURCES
 	"shared/sdk/UGameViewportClient.cpp"
 	"shared/sdk/Utility.cpp"
 	"shared/sdk/CVar.hpp"
+	"shared/sdk/ConsoleManager.hpp"
 	"shared/sdk/DynamicRHI.hpp"
 	"shared/sdk/EngineModule.hpp"
 	"shared/sdk/FRenderTargetPool.hpp"
