@@ -10,7 +10,7 @@ FConsoleManager* FConsoleManager::get() {
     static auto result = []() -> FConsoleManager** {
         SPDLOG_INFO("Finding IConsoleManager...");
 
-        const auto core_module = sdk::get_ue_module(L"Core");
+        auto core_module = sdk::get_ue_module(L"Core");
         const auto r_dumping_movie_string = utility::scan_string(core_module, L"r.DumpingMovie");
 
         if (!r_dumping_movie_string) {
