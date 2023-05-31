@@ -16,6 +16,8 @@ public:
 
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
     void on_draw_ui() override;
+    void on_frame() override;
+    void display_console();
     void on_config_load(const utility::Config& cfg, bool set_defaults) override;
 
     void dump_commands();
@@ -150,7 +152,18 @@ public:
 
 private:
     std::vector<std::shared_ptr<CVar>> m_displayed_cvars{};
-    std::vector<std::shared_ptr<CVar>> m_all_cvars{}; // ones the user can manually add to cvars.txt
+    std::vector<std::shared_ptr<CVar>> m_all_cvars{}; // ones the user can manually add to cvars.txt'
+
+    struct {
+        std::array<char, 256> input_buffer{};
+        std::vector<std::string> history{};
+        std::string last_parsed_name{};
+        std::string last_parsed_buffer{};
+        std::string last_autocomplete_string{};
+        size_t history_index{0};
+    } m_console;
+    
+    bool m_wants_display_console{false};
 
     static inline std::vector<std::shared_ptr<CVarStandard>> s_default_standard_cvars {
         // Bools

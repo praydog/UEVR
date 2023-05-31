@@ -1549,6 +1549,8 @@ void VR::on_pre_imgui_frame() {
 void VR::on_frame() {
     ZoneScopedN(__FUNCTION__);
 
+    m_cvar_manager->on_frame();
+
     if (!get_runtime()->ready()) {
         return;
     }

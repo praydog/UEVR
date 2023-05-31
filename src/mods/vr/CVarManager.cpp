@@ -72,6 +72,8 @@ void CVarManager::on_draw_ui() {
 
         ImGui::TextWrapped("Frozen CVars: %i", frozen_cvars);
 
+        ImGui::Checkbox("Display Console", &m_wants_display_console);
+
         if (ImGui::Button("Dump All CVars")) {
             GameThreadWorker::get().enqueue([this]() {
                 dump_commands();
@@ -111,6 +113,12 @@ void CVarManager::on_draw_ui() {
         }
 
         ImGui::TreePop();
+    }
+}
+
+void CVarManager::on_frame() {
+    if (m_wants_display_console) {
+        display_console();
     }
 }
 
@@ -181,6 +189,105 @@ void CVarManager::dump_commands() {
         file.close();
 
         SPDLOG_INFO("Dumped CVars to {}", (persistent_dir / "cvardump.json").string());
+    }
+}
+
+// Use ImGui to display a homebrew console.
+void CVarManager::display_console() {
+    bool open = true;
+
+    ImGui::SetNextWindowSize(ImVec2(720, 512), ImGuiCond_::ImGuiCond_Once);
+    if (ImGui::Begin("UEVRConsole", &open)) {
+        const auto console_manager = sdk::FConsoleManager::get();
+
+        if (console_manager == nullptr) {
+            ImGui::TextWrapped("Failed to get FConsoleManager.");
+            ImGui::End();
+            return;
+        }
+
+
+        ImGui::TextWrapped("Note: This is a homebrew console. It is not the same as the in-game console.");
+
+        ImGui::Separator();
+
+        ImGui::Text("> ");
+        ImGui::SameLine();
+
+        ImGui::PushItemWidth(-1);
+
+        // Do a preliminary parse of the input buffer to see if we can autocomplete.
+        {
+            const auto entire_command = std::string_view{ m_console.input_buffer.data() };
+
+            if (entire_command != m_console.last_parsed_buffer) {
+                std::vector<std::string> args{};
+
+                // Use getline
+                std::stringstream ss{ entire_command.data() };
+                while (ss.good()) {
+                    std::string arg{};
+                    std::getline(ss, arg, ' ');
+                    args.push_back(arg);
+                }
+
+                m_console.last_autocomplete_string = "";
+
+                if (!args.empty()) {
+                    const auto possible_commands = console_manager->fuzzy_find(utility::widen(args[0]));
+
+                    for (const auto& command : possible_commands) {
+                        m_console.last_autocomplete_string += utility::narrow(command.key) + "\n";
+                    }
+                }
+
+                m_console.last_parsed_buffer = entire_command;
+            }
+        }
+
+        if (ImGui::InputText("##UEVRConsoleInput", m_console.input_buffer.data(), m_console.input_buffer.size(), ImGuiInputTextFlags_EnterReturnsTrue)) {
+            m_console.input_buffer[m_console.input_buffer.size() - 1] = '\0';
+
+            if (m_console.input_buffer[0] != '\0') {
+                const auto entire_command = std::string_view{ m_console.input_buffer.data() };
+
+                // Split the command into the arguments via ' ' (space).
+                std::vector<std::string> args{};
+
+                // Use getline
+                std::stringstream ss{ entire_command.data() };
+                while (ss.good()) {
+                    std::string arg{};
+                    std::getline(ss, arg, ' ');
+                    args.push_back(arg);
+                }
+
+                // Execute the command.
+                if (!args.empty() && args.size() >= 2) {
+                    auto object = console_manager->find(utility::widen(args[0]));
+
+                    if (object != nullptr && object->AsCommand() == nullptr) {
+                        auto var = (sdk::IConsoleVariable*)object;
+                        
+                        GameThreadWorker::get().enqueue([var, value = utility::widen(args[1])]() {
+                            var->Set(value.c_str());
+                        });
+                    }
+                }
+
+                m_console.history.push_back(m_console.input_buffer.data());
+                m_console.history_index = m_console.history.size();
+
+                m_console.input_buffer.fill('\0');
+            }
+        }
+
+        // Display autocomplete
+        if (!m_console.last_autocomplete_string.empty()) {
+            ImGui::TextUnformatted(m_console.last_autocomplete_string.c_str());
+        }
+
+        ImGui::End();
     }
 }
 
