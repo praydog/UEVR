@@ -1,5 +1,6 @@
 #include <spdlog/spdlog.h>
 #include <utility/Scan.hpp>
+#include <utility/Module.hpp>
 
 #include "EngineModule.hpp"
 
@@ -10,7 +11,7 @@ FConsoleManager* FConsoleManager::get() {
     static auto result = []() -> FConsoleManager** {
         SPDLOG_INFO("Finding IConsoleManager...");
 
-        auto core_module = sdk::get_ue_module(L"Core");
+        const auto core_module = sdk::get_ue_module(L"Core");
         const auto r_dumping_movie_string = utility::scan_string(core_module, L"r.DumpingMovie");
 
         if (!r_dumping_movie_string) {
@@ -37,7 +38,8 @@ FConsoleManager* FConsoleManager::get() {
         // Check how many references there are to this function, if it's greater than say... 20, this is
         // IConsoleManager::SetupSingleton
         // If not, we can just disassemble the function looking for references to global variables
-        const auto function_references = utility::scan_displacement_references(core_module, *containing_function, std::optional<size_t>{20});
+        const auto module_size = utility::get_module_size(core_module);
+        const auto function_references = utility::scan_displacement_references((uintptr_t)core_module, *module_size - 0x1000, *containing_function, 20);
 
         if (function_references.empty()) {
             SPDLOG_ERROR("Failed to find any references to containing function");
