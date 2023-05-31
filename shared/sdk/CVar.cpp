@@ -695,7 +695,7 @@ float IConsoleVariable::GetFloat() {
     return func(this);
 }
 
-std::optional<IConsoleVariable::VtableInfo> IConsoleVariable::locate_vtable_indices() {
+std::optional<IConsoleObject::VtableInfo> IConsoleObject::locate_vtable_indices() {
     std::scoped_lock _{ s_vtable_mutex };
 
     const auto vtable = *(uintptr_t**)this;
@@ -708,16 +708,16 @@ std::optional<IConsoleVariable::VtableInfo> IConsoleVariable::locate_vtable_indi
     // in most cases the +2 function will be the Set function (the +1 function is Release)
     // from there, GetInt, GetFloat, etc will be the next subsequent functions
     // THIS MUST BE CALLED FROM AN ACTUAL IConsoleVariable INSTANCE, NOT A CONSOLE COMMAND!!!
-    SPDLOG_INFO("Locating IConsoleVariable vtable indices...");
+    SPDLOG_INFO("Locating IConsoleObject vtable indices...");
     std::optional<uint32_t> previous_nullptr_index{};
 
-    SPDLOG_INFO("Vtable: {:x} (cvar {:x})", (uintptr_t)vtable, (uintptr_t)this);
+    SPDLOG_INFO("Vtable: {:x} (console obj {:x})", (uintptr_t)vtable, (uintptr_t)this);
 
     for (auto i = 0; i < 20; ++i) {
         const auto func = vtable[i];
 
         if (func == 0 || IsBadReadPtr((void*)func, 1)) {
-            SPDLOG_ERROR("Reached end of IConsoleVariable vtable at index {}", i);
+            SPDLOG_ERROR("Reached end of IConsoleObject vtable at index {}", i);
             break;
         }
 
@@ -815,6 +815,8 @@ std::optional<IConsoleVariable::VtableInfo> IConsoleVariable::locate_vtable_indi
 
             auto& vtable_info = s_vtable_infos[vtable];
 
+            vtable_info.as_console_command_index = destructor_index - 1;
+            vtable_info.release_index = destructor_index;
             vtable_info.set_vtable_index = destructor_index + 1;
             auto potential_get_int_index = vtable_info.set_vtable_index + 1;
 
@@ -868,6 +870,8 @@ std::optional<IConsoleVariable::VtableInfo> IConsoleVariable::locate_vtable_indi
             vtable_info.get_int_vtable_index = potential_get_int_index;
             vtable_info.get_float_vtable_index = vtable_info.get_int_vtable_index + 1;
             SPDLOG_INFO("Encountered final nullptr at index {}", *previous_nullptr_index);
+            SPDLOG_INFO("IConsoleObject::AsConsoleCommand vtable index: {}", vtable_info.as_console_command_index);
+            SPDLOG_INFO("IConsoleObject::Release vtable index: {}", vtable_info.release_index);
             SPDLOG_INFO("IConsoleVariable::Set vtable index: {}", vtable_info.set_vtable_index);
             SPDLOG_INFO("IConsoleVariable::GetInt vtable index: {}", vtable_info.get_int_vtable_index);
             SPDLOG_INFO("IConsoleVariable::GetFloat vtable index: {}", vtable_info.get_float_vtable_index);

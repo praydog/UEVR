@@ -11,6 +11,8 @@ FConsoleManager* FConsoleManager::get() {
     static auto result = []() -> FConsoleManager** {
         SPDLOG_INFO("Finding IConsoleManager...");
 
+        const auto now = std::chrono::steady_clock::now();
+
         const auto core_module = sdk::get_ue_module(L"Core");
         const auto r_dumping_movie_string = utility::scan_string(core_module, L"r.DumpingMovie");
 
@@ -66,6 +68,9 @@ FConsoleManager* FConsoleManager::get() {
 
         SPDLOG_INFO("Found IConsoleManager**: {:x}", (uintptr_t)std::get<0>(*highest_global_variable_reference));
         SPDLOG_INFO("Points to IConsoleManager*: {:x}", *(uintptr_t*)std::get<0>(*highest_global_variable_reference));
+
+        const auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - now).count();
+        SPDLOG_INFO("Took {}ms to find IConsoleManager", diff);
 
         return (FConsoleManager**)std::get<0>(*highest_global_variable_reference);
     }();

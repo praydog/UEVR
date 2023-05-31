@@ -51,20 +51,34 @@ struct TConsoleVariableData {
     T values[2];
 };
 
+struct IConsoleCommand;
+
 // Dummy interface for IConsoleObject
 // The functions will actually dynamically scan the vtable for the right index
 struct IConsoleObject {
     virtual ~IConsoleObject() {}
     virtual wchar_t* GetHelp() const = 0;
-};
+    virtual uint32_t GetFlags() const = 0;
+    virtual void SetFlags(uint32_t flags) = 0;
 
-struct IConsoleVariable : IConsoleObject {
-    void Set(const wchar_t* in, uint32_t set_by_flags = 0x8000000);
-    int32_t GetInt();
-    float GetFloat();
+    // Everything past this point needs to be dynamically scanned
+    IConsoleCommand* AsCommand() {
+        const auto vtable_info = this->locate_vtable_indices();
 
-private:
+        if (!vtable_info.has_value() || vtable_info->as_console_command_index == 0) {
+            return nullptr;
+        }
+
+        const auto vtable = *(void***)this;
+        const auto func = ((IConsoleCommand*(__thiscall*)(void*))vtable[vtable_info->as_console_command_index]);
+
+        return func(this);
+    }
+
+protected:
     struct VtableInfo {
+        uint32_t as_console_command_index;
+        uint32_t release_index;
         uint32_t set_vtable_index;
         uint32_t get_int_vtable_index;
         uint32_t get_float_vtable_index;
@@ -74,6 +88,16 @@ private:
 
     static inline std::recursive_mutex s_vtable_mutex{};
     static inline std::unordered_map<void*, VtableInfo> s_vtable_infos{};
+};
+
+struct IConsoleCommand : IConsoleObject {
+    // TODO: Implement
+};
+
+struct IConsoleVariable : IConsoleObject {
+    void Set(const wchar_t* in, uint32_t set_by_flags = 0x8000000);
+    int32_t GetInt();
+    float GetFloat();
 };
 
 struct FConsoleVariableBase : public IConsoleVariable {
