@@ -154,12 +154,21 @@ private:
     std::vector<std::shared_ptr<CVar>> m_displayed_cvars{};
     std::vector<std::shared_ptr<CVar>> m_all_cvars{}; // ones the user can manually add to cvars.txt'
 
+    struct AutoComplete {
+        sdk::IConsoleObject* object;
+        std::string name;
+        std::string current_value;
+        std::string description;
+    };
+
     struct {
         std::array<char, 256> input_buffer{};
         std::vector<std::string> history{};
         std::string last_parsed_name{};
         std::string last_parsed_buffer{};
-        std::string last_autocomplete_string{};
+        //std::string last_autocomplete_string{};
+        std::recursive_mutex autocomplete_mutex{};
+        std::vector<AutoComplete> autocomplete{};
         size_t history_index{0};
     } m_console;
     

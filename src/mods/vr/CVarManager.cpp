@@ -196,7 +196,7 @@ void CVarManager::dump_commands() {
 void CVarManager::display_console() {
     bool open = true;
 
-    ImGui::SetNextWindowSize(ImVec2(720, 512), ImGuiCond_::ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(800, 512), ImGuiCond_::ImGuiCond_Once);
     if (ImGui::Begin("UEVRConsole", &open)) {
         const auto console_manager = sdk::FConsoleManager::get();
 
@@ -216,6 +216,8 @@ void CVarManager::display_console() {
 
         ImGui::PushItemWidth(-1);
 
+        std::scoped_lock _{m_console.autocomplete_mutex};
+
         // Do a preliminary parse of the input buffer to see if we can autocomplete.
         {
             const auto entire_command = std::string_view{ m_console.input_buffer.data() };
@@ -231,14 +233,42 @@ void CVarManager::display_console() {
                     args.push_back(arg);
                 }
 
-                m_console.last_autocomplete_string = "";
+                m_console.autocomplete.clear();
 
                 if (!args.empty()) {
-                    const auto possible_commands = console_manager->fuzzy_find(utility::widen(args[0]));
+                    GameThreadWorker::get().enqueue([console_manager, args, this]() {
+                        std::scoped_lock _{m_console.autocomplete_mutex};
+                        const auto possible_commands = console_manager->fuzzy_find(utility::widen(args[0]));
 
-                    for (const auto& command : possible_commands) {
-                        m_console.last_autocomplete_string += utility::narrow(command.key) + "\n";
-                    }
+                        for (const auto& command : possible_commands) {
+                            std::string value = "Command";
+                            std::string description = "";
+
+                            try {
+                                if (command.value->AsCommand() == nullptr) {
+                                    value = std::format("{}", ((sdk::IConsoleVariable*)command.value)->GetFloat());
+                                }
+                            } catch(...) {
+                                value = "Failed to get value.";
+                            }
+
+                            try {
+                                const auto help_string = command.value->GetHelp();
+
+                                if (help_string != nullptr && !IsBadReadPtr(help_string, sizeof(wchar_t))) {
+                                    description = utility::narrow(help_string);
+                                }
+                            } catch(...) {
+                            }
+
+                            m_console.autocomplete.emplace_back(AutoComplete{
+                                command.value, 
+                                utility::narrow(command.key),
+                                value,
+                                description
+                            });
+                        }
+                    });
                 }
 
                 m_console.last_parsed_buffer = entire_command;
@@ -263,7 +293,7 @@ void CVarManager::display_console() {
                 }
 
                 // Execute the command.
-                if (!args.empty() && args.size() >= 2) {
+                if (args.size() >= 2) {
                     auto object = console_manager->find(utility::widen(args[0]));
 
                     if (object != nullptr && object->AsCommand() == nullptr) {
@@ -283,8 +313,36 @@ void CVarManager::display_console() {
         }
 
         // Display autocomplete
-        if (!m_console.last_autocomplete_string.empty()) {
-            ImGui::TextUnformatted(m_console.last_autocomplete_string.c_str());
+        if (!m_console.autocomplete.empty()) {
+            //ImGui::TextUnformatted(m_console.last_autocomplete_string.c_str());
+            // Create a table of all the possible commands.
+            if (ImGui::BeginTable("##UEVRAutocomplete", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable)) {
+                ImGui::TableSetupColumn("Command", ImGuiTableColumnFlags_WidthFixed, 300.0f);
+                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+                ImGui::TableSetupColumn("Description", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableHeadersRow();
+
+                for (const auto& command : m_console.autocomplete) {
+                    ImGui::TableNextRow();
+
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(command.name.c_str());
+
+                    if (ImGui::IsItemClicked()) {
+                        // Copy the command to the input buffer.
+                        std::copy(command.name.begin(), command.name.end(), m_console.input_buffer.begin());
+                        m_console.input_buffer[command.name.size()] = '\0';
+                    }
+
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::TextUnformatted(command.current_value.c_str());
+
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::TextWrapped(command.description.c_str());
+                }
+
+                ImGui::EndTable();
+            }
         }
 
         ImGui::End();
