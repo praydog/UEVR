@@ -233,11 +233,11 @@ void CVarManager::display_console() {
                     args.push_back(arg);
                 }
 
-                m_console.autocomplete.clear();
-
                 if (!args.empty()) {
                     GameThreadWorker::get().enqueue([console_manager, args, this]() {
                         std::scoped_lock _{m_console.autocomplete_mutex};
+                        m_console.autocomplete.clear();
+
                         const auto possible_commands = console_manager->fuzzy_find(utility::widen(args[0]));
 
                         for (const auto& command : possible_commands) {
