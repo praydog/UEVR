@@ -9,6 +9,8 @@
 #include <spdlog/spdlog.h>
 #include <windows.h>
 
+#include "TArray.hpp"
+
 namespace sdk {
 template <typename T>
 struct TConsoleVariableData {
@@ -79,6 +81,7 @@ protected:
     struct VtableInfo {
         uint32_t as_console_command_index;
         uint32_t release_index;
+        uint32_t execute_index;
         uint32_t set_vtable_index;
         uint32_t get_int_vtable_index;
         uint32_t get_float_vtable_index;
@@ -91,7 +94,12 @@ protected:
 };
 
 struct IConsoleCommand : IConsoleObject {
-    // TODO: Implement
+    bool Execute(const wchar_t* args);
+    bool Execute(const std::wstring& args);
+    bool Execute(const std::vector<std::wstring>& args);
+
+protected:
+    bool execute_internal(const sdk::TArray<sdk::TArray<wchar_t>>& args, void* world, void* output_device);
 };
 
 struct IConsoleVariable : IConsoleObject {

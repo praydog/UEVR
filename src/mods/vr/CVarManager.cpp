@@ -259,6 +259,7 @@ void CVarManager::display_console() {
                                     description = utility::narrow(help_string);
                                 }
                             } catch(...) {
+                                description = "Failed to get description.";
                             }
 
                             m_console.autocomplete.emplace_back(AutoComplete{
@@ -295,12 +296,24 @@ void CVarManager::display_console() {
                 // Execute the command.
                 if (args.size() >= 2) {
                     auto object = console_manager->find(utility::widen(args[0]));
+                    const auto is_command = object != nullptr && object->AsCommand() != nullptr;
 
-                    if (object != nullptr && object->AsCommand() == nullptr) {
+                    if (object != nullptr && !is_command) {
                         auto var = (sdk::IConsoleVariable*)object;
                         
                         GameThreadWorker::get().enqueue([var, value = utility::widen(args[1])]() {
                             var->Set(value.c_str());
+                        });
+                    } else if (object != nullptr && is_command) {
+                        auto command = (sdk::IConsoleCommand*)object;
+
+                        std::vector<std::wstring> widened_args{};
+                        for (auto i = 1; i < args.size(); ++i) {
+                            widened_args.push_back(utility::widen(args[i]));
+                        }
+
+                        GameThreadWorker::get().enqueue([command, widened_args]() {
+                            command->Execute(widened_args);
                         });
                     }
                 }
@@ -314,7 +327,6 @@ void CVarManager::display_console() {
 
         // Display autocomplete
         if (!m_console.autocomplete.empty()) {
-            //ImGui::TextUnformatted(m_console.last_autocomplete_string.c_str());
             // Create a table of all the possible commands.
             if (ImGui::BeginTable("##UEVRAutocomplete", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable)) {
                 ImGui::TableSetupColumn("Command", ImGuiTableColumnFlags_WidthFixed, 300.0f);

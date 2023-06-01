@@ -695,6 +695,85 @@ float IConsoleVariable::GetFloat() {
     return func(this);
 }
 
+struct FakeOutputDevice {
+    virtual ~FakeOutputDevice() {};
+    virtual void Serialize(const wchar_t* text, size_t verbosity, void* category, void* r9) {
+        spdlog::info("{}", utility::narrow(text));
+    };
+    virtual size_t a2(void* rcx, void* rdx, void* r8, void* r9) {return 0;}
+    virtual size_t a3(void* rcx, void* rdx, void* r8, void* r9) {return 0;}
+    virtual size_t a4(void* rcx, void* rdx, void* r8, void* r9) {return 0;}
+    virtual size_t a5(void* rcx, void* rdx, void* r8, void* r9) {return 0;}
+    virtual size_t a6(void* rcx, void* rdx, void* r8, void* r9) {return 0;}
+    virtual size_t a7(void* rcx, void* rdx, void* r8, void* r9) {return 0;}
+    virtual size_t a8(void* rcx, void* rdx, void* r8, void* r9) {return 0;}
+    virtual size_t a9(void* rcx, void* rdx, void* r8, void* r9) {return 0;}
+    virtual size_t a10(void* rcx, void* rdx, void* r8, void* r9) {return 0;}
+
+private:
+    char unk_padding[0x100]{}; // just in case
+};
+
+bool IConsoleCommand::Execute(const std::wstring& args) {
+    return Execute(args.c_str());
+}
+
+bool IConsoleCommand::Execute(const wchar_t* args) {
+    std::vector<std::wstring> args_vec{};
+    std::wstringstream ss{};
+
+    // Split by spaces
+    while(ss.good()) {
+        std::wstring substr{};
+        std::getline(ss, substr, L' ');
+        args_vec.push_back(substr);
+    }
+
+    return Execute(args_vec);
+}
+
+bool IConsoleCommand::Execute(const std::vector<std::wstring>& args) {
+    std::vector<sdk::TArray<wchar_t>> args_vec{};
+
+    for (const auto& arg : args) {
+        auto& arr = args_vec.emplace_back();
+
+        arr.data = (wchar_t*)arg.c_str();
+        arr.count = arg.size();
+        arr.capacity = arg.size();
+    }
+
+    FakeOutputDevice fake_output_device{};
+    sdk::TArray<sdk::TArray<wchar_t>> fake_args_vec{};
+
+    fake_args_vec.data = args_vec.data();
+    fake_args_vec.count = args_vec.size();
+    fake_args_vec.capacity = args_vec.size();
+
+    // TODO: Pass in world...
+    return execute_internal(fake_args_vec, nullptr, &fake_output_device);
+}
+
+bool IConsoleCommand::execute_internal(const sdk::TArray<sdk::TArray<wchar_t>>& args, void* world, void* output_device) {
+    const auto info = locate_vtable_indices();
+
+    if (!info) {
+        static bool once = true;
+
+        if (once) {
+            SPDLOG_ERROR("s_execute_vtable_index is not initialized! Cannot call IConsoleCommand::execute_internal()!");
+            once = false;
+        }
+
+        return false;
+    }
+
+    using ExecuteFn = bool(*)(IConsoleCommand*, sdk::TArray<sdk::TArray<wchar_t>> const*, void*, void*);
+    const auto func = (*(ExecuteFn**)this)[info->execute_index];
+
+    return func(this, &args, world, output_device);
+}
+
 std::optional<IConsoleObject::VtableInfo> IConsoleObject::locate_vtable_indices() {
     std::scoped_lock _{ s_vtable_mutex };
 
@@ -817,6 +896,7 @@ std::optional<IConsoleObject::VtableInfo> IConsoleObject::locate_vtable_indices(
 
             vtable_info.as_console_command_index = destructor_index - 1;
             vtable_info.release_index = destructor_index;
+            vtable_info.execute_index = destructor_index + 1;
             vtable_info.set_vtable_index = destructor_index + 1;
             auto potential_get_int_index = vtable_info.set_vtable_index + 1;
 
