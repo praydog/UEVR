@@ -759,7 +759,7 @@ bool D3D12Component::setup() {
 
     backbuffer_desc.Width /= 2; // The texture we get from UE is both eyes combined. we will copy the regions later.
 
-    spdlog::info("[VR] D3D12 Backbuffer width: {}, height: {}", backbuffer_desc.Width, backbuffer_desc.Height);
+    spdlog::info("[VR] D3D12 RT width: {}, height: {}, format: {}", backbuffer_desc.Width, backbuffer_desc.Height, backbuffer_desc.Format);
 
     D3D12_HEAP_PROPERTIES heap_props{};
     heap_props.Type = D3D12_HEAP_TYPE_DEFAULT;
