@@ -15,6 +15,9 @@
 #include <../../directxtk12-src/Inc/SpriteBatch.h>
 #include <../../directxtk12-src/Inc/DescriptorHeap.h>
 
+#include "d3d12/CommandContext.hpp"
+#include "d3d12/TextureContext.hpp"
+
 class VR;
 
 namespace vrmod {
@@ -47,151 +50,13 @@ private:
 
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
-    struct ResourceCopier {
-        virtual ~ResourceCopier() { this->reset(); }
-
-        bool setup(const wchar_t* name = L"ResourceCopier object");
-        void reset();
-        void wait(uint32_t ms);
-        void copy(ID3D12Resource* src, ID3D12Resource* dst, 
-            D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT,
-            D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        void copy_region(ID3D12Resource* src, ID3D12Resource* dst, D3D12_BOX* src_box, 
-            D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT,
-            D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        void clear_rtv(ID3D12Resource* dst, D3D12_CPU_DESCRIPTOR_HANDLE rtv, const float* color, 
-            D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        void execute();
-
-        ComPtr<ID3D12CommandAllocator> cmd_allocator{};
-        ComPtr<ID3D12GraphicsCommandList> cmd_list{};
-        ComPtr<ID3D12Fence> fence{};
-        UINT64 fence_value{};
-        HANDLE fence_event{};
-
-        std::recursive_mutex mtx{};
-
-        bool waiting_for_fence{false};
-        bool has_commands{false};
-
-        std::wstring internal_name{L"ResourceCopier object"};
-    };
-
     ComPtr<ID3D12Resource> m_prev_backbuffer{};
-    std::array<ResourceCopier, 3> m_generic_copiers{};
+    std::array<d3d12::CommandContext, 3> m_generic_commands{};
 
-    struct TextureContext {
-        ResourceCopier copier{};
-        ComPtr<ID3D12Resource> texture{};
-        std::unique_ptr<DirectX::DescriptorHeap> rtv_heap{};
-        std::unique_ptr<DirectX::DescriptorHeap> srv_heap{};
-
-        bool setup(ID3D12Device* device, ID3D12Resource* rsrc, std::optional<DXGI_FORMAT> rtv_format, std::optional<DXGI_FORMAT> srv_format, const wchar_t* name = L"TextureContext object") {
-            reset();
-
-            copier.setup(name);
-
-            texture.Reset();
-            texture = rsrc;
-
-            if (rsrc == nullptr) {
-                return false;
-            }
-
-            return create_rtv(device, rtv_format) && create_srv(device, srv_format);
-        }
-
-        bool create_rtv(ID3D12Device* device, std::optional<DXGI_FORMAT> format = std::nullopt) {
-            rtv_heap.reset();
-
-            // create descriptor heap
-            try {
-                rtv_heap = std::make_unique<DirectX::DescriptorHeap>(device,
-                    D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-                    D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-                    1);
-            } catch(...) {
-                spdlog::error("Failed to create RTV descriptor heap");
-                return false;
-            }
-
-            if (rtv_heap->Heap() == nullptr) {
-                return false;
-            }
-
-            if (format) {
-                D3D12_RENDER_TARGET_VIEW_DESC rtv_desc{};
-                rtv_desc.Format = (DXGI_FORMAT)*format;
-                rtv_desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-                rtv_desc.Texture2D.MipSlice = 0;
-                rtv_desc.Texture2D.PlaneSlice = 0;
-                device->CreateRenderTargetView(texture.Get(), &rtv_desc, get_rtv());
-            } else {
-                device->CreateRenderTargetView(texture.Get(), nullptr, get_rtv());
-            }
-
-            return true;
-        }
-
-        bool create_srv(ID3D12Device* device, std::optional<DXGI_FORMAT> format = std::nullopt) {
-            srv_heap.reset();
-
-            // create descriptor heap
-            try {
-                srv_heap = std::make_unique<DirectX::DescriptorHeap>(device,
-                    D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                    D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-                    1);
-            } catch(...) {
-                spdlog::error("Failed to create SRV descriptor heap");
-                return false;
-            }
-
-            if (srv_heap->Heap() == nullptr) {
-                return false;
-            }
-
-            if (format) {
-                D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-                srv_desc.Format = (DXGI_FORMAT)*format;
-                srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-                srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-                srv_desc.Texture2D.MipLevels = 1;
-                srv_desc.Texture2D.MostDetailedMip = 0;
-                srv_desc.Texture2D.PlaneSlice = 0;
-                srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
-                device->CreateShaderResourceView(texture.Get(), &srv_desc, get_srv_cpu());
-            } else {
-                device->CreateShaderResourceView(texture.Get(), nullptr, get_srv_cpu());
-            }
-
-            return true;
-        }
-
-        D3D12_CPU_DESCRIPTOR_HANDLE get_rtv() {
-            return rtv_heap->GetCpuHandle(0);
-        }
-
-        D3D12_GPU_DESCRIPTOR_HANDLE get_srv_gpu() {
-            return srv_heap->GetGpuHandle(0);
-        }
-
-        D3D12_CPU_DESCRIPTOR_HANDLE get_srv_cpu() {
-            return srv_heap->GetCpuHandle(0);
-        }
-
-        void reset() {
-            copier.reset();
-            rtv_heap.reset();
-            srv_heap.reset();
-            texture.Reset();
-        }
-    };
-
-    TextureContext m_ui_tex{};
-    TextureContext m_game_ui_tex{};
-    TextureContext m_game_tex{};
-    std::array<TextureContext, 3> m_backbuffer_textures{};
+    d3d12::TextureContext m_ui_tex{};
+    d3d12::TextureContext m_game_ui_tex{};
+    d3d12::TextureContext m_game_tex{};
+    std::array<d3d12::TextureContext, 3> m_backbuffer_textures{};
 
     std::unique_ptr<DirectX::DX12::GraphicsMemory> m_graphics_memory{};
     std::unique_ptr<DirectX::DX12::SpriteBatch> m_backbuffer_batch{};
@@ -200,35 +65,35 @@ private:
     struct OpenVR {
         OpenVR(D3D12Component* p) : parent{p} {}
         
-        TextureContext& get_left() {
+        d3d12::TextureContext& get_left() {
             auto& ctx = this->left_eye_tex[this->texture_counter % left_eye_tex.size()];
 
             return ctx;
         }
 
-        TextureContext& get_right() {
+        d3d12::TextureContext& get_right() {
             auto& ctx = this->right_eye_tex[this->texture_counter % right_eye_tex.size()];
 
             return ctx;
         }
 
-        TextureContext& acquire_left() {
+        d3d12::TextureContext& acquire_left() {
             auto& ctx = get_left();
-            ctx.copier.wait(INFINITE);
+            ctx.commands.wait(INFINITE);
 
             return ctx;
         }
 
-        TextureContext& acquire_right() {
+        d3d12::TextureContext& acquire_right() {
             auto& ctx = get_right();
-            ctx.copier.wait(INFINITE);
+            ctx.commands.wait(INFINITE);
 
             return ctx;
         }
 
         void copy_left(ID3D12Resource* src, D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT) {
             auto& ctx = this->acquire_left();
-            //ctx.copier.copy(src, ctx.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            //ctx.commands.copy(src, ctx.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             // Copy the left half of the backbuffer to the left eye texture.
             D3D12_BOX src_box{};
             src_box.left = 0;
@@ -237,13 +102,13 @@ private:
             src_box.bottom = parent->m_backbuffer_size[1];
             src_box.front = 0;
             src_box.back = 1;
-            ctx.copier.copy_region(src, ctx.texture.Get(), &src_box, src_state, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-            ctx.copier.execute();
+            ctx.commands.copy_region(src, ctx.texture.Get(), &src_box, src_state, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            ctx.commands.execute();
         }
 
         void copy_right(ID3D12Resource* src, D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT) {
             auto& ctx = this->acquire_right();
-            //ctx.copier.copy(src, ctx.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            //ctx.commands.copy(src, ctx.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             // Copy the right half of the backbuffer to the right eye texture.
             D3D12_BOX src_box{};
             src_box.left = parent->m_backbuffer_size[0] / 2;
@@ -252,14 +117,14 @@ private:
             src_box.bottom = parent->m_backbuffer_size[1];
             src_box.front = 0;
             src_box.back = 1;
-            ctx.copier.copy_region(src, ctx.texture.Get(), &src_box, src_state, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-            ctx.copier.execute();
+            ctx.commands.copy_region(src, ctx.texture.Get(), &src_box, src_state, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            ctx.commands.execute();
         }
         
         // For AFR
         void copy_left_to_right(ID3D12Resource* src, D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT) {
             auto& ctx = this->acquire_right();
-            //ctx.copier.copy(src, ctx.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            //ctx.commands.copy(src, ctx.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             // Copy the right half of the backbuffer to the right eye texture.
             D3D12_BOX src_box{};
             src_box.left = 0;
@@ -268,12 +133,12 @@ private:
             src_box.bottom = parent->m_backbuffer_size[1];
             src_box.front = 0;
             src_box.back = 1;
-            ctx.copier.copy_region(src, ctx.texture.Get(), &src_box, src_state, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-            ctx.copier.execute();
+            ctx.commands.copy_region(src, ctx.texture.Get(), &src_box, src_state, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            ctx.commands.execute();
         }
 
-        std::array<TextureContext, 3> left_eye_tex{};
-        std::array<TextureContext, 3> right_eye_tex{};
+        std::array<d3d12::TextureContext, 3> left_eye_tex{};
+        std::array<d3d12::TextureContext, 3> right_eye_tex{};
         uint32_t texture_counter{0};
         D3D12Component* parent{};
 
@@ -285,14 +150,14 @@ private:
         std::optional<std::string> create_swapchains();
         void destroy_swapchains();
         void copy(uint32_t swapchain_idx, ID3D12Resource* src, 
-            std::optional<std::function<void(ResourceCopier&)>> additional_commands = std::nullopt,
+            std::optional<std::function<void(d3d12::CommandContext&)>> additional_commands = std::nullopt,
             D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT, D3D12_BOX* src_box = nullptr);
         void wait_for_all_copies() {
             std::scoped_lock _{this->mtx};
 
             for (auto& it : this->contexts) {
                 for (auto& texture_ctx : it.second.texture_contexts) {
-                    texture_ctx->copier.wait(INFINITE);
+                    texture_ctx->commands.wait(INFINITE);
                 }
             }
         }
@@ -301,7 +166,7 @@ private:
 
         struct SwapchainContext {
             std::vector<XrSwapchainImageD3D12KHR> textures{};
-            std::vector<std::unique_ptr<D3D12Component::TextureContext>> texture_contexts{};
+            std::vector<std::unique_ptr<d3d12::TextureContext>> texture_contexts{};
             uint32_t num_textures_acquired{0};
             uint32_t last_acquired_texture{0};
         };

@@ -99,22 +99,22 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
     if (ui_target != nullptr && m_game_ui_tex.srv_heap != nullptr && m_game_ui_tex.rtv_heap != nullptr) {
         // Draws the spectator view
-        auto draw_spec_and_clear_rt = [&](ResourceCopier& copier) {
-            draw_spectator_view(copier.cmd_list.Get(), is_right_eye_frame);
+        auto draw_spec_and_clear_rt = [&](d3d12::CommandContext& commands) {
+            draw_spectator_view(commands.cmd_list.Get(), is_right_eye_frame);
 
             const float clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-            copier.clear_rtv(m_game_ui_tex.texture.Get(), m_game_ui_tex.get_rtv(), (float*)&clear_color, ENGINE_SRC_COLOR);
+            commands.clear_rtv(m_game_ui_tex.texture.Get(), m_game_ui_tex.get_rtv(), (float*)&clear_color, ENGINE_SRC_COLOR);
         };
 
         if (runtime->is_openvr() && m_ui_tex.texture.Get() != nullptr) {
-            m_ui_tex.copier.wait(INFINITE);
+            m_ui_tex.commands.wait(INFINITE);
 
             if (is_right_eye_frame) {
-                m_ui_tex.copier.copy((ID3D12Resource*)ui_target->get_native_resource(), m_ui_tex.texture.Get(), ENGINE_SRC_COLOR);
+                m_ui_tex.commands.copy((ID3D12Resource*)ui_target->get_native_resource(), m_ui_tex.texture.Get(), ENGINE_SRC_COLOR);
             }
 
-            draw_spec_and_clear_rt(m_ui_tex.copier);
-            m_ui_tex.copier.execute();
+            draw_spec_and_clear_rt(m_ui_tex.commands);
+            m_ui_tex.commands.execute();
         } else if (runtime->is_openxr() && runtime->ready() && vr->m_openxr->frame_began) {
             if (is_right_eye_frame) {
                 m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, (ID3D12Resource*)ui_target->get_native_resource(), draw_spec_and_clear_rt, ENGINE_SRC_COLOR);
@@ -125,15 +125,15 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, g_framework->get_rendertarget_d3d12().Get(), std::nullopt, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
                 }
             } else {
-                m_game_ui_tex.copier.wait(INFINITE);
-                draw_spec_and_clear_rt(m_game_ui_tex.copier);
-                m_game_ui_tex.copier.execute();
+                m_game_ui_tex.commands.wait(INFINITE);
+                draw_spec_and_clear_rt(m_game_ui_tex.commands);
+                m_game_ui_tex.commands.execute();
             }
         }
     } else if (m_game_tex.texture.Get() != nullptr) {
-        m_game_tex.copier.wait(INFINITE);
-        draw_spectator_view(m_game_tex.copier.cmd_list.Get(), is_right_eye_frame);
-        m_game_tex.copier.execute();
+        m_game_tex.commands.wait(INFINITE);
+        draw_spectator_view(m_game_tex.commands.cmd_list.Get(), is_right_eye_frame);
+        m_game_tex.commands.execute();
     }
 
     ComPtr<ID3D12Resource> scene_depth_tex{};
@@ -383,9 +383,9 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         // Allows the desktop window to be recorded.
         /*if (vr->m_desktop_fix->value()) {
             if (runtime->ready() && m_prev_backbuffer != backbuffer && m_prev_backbuffer != nullptr) {
-                m_generic_copiers[frame_count % 3].wait(INFINITE);
-                m_generic_copiers[frame_count % 3].copy(m_prev_backbuffer.Get(), backbuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PRESENT);
-                m_generic_copiers[frame_count % 3].execute();
+                m_generic_commands[frame_count % 3].wait(INFINITE);
+                m_generic_commands[frame_count % 3].copy(m_prev_backbuffer.Get(), backbuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PRESENT);
+                m_generic_commands[frame_count % 3].execute();
             }
         }*/
     }
@@ -472,9 +472,9 @@ void D3D12Component::draw_spectator_view(ID3D12GraphicsCommandList* command_list
         const auto& last_right_eye_buffer = m_backbuffer_textures[(index + 2) % 3].texture;
 
         if (backbuffer.Get() != last_right_eye_buffer.Get()) {
-            m_generic_copiers[index % 3].wait(INFINITE);
-            m_generic_copiers[index % 3].copy(last_right_eye_buffer.Get(), backbuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PRESENT);
-            m_generic_copiers[index % 3].execute();
+            m_generic_commands[index % 3].wait(INFINITE);
+            m_generic_commands[index % 3].copy(last_right_eye_buffer.Get(), backbuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PRESENT);
+            m_generic_commands[index % 3].execute();
 
             return;
         }
@@ -632,10 +632,10 @@ void D3D12Component::clear_backbuffer() {
     }
 
     // Clear the backbuffer
-    backbuffer_ctx.copier.wait(0);
+    backbuffer_ctx.commands.wait(0);
     const float clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    backbuffer_ctx.copier.clear_rtv(backbuffer_ctx.texture.Get(), backbuffer_ctx.get_rtv(), clear_color, D3D12_RESOURCE_STATE_PRESENT);
-    backbuffer_ctx.copier.execute();
+    backbuffer_ctx.commands.clear_rtv(backbuffer_ctx.texture.Get(), backbuffer_ctx.get_rtv(), clear_color, D3D12_RESOURCE_STATE_PRESENT);
+    backbuffer_ctx.commands.execute();
 }
 
 void D3D12Component::on_post_present(VR* vr) {
@@ -665,8 +665,8 @@ void D3D12Component::on_reset(VR* vr) {
         ctx.reset();
     }
 
-    for (auto& copier : m_generic_copiers) {
-        copier.reset();
+    for (auto& commands : m_generic_commands) {
+        commands.reset();
     }
 
     for (auto& backbuffer : m_backbuffer_textures) {
@@ -675,6 +675,7 @@ void D3D12Component::on_reset(VR* vr) {
 
     m_ui_tex.reset();
     m_game_ui_tex.reset();
+    m_game_tex.reset();
     m_backbuffer_batch.reset();
     m_graphics_memory.reset();
 
@@ -774,7 +775,7 @@ bool D3D12Component::setup() {
         }
 
         ctx.texture->SetName(L"OpenVR Left Eye Texture");
-        if (!ctx.copier.setup(L"OpenVR Left Eye")) {
+        if (!ctx.commands.setup(L"OpenVR Left Eye")) {
             return false;
         }
     }
@@ -787,13 +788,13 @@ bool D3D12Component::setup() {
         }
 
         ctx.texture->SetName(L"OpenVR Right Eye Texture");
-        if (!ctx.copier.setup(L"OpenVR Right Eye")) {
+        if (!ctx.commands.setup(L"OpenVR Right Eye")) {
             return false;
         }
     }
 
-    for (auto& copier : m_generic_copiers) {
-        if (!copier.setup(L"Generic Copier")) {
+    for (auto& commands : m_generic_commands) {
+        if (!commands.setup(L"Generic commands")) {
             return false;
         }
     }
@@ -813,7 +814,7 @@ bool D3D12Component::setup() {
 
     m_ui_tex.texture->SetName(L"VR UI Texture");
 
-    if (!m_ui_tex.copier.setup(L"VR UI")) {
+    if (!m_ui_tex.commands.setup(L"VR UI")) {
         return false;
     }
 
@@ -924,8 +925,8 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
             spdlog::info("[VR] Creating swapchain image {} for swapchain {}", j, i);
 
             ctx.textures[j] = {XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR};
-            ctx.texture_contexts[j] = std::make_unique<D3D12Component::TextureContext>();
-            ctx.texture_contexts[j]->copier.setup((std::wstring{L"OpenXR Copier "} + std::to_wstring(i) + L" " + std::to_wstring(j)).c_str());
+            ctx.texture_contexts[j] = std::make_unique<d3d12::TextureContext>();
+            ctx.texture_contexts[j]->commands.setup((std::wstring{L"OpenXR commands "} + std::to_wstring(i) + L" " + std::to_wstring(j)).c_str());
 
             auto resource_state = D3D12_RESOURCE_STATE_RENDER_TARGET;
 
@@ -978,9 +979,9 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
                 if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) == 0) {
                     if (ctx.texture_contexts[index]->create_rtv(device, (DXGI_FORMAT)swapchain_create_info.format)) {
                         const float clear_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-                        texture_ctx->copier.clear_rtv(ctx.textures[index].texture, texture_ctx->get_rtv(), clear_color, D3D12_RESOURCE_STATE_RENDER_TARGET);
-                        texture_ctx->copier.execute();
-                        texture_ctx->copier.wait(100);
+                        texture_ctx->commands.clear_rtv(ctx.textures[index].texture, texture_ctx->get_rtv(), clear_color, D3D12_RESOURCE_STATE_RENDER_TARGET);
+                        texture_ctx->commands.execute();
+                        texture_ctx->commands.wait(100);
                     } else {
                         spdlog::error("[VR] Failed to create RTV for swapchain image {}.", index);
                     }
@@ -1178,7 +1179,9 @@ void D3D12Component::OpenXR::destroy_swapchains() {
 
         //ctx.texture_contexts.clear();
         for (auto& texture_context : ctx.texture_contexts) {
-            texture_context->copier.reset();
+            if (texture_context != nullptr) {
+                texture_context->reset();
+            }
         }
 
         ctx.texture_contexts.clear();
@@ -1192,9 +1195,8 @@ void D3D12Component::OpenXR::destroy_swapchains() {
             }
         }
 
-
         if (vr->m_openxr->swapchains.contains(i)) {
-            auto result = xrDestroySwapchain(vr->m_openxr->swapchains[i].handle);
+            const auto result = xrDestroySwapchain(vr->m_openxr->swapchains[i].handle);
 
             if (result != XR_SUCCESS) {
                 spdlog::error("[VR] Failed to destroy swapchain {}.", i);
@@ -1220,7 +1222,7 @@ void D3D12Component::OpenXR::destroy_swapchains() {
     vr->m_openxr->swapchains.clear();
 }
 
-void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resource, std::optional<std::function<void(ResourceCopier&)>> additional_commands, D3D12_RESOURCE_STATES src_state, D3D12_BOX* src_box) {
+void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resource, std::optional<std::function<void(d3d12::CommandContext&)>> additional_commands, D3D12_RESOURCE_STATES src_state, D3D12_BOX* src_box) {
     std::scoped_lock _{this->mtx};
 
     auto vr = VR::get();
@@ -1263,7 +1265,7 @@ void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resour
         spdlog::info("[VR] Attempting to correct...");
 
         for (auto& texture_ctx : ctx.texture_contexts) {
-            texture_ctx->copier.reset();
+            texture_ctx->commands.reset();
         }
 
         texture_index = 0;
@@ -1285,7 +1287,7 @@ void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resour
             spdlog::error("[VR] xrWaitSwapchainImage failed: {}", vr->m_openxr->get_result_string(result));
         } else {
             auto& texture_ctx = ctx.texture_contexts[texture_index];
-            texture_ctx->copier.wait(INFINITE);
+            texture_ctx->commands.wait(INFINITE);
 
             if (src_box == nullptr) {
                 const auto is_depth = swapchain_idx == (uint32_t)runtimes::OpenXR::SwapchainIndex::DEPTH || 
@@ -1293,13 +1295,13 @@ void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resour
                                       swapchain_idx == (uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_DEPTH_RIGHT_EYE;
                 const auto dst_state = is_depth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_RENDER_TARGET;
 
-                texture_ctx->copier.copy(
+                texture_ctx->commands.copy(
                     resource, 
                     ctx.textures[texture_index].texture, 
                     src_state, 
                     dst_state);
             } else {
-                texture_ctx->copier.copy_region(
+                texture_ctx->commands.copy_region(
                     resource, 
                     ctx.textures[texture_index].texture, src_box,
                     src_state, 
@@ -1307,10 +1309,10 @@ void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resour
             }
 
             if (additional_commands) {
-                (*additional_commands)(texture_ctx->copier);
+                (*additional_commands)(texture_ctx->commands);
             }
 
-            texture_ctx->copier.execute();
+            texture_ctx->commands.execute();
 
             XrSwapchainImageReleaseInfo release_info{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
             auto result = xrReleaseSwapchainImage(swapchain.handle, &release_info);
@@ -1327,7 +1329,7 @@ void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resour
                 }
 
                 for (auto& texture_ctx : ctx.texture_contexts) {
-                    texture_ctx->copier.wait(INFINITE);
+                    texture_ctx->commands.wait(INFINITE);
                 }
 
                 result = xrReleaseSwapchainImage(swapchain.handle, &release_info);
@@ -1340,225 +1342,6 @@ void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resour
 
             ctx.num_textures_acquired--;
         }
-    }
-}
-
-bool D3D12Component::ResourceCopier::setup(const wchar_t* name) {
-    std::scoped_lock _{this->mtx};
-
-    this->internal_name = name;
-
-    auto& hook = g_framework->get_d3d12_hook();
-    auto device = hook->get_device();
-
-    this->cmd_allocator.Reset();
-    this->cmd_list.Reset();
-    this->fence.Reset();
-
-    if (FAILED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&this->cmd_allocator)))) {
-        spdlog::error("[VR] Failed to create command allocator for {}", utility::narrow(name));
-        return false;
-    }
-
-    this->cmd_allocator->SetName(name);
-
-    if (FAILED(device->CreateCommandList(
-            0, D3D12_COMMAND_LIST_TYPE_DIRECT, this->cmd_allocator.Get(), nullptr, IID_PPV_ARGS(&this->cmd_list)))) {
-        spdlog::error("[VR] Failed to create command list for {}", utility::narrow(name));
-        return false;
-    }
-    
-    this->cmd_list->SetName(name);
-
-    if (FAILED(device->CreateFence(this->fence_value, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&this->fence)))) {
-        spdlog::error("[VR] Failed to create fence for {}", utility::narrow(name));
-        return false;
-    }
-
-    this->fence->SetName(name);
-    this->fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-
-    return true;
-}
-
-void D3D12Component::ResourceCopier::reset() {
-    std::scoped_lock _{this->mtx};
-    this->wait(2000);
-    //this->on_post_present(VR::get().get());
-
-    this->cmd_allocator.Reset();
-    this->cmd_list.Reset();
-    this->fence.Reset();
-    this->fence_value = 0;
-    CloseHandle(this->fence_event);
-    this->fence_event = 0;
-    this->waiting_for_fence = false;
-}
-
-void D3D12Component::ResourceCopier::wait(uint32_t ms) {
-    std::scoped_lock _{this->mtx};
-
-	if (this->fence_event && this->waiting_for_fence) {
-        WaitForSingleObject(this->fence_event, ms);
-        ResetEvent(this->fence_event);
-        this->waiting_for_fence = false;
-        if (FAILED(this->cmd_allocator->Reset())) {
-            spdlog::error("[VR] Failed to reset command allocator for {}", utility::narrow(this->internal_name));
-        }
-
-        if (FAILED(this->cmd_list->Reset(this->cmd_allocator.Get(), nullptr))) {
-            spdlog::error("[VR] Failed to reset command list for {}", utility::narrow(this->internal_name));
-        }
-        this->has_commands = false;
-    }
-}
-
-void D3D12Component::ResourceCopier::copy(ID3D12Resource* src, ID3D12Resource* dst, D3D12_RESOURCE_STATES src_state, D3D12_RESOURCE_STATES dst_state) {
-    std::scoped_lock _{this->mtx};
-
-    // Switch src into copy source.
-    D3D12_RESOURCE_BARRIER src_barrier{};
-
-    src_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    src_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    src_barrier.Transition.pResource = src;
-    src_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    src_barrier.Transition.StateBefore = src_state;
-    src_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-
-    // Switch dst into copy destination.
-    D3D12_RESOURCE_BARRIER dst_barrier{};
-    dst_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    dst_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    dst_barrier.Transition.pResource = dst;
-    dst_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    dst_barrier.Transition.StateBefore = dst_state;
-    dst_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-
-    {
-        D3D12_RESOURCE_BARRIER barriers[2]{src_barrier, dst_barrier};
-        this->cmd_list->ResourceBarrier(2, barriers);
-    }
-
-    // Copy the resource.
-    this->cmd_list->CopyResource(dst, src);
-
-    // Switch back to present.
-    src_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    src_barrier.Transition.StateAfter = src_state;
-    dst_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-    dst_barrier.Transition.StateAfter = dst_state;
-
-    {
-        D3D12_RESOURCE_BARRIER barriers[2]{src_barrier, dst_barrier};
-        this->cmd_list->ResourceBarrier(2, barriers);
-    }
-
-    this->has_commands = true;
-}
-
-void D3D12Component::ResourceCopier::copy_region(ID3D12Resource* src, ID3D12Resource* dst, D3D12_BOX* src_box, D3D12_RESOURCE_STATES src_state, D3D12_RESOURCE_STATES dst_state) {
-    std::scoped_lock _{this->mtx};
-
-    // Switch src into copy source.
-    D3D12_RESOURCE_BARRIER src_barrier{};
-
-    src_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    src_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    src_barrier.Transition.pResource = src;
-    src_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    src_barrier.Transition.StateBefore = src_state;
-    src_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-
-    // Switch dst into copy destination.
-    D3D12_RESOURCE_BARRIER dst_barrier{};
-    dst_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    dst_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    dst_barrier.Transition.pResource = dst;
-    dst_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    dst_barrier.Transition.StateBefore = dst_state;
-    dst_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-
-    {
-        D3D12_RESOURCE_BARRIER barriers[2]{src_barrier, dst_barrier};
-        this->cmd_list->ResourceBarrier(2, barriers);
-    }
-
-    // Copy the resource.
-    D3D12_TEXTURE_COPY_LOCATION src_loc{};
-    src_loc.pResource = src;
-    src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    src_loc.SubresourceIndex = 0;
-
-    D3D12_TEXTURE_COPY_LOCATION dst_loc{};
-    dst_loc.pResource = dst;
-    dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    dst_loc.SubresourceIndex = 0;
-
-    this->cmd_list->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, src_box);
-
-    // Switch back to present.
-    src_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    src_barrier.Transition.StateAfter = src_state;
-    dst_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-    dst_barrier.Transition.StateAfter = dst_state;
-
-    {
-        D3D12_RESOURCE_BARRIER barriers[2]{src_barrier, dst_barrier};
-        this->cmd_list->ResourceBarrier(2, barriers);
-    }
-
-    this->has_commands = true;
-}
-
-void D3D12Component::ResourceCopier::clear_rtv(ID3D12Resource* dst, D3D12_CPU_DESCRIPTOR_HANDLE rtv, const float* color, D3D12_RESOURCE_STATES dst_state) {
-    std::scoped_lock _{this->mtx};
-
-    // Switch dst into copy destination.
-    D3D12_RESOURCE_BARRIER dst_barrier{};
-    dst_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    dst_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    dst_barrier.Transition.pResource = dst;
-    dst_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    dst_barrier.Transition.StateBefore = dst_state;
-    dst_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-
-    // No need to switch if we're already in the right state.
-    if (dst_state != dst_barrier.Transition.StateAfter) {
-        D3D12_RESOURCE_BARRIER barriers[1]{dst_barrier};
-        this->cmd_list->ResourceBarrier(1, barriers);
-    }
-
-    // Clear the resource.
-    this->cmd_list->ClearRenderTargetView(rtv, color, 0, nullptr);
-
-    // Switch back to present.
-    dst_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    dst_barrier.Transition.StateAfter = dst_state;
-
-    if (dst_state != dst_barrier.Transition.StateBefore) {
-        D3D12_RESOURCE_BARRIER barriers[1]{dst_barrier};
-        this->cmd_list->ResourceBarrier(1, barriers);
-    }
-
-    this->has_commands = true;
-}
-
-void D3D12Component::ResourceCopier::execute() {
-    std::scoped_lock _{this->mtx};
-    
-    if (this->has_commands) {
-        if (FAILED(this->cmd_list->Close())) {
-            spdlog::error("[VR] Failed to close command list. ({})", utility::narrow(this->internal_name));
-            return;
-        }
-        
-        auto command_queue = g_framework->get_d3d12_hook()->get_command_queue();
-        command_queue->ExecuteCommandLists(1, (ID3D12CommandList* const*)this->cmd_list.GetAddressOf());
-        command_queue->Signal(this->fence.Get(), ++this->fence_value);
-        this->fence->SetEventOnCompletion(this->fence_value, this->fence_event);
-        this->waiting_for_fence = true;
-        this->has_commands = false;
     }
 }
 } // namespace vrmod
