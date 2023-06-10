@@ -90,16 +90,16 @@ FConsoleManager* FConsoleManager::get() {
         const auto now = std::chrono::steady_clock::now();
 
         for (const auto& candidate : candidates) {
-            spdlog::info("Trying to find IConsoleManager with candidate: {}", utility::narrow(candidate));
+            SPDLOG_INFO("Trying to find IConsoleManager with candidate: {}", utility::narrow(candidate));
             auto result = detail::try_find_console_manager(candidate);
 
             if (result) {
-                spdlog::info("Took {}ms to search through all candidates", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - now).count());
+                SPDLOG_INFO("Took {}ms to search through all candidates", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - now).count());
                 return result;
             }
         }
 
-        spdlog::error("Failed to find IConsoleManager");
+        SPDLOG_ERROR("Failed to find IConsoleManager");
 
         return nullptr;
     }();
