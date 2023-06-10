@@ -366,11 +366,22 @@ HRESULT WINAPI D3D12Hook::present(IDXGISwapChain3* swap_chain, UINT sync_interva
     }
 
     if (!d3d12->m_is_phase_1 && swap_chain != d3d12->m_swapchain_hook->get_instance()) {
-        return present_fn(swap_chain, sync_interval, flags);
+        const auto og_instance = d3d12->m_swapchain_hook->get_instance();
+
+        // If the original swapchain instance is invalid, then we should not proceed, and rehook the swapchain
+        if (IsBadReadPtr(og_instance, sizeof(void*)) || IsBadReadPtr(og_instance.deref(), sizeof(void*))) {
+            spdlog::error("Bad read pointer for original swapchain instance, re-hooking");
+            d3d12->m_is_phase_1 = true;
+        }
+
+        if (!d3d12->m_is_phase_1) {
+            return present_fn(swap_chain, sync_interval, flags);
+        }
     }
 
     if (d3d12->m_is_phase_1) {
         //d3d12->m_present_hook.reset();
+        d3d12->m_swapchain_hook.reset();
 
         // vtable hook the swapchain instead of global hooking
         // this seems safer for whatever reason
