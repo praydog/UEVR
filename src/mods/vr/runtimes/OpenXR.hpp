@@ -311,6 +311,7 @@ public:
         EXTRA_START,
 
         UI = EXTRA_START,
+        UI_RIGHT, // For 2D view with stereoscopic
         FRAMEWORK_UI,
 
         EXTRA_END,

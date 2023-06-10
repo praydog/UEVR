@@ -8,6 +8,8 @@
 #include <../../directxtk12-src/Inc/ResourceUploadBatch.h>
 #include <../../directxtk12-src/Inc/RenderTargetState.h>
 
+#include "d3d12/DirectXTK.hpp"
+
 #include "D3D12Component.hpp"
 
 //#define AFR_DEPTH_TEMP_DISABLED
@@ -17,7 +19,7 @@ constexpr auto ENGINE_SRC_COLOR = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
 
 namespace vrmod {
 vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
-    if (m_openvr.left_eye_tex[0].texture == nullptr || m_force_reset || m_last_afr_state != vr->is_using_afr()) {
+    if (m_force_reset || m_last_afr_state != vr->is_using_afr()) {
         if (!setup()) {
             spdlog::error("[D3D12 VR] Could not set up, trying again next frame");
             m_force_reset = true;
@@ -77,8 +79,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
     // Set up the game tex context
     if (m_game_tex.texture.Get() != backbuffer.Get()) {
-        // We use SRGB for the RTV but not for the SRV because it screws up the colors when drawing the spectator view
-        if (!m_game_tex.setup(device, backbuffer.Get(), DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM, L"Game Texture")) {
+        if (!m_game_tex.setup(device, backbuffer.Get(), DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_B8G8R8A8_UNORM, L"Game Texture")) {
             spdlog::error("[VR] Failed to fully setup game texture.");
             m_game_tex.reset();
         }
@@ -88,7 +89,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         if (m_game_ui_tex.texture.Get() != ui_target->get_native_resource()) {
             if (!m_game_ui_tex.setup(device, 
                 (ID3D12Resource*)ui_target->get_native_resource(), 
-                DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM,
+                DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_B8G8R8A8_UNORM,
                 L"Game UI Texture"))
             {
                 spdlog::error("[VR] Failed to fully setup game UI texture.");
@@ -98,35 +99,111 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     }
 
     if (ui_target != nullptr && m_game_ui_tex.srv_heap != nullptr && m_game_ui_tex.rtv_heap != nullptr) {
-        // Draws the spectator view
-        auto draw_spec_and_clear_rt = [&](d3d12::CommandContext& commands) {
+        const float clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+        const auto is_2d_screen = vr->is_using_2d_screen();
+
+        auto draw_2d_view = [&](d3d12::CommandContext& commands) {
             draw_spectator_view(commands.cmd_list.Get(), is_right_eye_frame);
 
-            const float clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-            commands.clear_rtv(m_game_ui_tex.texture.Get(), m_game_ui_tex.get_rtv(), (float*)&clear_color, ENGINE_SRC_COLOR);
+            if (is_2d_screen && m_game_tex.texture.Get() != nullptr && m_game_tex.srv_heap != nullptr) {
+                // Clear previous frame
+                for (auto& screen : m_2d_screen_tex) {
+                    commands.clear_rtv(screen, clear_color, ENGINE_SRC_COLOR);
+                }
+
+                // Render left side to left screen tex
+                d3d12::render_srv_to_rtv(
+                    m_game_batch.get(),
+                    commands.cmd_list.Get(),
+                    m_game_tex,
+                    m_2d_screen_tex[0],
+                    RECT{0, 0, (LONG)((float)m_backbuffer_size[0] / 2.0f), (LONG)m_backbuffer_size[1]},
+                    ENGINE_SRC_COLOR,
+                    ENGINE_SRC_COLOR
+                );
+
+                d3d12::render_srv_to_rtv(
+                    m_game_batch.get(),
+                    commands.cmd_list.Get(),
+                    m_game_ui_tex,
+                    m_2d_screen_tex[0],
+                    ENGINE_SRC_COLOR,
+                    ENGINE_SRC_COLOR
+                );
+
+                if (!is_afr) {
+                    // Render right side to right screen tex
+                    d3d12::render_srv_to_rtv(
+                        m_game_batch.get(),
+                        commands.cmd_list.Get(),
+                        m_game_tex,
+                        m_2d_screen_tex[1],
+                        RECT{(LONG)((float)m_backbuffer_size[0] / 2.0f), 0, (LONG)((float)m_backbuffer_size[0]), (LONG)m_backbuffer_size[1]},
+                        ENGINE_SRC_COLOR,
+                        ENGINE_SRC_COLOR
+                    );
+
+                    d3d12::render_srv_to_rtv(
+                        m_game_batch.get(),
+                        commands.cmd_list.Get(),
+                        m_game_ui_tex,
+                        m_2d_screen_tex[1],
+                        ENGINE_SRC_COLOR,
+                        ENGINE_SRC_COLOR
+                    );
+                }
+
+                // Clear the RT so the entire background is black when submitting to the compositor
+                commands.clear_rtv(m_game_tex, (float*)&clear_color, D3D12_RESOURCE_STATE_RENDER_TARGET);
+            }
         };
 
-        if (runtime->is_openvr() && m_ui_tex.texture.Get() != nullptr) {
-            m_ui_tex.commands.wait(INFINITE);
+        // Draws the spectator view
+        auto clear_rt = [&](d3d12::CommandContext& commands) {
+            commands.clear_rtv(m_game_ui_tex, (float*)&clear_color, ENGINE_SRC_COLOR);
+        };
+
+        if (runtime->is_openvr() && m_openvr_ui_tex.texture.Get() != nullptr) {
+            m_openvr_ui_tex.commands.wait(INFINITE);
+
+            draw_2d_view(m_openvr_ui_tex.commands);
 
             if (is_right_eye_frame) {
-                m_ui_tex.commands.copy((ID3D12Resource*)ui_target->get_native_resource(), m_ui_tex.texture.Get(), ENGINE_SRC_COLOR);
+                if (is_2d_screen) {
+                    m_openvr_ui_tex.commands.copy(m_2d_screen_tex[0].texture.Get(), m_openvr_ui_tex.texture.Get(), ENGINE_SRC_COLOR);
+                } else {
+                    m_openvr_ui_tex.commands.copy((ID3D12Resource*)ui_target->get_native_resource(), m_openvr_ui_tex.texture.Get(), ENGINE_SRC_COLOR);
+                }
+            } else if (is_2d_screen) {
+                m_openvr_ui_tex.commands.copy(m_2d_screen_tex[0].texture.Get(), m_openvr_ui_tex.texture.Get(), ENGINE_SRC_COLOR);
             }
 
-            draw_spec_and_clear_rt(m_ui_tex.commands);
-            m_ui_tex.commands.execute();
+            clear_rt(m_openvr_ui_tex.commands);
+            m_openvr_ui_tex.commands.execute();
         } else if (runtime->is_openxr() && runtime->ready() && vr->m_openxr->frame_began) {
             if (is_right_eye_frame) {
-                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, (ID3D12Resource*)ui_target->get_native_resource(), draw_spec_and_clear_rt, ENGINE_SRC_COLOR);
+                if (is_2d_screen) {
+                    if (is_afr) {
+                        m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI_RIGHT, m_2d_screen_tex[0].texture.Get(), draw_2d_view, clear_rt, ENGINE_SRC_COLOR);
+                    } else {
+                        m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, m_2d_screen_tex[0].texture.Get(), draw_2d_view, std::nullopt, ENGINE_SRC_COLOR);
+                        m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI_RIGHT, m_2d_screen_tex[1].texture.Get(), std::nullopt, clear_rt, ENGINE_SRC_COLOR);
+                    }
+                } else {
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, (ID3D12Resource*)ui_target->get_native_resource(), draw_2d_view, clear_rt, ENGINE_SRC_COLOR);
+                }
 
                 auto fw_rt = g_framework->get_rendertarget_d3d12();
 
                 if (fw_rt && g_framework->is_drawing_anything()) {
-                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, g_framework->get_rendertarget_d3d12().Get(), std::nullopt, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, g_framework->get_rendertarget_d3d12().Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
                 }
+            } else if (is_2d_screen) {
+                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, m_2d_screen_tex[0].texture.Get(), draw_2d_view, clear_rt, ENGINE_SRC_COLOR);
             } else {
                 m_game_ui_tex.commands.wait(INFINITE);
-                draw_spec_and_clear_rt(m_game_ui_tex.commands);
+                draw_2d_view(m_game_ui_tex.commands);
+                clear_rt(m_game_ui_tex.commands);
                 m_game_ui_tex.commands.execute();
             }
         }
@@ -174,17 +251,17 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             src_box.front = 0;
             src_box.back = 1;
 
-            m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_LEFT_EYE, backbuffer.Get(), {}, D3D12_RESOURCE_STATE_RENDER_TARGET, &src_box);
+            m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_LEFT_EYE, backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, &src_box);
 
             if (scene_depth_tex != nullptr) {
-                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_DEPTH_LEFT_EYE, scene_depth_tex.Get(), {}, ENGINE_SRC_DEPTH, nullptr);
+                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_DEPTH_LEFT_EYE, scene_depth_tex.Get(), ENGINE_SRC_DEPTH, nullptr);
             }
         }
 
         // OpenVR texture
         // Copy the back buffer to the left eye texture
         if (runtime->is_openvr()) {
-            m_openvr.copy_left(backbuffer.Get());
+            m_openvr.copy_left(backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
             auto openvr = vr->get_runtime<runtimes::OpenVR>();
             const auto submit_pose = openvr->get_pose_for_submit();
@@ -223,10 +300,10 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 src_box.front = 0;
                 src_box.back = 1;
 
-                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_LEFT_EYE, backbuffer.Get(), {}, D3D12_RESOURCE_STATE_RENDER_TARGET, &src_box);
+                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_LEFT_EYE, backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, &src_box);
 
                 if (scene_depth_tex != nullptr) {
-                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_DEPTH_LEFT_EYE, scene_depth_tex.Get(), {}, ENGINE_SRC_DEPTH, nullptr);
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_DEPTH_LEFT_EYE, scene_depth_tex.Get(), ENGINE_SRC_DEPTH, nullptr);
                 }
             }
 
@@ -248,17 +325,17 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                     src_box.back = 1;
                 }
 
-                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_RIGHT_EYE, backbuffer.Get(), {}, D3D12_RESOURCE_STATE_RENDER_TARGET, &src_box);
+                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_RIGHT_EYE, backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, &src_box);
 
                 if (scene_depth_tex != nullptr) {
-                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_DEPTH_RIGHT_EYE, scene_depth_tex.Get(), {}, ENGINE_SRC_DEPTH, nullptr);
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_DEPTH_RIGHT_EYE, scene_depth_tex.Get(), ENGINE_SRC_DEPTH, nullptr);
                 }
             } else {
                 // Copy over the entire double wide instead
-                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DOUBLE_WIDE, backbuffer.Get(), {}, D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr);
+                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DOUBLE_WIDE, backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr);
 
                 if (scene_depth_tex != nullptr) {
-                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DEPTH, scene_depth_tex.Get(), {}, ENGINE_SRC_DEPTH, nullptr);
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DEPTH, scene_depth_tex.Get(), ENGINE_SRC_DEPTH, nullptr);
                 }
             }
         }
@@ -287,7 +364,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
                 if (e != vr::VRCompositorError_None) {
                     spdlog::error("[VR] VRCompositor failed to submit left eye: {}", (int)e);
-                    return e;
+                    //return e; // dont return because it will just completely stop us from even getting to the right eye which could be catastrophic
                 }
             }
 
@@ -342,9 +419,24 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             std::vector<XrCompositionLayerQuad> quad_layers{};
 
             auto& openxr_overlay = vr->get_overlay_component().get_openxr();
-            const auto slate_quad = openxr_overlay.generate_slate_quad();
-            if (slate_quad) {
-                quad_layers.push_back(*slate_quad);
+
+            if (vr->m_2d_screen_mode->value()) {
+                const auto left_quad = openxr_overlay.generate_slate_quad(runtimes::OpenXR::SwapchainIndex::UI, XrEyeVisibility::XR_EYE_VISIBILITY_LEFT);
+                const auto right_quad = openxr_overlay.generate_slate_quad(runtimes::OpenXR::SwapchainIndex::UI_RIGHT, XrEyeVisibility::XR_EYE_VISIBILITY_RIGHT);
+
+                if (left_quad) {
+                    quad_layers.push_back(*left_quad);
+                }
+
+                if (right_quad) {
+                    quad_layers.push_back(*right_quad);
+                }
+            } else {
+                const auto slate_quad = openxr_overlay.generate_slate_quad();
+
+                if (slate_quad) {
+                    quad_layers.push_back(*slate_quad);
+                }   
             }
             
             const auto framework_quad = openxr_overlay.generate_framework_ui_quad();
@@ -395,7 +487,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     return e;
 }
 
-void D3D12Component::setup_sprite_batch_pso(DXGI_FORMAT output_format) {
+std::unique_ptr<DirectX::DX12::SpriteBatch> D3D12Component::setup_sprite_batch_pso(DXGI_FORMAT output_format) {
     spdlog::info("[D3D12] Setting up sprite batch PSO");
 
     auto& hook = g_framework->get_d3d12_hook();
@@ -410,12 +502,14 @@ void D3D12Component::setup_sprite_batch_pso(DXGI_FORMAT output_format) {
     DirectX::RenderTargetState output_state{output_format, DXGI_FORMAT_UNKNOWN};
     DirectX::SpriteBatchPipelineStateDescription pd{output_state};
 
-    m_backbuffer_batch = std::make_unique<DirectX::DX12::SpriteBatch>(device, upload, pd);
+    auto batch = std::make_unique<DirectX::DX12::SpriteBatch>(device, upload, pd);
 
     auto result = upload.End(command_queue);
     result.wait();
 
     spdlog::info("[D3D12] Sprite batch PSO setup complete");
+
+    return batch;
 }
 
 void D3D12Component::draw_spectator_view(ID3D12GraphicsCommandList* command_list, bool is_right_eye_frame) {
@@ -423,7 +517,7 @@ void D3D12Component::draw_spectator_view(ID3D12GraphicsCommandList* command_list
         return;
     }
 
-    if (m_game_ui_tex.srv_heap == nullptr | m_game_ui_tex.srv_heap->Heap() == nullptr) {
+    if (m_game_ui_tex.srv_heap == nullptr || m_game_ui_tex.srv_heap->Heap() == nullptr) {
         return;
     }
 
@@ -655,6 +749,8 @@ void D3D12Component::on_post_present(VR* vr) {
 }
 
 void D3D12Component::on_reset(VR* vr) {
+    m_force_reset = true;
+
     auto runtime = vr->get_runtime();
 
     for (auto& ctx : m_openvr.left_eye_tex) {
@@ -673,10 +769,15 @@ void D3D12Component::on_reset(VR* vr) {
         backbuffer.reset();
     }
 
-    m_ui_tex.reset();
+    for (auto & screen : m_2d_screen_tex) {
+        screen.reset();
+    }
+
+    m_openvr_ui_tex.reset();
     m_game_ui_tex.reset();
     m_game_tex.reset();
     m_backbuffer_batch.reset();
+    m_game_batch.reset();
     m_graphics_memory.reset();
 
     if (runtime->is_openxr() && runtime->loaded) {
@@ -758,6 +859,9 @@ bool D3D12Component::setup() {
 
     auto backbuffer_desc = backbuffer->GetDesc();
 
+    backbuffer_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    backbuffer_desc.Flags &= ~D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+    backbuffer_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     backbuffer_desc.Width /= 2; // The texture we get from UE is both eyes combined. we will copy the regions later.
 
     spdlog::info("[VR] D3D12 RT width: {}, height: {}, format: {}", backbuffer_desc.Width, backbuffer_desc.Height, backbuffer_desc.Format);
@@ -767,28 +871,76 @@ bool D3D12Component::setup() {
     heap_props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
     heap_props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
 
-    for (auto& ctx : m_openvr.left_eye_tex) {
-        if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &backbuffer_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
-                IID_PPV_ARGS(&ctx.texture)))) {
-            spdlog::error("[VR] Failed to create left eye texture.");
-            return false;
-        }
+    if (vr->is_using_2d_screen()) {
+        auto screen_desc = backbuffer_desc;
+        screen_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        screen_desc.Flags &= ~D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
-        ctx.texture->SetName(L"OpenVR Left Eye Texture");
-        if (!ctx.commands.setup(L"OpenVR Left Eye")) {
-            return false;
+        screen_desc.Width = (uint32_t)g_framework->get_d3d12_rt_size().x;
+        screen_desc.Height = (uint32_t)g_framework->get_d3d12_rt_size().y;
+
+        for (auto& context : m_2d_screen_tex) {
+            ComPtr<ID3D12Resource> screen_tex{};
+            if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &screen_desc, ENGINE_SRC_COLOR, nullptr,
+                    IID_PPV_ARGS(&screen_tex)))) {
+                spdlog::error("[VR] Failed to create 2D screen texture.");
+                continue;
+            }
+
+            screen_tex->SetName(L"2D Screen Texture");
+
+            if (!context.setup(device, screen_tex.Get(), DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_B8G8R8A8_UNORM, L"2D Screen")) {
+                spdlog::error("[VR] Failed to setup 2D screen context.");
+                continue;
+            }
         }
     }
 
-    for (auto& ctx : m_openvr.right_eye_tex) {
-        if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &backbuffer_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
-                IID_PPV_ARGS(&ctx.texture)))) {
-            spdlog::error("[VR] Failed to create right eye texture.");
+    if (vr->get_runtime()->is_openvr()) {
+        for (auto& ctx : m_openvr.left_eye_tex) {
+            if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &backbuffer_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                    IID_PPV_ARGS(&ctx.texture)))) {
+                spdlog::error("[VR] Failed to create left eye texture.");
+                return false;
+            }
+
+            ctx.texture->SetName(L"OpenVR Left Eye Texture");
+            if (!ctx.commands.setup(L"OpenVR Left Eye")) {
+                spdlog::error("[VR] Failed to setup left eye context.");
+                return false;
+            }
+        }
+
+        for (auto& ctx : m_openvr.right_eye_tex) {
+            if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &backbuffer_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                    IID_PPV_ARGS(&ctx.texture)))) {
+                spdlog::error("[VR] Failed to create right eye texture.");
+                return false;
+            }
+
+            ctx.texture->SetName(L"OpenVR Right Eye Texture");
+            if (!ctx.commands.setup(L"OpenVR Right Eye")) {
+                spdlog::error("[VR] Failed to setup right eye context.");
+                return false;
+            }
+        }
+
+        // Set up the UI texture. it's the desktop resolution.
+        auto ui_desc = backbuffer_desc;
+        ui_desc.Width = (uint32_t)g_framework->get_d3d12_rt_size().x;
+        ui_desc.Height = (uint32_t)g_framework->get_d3d12_rt_size().y;
+
+        ComPtr<ID3D12Resource> ui_tex{};
+        if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &ui_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                IID_PPV_ARGS(&ui_tex)))) {
+            spdlog::error("[VR] Failed to create UI texture.");
             return false;
         }
 
-        ctx.texture->SetName(L"OpenVR Right Eye Texture");
-        if (!ctx.commands.setup(L"OpenVR Right Eye")) {
+        ui_tex->SetName(L"OpenVR UI Texture");
+
+        if (!m_openvr_ui_tex.setup(device, ui_tex.Get(), DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_B8G8R8A8_UNORM, L"OpenVR UI")) {
+            spdlog::error("[VR] Failed to setup OpenVR UI context.");
             return false;
         }
     }
@@ -802,23 +954,8 @@ bool D3D12Component::setup() {
     m_backbuffer_size[0] = backbuffer_desc.Width * 2;
     m_backbuffer_size[1] = backbuffer_desc.Height;
 
-    // Set up the UI texture. it's the desktop resolution.
-    backbuffer_desc.Width = (uint32_t)g_framework->get_d3d12_rt_size().x;
-    backbuffer_desc.Height = (uint32_t)g_framework->get_d3d12_rt_size().y;
-
-    if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &backbuffer_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
-            IID_PPV_ARGS(&m_ui_tex.texture)))) {
-        spdlog::error("[VR] Failed to create UI texture.");
-        return false;
-    }
-
-    m_ui_tex.texture->SetName(L"VR UI Texture");
-
-    if (!m_ui_tex.commands.setup(L"VR UI")) {
-        return false;
-    }
-
-    setup_sprite_batch_pso(real_backbuffer_desc.Format);
+    m_backbuffer_batch = setup_sprite_batch_pso(real_backbuffer_desc.Format);
+    m_game_batch = setup_sprite_batch_pso(backbuffer_desc.Format);
 
     spdlog::info("[VR] d3d12 textures have been setup");
     m_force_reset = false;
@@ -1075,6 +1212,10 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
         return err;
     }
 
+    if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::UI_RIGHT, desktop_rt_swapchain_create_info, desktop_rt_desc)) {
+        return err;
+    }
+
     if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, desktop_rt_swapchain_create_info, desktop_rt_desc)) {
         return err;
     }
@@ -1222,8 +1363,20 @@ void D3D12Component::OpenXR::destroy_swapchains() {
     vr->m_openxr->swapchains.clear();
 }
 
-void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resource, std::optional<std::function<void(d3d12::CommandContext&)>> additional_commands, D3D12_RESOURCE_STATES src_state, D3D12_BOX* src_box) {
+void D3D12Component::OpenXR::copy(
+    uint32_t swapchain_idx, 
+    ID3D12Resource* resource, 
+    std::optional<std::function<void(d3d12::CommandContext&)>> pre_commands, 
+    std::optional<std::function<void(d3d12::CommandContext&)>> additional_commands, 
+    D3D12_RESOURCE_STATES src_state, 
+    D3D12_BOX* src_box) 
+{
     std::scoped_lock _{this->mtx};
+
+    if (resource == nullptr) {
+        spdlog::error("[VR] OpenXR: Trying to copy from a null resource.");
+        return;
+    }
 
     auto vr = VR::get();
 
@@ -1288,6 +1441,10 @@ void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resour
         } else {
             auto& texture_ctx = ctx.texture_contexts[texture_index];
             texture_ctx->commands.wait(INFINITE);
+
+            if (pre_commands) {
+                (*pre_commands)(texture_ctx->commands);
+            }
 
             if (src_box == nullptr) {
                 const auto is_depth = swapchain_idx == (uint32_t)runtimes::OpenXR::SwapchainIndex::DEPTH || 

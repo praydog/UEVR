@@ -6,6 +6,8 @@
 #include "ComPtr.hpp"
 
 namespace d3d12 {
+struct TextureContext;
+
 struct CommandContext {
     CommandContext() = default;
     virtual ~CommandContext() { this->reset(); }
@@ -21,6 +23,7 @@ struct CommandContext {
         D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     void clear_rtv(ID3D12Resource* dst, D3D12_CPU_DESCRIPTOR_HANDLE rtv, const float* color, 
         D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    void clear_rtv(TextureContext& tex, const float* color, D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     void execute();
 
     ComPtr<ID3D12CommandAllocator> cmd_allocator{};

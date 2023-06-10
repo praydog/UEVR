@@ -25,6 +25,7 @@
 #include <sdk/Utility.hpp>
 #include <sdk/RHICommandList.hpp>
 #include <sdk/UGameViewportClient.hpp>
+#include <sdk/Globals.hpp>
 
 #include "Framework.hpp"
 #include "Mods.hpp"
@@ -3945,6 +3946,8 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     // if we have stereo emulation mode enabled
     // it is only for debugging purposes
     if (!vr->is_stereo_emulation_enabled()) {
+        const auto is_2d_screen = vr->is_using_2d_screen();
+
         const auto rotation_offset = vr->get_rotation_offset();
         const auto current_hmd_rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(0)});
         const auto current_eye_rotation_offset = glm::normalize(glm::quat{vr->get_eye_transform(true_index)});
@@ -3954,27 +3957,35 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
         const auto pos = glm::vec3{rotation_offset * ((vr->get_position(0) - vr->get_standing_origin()))};
 
-        const auto offset1 = quat_converter * (vqi_norm * (pos * world_scale));
-        const auto offset2 = quat_converter * (glm::normalize(new_rotation) * (eye_offset * world_scale));
+        const auto head_offset = quat_converter * (vqi_norm * (pos * world_scale));
+        const auto eye_separation = quat_converter * (glm::normalize(new_rotation) * (eye_offset * world_scale));
 
         if (!has_double_precision) {
-            *view_location -= offset1;
-            *view_location -= offset2;
+            if (!is_2d_screen) {
+                *view_location -= head_offset;
+            }
+
+            *view_location -= eye_separation;
         } else {
-            *view_d -= offset1;
-            *view_d -= offset2;
+            if (!is_2d_screen) {
+                *view_location -= head_offset;
+            }
+
+            *view_d -= eye_separation;
         }
 
-        const auto euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
+        if (!is_2d_screen) {
+            const auto euler = glm::degrees(utility::math::euler_angles_from_steamvr(new_rotation));
 
-        if (!has_double_precision) {
-            view_rotation->pitch = euler.x;
-            view_rotation->yaw = euler.y;
-            view_rotation->roll = euler.z;
-        } else {
-            rot_d->pitch = euler.x;
-            rot_d->yaw = euler.y;
-            rot_d->roll = euler.z;
+            if (!has_double_precision) {
+                view_rotation->pitch = euler.x;
+                view_rotation->yaw = euler.y;
+                view_rotation->roll = euler.z;
+            } else {
+                rot_d->pitch = euler.x;
+                rot_d->yaw = euler.y;
+                rot_d->roll = euler.z;
+            }
         }
     }
 
@@ -4061,6 +4072,41 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
     // Can happen if we hooked this differently.
     if (g_hook->m_calculate_stereo_projection_matrix_hook) {
         g_hook->m_calculate_stereo_projection_matrix_hook.call<Matrix4x4f*>(stereo, out, view_index);
+    } else {
+        if (g_hook->m_has_double_precision) {
+            (*out)[3][2] = sdk::globals::get_near_clipping_plane();
+        } else {
+            (*(Matrix4x4d*)out)[3][2] = (double)sdk::globals::get_near_clipping_plane();
+        }
+    }
+
+    if (VR::get()->is_using_2d_screen()) {
+        float fov = 90.0f; // todo, get from FMinimalViewInfo
+
+        const float width = VR::get()->get_hmd_width();
+        const float height = VR::get()->get_hmd_height();
+        const float half_fov = glm::radians(fov) / 2.0f;
+        const float xs = 1.0f / glm::tan(half_fov);
+        const float ys = width / glm::tan(half_fov) / height;
+        const float near_z = sdk::globals::get_near_clipping_plane();
+
+        if (g_hook->m_has_double_precision) {
+            (*(Matrix4x4d*)out) = Matrix4x4d {
+                xs, 0.0, 0.0, 0.0,
+                0.0, ys, 0.0, 0.0,
+                0.0, 0.0, 0.0, 1.0,
+                0.0, 0.0, near_z, 0.0
+            };
+        } else {
+            *out = Matrix4x4f {
+                xs, 0.0f, 0.0f, 0.0f,
+                0.0f, ys, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, near_z, 0.0f
+            };
+        }
+
+        return out;
     }
 
     // SPDLOG_INFO("NearZ: {}", old_znear);

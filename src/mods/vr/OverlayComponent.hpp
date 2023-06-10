@@ -101,11 +101,15 @@ private:
 
         }
 
-        std::optional<std::reference_wrapper<XrCompositionLayerQuad>> generate_slate_quad();
+        std::optional<std::reference_wrapper<XrCompositionLayerQuad>> generate_slate_quad(
+            runtimes::OpenXR::SwapchainIndex swapchain = runtimes::OpenXR::SwapchainIndex::UI, 
+            XrEyeVisibility eye = XR_EYE_VISIBILITY_BOTH
+        );
         std::optional<std::reference_wrapper<XrCompositionLayerQuad>> generate_framework_ui_quad();
         
     private:
         XrCompositionLayerQuad m_slate_layer{};
+        XrCompositionLayerQuad m_slate_layer_right{};
         XrCompositionLayerQuad m_framework_ui_layer{};
         OverlayComponent* m_parent{ nullptr };
         

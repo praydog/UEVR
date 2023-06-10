@@ -606,24 +606,33 @@ void OverlayComponent::update_overlay_openvr() {
     }
 }
 
-std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::OpenXR::generate_slate_quad() {
+std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::OpenXR::generate_slate_quad(
+    runtimes::OpenXR::SwapchainIndex swapchain, 
+    XrEyeVisibility eye) 
+{
     auto& vr = VR::get();
 
     if (!vr->is_gui_enabled()) {
         return std::nullopt;
     }
 
-    auto& layer = this->m_slate_layer;
+    if (!vr->m_openxr->swapchains.contains((uint32_t)swapchain)) {
+        return std::nullopt;
+    }
+
+    const auto is_left_eye = eye == XR_EYE_VISIBILITY_BOTH || eye == XR_EYE_VISIBILITY_LEFT;
+
+    auto& layer = is_left_eye ? this->m_slate_layer : this->m_slate_layer_right;
 
     layer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
-    const auto& ui_swapchain = vr->m_openxr->swapchains[(uint32_t)runtimes::OpenXR::SwapchainIndex::UI];
+    const auto& ui_swapchain = vr->m_openxr->swapchains[(uint32_t)swapchain];
     layer.subImage.swapchain = ui_swapchain.handle;
+    layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
     layer.subImage.imageRect.offset.x = 0;
     layer.subImage.imageRect.offset.y = 0;
     layer.subImage.imageRect.extent.width = ui_swapchain.width;
     layer.subImage.imageRect.extent.height = ui_swapchain.height;
-    layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-    layer.eyeVisibility = XrEyeVisibility::XR_EYE_VISIBILITY_BOTH;
+    layer.eyeVisibility = eye;
 
     auto glm_matrix = glm::identity<glm::mat4>();
 

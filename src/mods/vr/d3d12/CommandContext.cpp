@@ -3,6 +3,7 @@
 
 #include "Framework.hpp"
 
+#include "TextureContext.hpp"
 #include "CommandContext.hpp"
 
 namespace d3d12 {
@@ -79,6 +80,11 @@ void CommandContext::wait(uint32_t ms) {
 void CommandContext::copy(ID3D12Resource* src, ID3D12Resource* dst, D3D12_RESOURCE_STATES src_state, D3D12_RESOURCE_STATES dst_state) {
     std::scoped_lock _{this->mtx};
 
+    if (src == nullptr || dst == nullptr) {
+        spdlog::error("[VR] nullptr passed to copy");
+        return;
+    }
+
     // Switch src into copy source.
     D3D12_RESOURCE_BARRIER src_barrier{};
 
@@ -122,6 +128,11 @@ void CommandContext::copy(ID3D12Resource* src, ID3D12Resource* dst, D3D12_RESOUR
 
 void CommandContext::copy_region(ID3D12Resource* src, ID3D12Resource* dst, D3D12_BOX* src_box, D3D12_RESOURCE_STATES src_state, D3D12_RESOURCE_STATES dst_state) {
     std::scoped_lock _{this->mtx};
+
+    if (src == nullptr || dst == nullptr) {
+        spdlog::error("[VR] nullptr passed to copy_region");
+        return;
+    }
 
     // Switch src into copy source.
     D3D12_RESOURCE_BARRIER src_barrier{};
@@ -177,6 +188,11 @@ void CommandContext::copy_region(ID3D12Resource* src, ID3D12Resource* dst, D3D12
 void CommandContext::clear_rtv(ID3D12Resource* dst, D3D12_CPU_DESCRIPTOR_HANDLE rtv, const float* color, D3D12_RESOURCE_STATES dst_state) {
     std::scoped_lock _{this->mtx};
 
+    if (dst == nullptr) {
+        spdlog::error("[VR] nullptr passed to clear_rtv");
+        return;
+    }
+
     // Switch dst into copy destination.
     D3D12_RESOURCE_BARRIER dst_barrier{};
     dst_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -207,6 +223,14 @@ void CommandContext::clear_rtv(ID3D12Resource* dst, D3D12_CPU_DESCRIPTOR_HANDLE 
     this->has_commands = true;
 }
 
+void CommandContext::clear_rtv(d3d12::TextureContext& tex, const float* color, D3D12_RESOURCE_STATES dst_state) {
+    if (tex.texture == nullptr || tex.rtv_heap == nullptr) {
+        return;
+    }
+
+    this->clear_rtv(tex.texture.Get(), tex.get_rtv(), color, dst_state);
+}
+
 void CommandContext::execute() {
     std::scoped_lock _{this->mtx};
     
@@ -217,7 +241,8 @@ void CommandContext::execute() {
         }
         
         auto command_queue = g_framework->get_d3d12_hook()->get_command_queue();
-        command_queue->ExecuteCommandLists(1, (ID3D12CommandList* const*)this->cmd_list.GetAddressOf());
+        ID3D12CommandList* const cmd_lists[] = {this->cmd_list.Get()};
+        command_queue->ExecuteCommandLists(1, cmd_lists);
         command_queue->Signal(this->fence.Get(), ++this->fence_value);
         this->fence->SetEventOnCompletion(this->fence_value, this->fence_event);
         this->waiting_for_fence = true;

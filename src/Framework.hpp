@@ -154,11 +154,11 @@ public:
     }
 
     Vector2f get_d3d11_rt_size() const {
-        return Vector2f{(float)m_d3d11.rt_width, (float)m_d3d11.rt_height};
+        return m_last_rt_size;
     }
 
     Vector2f get_d3d12_rt_size() const {
-        return Vector2f{(float)m_d3d12.rt_width, (float)m_d3d12.rt_height};
+        return m_last_rt_size;
     }
 
     Vector2f get_rt_size() const {
@@ -218,6 +218,7 @@ private:
     
     ImVec2 m_last_window_pos{};
     ImVec2 m_last_window_size{};
+    Vector2f m_last_rt_size{1920, 1080};
 
     struct AdditionalFont {
         std::filesystem::path filepath{};

@@ -225,13 +225,8 @@ public:
         return m_overlay_component;
     }
 
-    auto get_hmd_width() const {
-        return get_runtime()->get_width();
-    }
-
-    auto get_hmd_height() const {
-        return get_runtime()->get_height();
-    }
+    uint32_t get_hmd_width() const;
+    uint32_t get_hmd_height() const;
 
     const auto& get_eyes() const {
         return get_runtime()->eyes;
@@ -448,6 +443,10 @@ public:
         return m_decoupled_pitch_data.pre_flattened_rotation;
     }
 
+    bool is_using_2d_screen() const {
+        return m_2d_screen_mode->value();
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;
@@ -657,6 +656,7 @@ private:
     const ModToggle::Ptr m_decoupled_pitch{ ModToggle::create(generate_name("DecoupledPitch"), false) };
     const ModToggle::Ptr m_decoupled_pitch_ui_adjust{ ModToggle::create(generate_name("DecoupledPitchUIAdjust"), true) };
     const ModToggle::Ptr m_load_blueprint_code{ ModToggle::create(generate_name("LoadBlueprintCode"), false) };
+    const ModToggle::Ptr m_2d_screen_mode{ ModToggle::create(generate_name("2DScreenMode"), false) };
 
     // Aim method and movement orientation are not the same thing, but they can both have the same options
     const ModCombo::Ptr m_aim_method{ ModCombo::create(generate_name("AimMethod"), s_aim_method_names, AimMethod::GAME) };
@@ -719,6 +719,7 @@ private:
         *m_decoupled_pitch,
         *m_decoupled_pitch_ui_adjust,
         *m_load_blueprint_code,
+        *m_2d_screen_mode,
         *m_aim_method,
         *m_movement_orientation,
         *m_aim_speed,

@@ -40,11 +40,11 @@ public:
     auto is_initialized() const { return m_openvr.left_eye_tex[0].texture != nullptr; }
 
     auto& openxr() { return m_openxr; }
-    auto& get_ui_tex() { return m_ui_tex; }
+    auto& get_ui_tex() { return m_openvr_ui_tex; }
 
 private:
     bool setup();
-    void setup_sprite_batch_pso(DXGI_FORMAT output_format);
+    std::unique_ptr<DirectX::DX12::SpriteBatch> setup_sprite_batch_pso(DXGI_FORMAT output_format);
     void draw_spectator_view(ID3D12GraphicsCommandList* command_list, bool is_right_eye_frame);
     void clear_backbuffer();
 
@@ -53,13 +53,15 @@ private:
     ComPtr<ID3D12Resource> m_prev_backbuffer{};
     std::array<d3d12::CommandContext, 3> m_generic_commands{};
 
-    d3d12::TextureContext m_ui_tex{};
+    d3d12::TextureContext m_openvr_ui_tex{};
     d3d12::TextureContext m_game_ui_tex{};
     d3d12::TextureContext m_game_tex{};
+    std::array<d3d12::TextureContext, 2> m_2d_screen_tex{};
     std::array<d3d12::TextureContext, 3> m_backbuffer_textures{};
 
     std::unique_ptr<DirectX::DX12::GraphicsMemory> m_graphics_memory{};
     std::unique_ptr<DirectX::DX12::SpriteBatch> m_backbuffer_batch{};
+    std::unique_ptr<DirectX::DX12::SpriteBatch> m_game_batch{};
 
     // Mimicking what OpenXR does.
     struct OpenVR {
@@ -149,9 +151,16 @@ private:
         void initialize(XrSessionCreateInfo& session_info);
         std::optional<std::string> create_swapchains();
         void destroy_swapchains();
-        void copy(uint32_t swapchain_idx, ID3D12Resource* src, 
+        void copy(uint32_t swapchain_idx, ID3D12Resource* src,
+            std::optional<std::function<void(d3d12::CommandContext&)>> pre_commands = std::nullopt,
             std::optional<std::function<void(d3d12::CommandContext&)>> additional_commands = std::nullopt,
             D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT, D3D12_BOX* src_box = nullptr);
+
+        void copy(uint32_t swapchain_idx, ID3D12Resource* src,
+            D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT, D3D12_BOX* src_box = nullptr)
+        {
+            this->copy(swapchain_idx, src, std::nullopt, std::nullopt, src_state, src_box);
+        }
         void wait_for_all_copies() {
             std::scoped_lock _{this->mtx};
 
@@ -182,7 +191,7 @@ private:
     uint32_t m_backbuffer_size[2]{};
 
     uint32_t m_last_rendered_frame{0};
-    bool m_force_reset{false};
+    bool m_force_reset{true};
     bool m_last_afr_state{false};
     bool m_submitted_left_eye{false};
 };

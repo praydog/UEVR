@@ -1641,6 +1641,7 @@ bool Framework::init_d3d11() {
 
     m_d3d11.rt_width = backbuffer_desc.Width;
     m_d3d11.rt_height = backbuffer_desc.Height;
+    m_last_rt_size = {backbuffer_desc.Width, backbuffer_desc.Height};
 
     spdlog::info("[D3D11] Initializing ImGui D3D11...");
 
@@ -1783,6 +1784,8 @@ bool Framework::init_d3d12() {
 
         m_d3d12.rt_width = (uint32_t)desc.Width;
         m_d3d12.rt_height = (uint32_t)desc.Height;
+
+        m_last_rt_size = {desc.Width, desc.Height};
     }
 
     spdlog::info("[D3D12] Initializing ImGui...");

@@ -1829,6 +1829,22 @@ void VR::on_post_present() {
     }
 }
 
+uint32_t VR::get_hmd_width() const {
+    if (m_2d_screen_mode->value()) {
+        return g_framework->get_rt_size().x;
+    }
+
+    return get_runtime()->get_width();
+}
+
+uint32_t VR::get_hmd_height() const {
+    if (m_2d_screen_mode->value()) {
+        return g_framework->get_rt_size().y;
+    }
+
+    return get_runtime()->get_height();
+}
+
 void VR::on_draw_ui() {
     ZoneScopedN(__FUNCTION__);
 
@@ -1928,6 +1944,7 @@ void VR::on_draw_ui() {
         }
 
         m_desktop_fix->draw("Desktop Spectator View");
+        m_2d_screen_mode->draw("2D Screen Mode");
 
         ImGui::TextWrapped("Render Resolution (per-eye): %d x %d", get_runtime()->get_width(), get_runtime()->get_height());
         ImGui::TextWrapped("Total Render Resolution: %d x %d", get_runtime()->get_width() * 2, get_runtime()->get_height());
