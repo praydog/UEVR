@@ -40,7 +40,7 @@ public:
     auto is_initialized() const { return m_openvr.left_eye_tex[0].texture != nullptr; }
 
     auto& openxr() { return m_openxr; }
-    auto& get_ui_tex() { return m_openvr_ui_tex; }
+    auto& get_openvr_ui_tex() { return m_openvr.ui_tex; }
 
 private:
     bool setup();
@@ -53,7 +53,6 @@ private:
     ComPtr<ID3D12Resource> m_prev_backbuffer{};
     std::array<d3d12::CommandContext, 3> m_generic_commands{};
 
-    d3d12::TextureContext m_openvr_ui_tex{};
     d3d12::TextureContext m_game_ui_tex{};
     d3d12::TextureContext m_game_tex{};
     std::array<d3d12::TextureContext, 2> m_2d_screen_tex{};
@@ -141,6 +140,7 @@ private:
 
         std::array<d3d12::TextureContext, 3> left_eye_tex{};
         std::array<d3d12::TextureContext, 3> right_eye_tex{};
+        d3d12::TextureContext ui_tex{};
         uint32_t texture_counter{0};
         D3D12Component* parent{};
 

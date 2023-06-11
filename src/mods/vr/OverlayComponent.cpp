@@ -247,12 +247,12 @@ void OverlayComponent::update_slate_openvr() {
         vr::Texture_t ui_tex{(void*)vr->m_d3d11.get_ui_tex().Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
         vr::VROverlay()->SetOverlayTexture(m_slate_overlay_handle, &ui_tex);   
     } else {
-        if (vr->m_d3d12.get_ui_tex().texture.Get() == nullptr) {
+        if (vr->m_d3d12.get_openvr_ui_tex().texture.Get() == nullptr) {
             return;
         }
 
         vr::D3D12TextureData_t overlay_tex {
-            vr->m_d3d12.get_ui_tex().texture.Get(),
+            vr->m_d3d12.get_openvr_ui_tex().texture.Get(),
             g_framework->get_d3d12_hook()->get_command_queue(),
             0
         };

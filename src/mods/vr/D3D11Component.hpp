@@ -31,7 +31,7 @@ public:
 
     auto& openxr() { return m_openxr; }
 
-    auto& get_ui_tex(bool openxr = false) { return m_ui_tex; }
+    auto& get_ui_tex() { return m_ui_tex; }
     auto& get_blank_tex() { return m_blank_tex; }
 
     bool clear_tex(ID3D11Resource* rsrc, std::optional<DXGI_FORMAT> format = std::nullopt);

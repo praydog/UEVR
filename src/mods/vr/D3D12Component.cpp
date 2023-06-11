@@ -163,23 +163,23 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             commands.clear_rtv(m_game_ui_tex, (float*)&clear_color, ENGINE_SRC_COLOR);
         };
 
-        if (runtime->is_openvr() && m_openvr_ui_tex.texture.Get() != nullptr) {
-            m_openvr_ui_tex.commands.wait(INFINITE);
+        if (runtime->is_openvr() && m_openvr.ui_tex.texture.Get() != nullptr) {
+            m_openvr.ui_tex.commands.wait(INFINITE);
 
-            draw_2d_view(m_openvr_ui_tex.commands);
+            draw_2d_view(m_openvr.ui_tex.commands);
 
             if (is_right_eye_frame) {
                 if (is_2d_screen) {
-                    m_openvr_ui_tex.commands.copy(m_2d_screen_tex[0].texture.Get(), m_openvr_ui_tex.texture.Get(), ENGINE_SRC_COLOR);
+                    m_openvr.ui_tex.commands.copy(m_2d_screen_tex[0].texture.Get(), m_openvr.ui_tex.texture.Get(), ENGINE_SRC_COLOR);
                 } else {
-                    m_openvr_ui_tex.commands.copy((ID3D12Resource*)ui_target->get_native_resource(), m_openvr_ui_tex.texture.Get(), ENGINE_SRC_COLOR);
+                    m_openvr.ui_tex.commands.copy((ID3D12Resource*)ui_target->get_native_resource(), m_openvr.ui_tex.texture.Get(), ENGINE_SRC_COLOR);
                 }
             } else if (is_2d_screen) {
-                m_openvr_ui_tex.commands.copy(m_2d_screen_tex[0].texture.Get(), m_openvr_ui_tex.texture.Get(), ENGINE_SRC_COLOR);
+                m_openvr.ui_tex.commands.copy(m_2d_screen_tex[0].texture.Get(), m_openvr.ui_tex.texture.Get(), ENGINE_SRC_COLOR);
             }
 
-            clear_rt(m_openvr_ui_tex.commands);
-            m_openvr_ui_tex.commands.execute();
+            clear_rt(m_openvr.ui_tex.commands);
+            m_openvr.ui_tex.commands.execute();
         } else if (runtime->is_openxr() && runtime->ready() && vr->m_openxr->frame_began) {
             if (is_right_eye_frame) {
                 if (is_2d_screen) {
@@ -773,7 +773,7 @@ void D3D12Component::on_reset(VR* vr) {
         screen.reset();
     }
 
-    m_openvr_ui_tex.reset();
+    m_openvr.ui_tex.reset();
     m_game_ui_tex.reset();
     m_game_tex.reset();
     m_backbuffer_batch.reset();
@@ -939,7 +939,7 @@ bool D3D12Component::setup() {
 
         ui_tex->SetName(L"OpenVR UI Texture");
 
-        if (!m_openvr_ui_tex.setup(device, ui_tex.Get(), DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_B8G8R8A8_UNORM, L"OpenVR UI")) {
+        if (!m_openvr.ui_tex.setup(device, ui_tex.Get(), DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_B8G8R8A8_UNORM, L"OpenVR UI")) {
             spdlog::error("[VR] Failed to setup OpenVR UI context.");
             return false;
         }
