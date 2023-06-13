@@ -290,10 +290,68 @@ std::optional<uintptr_t> UEngine::get_initialize_hmd_device_address() {
 
         SPDLOG_INFO("Found r.EnableStereoEmulation cvar reference at {:x}", (uintptr_t)*enable_stereo_emulation_cvar_ref);
 
-        const auto result = utility::find_virtual_function_start(*enable_stereo_emulation_cvar_ref);
+        auto result = utility::find_virtual_function_start(*enable_stereo_emulation_cvar_ref);
 
         if (result) {
-            SPDLOG_INFO("Found InitializeHMDDevice at {:x}", (uintptr_t)*result);
+            const auto engine = UGameEngine::get();
+
+            // Verify that the result lands within the vtable.
+            if (engine != nullptr && !IsBadReadPtr(*(void**)engine, sizeof(void*))) {
+                const auto vtable = *(uintptr_t*)engine;
+                auto vtable_within = utility::scan_ptr(vtable, 200 * sizeof(void*), *result);
+
+                if (!vtable_within) {
+                    SPDLOG_ERROR("Found \"InitializeHMDDevice\" function at {:x}, but it is not within the vtable at {:x}!", *result, vtable);
+                    result = std::nullopt;
+                }
+            }
+
+            if (result) {
+                SPDLOG_INFO("Found InitializeHMDDevice at {:x}", (uintptr_t)*result);
+            }
+        }
+
+        if (!result) {
+            SPDLOG_ERROR("Failed to find InitializeHMDDevice function, falling back to vtable walk.");
+
+            const auto engine = UGameEngine::get();
+
+            if (engine != nullptr && !IsBadReadPtr(*(void**)engine, sizeof(void*))) {
+                const auto vtable = *(uintptr_t*)engine;
+
+                // Traverse the vtable and look for a function whose execution path falls within the reference to r.EnableStereoEmulation.
+                // Luckily the function is a virtual, so we don't need to worry about some random function
+                // calling it (like one of the engine startup functions). Since we're not actually emulating,
+                // and only doing an extensive disassembly, we won't be following indirect calls, so we can
+                // be sure that the function we find is the one we're looking for.
+                bool found = false;
+
+                for (auto i = 0; i < 200; ++i) {
+                    const auto fn = *(uintptr_t*)(vtable + (i * sizeof(void*)));
+                    if (fn == 0 || IsBadReadPtr((void*)fn, sizeof(void*))) {
+                        continue;
+                    }
+
+                    if (found) {
+                        break;
+                    }
+
+                    utility::exhaustive_decode((uint8_t*)fn, 200, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
+                        if (found) {
+                            return utility::ExhaustionResult::BREAK;
+                        }
+
+                        if (*enable_stereo_emulation_cvar_ref >= ip && *enable_stereo_emulation_cvar_ref < ip + ix.Length) {
+                            SPDLOG_INFO("Found \"InitializeHMDDevice\" function at {:x}, within the vtable at {:x}!", fn, vtable);
+                            result = fn;
+                            found = true;
+                            return utility::ExhaustionResult::BREAK;
+                        }
+
+                        return utility::ExhaustionResult::CONTINUE;
+                    });
+                }
+            }
         }
 
         return result;

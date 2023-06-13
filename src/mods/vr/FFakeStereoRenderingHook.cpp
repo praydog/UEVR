@@ -132,6 +132,7 @@ void FFakeStereoRenderingHook::attempt_hooking() {
 namespace detail{
 bool pre_find_engine_tick() {
     sdk::UGameEngine::get_tick_address(); // this takes a LONG time to find
+    sdk::UGameEngine::get_initialize_hmd_device_address();
     return true;
 }
 }
