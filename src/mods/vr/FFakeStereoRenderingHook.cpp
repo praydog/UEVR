@@ -3809,6 +3809,13 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
     static bool index_starts_from_one = true;
     static bool index_was_ever_two = false;
+    static bool index_was_ever_negative = false;
+
+    if (view_index == -1) {
+        index_was_ever_negative = true;
+        SPDLOG_INFO_ONCE("calculate stereo view offset called with view index -1 (INDEX_NONE), ignoring.");
+        return;
+    }
 
     // This is eSSP_FULL, we don't care. It will cause the view to become monoscopic if we do anything.
     if (index_was_ever_two && view_index == 0) {
@@ -3825,7 +3832,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         index_starts_from_one = false;
     }
 
-    const auto is_full_pass = view_index == 0 && !index_was_ever_two;
+    const auto is_full_pass = view_index == 0 && !index_was_ever_two && !index_was_ever_negative;
 
     auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
     const auto has_double_precision = g_hook->m_has_double_precision;
