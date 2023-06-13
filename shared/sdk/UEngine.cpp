@@ -296,7 +296,7 @@ std::optional<uintptr_t> UEngine::get_initialize_hmd_device_address() {
             const auto engine = UGameEngine::get();
 
             // Verify that the result lands within the vtable.
-            if (engine != nullptr && !IsBadReadPtr(*(void**)engine, sizeof(void*))) {
+            if (engine != nullptr && !IsBadReadPtr(*(void**)engine, 200 * sizeof(void*))) {
                 const auto vtable = *(uintptr_t*)engine;
                 auto vtable_within = utility::scan_ptr(vtable, 200 * sizeof(void*), *result);
 
@@ -311,7 +311,7 @@ std::optional<uintptr_t> UEngine::get_initialize_hmd_device_address() {
             }
         }
 
-        if (!result) {
+        if (!result) try {
             SPDLOG_ERROR("Failed to find InitializeHMDDevice function, falling back to vtable walk.");
 
             const auto engine = UGameEngine::get();
@@ -352,6 +352,9 @@ std::optional<uintptr_t> UEngine::get_initialize_hmd_device_address() {
                     });
                 }
             }
+        } catch(...) {
+            SPDLOG_ERROR("Exception occurred while attempting to find InitializeHMDDevice function.");
+            result = std::nullopt;  
         }
 
         return result;
