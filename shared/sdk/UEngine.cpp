@@ -305,10 +305,6 @@ std::optional<uintptr_t> UEngine::get_initialize_hmd_device_address() {
                     result = std::nullopt;
                 }
             }
-
-            if (result) {
-                SPDLOG_INFO("Found InitializeHMDDevice at {:x}", (uintptr_t)*result);
-            }
         }
 
         if (!result) try {
@@ -355,6 +351,10 @@ std::optional<uintptr_t> UEngine::get_initialize_hmd_device_address() {
         } catch(...) {
             SPDLOG_ERROR("Exception occurred while attempting to find InitializeHMDDevice function.");
             result = std::nullopt;  
+        }
+
+        if (result) {
+            SPDLOG_INFO("Found InitializeHMDDevice at {:x}", (uintptr_t)*result);
         }
 
         return result;

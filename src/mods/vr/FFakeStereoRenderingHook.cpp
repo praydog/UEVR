@@ -3969,7 +3969,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
             *view_location -= eye_separation;
         } else {
             if (!is_2d_screen) {
-                *view_location -= head_offset;
+                *view_d -= head_offset;
             }
 
             *view_d -= eye_separation;
