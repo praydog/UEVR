@@ -320,32 +320,9 @@ std::optional<uintptr_t> UEngine::get_initialize_hmd_device_address() {
                 // calling it (like one of the engine startup functions). Since we're not actually emulating,
                 // and only doing an extensive disassembly, we won't be following indirect calls, so we can
                 // be sure that the function we find is the one we're looking for.
-                bool found = false;
-
-                for (auto i = 0; i < 200; ++i) {
-                    const auto fn = *(uintptr_t*)(vtable + (i * sizeof(void*)));
-                    if (fn == 0 || IsBadReadPtr((void*)fn, sizeof(void*))) {
-                        continue;
-                    }
-
-                    if (found) {
-                        break;
-                    }
-
-                    utility::exhaustive_decode((uint8_t*)fn, 200, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
-                        if (found) {
-                            return utility::ExhaustionResult::BREAK;
-                        }
-
-                        if (*enable_stereo_emulation_cvar_ref >= ip && *enable_stereo_emulation_cvar_ref < ip + ix.Length) {
-                            SPDLOG_INFO("Found \"InitializeHMDDevice\" function at {:x}, within the vtable at {:x}!", fn, vtable);
-                            result = fn;
-                            found = true;
-                            return utility::ExhaustionResult::BREAK;
-                        }
-
-                        return utility::ExhaustionResult::CONTINUE;
-                    });
+                result = utility::find_encapsulating_virtual_function(vtable, 200, *enable_stereo_emulation_cvar_ref);
+                if (result) {
+                    SPDLOG_INFO("Found \"InitializeHMDDevice\" function at {:x}, within the vtable at {:x}!", *result, vtable);
                 }
             }
         } catch(...) {
