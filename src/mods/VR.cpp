@@ -1909,18 +1909,6 @@ void VR::on_draw_ui() {
         return;
     }
 
-    ImGui::TextWrapped("Hardware scheduling: %s", m_has_hw_scheduling ? "Enabled" : "Disabled");
-
-    if (m_has_hw_scheduling) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-        ImGui::TextWrapped("WARNING: Hardware-accelerated GPU scheduling is enabled. This may cause the game to run slower.");
-        ImGui::TextWrapped("Go into your Windows Graphics settings and disable \"Hardware-accelerated GPU scheduling\"");
-        ImGui::PopStyleColor();
-        ImGui::TextWrapped("Note: This is only necessary if you are experiencing performance issues.");
-    }
-
-    ImGui::Separator();
-
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
     if (ImGui::TreeNode((std::string{"Runtime Information ("} + get_runtime()->name().data() + ")").c_str())) {
         if (ImGui::Button("Set Standing Height")) {
@@ -2091,6 +2079,16 @@ void VR::on_draw_ui() {
 
     ImGui::DragFloat4("Raw Left", (float*)&m_raw_projections[0], 0.01f, -100.0f, 100.0f);
     ImGui::DragFloat4("Raw Right", (float*)&m_raw_projections[1], 0.01f, -100.0f, 100.0f);
+
+    ImGui::TextWrapped("Hardware scheduling: %s", m_has_hw_scheduling ? "Enabled" : "Disabled");
+
+    if (m_has_hw_scheduling) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+        ImGui::TextWrapped("WARNING: Hardware-accelerated GPU scheduling is enabled. This may cause the game to run slower.");
+        ImGui::TextWrapped("Go into your Windows Graphics settings and disable \"Hardware-accelerated GPU scheduling\"");
+        ImGui::PopStyleColor();
+        ImGui::TextWrapped("Note: This is only necessary if you are experiencing performance issues.");
+    }
 }
 
 Vector4f VR::get_position(uint32_t index, bool grip) const {
