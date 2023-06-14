@@ -1110,7 +1110,7 @@ int32_t* IXRTrackingSystemHook::get_ideal_debug_canvas_render_target_size(sdk::I
             base_context.ctx->Registers.RegRax = 0xdeadbeef;
             base_context.ctx->MemThreshold = 10;
 
-            utility::emulate(*module_within, return_address, 10, [&is_valid](const utility::ShemuContextExtended& ctx) -> utility::ExhaustionResult {
+            utility::emulate(*module_within, return_address, 10, base_context, [&is_valid](const utility::ShemuContextExtended& ctx) -> utility::ExhaustionResult {
                 if (check_ix(ctx.ctx->ctx->Instruction) || check_ix(ctx.next.ix)) {
                     is_valid = true;
                     return utility::ExhaustionResult::BREAK;
