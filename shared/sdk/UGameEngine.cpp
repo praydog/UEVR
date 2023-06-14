@@ -11,9 +11,9 @@ std::optional<uintptr_t> UGameEngine::get_tick_address() {
         SPDLOG_INFO("UGameEngine::get_tick_address: scanning for address");
 
         const auto module = sdk::get_ue_module(L"Engine");
-        const auto result = utility::find_virtual_function_from_string_ref(module, L"causeevent=", true); // present for a very long time
+        auto result = utility::find_virtual_function_from_string_ref(module, L"causeevent=", true); // present for a very long time
 
-        auto fallback_search = [&]() -> std::optional<uintptr_t> {
+        auto fallback_search_slow = [&]() -> std::optional<uintptr_t> {
             SPDLOG_ERROR("Failed to find UGameEngine::Tick using normal method, trying fallback");
             const auto engine = UEngine::get();
 
@@ -43,27 +43,6 @@ std::optional<uintptr_t> UGameEngine::get_tick_address() {
                         SPDLOG_ERROR("Failed to find UEngine::Tick string reference for fallback");
                         return std::nullopt;
                     }
-
-                    // This wont actually work because UGameEngine and UEngine vtables are not the same
-                    /*const auto engine_vtable = *(uintptr_t**)engine;
-
-                    if (engine_vtable == nullptr || IsBadReadPtr(engine_vtable, sizeof(void*) * 200)) {
-                        SPDLOG_ERROR("Engine vtable is invalid, cannot verify function validity");
-                        return std::nullopt;
-                    }
-
-                    // Find which function contains the reference to the string
-                    // There are no guarantees that string ref - 3 is the function we want
-                    // so we need to disassemble each virtual function and find the one that contains the string ref
-                    const auto encapsulating_function = utility::find_encapsulating_virtual_function((uintptr_t)engine_vtable, 200, *uengine_tick_string_ref);
-
-                    if (!encapsulating_function) {
-                        SPDLOG_ERROR("Failed to find encapsulating function for fallback");
-                        return std::nullopt;
-                    }
-                    
-                    uengine_tick_pure_virtual = *encapsulating_function;
-                    SPDLOG_INFO("Found UEngine::Tick pure virtual (encapsulation fallback): {:x}", (uintptr_t)*uengine_tick_pure_virtual);*/
 
                     uengine_tick_pure_virtual = *uengine_tick_string_ref - 3;
                     SPDLOG_INFO("Made guess for UEngine::Tick pure virtual (fallback): {:x}", (uintptr_t)*uengine_tick_pure_virtual);
@@ -154,8 +133,47 @@ std::optional<uintptr_t> UGameEngine::get_tick_address() {
             return std::nullopt;
         };
 
+        auto fallback_search_fast = [&]() -> std::optional<uintptr_t> {
+            SPDLOG_INFO("Attempting fast fallback scan for UGameEngine::Tick");
+
+            const auto string = utility::scan_string(module, L"causeevent=");
+
+            if (!string) {
+                return std::nullopt;
+            }
+
+            const auto string_ref = utility::scan_displacement_reference(module, *string);
+
+            if (!string_ref) {
+                return std::nullopt;
+            }
+
+            const auto engine = UEngine::get();
+            if (engine == nullptr) {
+                return std::nullopt;
+            }
+
+            const auto vtable = *(uintptr_t*)engine;
+            const auto vfunc = utility::find_encapsulating_virtual_function(vtable, 200, *string_ref);
+
+            if (!vfunc) {
+                return std::nullopt;
+            }
+
+            return *vfunc;
+        };
+
         if (!result) {
-            return fallback_search().value_or(0);
+            result = fallback_search_slow();
+
+            if (result) {
+                SPDLOG_INFO("Found UGameEngine::Tick via fast fallback scan");
+                return *result;
+            }
+
+            SPDLOG_ERROR("Failed to find UGameEngine::Tick via fast fallback scan");
+
+            return fallback_search_slow().value_or(0);
         }
 
         const auto engine = UEngine::get();
@@ -185,7 +203,14 @@ std::optional<uintptr_t> UGameEngine::get_tick_address() {
 
             if (!exists) {
                 SPDLOG_ERROR("UGameEngine::Tick: vtable check failed!");
-                return fallback_search().value_or(0);
+
+                if (auto fast_result = fallback_search_fast(); fast_result.has_value()) {
+                    SPDLOG_INFO("Found UGameEngine::Tick via fast fallback scan");
+                    return *fast_result;
+                }
+                
+                SPDLOG_ERROR("Failed to find UGameEngine::Tick via fast fallback scan, falling back to slow search");
+                return fallback_search_slow().value_or(0);
             }
         }
 
