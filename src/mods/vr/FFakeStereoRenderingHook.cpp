@@ -6013,9 +6013,15 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                         SPDLOG_INFO("Failed to analyze call at {:x}", ip);
                     }
 
+                    if (is_call && !next_call_is_not_the_right_one && bytes[0] == 0xFF && bytes[1] == 0x15) {
+                        // well this definitely is not the right one, indirect calls have never called the function we wanted (I think)
+                        SPDLOG_INFO("Found indirect call @ {:x}, skipping", ip);
+                        next_call_is_not_the_right_one = true;
+                    }
+
                     if (is_call && !next_call_is_not_the_right_one) {
                         const auto post_call = (uintptr_t)ip + decoded->Length;
-                        SPDLOG_INFO("AllocateRenderTargetTexture post_call: {:x}", post_call - (uintptr_t)*utility::get_module_within((void*)post_call));
+                        SPDLOG_INFO("AllocateRenderTargetTexture post_call: {:x}, rel {:x}", post_call, post_call - (uintptr_t)*utility::get_module_within((void*)post_call));
 
                         if (*(uint8_t*)ip == 0xE8) {
                             SPDLOG_INFO("E8 call found!");
