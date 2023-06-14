@@ -20,11 +20,53 @@ std::optional<uintptr_t> UGameEngine::get_tick_address() {
             if (engine != nullptr) {
                 // Not find_virtual_function_from_string_ref because it can fail on obfuscated executables
                 // where the virtual func is actually a jmp wrapper to the real function that this string is in.
-                const auto uengine_tick_pure_virtual = utility::find_function_from_string_ref(module, L"UEngine::Tick", true);
+                auto uengine_tick_pure_virtual = utility::find_function_from_string_ref(module, L"UEngine::Tick", true);
 
                 if (!uengine_tick_pure_virtual) {
-                    SPDLOG_ERROR("Failed to find UEngine::Tick pure virtual");
-                    return std::nullopt;
+                    // If we couldn't use the exception table to find the function then
+                    // we can use a "dumb" fallback method
+                    // Have only seen the need for this fallback method on modular builds of the engine
+                    // where compiler settings are strange
+                    SPDLOG_ERROR("Failed to find UEngine::Tick pure virtual, trying fallback");
+
+                    const auto uengine_tick_string = utility::scan_string(module, L"UEngine::Tick");
+
+                    if (!uengine_tick_string) {
+                        SPDLOG_ERROR("Failed to find UEngine::Tick string for fallback");
+                        return std::nullopt;
+                    }
+
+                    // TODO: Find the nearest valid instruction or something to this string and disassemble forward...?
+                    const auto uengine_tick_string_ref = utility::scan_relative_reference_strict(module, *uengine_tick_string, "4C 8D 05");
+
+                    if (!uengine_tick_string_ref) {
+                        SPDLOG_ERROR("Failed to find UEngine::Tick string reference for fallback");
+                        return std::nullopt;
+                    }
+
+                    // This wont actually work because UGameEngine and UEngine vtables are not the same
+                    /*const auto engine_vtable = *(uintptr_t**)engine;
+
+                    if (engine_vtable == nullptr || IsBadReadPtr(engine_vtable, sizeof(void*) * 200)) {
+                        SPDLOG_ERROR("Engine vtable is invalid, cannot verify function validity");
+                        return std::nullopt;
+                    }
+
+                    // Find which function contains the reference to the string
+                    // There are no guarantees that string ref - 3 is the function we want
+                    // so we need to disassemble each virtual function and find the one that contains the string ref
+                    const auto encapsulating_function = utility::find_encapsulating_virtual_function((uintptr_t)engine_vtable, 200, *uengine_tick_string_ref);
+
+                    if (!encapsulating_function) {
+                        SPDLOG_ERROR("Failed to find encapsulating function for fallback");
+                        return std::nullopt;
+                    }
+                    
+                    uengine_tick_pure_virtual = *encapsulating_function;
+                    SPDLOG_INFO("Found UEngine::Tick pure virtual (encapsulation fallback): {:x}", (uintptr_t)*uengine_tick_pure_virtual);*/
+
+                    uengine_tick_pure_virtual = *uengine_tick_string_ref - 3;
+                    SPDLOG_INFO("Made guess for UEngine::Tick pure virtual (fallback): {:x}", (uintptr_t)*uengine_tick_pure_virtual);
                 }
 
                 SPDLOG_INFO("UEngine::Tick: {:x} (pure virtual)", (uintptr_t)*uengine_tick_pure_virtual);
