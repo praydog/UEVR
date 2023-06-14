@@ -147,6 +147,8 @@ std::optional<uintptr_t> UGameEngine::get_tick_address() {
             if (!string_ref) {
                 return std::nullopt;
             }
+            
+            SPDLOG_INFO("Found causeevent= string ref: {:x}", *string_ref);
 
             const auto engine = UEngine::get();
             if (engine == nullptr) {
@@ -164,7 +166,7 @@ std::optional<uintptr_t> UGameEngine::get_tick_address() {
         };
 
         if (!result) {
-            result = fallback_search_slow();
+            result = fallback_search_fast();
 
             if (result) {
                 SPDLOG_INFO("Found UGameEngine::Tick via fast fallback scan");
@@ -179,6 +181,8 @@ std::optional<uintptr_t> UGameEngine::get_tick_address() {
         const auto engine = UEngine::get();
 
         if (engine != nullptr) {
+            SPDLOG_INFO("Checking if {:x} resides within the vtable at {:x}", *result, *(uintptr_t*)engine);
+            
             // Double check via the vtable that this function is actually UGameEngine::Tick
             const auto vtable = *(uintptr_t**)engine;
             bool exists = false;
