@@ -46,7 +46,7 @@ tag = "v1.34.10"
 
 [fetch-content.kananlib]
 git = "https://github.com/cursey/kananlib"
-tag = "92d47bee0399435072b7910a36824a3fe9bae714"
+tag = "b85618cb7f5ca3c66d9fbaa24fc3ed46bd697bb5"
 
 [fetch-content.safetyhook]
 git = "https://github.com/cursey/safetyhook"
