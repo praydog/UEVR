@@ -206,7 +206,7 @@ bool D3D11Component::TextureContext::clear_rtv(float* color) {
 }
 
 vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
-    if (m_left_eye_tex == nullptr || m_force_reset || m_last_afr_state != vr->is_using_afr()) {
+    if (m_force_reset || m_last_afr_state != vr->is_using_afr()) {
         if (!setup()) {
             spdlog::error("Failed to setup D3D11Component, trying again next frame");
             m_force_reset = true;
@@ -710,6 +710,8 @@ void D3D11Component::on_post_present(VR* vr) {
 }
 
 void D3D11Component::on_reset(VR* vr) {
+    m_force_reset = true;
+
     m_backbuffer_rtv.Reset();
     m_backbuffer.Reset();
     m_copied_backbuffer.Reset();
@@ -720,9 +722,6 @@ void D3D11Component::on_reset(VR* vr) {
     m_left_eye_srv.Reset();
     m_right_eye_srv.Reset();
     m_ui_tex.Reset();
-    m_blank_tex.Reset();
-    m_left_eye_depthstencil.Reset();
-    m_right_eye_depthstencil.Reset();
     m_vs_shader_blob.Reset();
     m_ps_shader_blob.Reset();
     m_vs_shader.Reset();
@@ -730,7 +729,12 @@ void D3D11Component::on_reset(VR* vr) {
     m_input_layout.Reset();
     m_constant_buffer.Reset();
     m_backbuffer_batch.reset();
+    m_game_batch.reset();
     m_is_shader_setup = false;
+
+    for (auto& tex : m_2d_screen_tex) {
+        tex.reset();
+    }
 
     if (vr->get_runtime()->is_openxr() && vr->get_runtime()->loaded) {
         auto& rt_pool = vr->get_render_target_pool_hook();
@@ -810,6 +814,7 @@ bool D3D11Component::setup() {
     }
 
     m_backbuffer_batch = std::make_unique<DirectX::DX11::SpriteBatch>(context.Get());
+    m_game_batch = std::make_unique<DirectX::DX11::SpriteBatch>(context.Get());
 
     // Get backbuffer description.
     D3D11_TEXTURE2D_DESC backbuffer_desc{};
@@ -851,11 +856,22 @@ bool D3D11Component::setup() {
     backbuffer_desc.Width = (uint32_t)g_framework->get_d3d11_rt_size().x;
     backbuffer_desc.Height = (uint32_t)g_framework->get_d3d11_rt_size().y;
     device->CreateTexture2D(&backbuffer_desc, nullptr, &m_ui_tex);
-    device->CreateTexture2D(&backbuffer_desc, nullptr, &m_blank_tex);
+
+    for (auto& ctx : m_2d_screen_tex) {
+        ComPtr<ID3D11Texture2D> tex{};
+        if (FAILED(device->CreateTexture2D(&backbuffer_desc, nullptr, &tex))) {
+            spdlog::error("[VR] Failed to create 2D screen texture (D3D11).");
+            continue;
+        }
+
+        if (!ctx.set(tex.Get(), DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)) {
+            spdlog::error("[VR] Failed to setup 2D screen texture context (D3D11).");
+            continue;
+        }
+    }
 
     // No need to pass the format as the backbuffer is not a typeless format.
     clear_tex(m_ui_tex.Get());
-    clear_tex(m_blank_tex.Get());
 
     // copy backbuffer into right eye
     context->CopyResource(m_right_eye_tex.Get(), backbuffer.Get());

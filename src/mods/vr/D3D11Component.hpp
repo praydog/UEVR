@@ -32,7 +32,6 @@ public:
     auto& openxr() { return m_openxr; }
 
     auto& get_ui_tex() { return m_ui_tex; }
-    auto& get_blank_tex() { return m_blank_tex; }
 
     bool clear_tex(ID3D11Resource* rsrc, std::optional<DXGI_FORMAT> format = std::nullopt);
     void copy_tex(ID3D11Resource* src, ID3D11Resource* dst);
@@ -117,11 +116,9 @@ private:
     ComPtr<ID3D11Texture2D> m_ui_tex{};
     TextureContext m_engine_ui_ref{};
     TextureContext m_engine_tex_ref{};
-    ComPtr<ID3D11Texture2D> m_blank_tex{};
+    std::array<TextureContext, 2> m_2d_screen_tex{};
     ComPtr<ID3D11Texture2D> m_left_eye_tex{};
     ComPtr<ID3D11Texture2D> m_right_eye_tex{};
-    ComPtr<ID3D11Texture2D> m_left_eye_depthstencil{};
-    ComPtr<ID3D11Texture2D> m_right_eye_depthstencil{};
     ComPtr<ID3DBlob> m_vs_shader_blob{};
     ComPtr<ID3DBlob> m_ps_shader_blob{};
 
@@ -137,6 +134,7 @@ private:
     ComPtr<ID3D11ShaderResourceView> m_right_eye_srv{};
 
     std::unique_ptr<DirectX::DX11::SpriteBatch> m_backbuffer_batch{};
+    std::unique_ptr<DirectX::DX11::SpriteBatch> m_game_batch{};
 
     vr::HmdMatrix44_t m_left_eye_proj{};
     vr::HmdMatrix44_t m_right_eye_proj{};
@@ -148,7 +146,7 @@ private:
     std::array<uint32_t, 2> m_real_backbuffer_size{};
 
     uint32_t m_last_rendered_frame{0};
-    bool m_force_reset{false};
+    bool m_force_reset{true};
     bool m_submitted_left_eye{false};
     bool m_is_shader_setup{false};
     bool m_last_afr_state{false};
