@@ -1179,12 +1179,17 @@ std::string OpenXR::translate_openvr_action_name(std::string action_name) const 
     return action_name;
 }
 
-Vector2f OpenXR::get_left_stick_axis() const {
+Vector2f OpenXR::get_stick_axis(VRRuntime::Hand hand_idx) const {
+    if (hand_idx != VRRuntime::Hand::LEFT && hand_idx != VRRuntime::Hand::RIGHT) {
+        return Vector2f{};
+    }
+
     if (!this->action_set.action_map.contains("joystick")) {
         return Vector2f{};
     }
 
-    const auto& hand = this->hands[VRRuntime::Hand::LEFT];
+    const auto& hand = this->hands[hand_idx];
+
     auto profile_it = hand.profiles.find(this->get_current_interaction_profile());
 
     if (profile_it == hand.profiles.end()) {
@@ -1193,10 +1198,25 @@ Vector2f OpenXR::get_left_stick_axis() const {
 
     const auto& hand_profile = profile_it->second;
 
-    auto joystick_action = this->action_set.action_map.find("joystick")->second;
-    auto touchpad_action = this->action_set.action_map.find("touchpad")->second;
+    XrAction action{XR_NULL_HANDLE};
 
-    auto action = hand_profile.path_map.contains("joystick") ? joystick_action : touchpad_action;
+    if (hand_profile.path_map.contains("joystick")) {
+        auto it = this->action_set.action_map.find("joystick");
+
+        if (it == this->action_set.action_map.end()) {
+            return Vector2f{};
+        }
+
+        action = it->second;
+    } else {
+        auto it = this->action_set.action_map.find("touchpad");
+
+        if (it == this->action_set.action_map.end()) {
+            return Vector2f{};
+        }
+
+        action = it->second;
+    }
 
     XrActionStateGetInfo get_info{XR_TYPE_ACTION_STATE_GET_INFO};
     get_info.action = action;
@@ -1213,38 +1233,12 @@ Vector2f OpenXR::get_left_stick_axis() const {
     return *(Vector2f*)&axis.currentState;
 }
 
+Vector2f OpenXR::get_left_stick_axis() const {
+    return this->get_stick_axis(VRRuntime::Hand::LEFT);
+}
+
 Vector2f OpenXR::get_right_stick_axis() const {
-    if (!this->action_set.action_map.contains("joystick")) {
-        return Vector2f{};
-    }
-
-    const auto& hand = this->hands[VRRuntime::Hand::RIGHT];
-    auto profile_it = hand.profiles.find(this->get_current_interaction_profile());
-
-    if (profile_it == hand.profiles.end()) {
-        return Vector2f{};
-    }
-
-    const auto& hand_profile = profile_it->second;
-
-    auto joystick_action = this->action_set.action_map.find("joystick")->second;
-    auto touchpad_action = this->action_set.action_map.find("touchpad")->second;
-
-    auto action = hand_profile.path_map.contains("joystick") ? joystick_action : touchpad_action;
-
-    XrActionStateGetInfo get_info{XR_TYPE_ACTION_STATE_GET_INFO};
-    get_info.action = action;
-    get_info.subactionPath = hand.path;
-
-    XrActionStateVector2f axis{XR_TYPE_ACTION_STATE_VECTOR2F};
-    auto result = xrGetActionStateVector2f(this->session, &get_info, &axis);
-
-    if (result != XR_SUCCESS) {
-        spdlog::error("[VR] Failed to get stick action state: {}", this->get_result_string(result));
-        return Vector2f{};
-    }
-
-    return *(Vector2f*)&axis.currentState;
+    return this->get_stick_axis(VRRuntime::Hand::RIGHT);
 }
 
 void OpenXR::trigger_haptic_vibration(float duration, float frequency, float amplitude, VRRuntime::Hand source) const {

@@ -1188,17 +1188,14 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
         return;
     }
 
-    static bool once = true;
-
-    if (once) {
-        spdlog::info("VR: Pre-engine tick");
-        once = false;
-    }
+    SPDLOG_INFO_ONCE("VR: Pre-engine tick");
 
     m_render_target_pool_hook->on_pre_engine_tick(engine, delta);
 
-    //update_hmd_state();
-    update_action_states();
+    // Dont update action states on AFR frames
+    if (m_fake_stereo_hook != nullptr && !m_fake_stereo_hook->is_ignoring_next_viewport_draw()) {
+        update_action_states();
+    }
 }
 
 void VR::on_pre_viewport_client_draw(void* viewport_client, void* viewport, void* canvas){

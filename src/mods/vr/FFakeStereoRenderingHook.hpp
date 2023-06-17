@@ -269,6 +269,10 @@ public:
         return m_in_viewport_client_draw;
     }
 
+    bool is_ignoring_next_viewport_draw() const {
+        return m_ignore_next_viewport_draw;
+    }
+
     // Do not call these directly
     static void setup_viewpoint(ISceneViewExtension* extension, void* player_controller, void* view_info);
     static void localplayer_setup_viewpoint(void* localplayer, void* view_info, void* pass);

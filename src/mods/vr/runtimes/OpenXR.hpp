@@ -159,6 +159,7 @@ public:
     Vector2f get_action_axis(XrAction action, VRRuntime::Hand hand) const;
     std::string translate_openvr_action_name(std::string action_name) const;
 
+    Vector2f get_stick_axis(VRRuntime::Hand hand) const;
     Vector2f get_left_stick_axis() const;
     Vector2f get_right_stick_axis() const;
 
