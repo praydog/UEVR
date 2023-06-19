@@ -1193,6 +1193,7 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     m_render_target_pool_hook->on_pre_engine_tick(engine, delta);
 
     // Dont update action states on AFR frames
+    // TODO: fix this for actual AFR, but we dont really care about pure AFR since synced beats it most of the time
     if (m_fake_stereo_hook != nullptr && !m_fake_stereo_hook->is_ignoring_next_viewport_draw()) {
         update_action_states();
     }
