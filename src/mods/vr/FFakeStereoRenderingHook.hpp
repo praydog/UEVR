@@ -343,6 +343,7 @@ private:
     struct {
         safetyhook::InlineHook constructor_hook{};
         std::unordered_set<void*> known_scene_states;
+        bool inside_post_init_properties{false};
     } m_sceneview_data;
 
     safetyhook::InlineHook m_localplayer_get_viewpoint_hook{};

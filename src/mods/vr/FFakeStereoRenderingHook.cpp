@@ -2574,6 +2574,8 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
     if (init_options_scene_state != nullptr && !g_hook->m_sceneview_data.known_scene_states.contains(init_options_scene_state)) {
         SPDLOG_INFO("Inserting new scene state {:x}", (uintptr_t)init_options_scene_state);
         known_scene_states.insert(init_options_scene_state);
+    } else if (init_options_scene_state == nullptr) {
+        SPDLOG_ERROR_ONCE("Scene state passed to FSceneView constructor is null");
     }
 
     if (init_options_scene_state != nullptr && vr->is_ghosting_fix_enabled() && known_scene_states.size() > 1 && vr->is_using_afr() && true_index == 1) {
@@ -4303,9 +4305,13 @@ uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoR
 
     auto& vr = VR::get();
 
+    if (g_hook->m_sceneview_data.inside_post_init_properties) {
+        return 2;
+    }
+
     if (!is_stereo_enabled || (vr->is_using_afr() && !vr->is_splitscreen_compatibility_enabled())) {
         if (is_stereo_enabled && vr->is_ghosting_fix_enabled() && vr->is_using_afr() &&
-            g_hook->m_sceneview_data.known_scene_states.size() == 1 && g_hook->m_fixed_localplayer_view_count) 
+            g_hook->m_sceneview_data.known_scene_states.size() < 2 && g_hook->m_fixed_localplayer_view_count) 
         {
             return 2; // We need to know about the second scene state to fix ghosting
         }
@@ -4734,7 +4740,10 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
         };
 
         const auto exception_handler = AddVectoredExceptionHandler(1, seh_handler);
+
+        m_sceneview_data.inside_post_init_properties = true;
         post_init_properties(localplayer);
+        m_sceneview_data.inside_post_init_properties = false;
 
         SPDLOG_INFO("PostInitProperties called!");
 
@@ -4743,6 +4752,7 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
         peb->BeingDebugged = old;
     }
 
+    g_hook->m_sceneview_data.known_scene_states.clear();
     g_hook->m_fixed_localplayer_view_count = true;
 }
 
