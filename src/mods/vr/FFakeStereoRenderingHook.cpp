@@ -1292,15 +1292,8 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_27() {
     #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
         SPDLOG_INFO("GetViewPassForIndex called: {:x} {} ", (uintptr_t)_ReturnAddress(), view_index);
     #endif
-        if (!g_hook->is_stereo_enabled(stereo)) {
-            return EStereoscopicPass::eSSP_FULL;
-        }
 
-        if (view_index == 0 || VR::get()->is_using_afr()) {
-            return EStereoscopicPass::eSSP_PRIMARY;
-        } 
-
-        return EStereoscopicPass::eSSP_SECONDARY;
+        return g_hook->get_view_pass_for_index_hook(stereo, stereo_requested, view_index);
     }; // GetViewPassForIndex
 
     m_fallback_vtable[GET_VIEW_INDEX_FOR_PASS_INDEX] = +[](FFakeStereoRendering* stereo, const EStereoscopicPass pass) -> int32_t {
@@ -1483,15 +1476,8 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_22() {
     #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
         SPDLOG_INFO("GetViewPassForIndex called: {:x} {} ", (uintptr_t)_ReturnAddress(), view_index);
     #endif
-        if (!g_hook->is_stereo_enabled(stereo)) {
-            return EStereoscopicPass::eSSP_FULL;
-        }
 
-        if (view_index == 0 || VR::get()->is_using_afr()) {
-            return EStereoscopicPass::eSSP_PRIMARY;
-        } 
-
-        return EStereoscopicPass::eSSP_SECONDARY;
+        return g_hook->get_view_pass_for_index_hook(stereo, stereo_requested, view_index);
     }; // GetViewPassForIndex
 
     m_fallback_vtable[GET_VIEW_INDEX_FOR_PASS_INDEX] = +[](FFakeStereoRendering* stereo, const EStereoscopicPass pass) -> int32_t {
@@ -3694,6 +3680,11 @@ bool FFakeStereoRenderingHook::is_stereo_enabled(FFakeStereoRendering* stereo) {
     // wait!!!
     if (!g_framework->is_game_data_intialized()) {
         return false;
+    }
+
+    if (g_hook->m_sceneview_data.inside_post_init_properties) {
+        g_hook->set_should_recreate_textures(true);
+        return true;
     }
     
     /*if (g_hook->m_analyzing_view_extensions) {
