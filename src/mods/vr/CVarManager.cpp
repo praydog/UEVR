@@ -194,6 +194,10 @@ void CVarManager::dump_commands() {
 
 // Use ImGui to display a homebrew console.
 void CVarManager::display_console() {
+    if (!g_framework->is_drawing_ui()) {
+        return;
+    }
+
     bool open = true;
 
     ImGui::SetNextWindowSize(ImVec2(800, 512), ImGuiCond_::ImGuiCond_Once);
