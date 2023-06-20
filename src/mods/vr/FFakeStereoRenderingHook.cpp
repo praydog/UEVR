@@ -2484,20 +2484,24 @@ constexpr auto INIT_OPTION_SCENE_STATE_INTERFACE_OFFSET = 0xB8;
 constexpr auto INIT_OPTIONS_PROJECTION_MATRIX_OFFSET = 0x50;
 constexpr auto INIT_OPTIONS_STEREO_PASS_OFFSET = 0x108;
 
+constexpr auto test = offsetof(sdk::FSceneViewInitOptions, scene_view_state);
 // FSceneView constructor hook
-sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView* view, sdk::FSceneViewInitOptions* init_options) {
+sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView* view, sdk::FSceneViewInitOptions* init_options, void* a3, void* a4) {
     SPDLOG_INFO_ONCE("Called FSceneView constructor for the first time");
 
     auto& vr = VR::get();
 
     if (!g_hook->is_in_viewport_client_draw() || !vr->is_hmd_active()) {
-        return g_hook->m_sceneview_data.constructor_hook.call<sdk::FSceneView*>(view, init_options);
+        return g_hook->m_sceneview_data.constructor_hook.call<sdk::FSceneView*>(view, init_options, a3, a4);
     }
 
-    auto& known_scene_states = g_hook->m_sceneview_data.known_scene_states;
+    std::scoped_lock _{g_hook->m_sceneview_data.mtx};
 
-    static uint32_t last_frame_count = 0;
-    static uint32_t last_index = 0;
+    auto init_options_ue5 = (sdk::FSceneViewInitOptionsUE5*)init_options;
+
+    auto& known_scene_states = g_hook->m_sceneview_data.known_scene_states;
+    auto& last_frame_count = g_hook->m_sceneview_data.last_frame_count;
+    auto& last_index = g_hook->m_sceneview_data.last_index;
 
     if (last_frame_count != g_frame_count || last_index > 1) {
         last_index = 0;
@@ -2554,8 +2558,10 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
         //init_options_stereo_pass = 0;
     }
 
-    auto& init_options_scene_state = *(void**)((uintptr_t)init_options + INIT_OPTION_SCENE_STATE_INTERFACE_OFFSET);
-    auto& init_options_stereo_pass = *(uint8_t*)((uintptr_t)init_options + INIT_OPTIONS_STEREO_PASS_OFFSET);
+    const auto is_ue5 = g_hook->has_double_precision();
+
+    auto& init_options_scene_state = is_ue5 ? init_options_ue5->scene_view_state : init_options->scene_view_state;
+    auto& init_options_stereo_pass = is_ue5 ? init_options_ue5->stereo_pass : init_options->stereo_pass;
 
     if (init_options_scene_state != nullptr && !g_hook->m_sceneview_data.known_scene_states.contains(init_options_scene_state)) {
         SPDLOG_INFO("Inserting new scene state {:x}", (uintptr_t)init_options_scene_state);
@@ -2579,7 +2585,7 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
 
     last_index++;
 
-    return g_hook->m_sceneview_data.constructor_hook.call<sdk::FSceneView*>(view, init_options);
+    return g_hook->m_sceneview_data.constructor_hook.call<sdk::FSceneView*>(view, init_options, a3, a4);
 }
 
 void FFakeStereoRenderingHook::setup_view_family(ISceneViewExtension* extension, FSceneViewFamily& view_family) {

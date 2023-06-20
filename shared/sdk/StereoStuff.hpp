@@ -7,6 +7,10 @@
 
 #include "FSceneView.hpp"
 
+namespace sdk {
+struct FSceneView;
+}
+
 enum ETextureCreateFlags : uint64_t { RenderTargetable = 1ull << 0, ResolveTargetable = 1ull << 1, ShaderResource = 1ull << 3, };
 enum EStereoscopicPass { eSSP_FULL, eSSP_PRIMARY, eSSP_SECONDARY };
 

@@ -23,6 +23,10 @@ struct UCanvas;
 struct IStereoLayers;
 struct FSceneViewFamily;
 
+namespace sdk {
+struct FSceneViewStateInterface;
+}
+
 // Injector-specific structure for VRRenderTargetManager that they will all secondarily inherit from
 // because different engine versions can have a different IStereoRenderTargetManager virtual table
 // so we need a unified way of storing data that can be used for all versions
@@ -304,7 +308,7 @@ private:
 
     // Hooks
     // FSceneView
-    static sdk::FSceneView* sceneview_constructor(sdk::FSceneView* sceneview, sdk::FSceneViewInitOptions* init_options);
+    static sdk::FSceneView* sceneview_constructor(sdk::FSceneView* sceneview, sdk::FSceneViewInitOptions* init_options, void* a3, void* a4);
     
     // IStereoRendering
     static bool is_stereo_enabled(FFakeStereoRendering* stereo);
@@ -341,9 +345,13 @@ private:
     std::unique_ptr<ThreadWorker<FRHICommandListImmediate*>> m_slate_thread_worker{std::make_unique<ThreadWorker<FRHICommandListImmediate*>>()};
 
     struct {
+        std::recursive_mutex mtx{};
         safetyhook::InlineHook constructor_hook{};
-        std::unordered_set<void*> known_scene_states;
+        std::unordered_set<sdk::FSceneViewStateInterface*> known_scene_states;
         bool inside_post_init_properties{false};
+
+        uint32_t last_frame_count{};
+        uint32_t last_index{};
     } m_sceneview_data;
 
     safetyhook::InlineHook m_localplayer_get_viewpoint_hook{};
