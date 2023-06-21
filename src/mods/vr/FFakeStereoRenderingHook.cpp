@@ -4307,7 +4307,8 @@ uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoR
 
     if (!is_stereo_enabled || (vr->is_using_afr() && !vr->is_splitscreen_compatibility_enabled())) {
         if (is_stereo_enabled && vr->is_ghosting_fix_enabled() && vr->is_using_afr() &&
-            g_hook->m_sceneview_data.known_scene_states.size() < 2 && g_hook->m_fixed_localplayer_view_count) 
+            g_hook->m_sceneview_data.known_scene_states.size() < 2 && g_hook->m_fixed_localplayer_view_count &&
+            !!g_hook->m_sceneview_data.constructor_hook)
         {
             return 2; // We need to know about the second scene state to fix ghosting
         }

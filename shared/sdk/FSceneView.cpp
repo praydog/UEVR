@@ -35,10 +35,12 @@ std::optional<uintptr_t> FSceneView::get_constructor_address() {
 
         // We need to find the string references "vr.InstancedStereo" and "r.TranslucentSortPolicy"
         // These two strings will reside together within the same function (the constructor)
-        const auto instanced_strings = utility::scan_strings(module, L"vr.InstancedStereo");
+        // ADDENDUM: We are only finding the references for "r.TranslucentSortPolicy" now
+        // we are still making use of "vr.InstancedStereo" but we are checking whether instructions
+        // reference data that == L"vr.InstancedStereo" instead of checking for the string reference itself
         const auto translucent_strings = utility::scan_strings(module, L"r.TranslucentSortPolicy");
 
-        if (instanced_strings.empty() || translucent_strings.empty()) {
+        if (translucent_strings.empty()) {
             SPDLOG_ERROR("[FSceneView] Failed to find string references for FSceneView constructor");
             return std::nullopt;
         }
@@ -107,13 +109,23 @@ std::optional<uintptr_t> FSceneView::get_constructor_address() {
                     return utility::ExhaustionResult::CONTINUE;
                 }
 
-                // Check if the displacement is any of the vr.InstancedStereo strings
-                for (const auto& instanced_string : instanced_strings) {
-                    if (*displacement == instanced_string) {
+                // Directly check the data at the displacement instead
+                // because modular builds have the string in a different DLL
+                // and hardcoding which DLL its in seems sloppy
+                try {
+                    const auto potential_string = (wchar_t*)*displacement;
+
+                    if (IsBadReadPtr(potential_string, sizeof(wchar_t) * 2)) {
+                        return utility::ExhaustionResult::CONTINUE;
+                    }
+
+                    if (std::wstring_view{ potential_string } == L"vr.InstancedStereo") {
                         SPDLOG_INFO("[FSceneView] Found correct displacement at 0x{:x}", ip);
                         is_correct_function = true;
                         return utility::ExhaustionResult::BREAK;
                     }
+                } catch(...) {
+
                 }
 
                 return utility::ExhaustionResult::CONTINUE;
