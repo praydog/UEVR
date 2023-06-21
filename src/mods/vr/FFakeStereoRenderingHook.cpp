@@ -2484,7 +2484,6 @@ constexpr auto INIT_OPTION_SCENE_STATE_INTERFACE_OFFSET = 0xB8;
 constexpr auto INIT_OPTIONS_PROJECTION_MATRIX_OFFSET = 0x50;
 constexpr auto INIT_OPTIONS_STEREO_PASS_OFFSET = 0x108;
 
-constexpr auto test = offsetof(sdk::FSceneViewInitOptions, scene_view_state);
 // FSceneView constructor hook
 sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView* view, sdk::FSceneViewInitOptions* init_options, void* a3, void* a4) {
     SPDLOG_INFO_ONCE("Called FSceneView constructor for the first time");

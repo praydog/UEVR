@@ -1,3 +1,4 @@
+#include <unordered_set>
 #include <cstdint>
 
 #include <spdlog/spdlog.h>
@@ -44,53 +45,83 @@ std::optional<uintptr_t> FSceneView::get_constructor_address() {
 
         SPDLOG_INFO("[FSceneView] Found string references for FSceneView constructor");
 
-        // We need to find the function that contains both of these strings
-        std::vector<uintptr_t> instanced_string_refs{};
         std::vector<uintptr_t> translucent_string_refs{};
-        //const auto instanced_string_refs = utility::scan_displacement_references(module, *instanced_string);
-        //const auto translucent_string_refs = utility::scan_displacement_references(module, *translucent_string);
-
-        for (const auto& instanced_string : instanced_strings) {
-            const auto instanced_string_refs_ = utility::scan_displacement_references(module, instanced_string);
-
-            instanced_string_refs.insert(instanced_string_refs.end(), instanced_string_refs_.begin(), instanced_string_refs_.end());
-        }
 
         for (const auto& translucent_string : translucent_strings) {
+            SPDLOG_INFO("[FSceneView] Found r.TranslucentSortPolicy string at 0x{:x}", translucent_string);
+
             const auto translucent_string_refs_ = utility::scan_displacement_references(module, translucent_string);
 
             translucent_string_refs.insert(translucent_string_refs.end(), translucent_string_refs_.begin(), translucent_string_refs_.end());
         }
 
-        if (instanced_string_refs.empty() || translucent_string_refs.empty()) {
+        if (translucent_string_refs.empty()) {
             SPDLOG_ERROR("[FSceneView] Failed to find references for FSceneView constructor");
             return std::nullopt;
         }
 
-        std::vector<uintptr_t> instanced_functions{};
-
-        for (const auto& instanced_ref : instanced_string_refs) {
-            const auto instanced_func = utility::find_function_start_with_call(instanced_ref);
-
-            if (!instanced_func) {
-                continue;
-            }
-
-            instanced_functions.push_back(*instanced_func);
-        }
+        // For use with a fallback method
+        std::vector<uintptr_t> translucent_functions{};
 
         for (const auto& translucent_ref : translucent_string_refs) {
+            SPDLOG_INFO("[FSceneView] Found r.TranslucentSortPolicy reference at 0x{:x}", translucent_ref);
+
             const auto translucent_func = utility::find_function_start_with_call(translucent_ref);
 
             if (!translucent_func) {
                 continue;
             }
 
-            for (const auto& instanced_func : instanced_functions) {
-                if (instanced_func == *translucent_func) {
-                    SPDLOG_INFO("[FSceneView] Found FSceneView constructor at 0x{:x}", instanced_func);
-                    return instanced_func;
+            translucent_functions.push_back(*translucent_func);
+        }
+
+        // previously we naively checked if the vr.InstancedStereo string ref was
+        // in the same function as one of the r.TranslucentSortPolicy string refs
+        // however, at some point, UE decided to
+        // move the vr.InstancedStereo string ref inside of its own function
+        // however, this function is still called from the constructor
+        // so we can exhaustively disassemble all code paths from the r.TranslucentSortPolicy string refs
+        // until we find a reference to the vr.InstancedStereo string along the way
+        // this is kind of a scorched earth method, but it works
+        SPDLOG_INFO("[FSceneView] Exhaustively searching for FSceneView constructor");
+
+        std::unordered_set<uintptr_t> seen_ips{};
+
+        for (const auto& translucent_function : translucent_functions) {
+            SPDLOG_INFO("[FSceneView] Exhaustively searching for references to vr.InstancedStereo in 0x{:x}", translucent_function);
+
+            bool is_correct_function = false;
+
+            utility::exhaustive_decode((uint8_t*)translucent_function, 1000, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
+                if (seen_ips.contains(ip) || is_correct_function) {
+                    return utility::ExhaustionResult::BREAK;
                 }
+
+                seen_ips.insert(ip);
+
+                // Looking for something like "lea rdx, "vr.InstancedStereo""
+                // but we will assume it can be any kind of instruction that references the string
+                const auto displacement = utility::resolve_displacement(ip);
+
+                if (!displacement) {
+                    return utility::ExhaustionResult::CONTINUE;
+                }
+
+                // Check if the displacement is any of the vr.InstancedStereo strings
+                for (const auto& instanced_string : instanced_strings) {
+                    if (*displacement == instanced_string) {
+                        SPDLOG_INFO("[FSceneView] Found correct displacement at 0x{:x}", ip);
+                        is_correct_function = true;
+                        return utility::ExhaustionResult::BREAK;
+                    }
+                }
+
+                return utility::ExhaustionResult::CONTINUE;
+            });
+
+            if (is_correct_function) {
+                SPDLOG_INFO("[FSceneView] Found FSceneView constructor at 0x{:x}", translucent_function);
+                return translucent_function;
             }
         }
 
