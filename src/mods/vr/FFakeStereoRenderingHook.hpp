@@ -428,6 +428,7 @@ private:
 
 
     bool m_analyzing_view_extensions{false};
+    bool m_has_view_extensions_installed{false};
 
     std::chrono::time_point<std::chrono::high_resolution_clock> m_analyze_view_extensions_start_time{};
 

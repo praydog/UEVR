@@ -362,12 +362,7 @@ void FFakeStereoRenderingHook::attempt_hook_fsceneview_constructor() {
         return;
     }
     
-    auto& vr = VR::get();
-
-    if (!vr->is_ghosting_fix_enabled() && !vr->is_splitscreen_compatibility_enabled()) {
-        return;
-    }
-
+    // just try to find it before ghosting fix is even enabled
     if (m_asynchronous_scan->value()) {
         static std::future<bool> future = std::async(std::launch::async, detail::pre_find_fsceneview_constructor);
 
@@ -377,6 +372,12 @@ void FFakeStereoRenderingHook::attempt_hook_fsceneview_constructor() {
         } else if (future.valid()) {
             return;
         }
+    }
+
+    auto& vr = VR::get();
+
+    if (!vr->is_ghosting_fix_enabled() && !vr->is_splitscreen_compatibility_enabled()) {
+        return;
     }
 
     utility::ScopeGuard _{[&]() {
@@ -2494,7 +2495,10 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
         return g_hook->m_sceneview_data.constructor_hook.call<sdk::FSceneView*>(view, init_options, a3, a4);
     }
 
-    std::scoped_lock _{g_hook->m_sceneview_data.mtx};
+    if (g_hook->m_analyzing_view_extensions || !g_hook->m_has_view_extensions_installed) {
+        SPDLOG_INFO_ONCE("FSceneView constructor was called before view extensions were installed, aborting");
+        return g_hook->m_sceneview_data.constructor_hook.call<sdk::FSceneView*>(view, init_options, a3, a4);
+    }
 
     auto init_options_ue5 = (sdk::FSceneViewInitOptionsUE5*)init_options;
 
@@ -3327,8 +3331,9 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
         }
 
         // Will get called when the view extensions are finally hooked.
-        RenderThreadWorker::get().enqueue([]() {
-            g_hook->m_analyzing_view_extensions = false;
+        RenderThreadWorker::get().enqueue([this]() {
+            this->m_analyzing_view_extensions = false;
+            this->m_has_view_extensions_installed = true;
         });
 
         // overwrite the vtable
@@ -4306,11 +4311,14 @@ uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoR
     }
 
     if (!is_stereo_enabled || (vr->is_using_afr() && !vr->is_splitscreen_compatibility_enabled())) {
+        // We need to know about the second scene state to fix ghosting, so set the view count to 2
+        // after we know about it, we can continue returning 1.
         if (is_stereo_enabled && vr->is_ghosting_fix_enabled() && vr->is_using_afr() &&
             g_hook->m_sceneview_data.known_scene_states.size() < 2 && g_hook->m_fixed_localplayer_view_count &&
-            !!g_hook->m_sceneview_data.constructor_hook)
+            !!g_hook->m_sceneview_data.constructor_hook && g_hook->m_has_view_extensions_installed)
         {
-            return 2; // We need to know about the second scene state to fix ghosting
+            // Only works correctly if view extensions are installed, so we can reset the view count to 1 without crashing
+            return 2;
         }
 
         return 1;
