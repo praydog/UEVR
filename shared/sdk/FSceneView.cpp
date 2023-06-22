@@ -89,6 +89,9 @@ std::optional<uintptr_t> FSceneView::get_constructor_address() {
 
         std::unordered_set<uintptr_t> seen_ips{};
 
+        const wchar_t target_string[] = L"vr.InstancedStereo";
+        const size_t target_length = sizeof(target_string) - sizeof(wchar_t);  // Do not count the null terminator
+
         for (const auto& translucent_function : translucent_functions) {
             SPDLOG_INFO("[FSceneView] Exhaustively searching for references to vr.InstancedStereo in 0x{:x}", translucent_function);
 
@@ -115,11 +118,11 @@ std::optional<uintptr_t> FSceneView::get_constructor_address() {
                 try {
                     const auto potential_string = (wchar_t*)*displacement;
 
-                    if (IsBadReadPtr(potential_string, sizeof(wchar_t) * 2)) {
+                    if (IsBadReadPtr(potential_string, target_length)) {
                         return utility::ExhaustionResult::CONTINUE;
                     }
 
-                    if (std::wstring_view{ potential_string } == L"vr.InstancedStereo") {
+                    if (std::memcmp(potential_string, target_string, target_length) == 0) {
                         SPDLOG_INFO("[FSceneView] Found correct displacement at 0x{:x}", ip);
                         is_correct_function = true;
                         return utility::ExhaustionResult::BREAK;
