@@ -2485,6 +2485,10 @@ constexpr auto INIT_OPTION_SCENE_STATE_INTERFACE_OFFSET = 0xB8;
 constexpr auto INIT_OPTIONS_PROJECTION_MATRIX_OFFSET = 0x50;
 constexpr auto INIT_OPTIONS_STEREO_PASS_OFFSET = 0x108;
 
+bool FFakeStereoRenderingHook::is_in_viewport_client_draw() const {
+    return m_in_viewport_client_draw && GameThreadWorker::get().is_same_thread();
+}
+
 // FSceneView constructor hook
 sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView* view, sdk::FSceneViewInitOptions* init_options, void* a3, void* a4) {
     SPDLOG_INFO_ONCE("Called FSceneView constructor for the first time");

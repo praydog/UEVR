@@ -269,9 +269,7 @@ public:
         calculate_stereo_view_offset(nullptr, view_index, view_rotation, world_to_meters, view_location);
     }
 
-    bool is_in_viewport_client_draw() const {
-        return m_in_viewport_client_draw;
-    }
+    bool is_in_viewport_client_draw() const;
 
     bool is_ignoring_next_viewport_draw() const {
         return m_ignore_next_viewport_draw;
