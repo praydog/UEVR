@@ -9,6 +9,10 @@
 #include <spdlog/spdlog.h>
 #include <windows.h>
 
+#include <utility/String.hpp>
+
+#include "threading/GameThreadWorker.hpp"
+#include "ConsoleManager.hpp"
 #include "TArray.hpp"
 
 namespace sdk {
@@ -17,7 +21,7 @@ struct TConsoleVariableData {
     static inline std::recursive_mutex s_mutex{};
     static inline std::unordered_map<TConsoleVariableData*, bool> s_valid_states{};
 
-    void set(T value) {
+    bool set(T value) {
         {
             std::scoped_lock _{s_mutex};
 
@@ -34,12 +38,13 @@ struct TConsoleVariableData {
             }
 
             if (!s_valid_states[this]) {
-                return;
+                return false;
             }
         }
 
         this->values[0] = value;
         this->values[1] = value;
+        return true;
     }
 
     T get(int index = 0) const {
@@ -136,17 +141,61 @@ public:
     }
 
     template<typename T>
+    void set_via_console_manager(T value) {
+        if (m_name.empty()) {
+            return;
+        }
+
+        if (m_real_cvar != nullptr) {
+            GameThreadWorker::get().enqueue([cvar = m_real_cvar, value]() {
+                cvar->Set(std::to_wstring(value).c_str());
+            });
+
+            return;
+        }
+
+        try {
+            const auto console_manager = sdk::FConsoleManager::get();
+
+            if (console_manager != nullptr) {
+                auto cvar = (sdk::IConsoleVariable*)console_manager->find(m_name);
+
+                if (cvar != nullptr) {
+                    m_real_cvar = cvar;
+                    spdlog::info("Fallback to real cvar for {}", utility::narrow(m_name));
+
+                    GameThreadWorker::get().enqueue([cvar, value]() {
+                        cvar->Set(std::to_wstring(value).c_str());
+                    });
+                }
+            }
+        } catch(...) {
+            
+        }
+    }
+
+    template<typename T>
     void set(T value) {
         if (this->m_cvar == nullptr || *this->m_cvar == nullptr) {
+            set_via_console_manager(value);
             return;
         }
 
         auto data = *(TConsoleVariableData<T>**)this->m_cvar;
-        data->set(value);
+        if (!data->set(value)) {
+            set_via_console_manager(value);
+        }
     }
 
     ConsoleVariableDataWrapper(uintptr_t address)
         : m_cvar{ (void**)address }
+    {
+
+    }
+
+    ConsoleVariableDataWrapper(uintptr_t address, const std::wstring& name)
+        : m_cvar{ (void**)address },
+        m_name{ name }
     {
 
     }
@@ -156,7 +205,9 @@ public:
     }
 
 private:
-    void** m_cvar;
+    void** m_cvar{nullptr};
+    std::wstring m_name{L""};
+    sdk::IConsoleVariable* m_real_cvar{nullptr};
 };
 
 // In some games, likely due to obfuscation, the cvar description is missing

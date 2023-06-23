@@ -311,13 +311,39 @@ std::optional<ConsoleVariableDataWrapper> find_cvar_data(std::wstring_view modul
         SPDLOG_INFO("Found {} at {:x}", utility::narrow(name.data()), (uintptr_t)*result);
     }
 
-    return result;
+    return ConsoleVariableDataWrapper{*result, name.data()};
 }
 
 IConsoleVariable** find_cvar(std::wstring_view module_name, std::wstring_view name, bool stop_at_first_mov) {
     SPDLOG_INFO("Attempting to locate {} {} cvar", utility::narrow(module_name.data()), utility::narrow(name.data()));
 
+    
     const auto module = sdk::get_ue_module(module_name.data());
+
+    // Attempt to locate it by way of the console manager first.
+    try {
+        const auto console_manager = sdk::FConsoleManager::get();
+
+        if (console_manager != nullptr) {
+            const auto cvar = console_manager->find(name.data());
+
+            if (cvar != nullptr) {
+                const auto module_data = utility::scan_ptr(module, (uintptr_t)cvar);
+
+                if (module_data) {
+                    SPDLOG_INFO("Found {} at {:x} (via console manager)", utility::narrow(name.data()), (uintptr_t)*module_data);
+                    return (IConsoleVariable**)*module_data;
+                } else {
+                    SPDLOG_ERROR("Failed to find {} in module data!", utility::narrow(name.data()));
+                }
+            } else {
+                SPDLOG_ERROR("Failed to find {} in console manager!", utility::narrow(name.data()));
+            }
+        }
+    } catch(...) {
+
+    }
+
     const auto str = utility::scan_string(module, name.data());
 
     if (!str) {
@@ -328,7 +354,7 @@ IConsoleVariable** find_cvar(std::wstring_view module_name, std::wstring_view na
     const auto str_ref = utility::scan_displacement_reference(module, *str);
 
     if (!str_ref) {
-        SPDLOG_ERROR("Failed to find {} string reference!");
+        SPDLOG_ERROR("Failed to find {} string reference!", utility::narrow(name.data()));
         return nullptr;
     }
 
@@ -387,13 +413,7 @@ bool set_cvar_data_int(std::wstring_view module, std::wstring_view name, int val
         return false;
     }
 
-    auto cvar = cvar_data->get<int>();
-
-    if (cvar == nullptr) {
-        return false;
-    }
-
-    cvar->set(value);
+    cvar_data->set(value);
     return true;
 } catch (...) {
     static std::unordered_map<std::wstring, bool> bad_cvars{};
@@ -414,13 +434,7 @@ bool set_cvar_data_float(std::wstring_view module, std::wstring_view name, float
         return false;
     }
 
-    auto cvar = cvar_data->get<float>();
-
-    if (cvar == nullptr) {
-        return false;
-    }
-
-    cvar->set(value);
+    cvar_data->set(value);
     return true;
 } catch (...) {
     static std::unordered_map<std::wstring, bool> bad_cvars{};
