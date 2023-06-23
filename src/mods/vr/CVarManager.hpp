@@ -189,7 +189,7 @@ private:
         
         // Floats
         std::make_unique<CVarStandard>(L"Renderer", L"r.Upscale.Softness", CVar::Type::FLOAT, 0.0f, 1.0f),
-        std::make_unique<CVarStandard>(L"Renderer", L"r.ScreenPercentage", CVar::Type::FLOAT, 10.0f, 150.0f),
+        std::make_unique<CVarStandard>(L"Core", L"r.ScreenPercentage", CVar::Type::FLOAT, 10.0f, 150.0f),
     };
 
     static inline std::vector<std::shared_ptr<CVarData>> s_default_data_cvars {
