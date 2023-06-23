@@ -12,6 +12,7 @@ namespace pixel_shader1 {
 }
 
 #include <utility/ScopeGuard.hpp>
+#include <utility/Logging.hpp>
 
 #include "Framework.hpp"
 #include "../VR.hpp"
@@ -784,7 +785,7 @@ void D3D11Component::copy_tex(ID3D11Resource* src, ID3D11Resource* dst) {
 }
 
 bool D3D11Component::setup() {
-    spdlog::info("[VR] Setting up D3D11 textures...");
+    SPDLOG_INFO_EVERY_N_SEC(1, "[VR] Setting up D3D11 textures...");
 
     on_reset(VR::get().get());
 
@@ -809,7 +810,7 @@ bool D3D11Component::setup() {
     }
 
     if (backbuffer == nullptr) {
-        spdlog::error("[VR] Failed to get back buffer (D3D11).");
+        SPDLOG_ERROR_EVERY_N_SEC(1, "[VR] Failed to get back buffer (D3D11).");
         return false;
     }
 

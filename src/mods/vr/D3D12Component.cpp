@@ -1,6 +1,7 @@
 #include <openvr.h>
 #include <utility/String.hpp>
 #include <utility/ScopeGuard.hpp>
+#include <utility/Logging.hpp>
 
 #include "Framework.hpp"
 #include "../VR.hpp"
@@ -820,7 +821,7 @@ void D3D12Component::on_reset(VR* vr) {
 }
 
 bool D3D12Component::setup() {
-    spdlog::info("[VR] Setting up d3d12 textures...");
+    SPDLOG_INFO_EVERY_N_SEC(1, "[VR] Setting up d3d12 textures...");
 
     auto vr = VR::get();
     on_reset(vr.get());
@@ -841,7 +842,7 @@ bool D3D12Component::setup() {
     }
 
     if (backbuffer == nullptr) {
-        spdlog::error("[VR] Failed to get back buffer (D3D12).");
+        SPDLOG_ERROR_EVERY_N_SEC(1, "[VR] Failed to get back buffer (D3D12).");
         return false;
     }
 
@@ -851,7 +852,7 @@ bool D3D12Component::setup() {
 
     ComPtr<ID3D12Resource> real_backbuffer{};
     if (FAILED(swapchain->GetBuffer(0, IID_PPV_ARGS(&real_backbuffer)))) {
-        spdlog::error("[VR] Failed to get back buffer (D3D12).");
+        spdlog::error("[VR] Failed to get real back buffer (D3D12).");
         return false;
     }
 
