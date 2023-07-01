@@ -1847,16 +1847,6 @@ void VR::on_draw_ui() {
     ZoneScopedN(__FUNCTION__);
 
     // create VR tree entry in menu (imgui)
-    if (get_runtime()->loaded) {
-        ImGui::SetNextItemOpen(m_has_hw_scheduling, ImGuiCond_::ImGuiCond_FirstUseEver);
-    } else {
-        if (m_openvr->error && !m_openvr->dll_missing) {
-            ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_FirstUseEver);
-        } else {
-            ImGui::SetNextItemOpen(false, ImGuiCond_::ImGuiCond_FirstUseEver);
-        }
-    }
-
     ImGui::PushID("VR");
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
     if (!m_fake_stereo_hook->has_attempted_to_hook_engine() || !m_fake_stereo_hook->has_attempted_to_hook_slate()) {
@@ -1905,6 +1895,14 @@ void VR::on_draw_ui() {
         }
 
         return;
+    }
+
+    if (m_has_hw_scheduling) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+        ImGui::TextWrapped("WARNING: Hardware-accelerated GPU scheduling is enabled. This may cause the game to run slower.");
+        ImGui::TextWrapped("Go into your Windows Graphics settings and disable \"Hardware-accelerated GPU scheduling\"");
+        ImGui::PopStyleColor();
+        ImGui::TextWrapped("Note: This is only necessary if you are experiencing performance issues.");
     }
 
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
@@ -2079,14 +2077,6 @@ void VR::on_draw_ui() {
     ImGui::DragFloat4("Raw Right", (float*)&m_raw_projections[1], 0.01f, -100.0f, 100.0f);
 
     ImGui::TextWrapped("Hardware scheduling: %s", m_has_hw_scheduling ? "Enabled" : "Disabled");
-
-    if (m_has_hw_scheduling) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-        ImGui::TextWrapped("WARNING: Hardware-accelerated GPU scheduling is enabled. This may cause the game to run slower.");
-        ImGui::TextWrapped("Go into your Windows Graphics settings and disable \"Hardware-accelerated GPU scheduling\"");
-        ImGui::PopStyleColor();
-        ImGui::TextWrapped("Note: This is only necessary if you are experiencing performance issues.");
-    }
 }
 
 Vector4f VR::get_position(uint32_t index, bool grip) const {
