@@ -2637,6 +2637,8 @@ void FFakeStereoRenderingHook::setup_viewpoint(ISceneViewExtension* extension, v
 
     // Fix localplayer view count
     if (!attempted_hook) {
+        SPDLOG_INFO("Attempting to find caller of ISceneViewExtension::SetupViewPoint");
+
         attempted_hook = true;
         const auto return_address = (uintptr_t)_ReturnAddress();
         const auto caller = utility::find_virtual_function_start(return_address);
@@ -2807,8 +2809,11 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
     // If we couldn't find GetDesiredNumberOfViews, we need to set the view count to 1 as a workaround
     // TODO: Check if this can cause a memory leak, I don't know who is resonsible
     // for destroying the views in the array
-    if (vr->is_using_afr() && (view_family.views.count == 2 || view_family.views.count == 3)) {
-        SPDLOG_INFO_ONCE("Setting view count to 1");
+    // This check might seem kind of arbitrary, but sometimes (rarely) the offset
+    // for the views can be wrong so if the count is some sane number
+    // then we can assume that the offset is correct
+    if (vr->is_using_afr() && view_family.views.count >= 2 && view_family.views.count <= 4) {
+        SPDLOG_INFO_ONCE("Setting view count to 1 (from {})", view_family.views.count);
         view_family.views.count = 1;
     }
 }
