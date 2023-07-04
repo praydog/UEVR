@@ -1192,7 +1192,7 @@ void Framework::draw_about() {
 
     ImGui::Text("Author: praydog");
     ImGui::Text("Unreal Engine VR");
-    ImGui::Text("https://github.com/praydog/Framework");
+    ImGui::Text("https://github.com/praydog/UEVR");
     ImGui::Text("http://praydog.com");
 
     if (ImGui::CollapsingHeader("Licenses")) {
