@@ -89,7 +89,7 @@ std::optional<FName::ConstructorFn> get_constructor_from_candidate(std::wstring_
     SPDLOG_INFO("FName::get_constructor_from_candidate: str_ref={:x}", *str_ref);
 
     const auto next_instr = *str_ref + 4;
-    const auto call_instr = utility::scan_disasm(next_instr, 10, "E8");
+    const auto call_instr = utility::scan_mnemonic(next_instr, 10, "CALL");
 
     if (!call_instr) {
         SPDLOG_ERROR("FName::get_constructor_from_candidate: Failed to get call instruction for {}", utility::narrow(str_candidate.data()));
@@ -97,10 +97,38 @@ std::optional<FName::ConstructorFn> get_constructor_from_candidate(std::wstring_
     }
 
     SPDLOG_INFO("FName::get_constructor_from_candidate: call_instr={:x}", *call_instr);
-    const auto result = utility::calculate_absolute(*call_instr + 1);
 
-    SPDLOG_INFO("FName::get_constructor_from_candidate: result={:x}", result);
-    return (FName::ConstructorFn)result;
+    const auto decoded = utility::decode_one((uint8_t*)*call_instr);
+
+    if (!decoded) {
+        SPDLOG_ERROR("FName::get_constructor_from_candidate: Failed to decode call instruction for {}", utility::narrow(str_candidate.data()));
+        return std::nullopt;
+    }
+
+    const auto displacement = utility::resolve_displacement(*call_instr);
+
+    if (!displacement) {
+        SPDLOG_ERROR("FName::get_constructor_from_candidate: Failed to resolve displacement for {}", utility::narrow(str_candidate.data()));
+        return std::nullopt;
+    }
+
+    std::optional<FName::ConstructorFn> result{};
+
+    if (decoded->BranchInfo.IsIndirect) {
+        SPDLOG_INFO("FName::get_constructor_from_candidate: indirect call");
+        if (*displacement == 0) {
+            SPDLOG_ERROR("FName::get_constructor_from_candidate: indirect call with null displacement");
+            return std::nullopt;
+        }
+
+        result = *(FName::ConstructorFn*)*displacement;
+    } else {
+        SPDLOG_INFO("FName::get_constructor_from_candidate: direct call");
+        result = (FName::ConstructorFn)*displacement;
+    }
+
+    SPDLOG_INFO("FName::get_constructor_from_candidate: result={:x}", (uintptr_t)*result);
+    return result;
 }
 }
 
