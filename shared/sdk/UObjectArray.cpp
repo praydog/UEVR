@@ -143,6 +143,35 @@ FUObjectArray* FUObjectArray::get() {
         // do an initial first pass as a test
         SPDLOG_INFO("[FUObjectArray::get] {} objects", result->get_object_count());
 
+        // Locate the distance between FUObjectItems
+        {
+            const auto first_item = result->get_object(0);
+
+            for (auto i = sizeof(void*); i < 0x50; i+= sizeof(void*)) {
+                const auto potential_next_item = (void*)((uintptr_t)first_item + i);
+                const auto potential_obj = *(void**)potential_next_item;
+
+                // Make sure the "object" is valid
+                if (potential_obj == nullptr || IsBadReadPtr(potential_obj, sizeof(void*)) || ((uintptr_t)potential_obj & 1) != 0) {
+                    continue;
+                }
+
+                // Now make sure the vtable is valid too
+                if (*(void**)potential_obj == nullptr || IsBadReadPtr(*(void**)potential_obj, sizeof(void*)) || ((uintptr_t)*(void**)potential_obj & 1) != 0) {
+                    continue;
+                }
+
+                // Make sure the first virtual function exists
+                if (**(void***)potential_obj == nullptr || IsBadReadPtr(**(void***)potential_obj, sizeof(void*))) {
+                    continue;
+                }
+
+                SPDLOG_INFO("[FUObjectArray::get] FUObjectItem distance: 0x{:x}", i);
+                s_item_distance = i;
+                break;
+            }
+        }
+
         for (auto i = 0; i < result->get_object_count(); ++i) {
             auto item = result->get_object(i);
             if (item == nullptr) {

@@ -42,10 +42,10 @@ struct FUObjectArray {
                 return nullptr;
             }
 
-            return (FUObjectItem*)((uintptr_t)chunk + (chunk_offset * sizeof(FUObjectItem)));
+            return (FUObjectItem*)((uintptr_t)chunk + (chunk_offset * s_item_distance));
         }
 
-        return (FUObjectItem*)((uintptr_t)get_objects_ptr() + (index * sizeof(FUObjectItem)));
+        return (FUObjectItem*)((uintptr_t)get_objects_ptr() + (index * s_item_distance));
     }
 
     void* get_objects_ptr() {
@@ -56,5 +56,6 @@ private:
     constexpr static inline auto OBJECTS_PER_CHUNK = 64 * 1024;
     constexpr static inline auto OBJECTS_OFFSET = 0x10;
     static inline bool s_is_chunked{false};
+    static inline int32_t s_item_distance{sizeof(FUObjectItem)}; // bruteforced later for older versions
 };
 }
