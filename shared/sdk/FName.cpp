@@ -163,85 +163,163 @@ std::optional<FName::ConstructorFn> FName::get_constructor() {
     return result;
 }
 
+namespace detail {
+// Alternative for ToString if a majority of the calls are inlined
+// not all of them are though.
+std::optional<FName::ToStringFn> inlined_find_to_string() {
+    SPDLOG_INFO("FName::get_to_string: inlined_find_to_string");
+
+    const auto module = sdk::get_ue_module(L"Engine");
+
+    if (module == nullptr) {
+        SPDLOG_ERROR("FName::get_to_string: Failed to get module");
+        return std::nullopt;
+    }
+
+    const auto str_data = utility::scan_string(module, L"Commandlet %s finished execution (result %d)");
+
+    if (!str_data) {
+        SPDLOG_ERROR("FName::get_to_string: Failed to get string data");
+        return std::nullopt;
+    }
+    
+    SPDLOG_INFO("FName::get_to_string: str_data={:x}", *str_data);
+
+    const auto str_ref = utility::scan_displacement_reference(module, *str_data);
+
+    if (!str_ref) {
+        SPDLOG_ERROR("FName::get_to_string: Failed to get string reference");
+        return std::nullopt;
+    }
+
+    SPDLOG_INFO("FName::get_to_string: str_ref={:x}", *str_ref);
+
+    auto instructions = utility::get_disassembly_behind(*str_ref);
+
+    if (instructions.empty()) {
+        SPDLOG_ERROR("FName::get_to_string: Failed to get instructions");
+        return std::nullopt;
+    }
+
+    std::optional<FName::ToStringFn> result{};
+
+    std::reverse(instructions.begin(), instructions.end());
+    for (auto& instr : instructions) {
+        if (std::string_view{instr.instrux.Mnemonic}.starts_with("CALL")) {
+            const auto displacement = utility::resolve_displacement(instr.addr);
+
+            if (instr.instrux.BranchInfo.IsIndirect) {
+                if (!IsBadReadPtr((void*)*displacement, sizeof(void*))) {
+                    result = *(FName::ToStringFn*)*displacement;
+                }
+            } else {
+                result = (FName::ToStringFn)*displacement;
+            }
+            
+            break;
+        }
+    }
+
+    if (result) {
+        SPDLOG_INFO("FName::get_to_string (inlined alternative): result={:x}", (uintptr_t)*result);
+    }
+
+    return result;
+}
+
+std::optional<FName::ToStringFn> standard_find_to_string() {
+    SPDLOG_INFO("FName::get_to_string: standard_find_to_string");
+
+    const auto module = sdk::get_ue_module(L"Engine");
+
+    if (module == nullptr) {
+        SPDLOG_ERROR("FName::get_to_string: Failed to get module");
+        return std::nullopt;
+    }
+
+    const auto str_data = utility::scan_string(module, L"TAutoWeakObjectPtr<%s%s>");
+
+    if (!str_data) {
+        SPDLOG_ERROR("FName::get_to_string: Failed to get string data");
+        return std::nullopt;
+    }
+    
+    SPDLOG_INFO("FName::get_to_string: str_data={:x}", *str_data);
+
+    const auto str_ref = utility::scan_displacement_reference(module, *str_data);
+
+    if (!str_ref) {
+        SPDLOG_ERROR("FName::get_to_string: Failed to get string reference");
+        return std::nullopt;
+    }
+
+    SPDLOG_INFO("FName::get_to_string: str_ref={:x}", *str_ref);
+
+    const auto containing_func = utility::find_function_start(*str_ref);
+
+    if (!containing_func) {
+        SPDLOG_ERROR("FName::get_to_string: Failed to find containing function");
+        return std::nullopt;
+    }
+
+    SPDLOG_INFO("FName::get_to_string: containing_func={:x}", *containing_func);
+
+    std::optional<uintptr_t> last_direct_call{};
+    std::optional<FName::ToStringFn> result{};
+
+    // It's known that FName::ToString precedes a string reference to TAutoWeakObjectPtr<%s%s>.
+    // So we must keep track of each direct call that precedes it
+    // because there's an indirect call that also precedes it.
+    // TODO: Possibly fix this for modular builds.
+    utility::exhaustive_decode((uint8_t*)*containing_func, 100, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
+        if (result) {
+            return utility::ExhaustionResult::BREAK;
+        }
+
+        if (std::string_view{ix.Mnemonic}.starts_with("CALL") && !ix.BranchInfo.IsIndirect) {
+            last_direct_call = utility::calculate_absolute((ip + ix.Length) - 4);
+            SPDLOG_INFO("Found a direct call to {:x}", *last_direct_call);
+        }
+
+        if (std::string_view{ix.Mnemonic}.starts_with("CALL")) {
+            return utility::ExhaustionResult::STEP_OVER;
+        }
+
+        const auto displacement = utility::resolve_displacement(ip);
+
+        if (displacement && *displacement == str_data) {
+            if (last_direct_call) {
+                result = (FName::ToStringFn)*last_direct_call;
+            }
+
+            return utility::ExhaustionResult::BREAK;
+        }
+
+        return utility::ExhaustionResult::CONTINUE;
+    });
+
+    if (!result) {
+        SPDLOG_ERROR("FName::get_to_string: Failed to find ToString function");
+        return std::nullopt;
+    }
+
+    SPDLOG_INFO("FName::get_to_string: result={:x}", (uintptr_t)*result);
+
+    return result;
+}
+}
+
 std::optional<FName::ToStringFn> FName::get_to_string() {
     static auto result = []() -> std::optional<FName::ToStringFn> {
         SPDLOG_INFO("FName::get_to_string");
 
-        const auto module = sdk::get_ue_module(L"Engine");
+        const auto inlined_result = detail::inlined_find_to_string();
 
-        if (module == nullptr) {
-            SPDLOG_ERROR("FName::get_to_string: Failed to get module");
-            return std::nullopt;
+        if (inlined_result) {
+            return inlined_result;
         }
 
-        const auto str_data = utility::scan_string(module, L"TAutoWeakObjectPtr<%s%s>");
-        if (!str_data) {
-            SPDLOG_ERROR("FName::get_to_string: Failed to get string data");
-            return std::nullopt;
-        }
-        
-        SPDLOG_INFO("FName::get_to_string: str_data={:x}", *str_data);
-
-        const auto str_ref = utility::scan_displacement_reference(module, *str_data);
-
-        if (!str_ref) {
-            SPDLOG_ERROR("FName::get_to_string: Failed to get string reference");
-            return std::nullopt;
-        }
-
-        SPDLOG_INFO("FName::get_to_string: str_ref={:x}", *str_ref);
-
-        const auto containing_func = utility::find_function_start(*str_ref);
-
-        if (!containing_func) {
-            SPDLOG_ERROR("FName::get_to_string: Failed to find containing function");
-            return std::nullopt;
-        }
-
-        SPDLOG_INFO("FName::get_to_string: containing_func={:x}", *containing_func);
-
-        std::optional<uintptr_t> last_direct_call{};
-        std::optional<FName::ToStringFn> result{};
-
-        // It's known that FName::ToString precedes a string reference to TAutoWeakObjectPtr<%s%s>.
-        // So we must keep track of each direct call that precedes it
-        // because there's an indirect call that also precedes it.
-        // TODO: Possibly fix this for modular builds.
-        utility::exhaustive_decode((uint8_t*)*containing_func, 100, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
-            if (result) {
-                return utility::ExhaustionResult::BREAK;
-            }
-
-            if (std::string_view{ix.Mnemonic}.starts_with("CALL") && !ix.BranchInfo.IsIndirect) {
-                last_direct_call = utility::calculate_absolute((ip + ix.Length) - 4);
-                SPDLOG_INFO("Found a direct call to {:x}", *last_direct_call);
-            }
-
-            if (std::string_view{ix.Mnemonic}.starts_with("CALL")) {
-                return utility::ExhaustionResult::STEP_OVER;
-            }
-
-            const auto displacement = utility::resolve_displacement(ip);
-
-            if (displacement && *displacement == str_data) {
-                if (last_direct_call) {
-                    result = (FName::ToStringFn)*last_direct_call;
-                }
-
-                return utility::ExhaustionResult::BREAK;
-            }
-
-            return utility::ExhaustionResult::CONTINUE;
-        });
-
-        if (!result) {
-            SPDLOG_ERROR("FName::get_to_string: Failed to find ToString function");
-            return std::nullopt;
-        }
-
-        SPDLOG_INFO("FName::get_to_string: result={:x}", (uintptr_t)*result);
-
-        return result;
+        return detail::standard_find_to_string();
     }();
 
     return result;
@@ -268,6 +346,9 @@ std::wstring FName::to_string() const {
 
     const auto fn = *to_string;
     TArray<wchar_t> buffer{};
+    /*wchar_t scratch[512]{};
+    buffer.data = scratch;
+    buffer.capacity = 512 * sizeof(wchar_t);*/
 
     fn(this, &buffer);
 

@@ -101,7 +101,7 @@ FUObjectArray* FUObjectArray::get() {
             }
             
             // At this point we've found it, check if it's a chunked array or not, and set a static variable
-            if (IsBadReadPtr(*(void**)&potential_max_chunks, sizeof(void*)) && potential_max_chunks > 0 && potential_num_chunks > 0) {
+            if (potential_max_chunks > 0 && potential_num_chunks > 0 && potential_max_chunks < 1000 && potential_num_chunks <= potential_max_chunks) {
                 try {
                     SPDLOG_INFO("max_chunks: {}, num_chunks: {}", potential_max_chunks, potential_num_chunks);
 
@@ -141,7 +141,9 @@ FUObjectArray* FUObjectArray::get() {
         }
 
         // do an initial first pass as a test
-        /*for (auto i = 0; i < result->get_object_count(); ++i) {
+        SPDLOG_INFO("[FUObjectArray::get] {} objects", result->get_object_count());
+
+        for (auto i = 0; i < result->get_object_count(); ++i) {
             auto item = result->get_object(i);
             if (item == nullptr) {
                 continue;
@@ -159,9 +161,9 @@ FUObjectArray* FUObjectArray::get() {
 
                 SPDLOG_INFO("{} {}", i, utility::narrow(name));
             } catch(...) {
-
+                SPDLOG_ERROR("Failed to get name {}", i);
             }
-        }*/
+        }
 
         return result;
     }();

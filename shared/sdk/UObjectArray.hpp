@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 namespace sdk {
 class UObjectBase;
 
@@ -19,7 +21,8 @@ struct FUObjectArray {
 
     int32_t get_object_count() {
         if (s_is_chunked) {
-            return *(int32_t*)((uintptr_t)this + OBJECTS_OFFSET + sizeof(void*) + sizeof(void*) + 0x4);
+            constexpr auto offs = OBJECTS_OFFSET + sizeof(void*) + sizeof(void*) + 0x4;
+            return *(int32_t*)((uintptr_t)this + offs);
         }
 
         return *(int32_t*)((uintptr_t)this + OBJECTS_OFFSET + 0x8);
