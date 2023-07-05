@@ -62,12 +62,12 @@ FetchContent_Declare(bddisasm
 )
 FetchContent_MakeAvailable(bddisasm)
 
-message(STATUS "Fetching kananlib (9464688cf25c2663a75cd995e5dee847b35694e2)...")
+message(STATUS "Fetching kananlib (68354b8f7008be5df42a1940fed1391383262e86)...")
 FetchContent_Declare(kananlib
 	GIT_REPOSITORY
 		"https://github.com/cursey/kananlib"
 	GIT_TAG
-		9464688cf25c2663a75cd995e5dee847b35694e2
+		68354b8f7008be5df42a1940fed1391383262e86
 )
 FetchContent_MakeAvailable(kananlib)
 
@@ -328,6 +328,7 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/UEngine.cpp"
 	"shared/sdk/UGameEngine.cpp"
 	"shared/sdk/UGameViewportClient.cpp"
+	"shared/sdk/UObjectArray.cpp"
 	"shared/sdk/Utility.cpp"
 	"shared/sdk/CVar.hpp"
 	"shared/sdk/ConsoleManager.hpp"
@@ -346,6 +347,7 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/UEngine.hpp"
 	"shared/sdk/UGameEngine.hpp"
 	"shared/sdk/UGameViewportClient.hpp"
+	"shared/sdk/UObjectArray.hpp"
 	"shared/sdk/Utility.hpp"
 	"shared/sdk/threading/GameThreadWorker.hpp"
 	"shared/sdk/threading/RHIThreadWorker.hpp"
@@ -411,6 +413,7 @@ list(APPEND sdk-nolog_SOURCES
 	"shared/sdk/UEngine.cpp"
 	"shared/sdk/UGameEngine.cpp"
 	"shared/sdk/UGameViewportClient.cpp"
+	"shared/sdk/UObjectArray.cpp"
 	"shared/sdk/Utility.cpp"
 	"shared/sdk/CVar.hpp"
 	"shared/sdk/ConsoleManager.hpp"
@@ -429,6 +432,7 @@ list(APPEND sdk-nolog_SOURCES
 	"shared/sdk/UEngine.hpp"
 	"shared/sdk/UGameEngine.hpp"
 	"shared/sdk/UGameViewportClient.hpp"
+	"shared/sdk/UObjectArray.hpp"
 	"shared/sdk/Utility.hpp"
 	"shared/sdk/threading/GameThreadWorker.hpp"
 	"shared/sdk/threading/RHIThreadWorker.hpp"
