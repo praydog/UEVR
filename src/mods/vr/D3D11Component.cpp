@@ -209,7 +209,7 @@ bool D3D11Component::TextureContext::clear_rtv(float* color) {
 vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     if (m_force_reset || m_last_afr_state != vr->is_using_afr()) {
         if (!setup()) {
-            spdlog::error("Failed to setup D3D11Component, trying again next frame");
+            SPDLOG_ERROR_EVERY_N_SEC(1, "Failed to setup D3D11Component, trying again next frame");
             m_force_reset = true;
             return vr::VRCompositorError_None;
         }

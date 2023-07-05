@@ -22,7 +22,7 @@ namespace vrmod {
 vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     if (m_force_reset || m_last_afr_state != vr->is_using_afr()) {
         if (!setup()) {
-            spdlog::error("[D3D12 VR] Could not set up, trying again next frame");
+            SPDLOG_ERROR_EVERY_N_SEC(1, "[D3D12 VR] Could not set up, trying again next frame");
             m_force_reset = true;
             return vr::VRCompositorError_None;
         }

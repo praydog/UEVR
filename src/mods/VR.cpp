@@ -1718,7 +1718,7 @@ void VR::on_present() {
     if (renderer == Framework::RendererType::D3D11) {
         // if we don't do this then D3D11 OpenXR freezes for some reason.
         if (!runtime->got_first_sync) {
-            spdlog::info("Attempting to sync!");
+            SPDLOG_INFO_EVERY_N_SEC(1, "Attempting to sync!");
             if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::LATE) {
                 runtime->synchronize_frame();
             }
