@@ -80,12 +80,12 @@ FUObjectArray* FUObjectArray::get() {
                 return utility::ExhaustionResult::CONTINUE;
             }
 
-            if (!IsBadReadPtr(*(void**)&potential_obj_first_gc_index, sizeof(void*))) {
+            if (!IsBadReadPtr(*(void**)&potential_obj_first_gc_index, sizeof(void*)) && (*(int64_t*)&potential_obj_first_gc_index & 1) == 0) {
                 SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to valid pointer", *displacement);
                 return utility::ExhaustionResult::CONTINUE;
             }
 
-            if (!IsBadReadPtr(*(void**)&potential_obj_max_objects_not_consid_by_gc, sizeof(void*))) {
+            if (!IsBadReadPtr(*(void**)&potential_obj_max_objects_not_consid_by_gc, sizeof(void*)) && (*(int64_t*)&potential_obj_max_objects_not_consid_by_gc & 1) == 0) {
                 SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to valid pointer", *displacement);
                 return utility::ExhaustionResult::CONTINUE;
             }
@@ -98,6 +98,30 @@ FUObjectArray* FUObjectArray::get() {
             if (potential_obj_obj_objects == nullptr || IsBadReadPtr(potential_obj_obj_objects, sizeof(void*))) {
                 SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to invalid pointer", *displacement);
                 return utility::ExhaustionResult::CONTINUE;
+            }
+
+            // Verify that the first object in the list is valid
+            {
+                const auto first_obj = *(void**)potential_obj_obj_objects;
+
+                if (first_obj == nullptr || IsBadReadPtr(first_obj, sizeof(void*))) {
+                    SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to invalid pointer @ first object", *displacement);
+                    return utility::ExhaustionResult::CONTINUE;
+                }
+
+                const auto first_vtable = *(void**)first_obj;
+
+                if (first_vtable == nullptr || IsBadReadPtr(first_vtable, sizeof(void*))) {
+                    SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to invalid pointer @ first vtable", *displacement);
+                    return utility::ExhaustionResult::CONTINUE;
+                }
+
+                const auto first_vfunc = *(void**)first_vtable;
+
+                if (first_vfunc == nullptr || IsBadReadPtr(first_vfunc, sizeof(void*))) {
+                    SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to invalid pointer @ first vfunc", *displacement);
+                    return utility::ExhaustionResult::CONTINUE;
+                }
             }
             
             // At this point we've found it, check if it's a chunked array or not, and set a static variable
