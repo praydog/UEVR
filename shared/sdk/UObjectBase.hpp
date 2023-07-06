@@ -1,0 +1,42 @@
+#pragma once
+
+#include "FName.hpp"
+
+namespace sdk {
+class UClass;
+class UObject;
+
+class UObjectBase {
+public:
+    void update_offsets();
+    std::wstring get_full_name() const;
+
+    UClass* get_class() const {
+        return *(UClass**)((uintptr_t)this + s_class_private_offset);
+    }
+
+    UObject* get_outer() const {
+        return *(UObject**)((uintptr_t)this + s_outer_private_offset);
+    }
+
+    FName& get_fname() const {
+        return *(FName*)((uintptr_t)this + s_fname_offset);
+    }
+
+    uint32_t get_object_flags() const {
+        return *(uint32_t*)((uintptr_t)this + s_object_flags_offset);
+    }
+
+    uint32_t get_internal_index() const {
+        return *(uint32_t*)((uintptr_t)this + s_internal_index_offset);
+    }
+
+private:
+    static inline bool s_attempted_update_offsets{false};
+    static inline uint32_t s_object_flags_offset{0x8};
+    static inline uint32_t s_internal_index_offset{0xC};
+    static inline uint32_t s_class_private_offset{0x10};
+    static inline uint32_t s_fname_offset{0x18};
+    static inline uint32_t s_outer_private_offset{0x20};
+};
+}

@@ -1,10 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include "UObjectBase.hpp"
 
 namespace sdk {
-class UObjectBase;
-
 struct FUObjectItem {
     UObjectBase* object{nullptr};
     int32_t flags{0};

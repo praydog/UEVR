@@ -265,7 +265,7 @@ FUObjectArray* FUObjectArray::get() {
                 return utility::ExhaustionResult::CONTINUE;
             }
 
-            SPDLOG_INFO("Found GUObjectArray at 0x{:x}", *displacement);
+            SPDLOG_INFO("[FUObjectArray::get] Found GUObjectArray at 0x{:x}", *displacement);
             result = potential_result;
             return utility::ExhaustionResult::BREAK;
         });
@@ -278,21 +278,30 @@ FUObjectArray* FUObjectArray::get() {
         // do an initial first pass as a test
         SPDLOG_INFO("[FUObjectArray::get] {} objects", result->get_object_count());
 
+        try {
+            if (auto item = result->get_object(0); item != nullptr) {
+                if (item->object != nullptr) {
+                    item->object->update_offsets();
+                }
+            }
+        } catch(...) {
+            SPDLOG_ERROR("[FUObjectArray::get] Failed to update offsets");
+        }
+
         for (auto i = 0; i < result->get_object_count(); ++i) {
             auto item = result->get_object(i);
             if (item == nullptr) {
                 continue;
             }
             
-            auto obj = *(void**)item;
+            auto obj = *(sdk::UObjectBase**)item;
 
             if (obj == nullptr || IsBadReadPtr(obj, sizeof(void*))) {
                 continue;
             }
 
-            FName* fname = (FName*)((uintptr_t)obj + 0x18);
             try {
-                const auto name = fname->to_string();
+                const auto name = obj->get_full_name();
 
                 SPDLOG_INFO("{} {}", i, utility::narrow(name));
             } catch(...) {
