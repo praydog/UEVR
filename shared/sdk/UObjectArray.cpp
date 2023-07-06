@@ -52,6 +52,11 @@ FUObjectArray* FUObjectArray::get() {
                 return utility::ExhaustionResult::CONTINUE;
             }
 
+            if (*displacement & 1 != 0) {
+                SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to odd alignment", *displacement);
+                return utility::ExhaustionResult::CONTINUE;
+            }
+
             // Now, we need to analyze this "structure" to see if it's actually a GUObjectArray
             // We need to make sure the integer values look integer-like, and if casting them
             // to 8 bytes, they must point to bad memory
