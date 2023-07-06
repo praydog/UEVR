@@ -156,12 +156,14 @@ FUObjectArray* FUObjectArray::get() {
             }
 
             if (!s_is_inlined_array) {
-                if (potential_obj_first_gc_index < 0 || potential_obj_last_non_gc_index < 0 || potential_obj_max_objects_not_consid_by_gc < 0) {
+                // Seen one of these be -1 normally, so we can't just rule out < 0, it has to be < -1
+                if (potential_obj_first_gc_index < -1 || potential_obj_last_non_gc_index < -1 || potential_obj_max_objects_not_consid_by_gc < -1) {
                     SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to negative values", *displacement);
                     return utility::ExhaustionResult::CONTINUE;
                 }
 
-                if (!IsBadReadPtr(*(void**)&potential_obj_first_gc_index, sizeof(void*)) && (*(int64_t*)&potential_obj_first_gc_index & 1) == 0) {
+                // Seems like this can fail on some, we'll just skip it and come up with a better heuristic
+                /*if (!IsBadReadPtr(*(void**)&potential_obj_first_gc_index, sizeof(void*)) && (*(int64_t*)&potential_obj_first_gc_index & 1) == 0) {
                     SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to valid pointer", *displacement);
                     return utility::ExhaustionResult::CONTINUE;
                 }
@@ -169,7 +171,7 @@ FUObjectArray* FUObjectArray::get() {
                 if (!IsBadReadPtr(*(void**)&potential_obj_max_objects_not_consid_by_gc, sizeof(void*)) && (*(int64_t*)&potential_obj_max_objects_not_consid_by_gc & 1) == 0) {
                     SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to valid pointer", *displacement);
                     return utility::ExhaustionResult::CONTINUE;
-                }
+                }*/
 
                 if (*(uint8_t*)&potential_obj_is_open_for_disregard_for_gc > 1) {
                     SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to invalid boolean", *displacement);
@@ -212,24 +214,13 @@ FUObjectArray* FUObjectArray::get() {
                 SPDLOG_INFO("GUObjectArray appears to not be chunked (max_chunks: {}, num_chunks: {})", potential_max_chunks, potential_num_chunks);
             }
 
-            SPDLOG_INFO("Found GUObjectArray at 0x{:x}", *displacement);
-            result = (FUObjectArray*)*displacement;
-            return utility::ExhaustionResult::BREAK;
-        });
+            // Now comes the real test, we need to check the entire size of the array and make sure that the pointers are valid
+            // Locate the distance between FUObjectItems
+            const auto potential_result = (FUObjectArray*)*displacement;
+            const auto first_item = potential_result->get_object(0);
+            bool distance_determined = false;
 
-        if (result == nullptr) {
-            SPDLOG_ERROR("[FUObjectArray::get] Failed to find GUObjectArray");
-            return nullptr;
-        }
-
-        // do an initial first pass as a test
-        SPDLOG_INFO("[FUObjectArray::get] {} objects", result->get_object_count());
-
-        // Locate the distance between FUObjectItems
-        {
-            const auto first_item = result->get_object(0);
-
-            for (auto i = sizeof(void*); i < 0x50; i+= sizeof(void*)) {
+            for (auto i = sizeof(void*); i < 0x50; i+= sizeof(void*)) try {
                 const auto potential_next_item = (void*)((uintptr_t)first_item + i);
                 const auto potential_obj = *(void**)potential_next_item;
 
@@ -250,9 +241,42 @@ FUObjectArray* FUObjectArray::get() {
 
                 SPDLOG_INFO("[FUObjectArray::get] FUObjectItem distance: 0x{:x}", i);
                 s_item_distance = i;
+                distance_determined = true;
                 break;
+            } catch(...) {
+                continue; // we can try again.
             }
+
+            if (!distance_determined) {
+                SPDLOG_ERROR("[FUObjectArray::get] Failed to determine FUObjectItem distance for {:x}, skipping", *displacement);
+                return utility::ExhaustionResult::CONTINUE;
+            }
+
+            // Now verify
+            for (auto i = 0; i < potential_result->get_object_count(); ++i) try {
+                const auto potential_obj = potential_result->get_object(i);
+
+                if (potential_obj == nullptr || IsBadReadPtr(potential_obj, sizeof(void*))) {
+                    SPDLOG_ERROR("[FUObjectArray::get] Failed to read potential object at index {} for {:x}, skipping", i, *displacement);
+                    return utility::ExhaustionResult::CONTINUE;
+                }
+            } catch(...) {
+                SPDLOG_ERROR("[FUObjectArray::get] Failed to read potential object at index {} for {:x}, skipping (exception)", i, *displacement);
+                return utility::ExhaustionResult::CONTINUE;
+            }
+
+            SPDLOG_INFO("Found GUObjectArray at 0x{:x}", *displacement);
+            result = potential_result;
+            return utility::ExhaustionResult::BREAK;
+        });
+
+        if (result == nullptr) {
+            SPDLOG_ERROR("[FUObjectArray::get] Failed to find GUObjectArray");
+            return nullptr;
         }
+
+        // do an initial first pass as a test
+        SPDLOG_INFO("[FUObjectArray::get] {} objects", result->get_object_count());
 
         for (auto i = 0; i < result->get_object_count(); ++i) {
             auto item = result->get_object(i);
