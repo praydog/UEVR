@@ -75,33 +75,8 @@ FUObjectArray* FUObjectArray::get() {
             int32_t& potential_max_chunks = *(int32_t*)(*displacement + 0x28);
             int32_t& potential_num_chunks = *(int32_t*)(*displacement + 0x2C);
 
-            if (potential_obj_first_gc_index < 0 || potential_obj_last_non_gc_index < 0 || potential_obj_max_objects_not_consid_by_gc < 0) {
-                SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to negative values", *displacement);
-                return utility::ExhaustionResult::CONTINUE;
-            }
-
-            if (!IsBadReadPtr(*(void**)&potential_obj_first_gc_index, sizeof(void*)) && (*(int64_t*)&potential_obj_first_gc_index & 1) == 0) {
-                SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to valid pointer", *displacement);
-                return utility::ExhaustionResult::CONTINUE;
-            }
-
-            if (!IsBadReadPtr(*(void**)&potential_obj_max_objects_not_consid_by_gc, sizeof(void*)) && (*(int64_t*)&potential_obj_max_objects_not_consid_by_gc & 1) == 0) {
-                SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to valid pointer", *displacement);
-                return utility::ExhaustionResult::CONTINUE;
-            }
-
-            if (*(uint8_t*)&potential_obj_is_open_for_disregard_for_gc > 1) {
-                SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to invalid boolean", *displacement);
-                return utility::ExhaustionResult::CONTINUE;
-            }
-
-            if (potential_obj_obj_objects == nullptr || IsBadReadPtr(potential_obj_obj_objects, sizeof(void*))) {
-                SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to invalid pointer", *displacement);
-                return utility::ExhaustionResult::CONTINUE;
-            }
-
             // Verify that the first object in the list is valid
-            {
+            if (potential_obj_obj_objects != nullptr && !IsBadReadPtr(potential_obj_obj_objects, sizeof(void*))) {
                 const auto first_obj = *(void**)potential_obj_obj_objects;
 
                 if (first_obj == nullptr || IsBadReadPtr(first_obj, sizeof(void*))) {
@@ -123,9 +98,87 @@ FUObjectArray* FUObjectArray::get() {
                     return utility::ExhaustionResult::CONTINUE;
                 }
             }
+
+            // Do an initial check to see if we're operating on <= 4.10,
+            // which means the array is inlined and the size and chunk amount is stored at 0x1010 (512 * 8 + OBJECTS_OFFSET)
+            auto check_inlined_array = [&]() -> bool {
+                constexpr auto inlined_count_offs = OBJECTS_OFFSET + (MAX_INLINED_CHUNKS * sizeof(void*));
+
+                if (IsBadReadPtr((void*)*displacement, inlined_count_offs + 8)) {
+                    return false;
+                }
+
+                const auto count = *(int32_t*)(*displacement + inlined_count_offs);
+                const auto chunk_count = *(int32_t*)(*displacement + inlined_count_offs + 4);
+
+                if (count > 0 && chunk_count > 0 && chunk_count < MAX_INLINED_CHUNKS) {
+                    SPDLOG_INFO("Checking potential GUObjectArray at 0x{:x} with inlined count of {} and chunk count of {}", *displacement, count, chunk_count);
+
+                    // Now that this has passed, we need to verify that the pointers in the inlined array match up with these counts
+                    for (int32_t i = 0; i < chunk_count; ++i) {
+                        const auto potential_chunk = *(void**)(*displacement + OBJECTS_OFFSET + (i * sizeof(void*)));
+
+                        if (potential_chunk == nullptr || IsBadReadPtr(potential_chunk, sizeof(void*))) {
+                            return false;
+                        }
+
+                        const auto potential_obj = *(void**)potential_chunk;
+
+                        if (potential_obj == nullptr || IsBadReadPtr(potential_obj, sizeof(void*))) {
+                            return false;
+                        }
+                    }
+
+                    // Now check the ones ahead of the chunk count and make sure they are nullptr
+                    for (int32_t i = chunk_count; i < MAX_INLINED_CHUNKS; ++i) {
+                        const auto potential_chunk = *(void**)(*displacement + OBJECTS_OFFSET + (i * sizeof(void*)));
+
+                        if (potential_chunk != nullptr) {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                }
+
+                return false;
+            };
+
+            s_is_inlined_array = check_inlined_array();
+
+            if (s_is_inlined_array) {
+                SPDLOG_INFO("GUObjectArray appears to be inlined (<= 4.10)");
+            }
+
+            if (!s_is_inlined_array) {
+                if (potential_obj_first_gc_index < 0 || potential_obj_last_non_gc_index < 0 || potential_obj_max_objects_not_consid_by_gc < 0) {
+                    SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to negative values", *displacement);
+                    return utility::ExhaustionResult::CONTINUE;
+                }
+
+                if (!IsBadReadPtr(*(void**)&potential_obj_first_gc_index, sizeof(void*)) && (*(int64_t*)&potential_obj_first_gc_index & 1) == 0) {
+                    SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to valid pointer", *displacement);
+                    return utility::ExhaustionResult::CONTINUE;
+                }
+
+                if (!IsBadReadPtr(*(void**)&potential_obj_max_objects_not_consid_by_gc, sizeof(void*)) && (*(int64_t*)&potential_obj_max_objects_not_consid_by_gc & 1) == 0) {
+                    SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to valid pointer", *displacement);
+                    return utility::ExhaustionResult::CONTINUE;
+                }
+
+                if (*(uint8_t*)&potential_obj_is_open_for_disregard_for_gc > 1) {
+                    SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to invalid boolean", *displacement);
+                    return utility::ExhaustionResult::CONTINUE;
+                }
+
+                if (potential_obj_obj_objects == nullptr || IsBadReadPtr(potential_obj_obj_objects, sizeof(void*))) {
+                    SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to invalid pointer", *displacement);
+                    return utility::ExhaustionResult::CONTINUE;
+                }
+            }
             
             // At this point we've found it, check if it's a chunked array or not, and set a static variable
-            if (potential_max_chunks > 0 && potential_num_chunks > 0 && potential_max_chunks < 1000 && potential_num_chunks <= potential_max_chunks) {
+            if (!s_is_inlined_array && potential_max_chunks > 0 && potential_num_chunks > 0 && potential_max_chunks < 1000 && potential_num_chunks <= potential_max_chunks) {
                 try {
                     SPDLOG_INFO("max_chunks: {}, num_chunks: {}", potential_max_chunks, potential_num_chunks);
 
@@ -150,7 +203,7 @@ FUObjectArray* FUObjectArray::get() {
                 } catch(...) {
                     SPDLOG_ERROR("Failed to check if GUObjectArray is chunked");
                 }
-            } else {
+            } else if (!s_is_inlined_array) {
                 SPDLOG_INFO("GUObjectArray appears to not be chunked (max_chunks: {}, num_chunks: {})", potential_max_chunks, potential_num_chunks);
             }
 
