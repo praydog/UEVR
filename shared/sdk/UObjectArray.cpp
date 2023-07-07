@@ -1,3 +1,6 @@
+#include <unordered_map>
+#include <shared_mutex>
+
 #include <spdlog/spdlog.h>
 #include <utility/Scan.hpp>
 #include <utility/String.hpp>
@@ -8,6 +11,47 @@
 #include "UObjectArray.hpp"
 
 namespace sdk {
+UObjectBase* find_uobject(const std::wstring& full_name, bool cached) {
+    static std::unordered_map<std::wstring, UObjectBase*> cache{};
+    static std::shared_mutex cache_mutex{};
+
+    if (cached) {
+        std::shared_lock _{cache_mutex};
+
+        if (auto it = cache.find(full_name); it != cache.end()) {
+            return it->second;
+        }
+    }
+
+    const auto objs = FUObjectArray::get();
+
+    if (objs == nullptr) {
+        return nullptr;
+    }
+
+    for (auto i = 0; i < objs->get_object_count(); ++i) {
+        const auto item = objs->get_object(i);
+        if (item == nullptr) {
+            continue;
+        }
+
+        const auto object = item->object;
+
+        if (object == nullptr) {
+            continue;
+        }
+
+        if (object->get_full_name() == full_name) {
+            std::unique_lock _{cache_mutex};
+            cache[full_name] = object;
+
+            return object;
+        }
+    }
+
+    return nullptr;
+}
+
 FUObjectArray* FUObjectArray::get() {
     static auto result = []() -> FUObjectArray* {
         SPDLOG_INFO("[FUObjectArray::get] Searching for FUObjectArray...");

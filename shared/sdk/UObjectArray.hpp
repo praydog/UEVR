@@ -1,9 +1,12 @@
 #pragma once
 
+#include <string>
 #include <cstdint>
 #include "UObjectBase.hpp"
 
 namespace sdk {
+UObjectBase* find_uobject(const std::wstring& full_name, bool cached = true);
+
 struct FUObjectItem {
     UObjectBase* object{nullptr};
     int32_t flags{0};
