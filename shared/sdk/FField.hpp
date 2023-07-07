@@ -21,7 +21,7 @@ public:
         return *(FName*)((uintptr_t)this + s_name_offset);
     }
 
-private:
+protected:
     static inline bool s_attempted_update_offsets{false};
     static inline uint32_t s_next_offset{0x20}; // not correct always, we bruteforce it later
     static inline uint32_t s_name_offset{0x28}; // not correct always, we bruteforce it later

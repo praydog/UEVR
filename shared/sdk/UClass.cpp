@@ -5,6 +5,7 @@
 
 #include "UObjectArray.hpp"
 #include "UProperty.hpp"
+#include "FProperty.hpp"
 #include "FField.hpp"
 
 #include "UClass.hpp"
@@ -152,6 +153,37 @@ void UStruct::update_offsets() {
                                 const auto next_next_name = next_next_fname.to_string();
 
                                 SPDLOG_INFO("[UStruct] Next Next Name: {}", utility::narrow(next_next_name));
+
+                                // now determine which ones are xyz and pass to bruteforce func
+                                FProperty* x_prop{};
+                                FProperty* y_prop{};
+                                FProperty* z_prop{};
+
+                                if (possible_name_a1 == L"X") {
+                                    x_prop = (FProperty*)value;
+                                } else if (possible_name_a1 == L"Y") {
+                                    y_prop = (FProperty*)value;
+                                } else if (possible_name_a1 == L"Z") {
+                                    z_prop = (FProperty*)value;
+                                }
+
+                                if (potential_next_field_name == L"X") {
+                                    x_prop = (FProperty*)potential_field;
+                                } else if (potential_next_field_name == L"Y") {
+                                    y_prop = (FProperty*)potential_field;
+                                } else if (potential_next_field_name == L"Z") {
+                                    z_prop = (FProperty*)potential_field;
+                                }
+
+                                if (next_next_name == L"X") {
+                                    x_prop = (FProperty*)next_next;
+                                } else if (next_next_name == L"Y") {
+                                    y_prop = (FProperty*)next_next;
+                                } else if (next_next_name == L"Z") {
+                                    z_prop = (FProperty*)next_next;
+                                }
+
+                                FProperty::bruteforce_fproperty_offset(x_prop, y_prop, z_prop);
                             } catch(...) {
                                 SPDLOG_ERROR("[UStruct] Failed to get Next Next Name!");
                             }
