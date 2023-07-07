@@ -2552,32 +2552,50 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
 
         // We need to "undo" the operations done to create the rotation matrix so we can get the original angle
         // const auto view_rot_mat = conversion_mat * make_inverse_rot_matrix(euler); <-- this is the result of the conversion
-        auto euler = utility::math::ue_euler_from_rotation_matrix(glm::inverse(conversion_mat_inverse * init_options_view_rotation_matrix));
+        glm::vec3 euler{};
+
+        if (is_ue5) {
+            euler = utility::math::ue_euler_from_rotation_matrix(glm::inverse(conversion_mat_inverse * glm::mat4{init_options_view_rotation_matrix_ue5}));
+        } else {
+            euler = utility::math::ue_euler_from_rotation_matrix(glm::inverse(conversion_mat_inverse * init_options_view_rotation_matrix));
+        }
 
         g_hook->calculate_stereo_view_offset_(true_index + 1, (Rotator<float>*)&euler, 100.0f, &init_options_view_origin);
 
         const auto view_rot_mat = conversion_mat * utility::math::ue_inverse_rotation_matrix(euler);
 
-        init_options_view_rotation_matrix = view_rot_mat;
-        init_options_view_rect = view_rect;
-        init_options_constrained_view_rect = view_rect;
-        init_options_projection_matrix = proj_mat;
+        *(FIntRect*)&init_options_view_rect = view_rect;
+        *(FIntRect*)&init_options_constrained_view_rect = view_rect;
+
+        if (is_ue5) {
+            init_options_view_rotation_matrix_ue5 = view_rot_mat;
+            init_options_projection_matrix_ue5 = proj_mat;
+        } else {
+            init_options_view_rotation_matrix = view_rot_mat;
+            init_options_projection_matrix = proj_mat;
+        }
+
         //init_options_stereo_pass = 0;
     }
-
-    const auto is_ue5 = g_hook->has_double_precision();
 
     auto& init_options_scene_state = is_ue5 ? init_options_ue5->scene_view_state : init_options->scene_view_state;
     auto& init_options_stereo_pass = is_ue5 ? init_options_ue5->stereo_pass : init_options->stereo_pass;
 
+    bool new_scene_state_inserted_this_frame = false;
+
     if (init_options_scene_state != nullptr && !g_hook->m_sceneview_data.known_scene_states.contains(init_options_scene_state)) {
         SPDLOG_INFO("Inserting new scene state {:x}", (uintptr_t)init_options_scene_state);
         known_scene_states.insert(init_options_scene_state);
+        new_scene_state_inserted_this_frame = true;
     } else if (init_options_scene_state == nullptr) {
         SPDLOG_ERROR_ONCE("Scene state passed to FSceneView constructor is null");
+
+        if ((int32_t)init_options_stereo_pass < 0) {
+            SPDLOG_ERROR_ONCE("Stereo pass is negative");
+        }
     }
 
-    if (init_options_scene_state != nullptr && vr->is_ghosting_fix_enabled() && known_scene_states.size() > 1 && vr->is_using_afr() && true_index == 1) {
+    if (init_options_scene_state != nullptr && !new_scene_state_inserted_this_frame && vr->is_ghosting_fix_enabled() && !known_scene_states.empty() && vr->is_using_afr() && true_index == 1) {
         init_options_stereo_pass = 1;
 
         // Set the scene state to the one that isn't the current one
