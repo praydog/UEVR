@@ -65,6 +65,7 @@ void UStruct::update_offsets() {
                 *(sdk::UStruct**)((uintptr_t)struct_class + i) == field_class && 
                 *(sdk::UStruct**)((uintptr_t)field_class + i) == object_class) 
             {
+                s_super_struct_offset = i;
                 found_super_struct = true;
                 SPDLOG_INFO("[UStruct] Found SuperStruct at offset 0x{:X}", i);
                 break;
