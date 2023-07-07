@@ -12,9 +12,13 @@ public:
     static UClass* static_class();
     static void update_offsets();
 
+    UField* get_next() const {
+        return *(UField**)((uintptr_t)this + s_next_offset);
+    }
 
 protected:
     static inline bool s_attempted_update_offsets{false};
+    static inline uint32_t s_next_offset{0x28}; // not correct always, we bruteforce it later
 
     friend class UStruct;
 };
@@ -28,8 +32,12 @@ public:
         return *(UStruct**)((uintptr_t)this + s_super_struct_offset);
     }
     
-    FField* get_children() const {
-        return *(FField**)((uintptr_t)this + s_children_offset);
+    UField* get_children() const {
+        return *(UField**)((uintptr_t)this + s_children_offset);
+    }
+
+    FField* get_child_properties() const {
+        return *(FField**)((uintptr_t)this + s_child_properties_offset);
     }
 
     bool is_a(UStruct* other) const {
@@ -45,7 +53,8 @@ public:
 protected:
     static inline bool s_attempted_update_offsets{false};
     static inline uint32_t s_super_struct_offset{0x40}; // not correct always, we bruteforce it later
-    static inline uint32_t s_children_offset{0x48}; // not correct always, we bruteforce it later
+    static inline uint32_t s_children_offset{0x48}; // For UField variants
+    static inline uint32_t s_child_properties_offset{0x48}; // not correct always, we bruteforce it later // Children (old)/ChildProperties
     static inline uint32_t s_properties_size_offset{0x50}; // not correct always, we bruteforce it later
 
     friend class UField;

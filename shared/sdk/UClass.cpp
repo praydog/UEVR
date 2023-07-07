@@ -113,9 +113,9 @@ void UStruct::update_offsets() {
                 const auto possible_name_a1 = possible_fname_a1.to_string();
 
                 if (possible_name_a1 == L"X" || possible_name_a1 == L"Y" || possible_name_a1 == L"Z") {
-                    SPDLOG_INFO("[UStruct] Found Children at offset 0x{:X}", i);
+                    SPDLOG_INFO("[UStruct] Found ChildProperties at offset 0x{:X}", i);
                     SPDLOG_INFO("[UStruct] Found FField/UField Name at offset 0x{:X} ({})", j, utility::narrow(possible_name_a1));
-                    s_children_offset = i;
+                    s_child_properties_offset = i;
                     FField::s_name_offset = j;
 
                     // Now we need to locate the "Next" field of the UField struct.
@@ -146,6 +146,18 @@ void UStruct::update_offsets() {
                             (potential_next_field_name == L"X" || potential_next_field_name == L"Y" || potential_next_field_name == L"Z")) {
                             SPDLOG_INFO("[UStruct] Found true UField Next at offset 0x{:X} ({})", k, utility::narrow(potential_next_field_name));
                             FField::s_next_offset = k;
+
+                            try {
+                                const auto uvalue = ((UObject*)value);
+
+                                if (uvalue->is_a(sdk::UField::static_class())) {
+                                    UField::s_next_offset = k;
+                                    FField::s_uses_ufield_only = true; // for older versions of the engine
+                                    SPDLOG_INFO("[UStruct] UField detected, setting UField::s_next_offset to 0x{:X}", k);
+                                }
+                            } catch(...) {
+                                // dont care
+                            }
 
                             const auto next_next = potential_field->get_next();
 
@@ -212,7 +224,7 @@ void UStruct::update_offsets() {
         }
 
         if (!found) {
-            SPDLOG_ERROR("[UStruct] Failed to find Children and Name!");
+            SPDLOG_ERROR("[UStruct] Failed to find ChildProperties and Name!");
         }
     } else {
         SPDLOG_ERROR("[UStruct] Failed to find Matrix/Vector!");
