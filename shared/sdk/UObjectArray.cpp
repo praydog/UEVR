@@ -350,6 +350,7 @@ FUObjectArray* FUObjectArray::get() {
         // Attempt to find the SuperStruct offset
         sdk::UStruct::update_offsets();
         sdk::UClass::update_offsets();
+        sdk::UScriptStruct::update_offsets();
 
         for (auto i = 0; i < result->get_object_count(); ++i) {
             auto item = result->get_object(i);
