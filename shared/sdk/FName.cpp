@@ -176,55 +176,64 @@ std::optional<FName::ToStringFn> inlined_find_to_string() {
         return std::nullopt;
     }
 
-    const auto str_data = utility::scan_string(module, L"Commandlet %s finished execution (result %d)");
+    std::vector<std::wstring> candidates {
+        L" Bone: %s, Look At Location : %s, Target Location : %s)",
+        L"Commandlet %s finished execution (result %d)"
+    };
 
-    if (!str_data) {
-        SPDLOG_ERROR("FName::get_to_string: Failed to get string data");
-        return std::nullopt;
-    }
-    
-    SPDLOG_INFO("FName::get_to_string: str_data={:x}", *str_data);
+    for (auto candidate : candidates) {
+        const auto str_data = utility::scan_string(module, candidate.data());
 
-    const auto str_ref = utility::scan_displacement_reference(module, *str_data);
-
-    if (!str_ref) {
-        SPDLOG_ERROR("FName::get_to_string: Failed to get string reference");
-        return std::nullopt;
-    }
-
-    SPDLOG_INFO("FName::get_to_string: str_ref={:x}", *str_ref);
-
-    auto instructions = utility::get_disassembly_behind(*str_ref);
-
-    if (instructions.empty()) {
-        SPDLOG_ERROR("FName::get_to_string: Failed to get instructions");
-        return std::nullopt;
-    }
-
-    std::optional<FName::ToStringFn> result{};
-
-    std::reverse(instructions.begin(), instructions.end());
-    for (auto& instr : instructions) {
-        if (std::string_view{instr.instrux.Mnemonic}.starts_with("CALL")) {
-            const auto displacement = utility::resolve_displacement(instr.addr);
-
-            if (instr.instrux.BranchInfo.IsIndirect) {
-                if (!IsBadReadPtr((void*)*displacement, sizeof(void*))) {
-                    result = *(FName::ToStringFn*)*displacement;
-                }
-            } else {
-                result = (FName::ToStringFn)*displacement;
-            }
-            
-            break;
+        if (!str_data) {
+            SPDLOG_ERROR("FName::get_to_string: Failed to get string data");
+            continue;
         }
+        
+        SPDLOG_INFO("FName::get_to_string: str_data={:x}", *str_data);
+
+        const auto str_ref = utility::scan_displacement_reference(module, *str_data);
+
+        if (!str_ref) {
+            SPDLOG_ERROR("FName::get_to_string: Failed to get string reference");
+            continue;
+        }
+
+        SPDLOG_INFO("FName::get_to_string: str_ref={:x}", *str_ref);
+
+        auto instructions = utility::get_disassembly_behind(*str_ref);
+
+        if (instructions.empty()) {
+            SPDLOG_ERROR("FName::get_to_string: Failed to get instructions");
+            continue;
+        }
+
+        std::optional<FName::ToStringFn> result{};
+
+        std::reverse(instructions.begin(), instructions.end());
+        for (auto& instr : instructions) {
+            if (std::string_view{instr.instrux.Mnemonic}.starts_with("CALL")) {
+                const auto displacement = utility::resolve_displacement(instr.addr);
+
+                if (instr.instrux.BranchInfo.IsIndirect) {
+                    if (!IsBadReadPtr((void*)*displacement, sizeof(void*))) {
+                        result = *(FName::ToStringFn*)*displacement;
+                    }
+                } else {
+                    result = (FName::ToStringFn)*displacement;
+                }
+                
+                break;
+            }
+        }
+
+        if (result) {
+            SPDLOG_INFO("FName::get_to_string (inlined alternative): result={:x}", (uintptr_t)*result);
+        }
+
+        return result;
     }
 
-    if (result) {
-        SPDLOG_INFO("FName::get_to_string (inlined alternative): result={:x}", (uintptr_t)*result);
-    }
-
-    return result;
+    return std::nullopt;
 }
 
 std::optional<FName::ToStringFn> standard_find_to_string() {
