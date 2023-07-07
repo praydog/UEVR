@@ -888,6 +888,12 @@ enum ECustomSystemFlags : int32_t {
     SYSTEMFLAG_MOTION_CONTROLLERS_ACTIVE = 1 << 4,
     SYSTEMFLAG_LEFT_THUMBREST_ACTIVE = 1 << 5,
     SYSTEMFLAG_RIGHT_THUMBREST_ACTIVE = 1 << 6,
+    SYSTEMFLAG_GAME_AIMING_MODE = 1 << 7,
+    SYSTEMFLAG_HEAD_AIMING_MODE = 1 << 8,
+    SYSTEMFLAG_LEFT_CONTROLLER_AIMING_MODE = 1 << 9,
+    SYSTEMFLAG_RIGHT_CONTROLLER_AIMING_MODE = 1 << 10,
+    SYSTEMFLAG_TWO_HANDED_LEFT_AIMING_MODE = 1 << 11,
+    SYSTEMFLAG_TWO_HANDED_RIGHT_AIMING_MODE = 1 << 12,
 };
 
 int32_t IXRTrackingSystemHook::get_xr_system_flags(sdk::IXRTrackingSystem* system) {
@@ -926,6 +932,24 @@ int32_t IXRTrackingSystemHook::get_xr_system_flags(sdk::IXRTrackingSystem* syste
 
     if (vr->is_action_active_any_joystick(right_thumbrest_handle)) {
         out |= ECustomSystemFlags::SYSTEMFLAG_RIGHT_THUMBREST_ACTIVE;
+    }
+
+    if (!vr->is_any_aim_method_active()) {
+        out |= ECustomSystemFlags::SYSTEMFLAG_GAME_AIMING_MODE;
+    } else {
+        const auto aim_method = vr->get_aim_method();
+
+        if (aim_method == VR::AimMethod::HEAD) {
+            out |= ECustomSystemFlags::SYSTEMFLAG_HEAD_AIMING_MODE;
+        } else if (aim_method == VR::AimMethod::LEFT_CONTROLLER) {
+            out |= ECustomSystemFlags::SYSTEMFLAG_LEFT_CONTROLLER_AIMING_MODE;
+        } else if (aim_method == VR::AimMethod::RIGHT_CONTROLLER) {
+            out |= ECustomSystemFlags::SYSTEMFLAG_RIGHT_CONTROLLER_AIMING_MODE;
+        } else if (aim_method == VR::AimMethod::TWO_HANDED_LEFT) {
+            out |= ECustomSystemFlags::SYSTEMFLAG_TWO_HANDED_LEFT_AIMING_MODE;
+        } else if (aim_method == VR::AimMethod::TWO_HANDED_RIGHT) {
+            out |= ECustomSystemFlags::SYSTEMFLAG_TWO_HANDED_RIGHT_AIMING_MODE;
+        }
     }
 
     return out;
