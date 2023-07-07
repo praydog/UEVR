@@ -5,19 +5,16 @@
 namespace sdk {
 class UClass;
 class UStruct;
+class FField;
 
 class UField : public UObject {
 public:
     static UClass* static_class();
     static void update_offsets();
 
-    UField* get_next() const {
-        return *(UField**)((uintptr_t)this + s_next_offset);
-    }
 
 protected:
     static inline bool s_attempted_update_offsets{false};
-    static inline uint32_t s_next_offset{0x30}; // not correct always, we bruteforce it later
 
     friend class UStruct;
 };
@@ -29,6 +26,10 @@ public:
 
     UStruct* get_super_struct() const {
         return *(UStruct**)((uintptr_t)this + s_super_struct_offset);
+    }
+    
+    FField* get_children() const {
+        return *(FField**)((uintptr_t)this + s_children_offset);
     }
 
     bool is_a(UStruct* other) const {

@@ -5,6 +5,7 @@
 
 #include "UObjectArray.hpp"
 #include "UProperty.hpp"
+#include "FField.hpp"
 
 #include "UClass.hpp"
 
@@ -31,11 +32,6 @@ void UField::update_offsets() {
     SPDLOG_INFO("[UField] Bruteforcing offsets...");
 
     UStruct::update_offsets();
-
-    // best thing i can come up with for now.
-    s_next_offset = UStruct::s_super_struct_offset - sizeof(void*);
-
-    SPDLOG_INFO("[UField] Found Next at offset 0x{:X}", s_next_offset);
 }
 
 void UStruct::update_offsets() {
@@ -90,7 +86,7 @@ void UStruct::update_offsets() {
         for (auto i = child_search_start; i < 0x300; i += sizeof(void*)) try {
             // These can be either FField or UField (UProperty or FProperty)
             // quantum physics... brutal.
-            const auto value = *(void**)((uintptr_t)vector_scriptstruct + i);
+            const auto value = *(sdk::FField**)((uintptr_t)vector_scriptstruct + i);
 
             if (value == nullptr || IsBadReadPtr(value, sizeof(void*)) || ((uintptr_t)value & 1) != 0) {
                 continue;
@@ -116,14 +112,14 @@ void UStruct::update_offsets() {
 
                 if (possible_name_a1 == L"X" || possible_name_a1 == L"Y" || possible_name_a1 == L"Z") {
                     SPDLOG_INFO("[UStruct] Found Children at offset 0x{:X}", i);
-                    SPDLOG_INFO("[UStruct] Found UProperty/FProperty Name at offset 0x{:X} ({})", j, utility::narrow(possible_name_a1));
+                    SPDLOG_INFO("[UStruct] Found FField/UField Name at offset 0x{:X} ({})", j, utility::narrow(possible_name_a1));
                     s_children_offset = i;
-                    UProperty::s_name_offset = j;
+                    FField::s_name_offset = j;
 
                     // Now we need to locate the "Next" field of the UField struct.
                     // We cant start at UObjectBase::get_class_size() because it can be an FField or UField.
                     for (auto k = 0; k < 0x100; k += sizeof(void*)) try {
-                        const auto potential_field = *(sdk::UField**)((uintptr_t)value + k);
+                        const auto potential_field = *(sdk::FField**)((uintptr_t)value + k);
 
                         if (potential_field == nullptr || IsBadReadPtr(potential_field, sizeof(void*)) || ((uintptr_t)potential_field & 1) != 0) {
                             continue;
@@ -141,18 +137,18 @@ void UStruct::update_offsets() {
                             continue;
                         }
 
-                        const auto& potential_field_fname = ((UProperty*)potential_field)->get_property_name();
+                        const auto& potential_field_fname = potential_field->get_field_name();
                         const auto potential_next_field_name = potential_field_fname.to_string();
 
                         if (possible_name_a1 != potential_next_field_name &&
                             (potential_next_field_name == L"X" || potential_next_field_name == L"Y" || potential_next_field_name == L"Z")) {
                             SPDLOG_INFO("[UStruct] Found true UField Next at offset 0x{:X} ({})", k, utility::narrow(potential_next_field_name));
-                            UField::s_next_offset = k;
+                            FField::s_next_offset = k;
 
-                            const auto next_next = (sdk::UProperty*)potential_field->get_next();
+                            const auto next_next = potential_field->get_next();
 
                             if (next_next != nullptr) try {
-                                const auto& next_next_fname = next_next->get_property_name();
+                                const auto& next_next_fname = next_next->get_field_name();
                                 const auto next_next_name = next_next_fname.to_string();
 
                                 SPDLOG_INFO("[UStruct] Next Next Name: {}", utility::narrow(next_next_name));
