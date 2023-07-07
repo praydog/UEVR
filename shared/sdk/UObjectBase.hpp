@@ -31,6 +31,10 @@ public:
         return *(uint32_t*)((uintptr_t)this + s_internal_index_offset);
     }
 
+    static uint32_t get_class_size() {
+        return s_outer_private_offset + sizeof(void*);
+    }
+
 private:
     static inline bool s_attempted_update_offsets{false};
     static inline uint32_t s_object_flags_offset{0x8};
