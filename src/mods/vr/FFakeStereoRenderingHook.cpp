@@ -2504,6 +2504,7 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
         return g_hook->m_sceneview_data.constructor_hook.call<sdk::FSceneView*>(view, init_options, a3, a4);
     }
 
+    const auto is_ue5 = g_hook->has_double_precision();
     auto init_options_ue5 = (sdk::FSceneViewInitOptionsUE5*)init_options;
 
     auto& known_scene_states = g_hook->m_sceneview_data.known_scene_states;
@@ -2535,11 +2536,14 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
 
         const auto proj_mat = vr->get_projection_matrix((VRRuntime::Eye)(true_index));
 
-        auto& init_options_view_origin = *(glm::vec3*)((uintptr_t)init_options + INIT_OPTIONS_VIEW_ORIGIN_OFFSET);
-        auto& init_options_view_rotation_matrix = *(Matrix4x4f*)((uintptr_t)init_options + INIT_OPTIONS_ROTATION_MATRIX_OFFSET);
-        auto& init_options_view_rect = *(FIntRect*)((uintptr_t)init_options + INIT_OPTIONS_VIEW_RECT_OFFSET);
-        auto& init_options_constrained_view_rect = *(FIntRect*)((uintptr_t)init_options + INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET);
-        auto& init_options_projection_matrix = *(Matrix4x4f*)((uintptr_t)init_options + INIT_OPTIONS_PROJECTION_MATRIX_OFFSET);
+        auto& init_options_view_origin = is_ue5 ? *(glm::vec3*)&init_options_ue5->view_origin : init_options->view_origin;
+        auto& init_options_view_rect = is_ue5 ? init_options_ue5->view_rect : init_options->view_rect;
+        auto& init_options_constrained_view_rect = is_ue5 ? init_options_ue5->constrained_view_rect : init_options->constrained_view_rect;
+        auto& init_options_projection_matrix = init_options->projection_matrix;
+        auto& init_options_projection_matrix_ue5 = init_options_ue5->projection_matrix;
+
+        auto& init_options_view_rotation_matrix = init_options->view_rotation_matrix;
+        auto& init_options_view_rotation_matrix_ue5 = init_options_ue5->view_rotation_matrix;
 
         const auto conversion_mat = glm::mat4 {
             0, 0, 1, 0,
