@@ -13,6 +13,15 @@ public:
 class UStruct : public UField {
 public:
     static UClass* static_class();
+    static void update_offsets();
+
+    UStruct* get_super_struct() const {
+        return *(UStruct**)((uintptr_t)this + s_super_struct_offset);
+    }
+
+private:
+    static inline bool s_attempted_update_offsets{false};
+    static inline uint32_t s_super_struct_offset{0x40}; // not correct always, we bruteforce it later
 };
 
 class UClass : public UStruct {

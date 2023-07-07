@@ -347,15 +347,8 @@ FUObjectArray* FUObjectArray::get() {
             return nullptr;
         }
 
-        const auto object_class = sdk::UObject::static_class();
-        const auto field_class = sdk::UField::static_class();
-        const auto struct_class = sdk::UStruct::static_class();
-        const auto class_class = sdk::UClass::static_class();
-
-        SPDLOG_INFO("[FUObjectArray::get] UObject: 0x{:x}", (uintptr_t)object_class);
-        SPDLOG_INFO("[FUObjectArray::get] UField: 0x{:x}", (uintptr_t)field_class);
-        SPDLOG_INFO("[FUObjectArray::get] UStruct: 0x{:x}", (uintptr_t)struct_class);
-        SPDLOG_INFO("[FUObjectArray::get] UClass: 0x{:x}", (uintptr_t)class_class);
+        // Attempt to find the SuperStruct offset
+        sdk::UStruct::update_offsets();
 
         for (auto i = 0; i < result->get_object_count(); ++i) {
             auto item = result->get_object(i);
