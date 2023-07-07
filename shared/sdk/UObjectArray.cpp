@@ -58,14 +58,14 @@ FUObjectArray* FUObjectArray::get() {
     static auto result = []() -> FUObjectArray* {
         SPDLOG_INFO("[FUObjectArray::get] Searching for FUObjectArray...");
 
-        const auto engine = sdk::get_ue_module(L"Engine");
+        const auto core_uobject = sdk::get_ue_module(L"CoreUObject");
 
-        if (engine == nullptr) {
+        if (core_uobject == nullptr) {
             return nullptr;
         }
 
-        const auto object_base_init_fn = utility::find_function_with_string_refs(engine, L"gc.MaxObjectsNotConsideredByGC", 
-                                                                                         L"/Script/Engine.GarbageCollectionSettings");
+        const auto object_base_init_fn = utility::find_function_with_string_refs(core_uobject, L"gc.MaxObjectsNotConsideredByGC", 
+                                                                                               L"/Script/Engine.GarbageCollectionSettings");
 
         if (!object_base_init_fn) {
             SPDLOG_ERROR("[FUObjectArray::get] Failed to find object base init function");

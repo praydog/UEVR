@@ -32,10 +32,10 @@ void UStruct::update_offsets() {
     const auto struct_class = sdk::UStruct::static_class();
     const auto class_class = sdk::UClass::static_class();
 
-    SPDLOG_INFO("[FUObjectArray::get] UObject: 0x{:x}", (uintptr_t)object_class);
-    SPDLOG_INFO("[FUObjectArray::get] UField: 0x{:x}", (uintptr_t)field_class);
-    SPDLOG_INFO("[FUObjectArray::get] UStruct: 0x{:x}", (uintptr_t)struct_class);
-    SPDLOG_INFO("[FUObjectArray::get] UClass: 0x{:x}", (uintptr_t)class_class);
+    SPDLOG_INFO("[UStruct] UObject: 0x{:x}", (uintptr_t)object_class);
+    SPDLOG_INFO("[UStruct] UField: 0x{:x}", (uintptr_t)field_class);
+    SPDLOG_INFO("[UStruct] UStruct: 0x{:x}", (uintptr_t)struct_class);
+    SPDLOG_INFO("[UStruct] UClass: 0x{:x}", (uintptr_t)class_class);
 
     if (class_class != nullptr && struct_class != nullptr && field_class != nullptr) {
         for (auto i = sdk::UObjectBase::get_class_size(); i < 0x100; i += sizeof(void*)) try {

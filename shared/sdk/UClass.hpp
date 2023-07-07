@@ -35,6 +35,6 @@ public:
 
 private:
     static inline bool s_attempted_update_offsets{false};
-    static inline uint32_t s_default_object_offset{0x40}; // not correct always, we bruteforce it later
+    static inline uint32_t s_default_object_offset{0x118}; // not correct always, we bruteforce it later
 };
 }

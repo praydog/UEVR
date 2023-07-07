@@ -169,7 +169,7 @@ namespace detail {
 std::optional<FName::ToStringFn> inlined_find_to_string() {
     SPDLOG_INFO("FName::get_to_string: inlined_find_to_string");
 
-    const auto module = sdk::get_ue_module(L"Engine");
+    const auto module = sdk::get_ue_module(L"AnimGraphRuntime");
 
     if (module == nullptr) {
         SPDLOG_ERROR("FName::get_to_string: Failed to get module");
