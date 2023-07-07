@@ -4,15 +4,22 @@
 
 namespace sdk {
 class UClass;
+class UStruct;
 
 class UField : public UObject {
 public:
     static UClass* static_class();
     static void update_offsets();
 
+    UField* get_next() const {
+        return *(UField**)((uintptr_t)this + s_next_offset);
+    }
+
 protected:
     static inline bool s_attempted_update_offsets{false};
     static inline uint32_t s_next_offset{0x30}; // not correct always, we bruteforce it later
+
+    friend class UStruct;
 };
 
 class UStruct : public UField {
@@ -37,6 +44,8 @@ public:
 protected:
     static inline bool s_attempted_update_offsets{false};
     static inline uint32_t s_super_struct_offset{0x40}; // not correct always, we bruteforce it later
+    static inline uint32_t s_children_offset{0x48}; // not correct always, we bruteforce it later
+    static inline uint32_t s_properties_size_offset{0x50}; // not correct always, we bruteforce it later
 
     friend class UField;
 };

@@ -9,6 +9,7 @@
 
 #include "UObject.hpp"
 #include "UClass.hpp"
+#include "UProperty.hpp"
 #include "FName.hpp"
 #include "UObjectArray.hpp"
 
@@ -351,6 +352,7 @@ FUObjectArray* FUObjectArray::get() {
         sdk::UStruct::update_offsets();
         sdk::UClass::update_offsets();
         sdk::UScriptStruct::update_offsets();
+        sdk::UProperty::update_offsets();
 
         for (auto i = 0; i < result->get_object_count(); ++i) {
             auto item = result->get_object(i);
