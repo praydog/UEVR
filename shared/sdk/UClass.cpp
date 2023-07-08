@@ -2,6 +2,7 @@
 #include <spdlog/spdlog.h>
 
 #include <utility/String.hpp>
+#include <utility/Scan.hpp>
 
 #include "UObjectArray.hpp"
 #include "UProperty.hpp"
@@ -81,6 +82,8 @@ void UStruct::update_offsets() {
 
     const auto matrix_scriptstruct = sdk::find_uobject(L"ScriptStruct /Script/CoreUObject.Matrix");
     const auto vector_scriptstruct = sdk::find_uobject(L"ScriptStruct /Script/CoreUObject.Vector");
+    const auto float_property = sdk::find_uobject(L"Class /Script/CoreUObject.FloatProperty");
+    const auto double_property = sdk::find_uobject(L"Class /Script/CoreUObject.DoubleProperty");
 
     if (matrix_scriptstruct != nullptr && vector_scriptstruct != nullptr) {
         bool found = false;
@@ -116,7 +119,65 @@ void UStruct::update_offsets() {
                     SPDLOG_INFO("[UStruct] Found ChildProperties at offset 0x{:X}", i);
                     SPDLOG_INFO("[UStruct] Found FField/UField Name at offset 0x{:X} ({})", j, utility::narrow(possible_name_a1));
                     s_child_properties_offset = i;
+                    s_children_offset = i - sizeof(void*);
                     FField::s_name_offset = j;
+
+                    bool found_ufield_class_offset = false;
+
+                    // For UE4
+                    if (float_property != nullptr) {
+                        const auto class_offset = utility::scan_ptr((uintptr_t)value, 0x50, (uintptr_t)float_property);
+
+                        if (class_offset) {
+                            FField::s_class_offset = *class_offset - (uintptr_t)value;
+                            found_ufield_class_offset = true;
+                            SPDLOG_INFO("[UStruct] Found FField/UField Class at offset 0x{:X}", FField::s_class_offset);
+                        }
+                    }
+
+                    // For UE5
+                    if (double_property != nullptr) {
+                        const auto class_offset = utility::scan_ptr((uintptr_t)value, 0x50, (uintptr_t)double_property);
+
+                        if (class_offset) {
+                            FField::s_class_offset = *class_offset - (uintptr_t)value;
+                            found_ufield_class_offset = true;
+                            SPDLOG_INFO("[UStruct] Found FField/UField Class at offset 0x{:X}", FField::s_class_offset);
+                        }
+                    }
+
+                    // Need to look for FFieldClass variant
+                    if (!found_ufield_class_offset) {
+                        for (auto k = 0; k < 0x100; k += sizeof(void*)) try {
+                            const auto potential_ffc = *(void**)((uintptr_t)value + k);
+
+                            if (potential_ffc == nullptr || IsBadReadPtr(potential_ffc, sizeof(void*)) || ((uintptr_t)potential_ffc & 1) != 0) {
+                                continue;
+                            }
+
+                            // probe for a valid FName, FFieldClass should have one near the start of the struct.
+                            for (auto l = 0; l < 0x100; l += sizeof(void*)) try {
+                                const auto& possible_fname_ffc = *(FName*)((uintptr_t)potential_ffc + l);
+                                const auto possible_name_ffc = possible_fname_ffc.to_string();
+
+                                if (possible_name_ffc == L"FloatProperty" || possible_name_ffc == L"DoubleProperty") {
+                                    FField::s_class_offset = k;
+                                    FFieldClass::s_name_offset = l;
+                                    found_ufield_class_offset = true;
+                                    SPDLOG_INFO("[UStruct] Found FFieldClass offset 0x{:X}", FField::s_class_offset);
+                                    break;
+                                }
+                            } catch (...) {
+                                continue;
+                            }
+
+                            if (found_ufield_class_offset) {
+                                break;
+                            }
+                        } catch (...) {
+                            continue;
+                        }
+                    }
 
                     // Now we need to locate the "Next" field of the UField struct.
                     // We cant start at UObjectBase::get_class_size() because it can be an FField or UField.
@@ -153,7 +214,10 @@ void UStruct::update_offsets() {
                                 if (uvalue->is_a(sdk::UField::static_class())) {
                                     UField::s_next_offset = k;
                                     FField::s_uses_ufield_only = true; // for older versions of the engine
+                                    s_children_offset = s_child_properties_offset; // for older versions of the engine
                                     SPDLOG_INFO("[UStruct] UField detected, setting UField::s_next_offset to 0x{:X}", k);
+                                } else {
+                                    s_children_offset = s_child_properties_offset - sizeof(void*); // for newer versions of the engine
                                 }
                             } catch(...) {
                                 // dont care
