@@ -334,7 +334,7 @@ void UStruct::resolve_function_offsets(uint32_t child_search_start) {
                 }
                 
                 if (func_count < 5) {
-                    break;
+                    continue;
                 }
 
                 SPDLOG_INFO("[UStruct] Found UField Next at offset 0x{:X}", i);
