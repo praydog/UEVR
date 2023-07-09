@@ -10,6 +10,7 @@
 #include "UProperty.hpp"
 #include "FProperty.hpp"
 #include "FField.hpp"
+#include "FProperty.hpp"
 
 #include "UClass.hpp"
 
@@ -555,5 +556,33 @@ void UScriptStruct::update_offsets() {
     } catch(...) {
         continue;
     }
+}
+
+FProperty* UStruct::find_property(std::wstring_view name) const {
+    for (auto super = this; super != nullptr; super = (UClass*)super->get_super_struct()) {
+        for (auto child = super->get_child_properties(); child != nullptr; child = child->get_next()) {
+            SPDLOG_INFO("[UStruct] Checking child property {}", utility::narrow(child->get_field_name().to_string()));
+
+            if (child->get_field_name().to_string() == name) {
+                return (FProperty*)child;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+UProperty* UStruct::find_uproperty(std::wstring_view name) const {
+    for (auto super = this; super != nullptr; super = (UClass*)super->get_super_struct()) {
+        for (auto child = super->get_children(); child != nullptr; child = child->get_next()) {
+            SPDLOG_INFO("[UStruct] Checking child UProperty {}", utility::narrow(child->get_fname().to_string()));
+
+            if (child->get_fname().to_string() == name) {
+                return (UProperty*)child;
+            }
+        }
+    }
+
+    return nullptr;
 }
 }

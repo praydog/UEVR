@@ -113,7 +113,7 @@ void UObjectBase::update_process_event_index() try {
                     return utility::ExhaustionResult::CONTINUE;
                 }
 
-                if (*displacement == 0x0 || IsBadReadPtr((void*)*displacement, sizeof(void*) * 4)) {
+                if (*displacement == 0x0 || IsBadReadPtr((void*)*displacement, sizeof(void*) * 10)) {
                     return utility::ExhaustionResult::CONTINUE;
                 }
 

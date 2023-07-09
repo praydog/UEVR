@@ -2,8 +2,8 @@
 
 #include <cstdint>
 
-#include "UClass.hpp"
 #include "FField.hpp"
+#include "UClass.hpp"
 
 namespace sdk {
 class UProperty;

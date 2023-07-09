@@ -6,6 +6,8 @@ namespace sdk {
 class UClass;
 class UStruct;
 class FField;
+class FProperty;
+class UProperty;
 
 class UField : public UObject {
 public:
@@ -49,6 +51,9 @@ public:
 
         return false;
     }
+
+    FProperty* find_property(std::wstring_view name) const;
+    UProperty* find_uproperty(std::wstring_view name) const;
 
 protected:
     static void resolve_field_offsets(uint32_t child_search_start);
