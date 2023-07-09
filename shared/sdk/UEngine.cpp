@@ -68,6 +68,34 @@ UEngine* UEngine::get() {
     return *engine;
 }
 
+UWorld* UEngine::get_world() {
+    const auto& game_instance = get_property<sdk::UObject*>(L"GameInstance");
+
+    if (game_instance == nullptr) {
+        return nullptr;
+    }
+
+    const auto& localplayers = game_instance->get_property<sdk::TArray<sdk::UObject*>>(L"LocalPlayers");
+
+    if (localplayers.count == 0) {
+        return nullptr;
+    }
+
+    const auto localplayer = localplayers.data[0];
+
+    if (localplayer == nullptr) {
+        return nullptr;
+    }
+
+    const auto viewport_client = localplayer->get_property<sdk::UObject*>(L"ViewportClient");
+
+    if (viewport_client == nullptr) {
+        return nullptr;
+    }
+
+    return viewport_client->get_property<sdk::UWorld*>(L"World");
+}
+
 std::optional<uintptr_t> UEngine::get_emulatestereo_string_ref_address() {
     static const auto addr = []() -> std::optional<uintptr_t> {
         SPDLOG_INFO("Searching for correct string reference to \"emulatestereo\"...");
