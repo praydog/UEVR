@@ -1,6 +1,7 @@
 #pragma once
 
 #include "UObject.hpp"
+#include "UWorld.hpp"
 
 namespace sdk {
 class UWorld;

@@ -1,3 +1,6 @@
+#include <shared_mutex>
+#include <unordered_map>
+
 #include <windows.h>
 #include <spdlog/spdlog.h>
 
@@ -559,11 +562,26 @@ void UScriptStruct::update_offsets() {
 }
 
 FProperty* UStruct::find_property(std::wstring_view name) const {
+    static std::shared_mutex prop_mtx{};
+    static std::unordered_map<const sdk::UStruct*, std::unordered_map<std::wstring, sdk::FProperty*>> prop_cache{};
+
+    {
+        std::shared_lock _{ prop_mtx };
+
+        if (auto it1 = prop_cache.find(this); it1 != prop_cache.end()) {
+            if (auto it2 = it1->second.find(name.data()); it2 != it1->second.end()) {
+                return it2->second;
+            }
+        }
+    }
+
     for (auto super = this; super != nullptr; super = (UClass*)super->get_super_struct()) {
         for (auto child = super->get_child_properties(); child != nullptr; child = child->get_next()) {
             //SPDLOG_INFO("[UStruct] Checking child property {}", utility::narrow(child->get_field_name().to_string()));
 
             if (child->get_field_name().to_string() == name) {
+                std::unique_lock _{ prop_mtx };
+                prop_cache[this][name.data()] = (sdk::FProperty*)child;
                 return (FProperty*)child;
             }
         }
@@ -573,11 +591,26 @@ FProperty* UStruct::find_property(std::wstring_view name) const {
 }
 
 UProperty* UStruct::find_uproperty(std::wstring_view name) const {
+    static std::shared_mutex prop_mtx{};
+    static std::unordered_map<const sdk::UStruct*, std::unordered_map<std::wstring, sdk::UProperty*>> prop_cache{};
+
+    {
+        std::shared_lock _{ prop_mtx };
+
+        if (auto it1 = prop_cache.find(this); it1 != prop_cache.end()) {
+            if (auto it2 = it1->second.find(name.data()); it2 != it1->second.end()) {
+                return it2->second;
+            }
+        }
+    }
+
     for (auto super = this; super != nullptr; super = (UClass*)super->get_super_struct()) {
         for (auto child = super->get_children(); child != nullptr; child = child->get_next()) {
             //SPDLOG_INFO("[UStruct] Checking child UProperty {}", utility::narrow(child->get_fname().to_string()));
 
             if (child->get_fname().to_string() == name) {
+                std::unique_lock _{ prop_mtx };
+                prop_cache[this][name.data()] = (sdk::UProperty*)child;
                 return (UProperty*)child;
             }
         }
