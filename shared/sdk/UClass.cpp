@@ -3,6 +3,7 @@
 
 #include <utility/String.hpp>
 #include <utility/Scan.hpp>
+#include <utility/Module.hpp>
 
 #include "UObjectArray.hpp"
 #include "UFunction.hpp"
@@ -256,7 +257,7 @@ void UStruct::resolve_field_offsets(uint32_t child_search_start) {
     }
 }
 
-void UStruct::resolve_function_offsets(uint32_t child_search_start) {
+void UStruct::resolve_function_offsets(uint32_t child_search_start) try {
     // This object has a bunch of functions so we can use it to find the function offsets
     // and the UField Next offset for the games that have FField
     const auto gameplay_statics = (sdk::UClass*)sdk::find_uobject(L"Class /Script/Engine.GameplayStatics");
@@ -344,6 +345,50 @@ void UStruct::resolve_function_offsets(uint32_t child_search_start) {
             continue;
         }
     }
+
+    std::unordered_map<uint32_t, uint32_t> offsets_with_ptr_within_module{};
+
+    for (auto next = gameplay_statics->get_children(); next != nullptr; next = next->get_next()) try {
+        if (!next->is_a<UFunction>()) {
+            continue;
+        }
+        
+        for (auto i = UStruct::s_child_properties_offset + sizeof(void*); i < 0x200; i += sizeof(void*)) try {
+            const auto possible_native_fn = *(void**)((uintptr_t)next + i);
+
+            if (possible_native_fn == nullptr || IsBadReadPtr(possible_native_fn, sizeof(void*))) {
+                continue;
+            }
+
+            if (utility::get_module_within(possible_native_fn)) {
+                offsets_with_ptr_within_module[i]++;
+            }
+        } catch(...) {
+            continue;
+        }
+    } catch(...) {
+        continue;
+    }
+
+    // Check which offset has the most pointers to a module
+    uint32_t most_ptrs = 0;
+    uint32_t most_ptrs_offset = 0;
+
+    for (const auto& [offset, ptr_count] : offsets_with_ptr_within_module) {
+        if (ptr_count > most_ptrs) {
+            most_ptrs = ptr_count;
+            most_ptrs_offset = offset;
+        }
+    }
+
+    if (most_ptrs > 0) {
+        UFunction::s_native_function_offset = most_ptrs_offset;
+        SPDLOG_INFO("[UStruct] Found native function offset at 0x{:X}", most_ptrs_offset);
+    } else {
+        SPDLOG_ERROR("[UStruct] Failed to find native function offset!");
+    }
+} catch(...) {
+    SPDLOG_ERROR("[UStruct::resolve_function_offsets] Failed to resolve function offsets! (unknown exception)");
 }
 
 void UStruct::update_offsets() {
