@@ -255,6 +255,48 @@ void UStruct::resolve_field_offsets(uint32_t child_search_start) {
     }
 }
 
+void UStruct::resolve_function_offsets(uint32_t child_search_start) {
+    // This object has a bunch of functions so we can use it to find the function offsets
+    // and the UField Next offset for the games that have FField
+    const auto gameplay_statics = sdk::find_uobject(L"Class /Script/Engine.GameplayStatics");
+
+    if (gameplay_statics == nullptr) {
+        SPDLOG_ERROR("[UStruct] Failed to find GameplayStatics!");
+        return;
+    }
+
+    // We need to bruteforce the true Children offset if the game is using FField
+    if (!FField::s_uses_ufield_only) {
+        for (auto i = child_search_start; i < 0x100; i += sizeof(void*)) try {
+            const auto potential_field = *(sdk::UField**)((uintptr_t)gameplay_statics + i);
+
+            if (potential_field == nullptr || IsBadReadPtr(potential_field, sizeof(void*)) || ((uintptr_t)potential_field & 1) != 0) {
+                continue;
+            }
+
+            const auto potential_field_vtable = *(void**)potential_field;
+
+            if (potential_field_vtable == nullptr || IsBadReadPtr(potential_field_vtable, sizeof(void*)) || ((uintptr_t)potential_field_vtable & 1) != 0) {
+                continue;
+            }
+
+            const auto potential_field_vtable_first = *(void**)potential_field_vtable;
+
+            if (potential_field_vtable_first == nullptr || IsBadReadPtr(potential_field_vtable_first, sizeof(void*))) {
+                continue;
+            }
+
+            if (i != UStruct::s_super_struct_offset && potential_field->is_a<UField>()) {
+                UStruct::s_children_offset = i;
+                SPDLOG_INFO("[UStruct] Found UField Children at offset 0x{:X}", i);
+                break;
+            }
+        } catch(...) {
+            continue;
+        }
+    }
+}
+
 void UStruct::update_offsets() {
     if (s_attempted_update_offsets) {
         return;
@@ -300,6 +342,7 @@ void UStruct::update_offsets() {
     const auto child_search_start = found_super_struct ? s_super_struct_offset + sizeof(void*) : sdk::UObjectBase::get_class_size();
 
     UStruct::resolve_field_offsets(child_search_start);
+    UStruct::resolve_function_offsets(child_search_start);
 
     UField::update_offsets();
 }
