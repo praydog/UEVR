@@ -387,6 +387,8 @@ void UStruct::resolve_function_offsets(uint32_t child_search_start) try {
     } else {
         SPDLOG_ERROR("[UStruct] Failed to find native function offset!");
     }
+
+    UObjectBase::update_process_event_index();
 } catch(...) {
     SPDLOG_ERROR("[UStruct::resolve_function_offsets] Failed to resolve function offsets! (unknown exception)");
 }

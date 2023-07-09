@@ -349,8 +349,8 @@ FUObjectArray* FUObjectArray::get() {
         }
 
         // Attempt to find the SuperStruct offset
-        sdk::UStruct::update_offsets();
         sdk::UClass::update_offsets();
+        sdk::UStruct::update_offsets();
         sdk::UScriptStruct::update_offsets();
         sdk::UProperty::update_offsets();
 

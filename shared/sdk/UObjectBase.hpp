@@ -3,6 +3,7 @@
 #include "FName.hpp"
 
 namespace sdk {
+class UStruct;
 class UClass;
 class UObject;
 
@@ -36,11 +37,17 @@ public:
     }
 
 private:
+    static void update_process_event_index();
+
     static inline bool s_attempted_update_offsets{false};
     static inline uint32_t s_object_flags_offset{0x8};
     static inline uint32_t s_internal_index_offset{0xC};
     static inline uint32_t s_class_private_offset{0x10};
     static inline uint32_t s_fname_offset{0x18};
     static inline uint32_t s_outer_private_offset{0x20};
+
+    static inline uint32_t s_process_event_index{0};
+
+    friend class UStruct;
 };
 }
