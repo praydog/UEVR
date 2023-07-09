@@ -91,13 +91,13 @@ void UStruct::update_offsets() {
         for (auto i = child_search_start; i < 0x300; i += sizeof(void*)) try {
             // These can be either FField or UField (UProperty or FProperty)
             // quantum physics... brutal.
-            const auto value = *(sdk::FField**)((uintptr_t)vector_scriptstruct + i);
+            const auto potential_field = *(sdk::FField**)((uintptr_t)vector_scriptstruct + i);
 
-            if (value == nullptr || IsBadReadPtr(value, sizeof(void*)) || ((uintptr_t)value & 1) != 0) {
+            if (potential_field == nullptr || IsBadReadPtr(potential_field, sizeof(void*)) || ((uintptr_t)potential_field & 1) != 0) {
                 continue;
             }
 
-            const auto vtable = *(void**)value;
+            const auto vtable = *(void**)potential_field;
 
             if (vtable == nullptr || IsBadReadPtr(vtable, sizeof(void*)) || ((uintptr_t)vtable & 1) != 0) {
                 continue;
@@ -112,7 +112,7 @@ void UStruct::update_offsets() {
             // Now we need to walk the memory of the value to see if calling FName::ToString results in "X" or "Y" or "Z"
             // this means we found something that looks like the fields array, as well as resolving the offset to the name index.
             for (auto j = sizeof(void*); j < 0x100; ++j) try {
-                const auto& possible_fname_a1 = *(FName*)((uintptr_t)value + j);
+                const auto& possible_fname_a1 = *(FName*)((uintptr_t)potential_field + j);
                 const auto possible_name_a1 = possible_fname_a1.to_string();
 
                 if (possible_name_a1 == L"X" || possible_name_a1 == L"Y" || possible_name_a1 == L"Z") {
@@ -126,21 +126,21 @@ void UStruct::update_offsets() {
 
                     // For UE4
                     if (float_property != nullptr) {
-                        const auto class_offset = utility::scan_ptr((uintptr_t)value, 0x50, (uintptr_t)float_property);
+                        const auto class_offset = utility::scan_ptr((uintptr_t)potential_field, 0x50, (uintptr_t)float_property);
 
                         if (class_offset) {
-                            FField::s_class_offset = *class_offset - (uintptr_t)value;
+                            FField::s_class_offset = *class_offset - (uintptr_t)potential_field;
                             found_ufield_class_offset = true;
                             SPDLOG_INFO("[UStruct] Found FField/UField Class at offset 0x{:X}", FField::s_class_offset);
                         }
                     }
 
                     // For UE5
-                    if (double_property != nullptr) {
-                        const auto class_offset = utility::scan_ptr((uintptr_t)value, 0x50, (uintptr_t)double_property);
+                    if (!found_ufield_class_offset && double_property != nullptr) {
+                        const auto class_offset = utility::scan_ptr((uintptr_t)potential_field, 0x50, (uintptr_t)double_property);
 
                         if (class_offset) {
-                            FField::s_class_offset = *class_offset - (uintptr_t)value;
+                            FField::s_class_offset = *class_offset - (uintptr_t)potential_field;
                             found_ufield_class_offset = true;
                             SPDLOG_INFO("[UStruct] Found FField/UField Class at offset 0x{:X}", FField::s_class_offset);
                         }
@@ -149,7 +149,7 @@ void UStruct::update_offsets() {
                     // Need to look for FFieldClass variant
                     if (!found_ufield_class_offset) {
                         for (auto k = 0; k < 0x100; k += sizeof(void*)) try {
-                            const auto potential_ffc = *(void**)((uintptr_t)value + k);
+                            const auto potential_ffc = *(void**)((uintptr_t)potential_field + k);
 
                             if (potential_ffc == nullptr || IsBadReadPtr(potential_ffc, sizeof(void*)) || ((uintptr_t)potential_ffc & 1) != 0) {
                                 continue;
@@ -165,6 +165,7 @@ void UStruct::update_offsets() {
                                     FFieldClass::s_name_offset = l;
                                     found_ufield_class_offset = true;
                                     SPDLOG_INFO("[UStruct] Found FFieldClass offset 0x{:X}", FField::s_class_offset);
+                                    SPDLOG_INFO("[UStruct] Found FFieldClass::Name offset 0x{:X} ({})", FFieldClass::s_name_offset, utility::narrow(possible_name_ffc));
                                     break;
                                 }
                             } catch (...) {
@@ -182,13 +183,13 @@ void UStruct::update_offsets() {
                     // Now we need to locate the "Next" field of the UField struct.
                     // We cant start at UObjectBase::get_class_size() because it can be an FField or UField.
                     for (auto k = 0; k < 0x100; k += sizeof(void*)) try {
-                        const auto potential_field = *(sdk::FField**)((uintptr_t)value + k);
+                        const auto potential_next_field = *(sdk::FField**)((uintptr_t)potential_field + k);
 
-                        if (potential_field == nullptr || IsBadReadPtr(potential_field, sizeof(void*)) || ((uintptr_t)potential_field & 1) != 0) {
+                        if (potential_next_field == nullptr || IsBadReadPtr(potential_next_field, sizeof(void*)) || ((uintptr_t)potential_next_field & 1) != 0) {
                             continue;
                         }
 
-                        const auto potential_field_vtable = *(void**)potential_field;
+                        const auto potential_field_vtable = *(void**)potential_next_field;
 
                         if (potential_field_vtable == nullptr || IsBadReadPtr(potential_field_vtable, sizeof(void*)) || ((uintptr_t)potential_field_vtable & 1) != 0) {
                             continue;
@@ -200,16 +201,17 @@ void UStruct::update_offsets() {
                             continue;
                         }
 
-                        const auto& potential_field_fname = potential_field->get_field_name();
-                        const auto potential_next_field_name = potential_field_fname.to_string();
+                        const auto& potential_next_field_fname = potential_next_field->get_field_name();
+                        const auto potential_next_field_name = potential_next_field_fname.to_string();
 
                         if (possible_name_a1 != potential_next_field_name &&
-                            (potential_next_field_name == L"X" || potential_next_field_name == L"Y" || potential_next_field_name == L"Z")) {
-                            SPDLOG_INFO("[UStruct] Found true UField Next at offset 0x{:X} ({})", k, utility::narrow(potential_next_field_name));
+                            (potential_next_field_name == L"X" || potential_next_field_name == L"Y" || potential_next_field_name == L"Z")) 
+                        {
+                            SPDLOG_INFO("[UStruct] Found FField Next at offset 0x{:X} ({})", k, utility::narrow(potential_next_field_name));
                             FField::s_next_offset = k;
 
                             try {
-                                const auto uvalue = ((UObject*)value);
+                                const auto uvalue = ((UObject*)potential_field);
 
                                 if (uvalue->is_a(sdk::UField::static_class())) {
                                     UField::s_next_offset = k;
@@ -223,7 +225,7 @@ void UStruct::update_offsets() {
                                 // dont care
                             }
 
-                            const auto next_next = potential_field->get_next();
+                            const auto next_next = potential_next_field->get_next();
 
                             if (next_next != nullptr) try {
                                 const auto& next_next_fname = next_next->get_field_name();
@@ -237,19 +239,19 @@ void UStruct::update_offsets() {
                                 FProperty* z_prop{};
 
                                 if (possible_name_a1 == L"X") {
-                                    x_prop = (FProperty*)value;
+                                    x_prop = (FProperty*)potential_field;
                                 } else if (possible_name_a1 == L"Y") {
-                                    y_prop = (FProperty*)value;
+                                    y_prop = (FProperty*)potential_field;
                                 } else if (possible_name_a1 == L"Z") {
-                                    z_prop = (FProperty*)value;
+                                    z_prop = (FProperty*)potential_field;
                                 }
 
                                 if (potential_next_field_name == L"X") {
-                                    x_prop = (FProperty*)potential_field;
+                                    x_prop = (FProperty*)potential_next_field;
                                 } else if (potential_next_field_name == L"Y") {
-                                    y_prop = (FProperty*)potential_field;
+                                    y_prop = (FProperty*)potential_next_field;
                                 } else if (potential_next_field_name == L"Z") {
-                                    z_prop = (FProperty*)potential_field;
+                                    z_prop = (FProperty*)potential_next_field;
                                 }
 
                                 if (next_next_name == L"X") {
