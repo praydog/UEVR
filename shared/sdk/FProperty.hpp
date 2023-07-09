@@ -6,6 +6,8 @@
 #include "FField.hpp"
 
 namespace sdk {
+class UProperty;
+
 class FProperty : public FField {
 public:
     int32_t get_offset() const {
@@ -19,5 +21,6 @@ private:
     static inline uint32_t s_offset_offset{0x0}; // idk
 
     friend class UStruct;
+    friend class UProperty;
 };
 }

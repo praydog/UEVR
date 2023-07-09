@@ -1,5 +1,6 @@
 #include <spdlog/spdlog.h>
 
+#include "UProperty.hpp"
 #include "FProperty.hpp"
 
 namespace sdk {
@@ -26,6 +27,11 @@ void FProperty::bruteforce_fproperty_offset(FProperty* x_prop, FProperty* y_prop
             SPDLOG_INFO("[FProperty] Found offset field at offset 0x{:X}", i);
             s_offset_offset = i;
             found = true;
+
+            if (FField::s_uses_ufield_only) {
+                UProperty::s_offset_offset = i;
+            }
+
             break;
         }
     } catch(...) {
