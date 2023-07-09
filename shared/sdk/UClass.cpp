@@ -5,6 +5,7 @@
 #include <utility/Scan.hpp>
 
 #include "UObjectArray.hpp"
+#include "UFunction.hpp"
 #include "UProperty.hpp"
 #include "FProperty.hpp"
 #include "FField.hpp"
@@ -258,7 +259,7 @@ void UStruct::resolve_field_offsets(uint32_t child_search_start) {
 void UStruct::resolve_function_offsets(uint32_t child_search_start) {
     // This object has a bunch of functions so we can use it to find the function offsets
     // and the UField Next offset for the games that have FField
-    const auto gameplay_statics = sdk::find_uobject(L"Class /Script/Engine.GameplayStatics");
+    const auto gameplay_statics = (sdk::UClass*)sdk::find_uobject(L"Class /Script/Engine.GameplayStatics");
 
     if (gameplay_statics == nullptr) {
         SPDLOG_ERROR("[UStruct] Failed to find GameplayStatics!");
@@ -289,6 +290,54 @@ void UStruct::resolve_function_offsets(uint32_t child_search_start) {
             if (i != UStruct::s_super_struct_offset && potential_field->is_a<UField>()) {
                 UStruct::s_children_offset = i;
                 SPDLOG_INFO("[UStruct] Found UField Children at offset 0x{:X}", i);
+                break;
+            }
+        } catch(...) {
+            continue;
+        }
+
+        // Now we need to find the UField::Next offset
+        const auto first_ufield = gameplay_statics->get_children();
+
+        if (first_ufield == nullptr || IsBadReadPtr(first_ufield, sizeof(void*)) || ((uintptr_t)first_ufield & 1) != 0) {
+            SPDLOG_ERROR("[UStruct] Failed to find first UField!");
+            return;
+        }
+
+        for (auto i = sdk::UObjectBase::get_class_size(); i < 0x100; i += sizeof(void*)) try {
+            const auto potential_next_field = *(sdk::UField**)((uintptr_t)first_ufield + i);
+
+            if (potential_next_field == nullptr || IsBadReadPtr(potential_next_field, sizeof(void*)) || ((uintptr_t)potential_next_field & 1) != 0) {
+                continue;
+            }
+
+            const auto potential_next_field_vtable = *(void**)potential_next_field;
+
+            if (potential_next_field_vtable == nullptr || IsBadReadPtr(potential_next_field_vtable, sizeof(void*)) || ((uintptr_t)potential_next_field_vtable & 1) != 0) {
+                continue;
+            }
+
+            const auto potential_next_field_vtable_first = *(void**)potential_next_field_vtable;
+
+            if (potential_next_field_vtable_first == nullptr || IsBadReadPtr(potential_next_field_vtable_first, sizeof(void*))) {
+                continue;
+            }
+
+            if (potential_next_field->is_a<UField>()) {
+                UField::s_next_offset = i;
+                // now verify it by doing a linked list walk to make sure that at least a few functions are valid
+                uint32_t func_count = 0;
+                for (auto next = potential_next_field; next != nullptr; next = next->get_next()) {
+                    if (next->is_a<UFunction>()) {
+                        func_count++;
+                    }
+                }
+                
+                if (func_count < 5) {
+                    break;
+                }
+
+                SPDLOG_INFO("[UStruct] Found UField Next at offset 0x{:X}", i);
                 break;
             }
         } catch(...) {
