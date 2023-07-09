@@ -51,6 +51,9 @@ public:
     }
 
 protected:
+    static void resolve_field_offsets(uint32_t child_search_start);
+    static void resolve_function_offsets(uint32_t child_search_start);
+
     static inline bool s_attempted_update_offsets{false};
     static inline uint32_t s_super_struct_offset{0x40}; // not correct always, we bruteforce it later
     static inline uint32_t s_children_offset{0x48}; // For UField variants
