@@ -85,9 +85,11 @@ FUObjectArray* FUObjectArray::get() {
                 return utility::ExhaustionResult::BREAK;
             }
 
-            if (std::string_view{ix.Mnemonic}.starts_with("CALL")) {
+            // Decided to comment this out, some games have compiler optimizations (or non-optimizations...)
+            // that cause the GUObjectArray to be referenced inside of a separate function that this function calls
+            /*if (std::string_view{ix.Mnemonic}.starts_with("CALL")) {
                 return utility::ExhaustionResult::STEP_OVER;
-            }
+            }*/
 
             const auto displacement = utility::resolve_displacement(ip);
 
