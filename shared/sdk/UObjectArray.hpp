@@ -7,6 +7,11 @@
 namespace sdk {
 UObjectBase* find_uobject(const std::wstring& full_name, bool cached = true);
 
+template<typename T>
+T* find_uobject(const std::wstring& full_name, bool cached = true) {
+    return (T*)find_uobject(full_name, cached);
+}
+
 struct FUObjectItem {
     UObjectBase* object{nullptr};
     int32_t flags{0};
