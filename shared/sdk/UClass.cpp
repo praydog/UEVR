@@ -644,5 +644,7 @@ UFunction* UStruct::find_function(std::wstring_view name) const {
             }
         }
     }
+
+    return nullptr;
 }
 }
