@@ -4043,7 +4043,9 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         }
 
         // Roomscale movement
-        if (true_index == 0 && vr->is_roomscale_enabled()) {
+        // only do it on the right eye pass
+        // if we did it on the left, there would be eye desyncs when the right eye is rendered
+        if (true_index == 1 && vr->is_roomscale_enabled()) {
             const auto world = sdk::UEngine::get()->get_world();
 
             if (const auto controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0); controller != nullptr) {
