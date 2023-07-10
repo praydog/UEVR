@@ -68,20 +68,44 @@ UEngine* UEngine::get() {
     return *engine;
 }
 
-UWorld* UEngine::get_world() {
+ULocalPlayer* UEngine::get_localplayer(int32_t index) {
+    if (index < 0) {
+        return nullptr;
+    }
+
     const auto& game_instance = get_property<sdk::UObject*>(L"GameInstance");
 
     if (game_instance == nullptr) {
         return nullptr;
     }
 
-    const auto& localplayers = game_instance->get_property<sdk::TArray<sdk::UObject*>>(L"LocalPlayers");
+    const auto& localplayers = game_instance->get_property<sdk::TArray<sdk::ULocalPlayer*>>(L"LocalPlayers");
 
-    if (localplayers.count == 0) {
+    if (localplayers.count <= index) {
         return nullptr;
     }
 
-    const auto localplayer = localplayers.data[0];
+    return localplayers.data[index];
+}
+
+APawn* UEngine::get_localpawn(int32_t index) {
+    const auto player = (UObject*)get_localplayer(index);
+
+    if (player == nullptr) {
+        return nullptr;
+    }
+
+    const auto player_controller = (UObject*)player->get_property<sdk::APlayerController*>(L"PlayerController");
+
+    if (player_controller == nullptr) {
+        return nullptr;
+    }
+
+    return player_controller->get_property<sdk::APawn*>(L"AcknowledgedPawn");
+}
+
+UWorld* UEngine::get_world() {
+    const auto localplayer = (sdk::UObject*)get_localplayer(0);
 
     if (localplayer == nullptr) {
         return nullptr;

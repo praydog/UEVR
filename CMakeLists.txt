@@ -314,6 +314,7 @@ set(CMKR_TARGET sdk)
 set(sdk_SOURCES "")
 
 list(APPEND sdk_SOURCES
+	"shared/sdk/APlayerController.cpp"
 	"shared/sdk/CVar.cpp"
 	"shared/sdk/ConsoleManager.cpp"
 	"shared/sdk/DynamicRHI.cpp"
@@ -338,6 +339,7 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/UObjectBase.cpp"
 	"shared/sdk/UProperty.cpp"
 	"shared/sdk/Utility.cpp"
+	"shared/sdk/APlayerController.hpp"
 	"shared/sdk/CVar.hpp"
 	"shared/sdk/ConsoleManager.hpp"
 	"shared/sdk/DynamicRHI.hpp"
@@ -417,6 +419,7 @@ set(CMKR_TARGET sdk-nolog)
 set(sdk-nolog_SOURCES "")
 
 list(APPEND sdk-nolog_SOURCES
+	"shared/sdk/APlayerController.cpp"
 	"shared/sdk/CVar.cpp"
 	"shared/sdk/ConsoleManager.cpp"
 	"shared/sdk/DynamicRHI.cpp"
@@ -441,6 +444,7 @@ list(APPEND sdk-nolog_SOURCES
 	"shared/sdk/UObjectBase.cpp"
 	"shared/sdk/UProperty.cpp"
 	"shared/sdk/Utility.cpp"
+	"shared/sdk/APlayerController.hpp"
 	"shared/sdk/CVar.hpp"
 	"shared/sdk/ConsoleManager.hpp"
 	"shared/sdk/DynamicRHI.hpp"
