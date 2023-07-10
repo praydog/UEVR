@@ -314,6 +314,8 @@ set(CMKR_TARGET sdk)
 set(sdk_SOURCES "")
 
 list(APPEND sdk_SOURCES
+	"shared/sdk/AActor.cpp"
+	"shared/sdk/APawn.cpp"
 	"shared/sdk/APlayerController.cpp"
 	"shared/sdk/CVar.cpp"
 	"shared/sdk/ConsoleManager.cpp"
@@ -339,6 +341,8 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/UObjectBase.cpp"
 	"shared/sdk/UProperty.cpp"
 	"shared/sdk/Utility.cpp"
+	"shared/sdk/AActor.hpp"
+	"shared/sdk/APawn.hpp"
 	"shared/sdk/APlayerController.hpp"
 	"shared/sdk/CVar.hpp"
 	"shared/sdk/ConsoleManager.hpp"
@@ -419,6 +423,8 @@ set(CMKR_TARGET sdk-nolog)
 set(sdk-nolog_SOURCES "")
 
 list(APPEND sdk-nolog_SOURCES
+	"shared/sdk/AActor.cpp"
+	"shared/sdk/APawn.cpp"
 	"shared/sdk/APlayerController.cpp"
 	"shared/sdk/CVar.cpp"
 	"shared/sdk/ConsoleManager.cpp"
@@ -444,6 +450,8 @@ list(APPEND sdk-nolog_SOURCES
 	"shared/sdk/UObjectBase.cpp"
 	"shared/sdk/UProperty.cpp"
 	"shared/sdk/Utility.cpp"
+	"shared/sdk/AActor.hpp"
+	"shared/sdk/APawn.hpp"
 	"shared/sdk/APlayerController.hpp"
 	"shared/sdk/CVar.hpp"
 	"shared/sdk/ConsoleManager.hpp"

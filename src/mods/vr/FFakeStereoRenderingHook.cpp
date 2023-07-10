@@ -26,6 +26,12 @@
 #include <sdk/RHICommandList.hpp>
 #include <sdk/UGameViewportClient.hpp>
 #include <sdk/Globals.hpp>
+#include <sdk/FName.hpp>
+#include <sdk/UObjectArray.hpp>
+
+#include <sdk/UGameplayStatics.hpp>
+#include <sdk/APawn.hpp>
+#include <sdk/APlayerController.hpp>
 
 #include "Framework.hpp"
 #include "Mods.hpp"
@@ -3997,9 +4003,15 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         const auto new_rotation = glm::normalize(vqi_norm * current_hmd_rotation * current_eye_rotation_offset);
         const auto eye_offset = glm::vec3{vr->get_eye_offset((VRRuntime::Eye)(true_index))};
 
-        const auto pos = glm::vec3{rotation_offset * ((vr->get_position(0) - vr->get_standing_origin()))};
+
+        const auto standing_delta = vr->get_position(0) - vr->get_standing_origin();
+        const auto standing_delta_flat = glm::vec3{standing_delta.x, 0, standing_delta.z};
+
+        const auto pos = glm::vec3{rotation_offset * standing_delta};
+        const auto pos_flat = glm::vec3{rotation_offset * standing_delta_flat};
 
         const auto head_offset = quat_converter * (vqi_norm * (pos * world_scale));
+        const auto head_offset_flat = quat_converter * (vqi_norm * (pos_flat * world_scale));
         const auto eye_separation = quat_converter * (glm::normalize(new_rotation) * (eye_offset * world_scale));
 
         if (!has_double_precision) {
@@ -4027,6 +4039,28 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
                 rot_d->pitch = euler.x;
                 rot_d->yaw = euler.y;
                 rot_d->roll = euler.z;
+            }
+        }
+
+        // Roomscale movement
+        if (true_index == 0 && vr->is_roomscale_enabled()) {
+            const auto world = sdk::UEngine::get()->get_world();
+
+            if (const auto controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0); controller != nullptr) {
+                if (const auto pawn = controller->get_acknowledged_pawn(); pawn != nullptr) {
+                    const auto pawn_pos = pawn->get_actor_location();
+                    const auto new_pos = pawn_pos - head_offset_flat;
+
+                    pawn->set_actor_location(new_pos, false, false);
+
+                    // Recenter the standing origin
+                    auto current_standing_origin = vr->get_standing_origin();
+                    const auto hmd_pos = vr->get_position(0);
+                    // dont touch the Y axis
+                    current_standing_origin.x = hmd_pos.x;
+                    current_standing_origin.z = hmd_pos.z;
+                    vr->set_standing_origin(current_standing_origin);
+                }
             }
         }
     }
