@@ -618,4 +618,31 @@ UProperty* UStruct::find_uproperty(std::wstring_view name) const {
 
     return nullptr;
 }
+
+UFunction* UStruct::find_function(std::wstring_view name) const {
+    static std::shared_mutex func_mtx{};
+    static std::unordered_map<const sdk::UStruct*, std::unordered_map<std::wstring, sdk::UFunction*>> func_cache{};
+
+    {
+        std::shared_lock _{ func_mtx };
+
+        if (auto it1 = func_cache.find(this); it1 != func_cache.end()) {
+            if (auto it2 = it1->second.find(name.data()); it2 != it1->second.end()) {
+                return it2->second;
+            }
+        }
+    }
+
+    for (auto super = this; super != nullptr; super = (UClass*)super->get_super_struct()) {
+        for (auto child = super->get_children(); child != nullptr; child = child->get_next()) {
+            //SPDLOG_INFO("[UStruct] Checking child UProperty {}", utility::narrow(child->get_fname().to_string()));
+
+            if (child->get_fname().to_string() == name) {
+                std::unique_lock _{ func_mtx };
+                func_cache[this][name.data()] = (sdk::UFunction*)child;
+                return (UFunction*)child;
+            }
+        }
+    }
+}
 }

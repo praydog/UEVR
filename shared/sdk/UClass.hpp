@@ -54,6 +54,7 @@ public:
 
     FProperty* find_property(std::wstring_view name) const;
     UProperty* find_uproperty(std::wstring_view name) const;
+    UFunction* find_function(std::wstring_view name) const;
 
 protected:
     static void resolve_field_offsets(uint32_t child_search_start);
@@ -75,6 +76,11 @@ public:
 
     UObject* get_class_default_object() const {
         return *(UObject**)((uintptr_t)this + s_default_object_offset);
+    }
+
+    template<typename T>
+    T* get_class_default_object() const {
+        return static_cast<T*>(get_class_default_object());
     }
 
 protected:
