@@ -6,11 +6,13 @@ namespace sdk {
 class UStruct;
 class UClass;
 class UObject;
+class UFunction;
 
 class UObjectBase {
 public:
     void update_offsets();
     std::wstring get_full_name() const;
+    void process_event(UFunction* function, void* params);
 
     UClass* get_class() const {
         return *(UClass**)((uintptr_t)this + s_class_private_offset);
@@ -37,6 +39,7 @@ public:
     }
 
 private:
+    using ProcessEventFn = void(*)(UObjectBase*, UFunction*, void*);
     static void update_process_event_index();
 
     static inline bool s_attempted_update_offsets{false};

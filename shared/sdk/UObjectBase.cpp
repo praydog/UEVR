@@ -190,4 +190,11 @@ std::wstring UObjectBase::get_full_name() const {
 
     return c->get_fname().to_string() + L' ' + obj_name;
 }
+
+void UObjectBase::process_event(sdk::UFunction* func, void* params) {
+    const auto vtable = *(void***)this;
+    const auto vfunc = (ProcessEventFn)vtable[s_process_event_index];
+    
+    vfunc(this, func, params);
+}
 }
