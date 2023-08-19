@@ -2021,7 +2021,12 @@ void VR::on_draw_ui() {
         ImGui::TreePop();
     }
 
-    m_roomscale_movement->draw("Roomscale Movement");
+    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+    if (ImGui::TreeNode("Roomscale Movement")) {
+        m_roomscale_movement->draw("Enabled");
+
+        ImGui::TreePop();
+    }
 
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
     if (ImGui::TreeNode("Decoupled Pitch")) {
