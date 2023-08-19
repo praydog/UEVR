@@ -13,6 +13,8 @@ public:
     bool set_actor_location(const glm::vec3& location, bool sweep, bool teleport);
     glm::vec3 get_actor_location();
 
+    bool set_actor_rotation(const glm::vec3& rotation, bool teleport);
+
 protected:
 };
 }
