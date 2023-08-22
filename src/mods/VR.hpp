@@ -451,6 +451,10 @@ public:
         return m_roomscale_movement->value();
     }
 
+    bool is_roomscale_using_actor_rotation() const {
+        return m_roomscale_movement_actor_rotation->value();
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;
@@ -662,6 +666,7 @@ private:
     const ModToggle::Ptr m_load_blueprint_code{ ModToggle::create(generate_name("LoadBlueprintCode"), false) };
     const ModToggle::Ptr m_2d_screen_mode{ ModToggle::create(generate_name("2DScreenMode"), false) };
     const ModToggle::Ptr m_roomscale_movement{ ModToggle::create(generate_name("RoomscaleMovement"), false) };
+    const ModToggle::Ptr m_roomscale_movement_actor_rotation{ ModToggle::create(generate_name("RoomscaleMovementActorRotation"), false) };
 
     // Aim method and movement orientation are not the same thing, but they can both have the same options
     const ModCombo::Ptr m_aim_method{ ModCombo::create(generate_name("AimMethod"), s_aim_method_names, AimMethod::GAME) };
@@ -726,6 +731,7 @@ private:
         *m_load_blueprint_code,
         *m_2d_screen_mode,
         *m_roomscale_movement,
+        *m_roomscale_movement_actor_rotation,
         *m_aim_method,
         *m_movement_orientation,
         *m_aim_speed,

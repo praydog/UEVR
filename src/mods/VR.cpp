@@ -2024,6 +2024,7 @@ void VR::on_draw_ui() {
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
     if (ImGui::TreeNode("Roomscale Movement")) {
         m_roomscale_movement->draw("Enabled");
+        m_roomscale_movement_actor_rotation->draw("Use Actor Rotation");
 
         ImGui::TreePop();
     }
