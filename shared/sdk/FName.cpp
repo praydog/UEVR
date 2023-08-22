@@ -172,7 +172,7 @@ std::optional<FName::ToStringFn> inlined_find_to_string() {
     const auto module = sdk::get_ue_module(L"AnimGraphRuntime");
 
     if (module == nullptr) {
-        SPDLOG_ERROR("FName::get_to_string: Failed to get module");
+        SPDLOG_ERROR("FName::get_to_string (inlined): Failed to get module");
         return std::nullopt;
     }
 
@@ -185,49 +185,75 @@ std::optional<FName::ToStringFn> inlined_find_to_string() {
         const auto str_data = utility::scan_string(module, candidate.data());
 
         if (!str_data) {
-            SPDLOG_ERROR("FName::get_to_string: Failed to get string data");
+            SPDLOG_ERROR("FName::get_to_string (inlined): Failed to get string data");
             continue;
         }
         
-        SPDLOG_INFO("FName::get_to_string: str_data={:x}", *str_data);
+        SPDLOG_INFO("FName::get_to_string (inlined): str_data={:x}", *str_data);
 
         const auto str_ref = utility::scan_displacement_reference(module, *str_data);
 
         if (!str_ref) {
-            SPDLOG_ERROR("FName::get_to_string: Failed to get string reference");
+            SPDLOG_ERROR("FName::get_to_string  (inlined): Failed to get string reference");
             continue;
         }
 
-        SPDLOG_INFO("FName::get_to_string: str_ref={:x}", *str_ref);
+        SPDLOG_INFO("FName::get_to_string (inlined): str_ref={:x}", *str_ref);
 
-        auto instructions = utility::get_disassembly_behind(*str_ref);
+        auto attempt_find_from_addr = [&](uintptr_t addr) -> std::optional<FName::ToStringFn> {
+            auto instructions = utility::get_disassembly_behind(addr);
 
-        if (instructions.empty()) {
-            SPDLOG_ERROR("FName::get_to_string: Failed to get instructions");
-            continue;
-        }
+            if (instructions.empty()) {
+                SPDLOG_ERROR("FName::get_to_string (inlined): Failed to get instructions");
+                return std::nullopt;
+            }
 
-        std::optional<FName::ToStringFn> result{};
+            std::reverse(instructions.begin(), instructions.end());
 
-        std::reverse(instructions.begin(), instructions.end());
-        for (auto& instr : instructions) {
-            if (std::string_view{instr.instrux.Mnemonic}.starts_with("CALL")) {
-                const auto displacement = utility::resolve_displacement(instr.addr);
+            for (auto& instr : instructions) {
+                if (std::string_view{instr.instrux.Mnemonic}.starts_with("CALL")) {
+                    const auto displacement = utility::resolve_displacement(instr.addr);
 
-                if (instr.instrux.BranchInfo.IsIndirect) {
-                    if (!IsBadReadPtr((void*)*displacement, sizeof(void*))) {
-                        result = *(FName::ToStringFn*)*displacement;
+                    if (instr.instrux.BranchInfo.IsIndirect) {
+                        if (!IsBadReadPtr((void*)*displacement, sizeof(void*))) {
+                            return *(FName::ToStringFn*)*displacement;
+                        }
+                    } else {
+                        return (FName::ToStringFn)*displacement;
                     }
-                } else {
-                    result = (FName::ToStringFn)*displacement;
+                    
+                    break;
                 }
-                
-                break;
+            }
+
+            return std::nullopt;
+        };
+
+        auto result = attempt_find_from_addr(*str_ref);
+
+        // very alternative scan
+        if (!result) {
+            SPDLOG_INFO("Attempting to perform alternative scan to the alternative scan");
+
+            const auto fn_begin = utility::find_function_start(*str_ref);
+
+            if (fn_begin) {
+                const auto fn_callsite = utility::scan_relative_reference_strict(module, *fn_begin, "E8");
+
+                if (fn_callsite) {
+                    result = attempt_find_from_addr(*fn_callsite);
+                } else {
+                    SPDLOG_ERROR("FName::get_to_string (inlined): Failed to find function callsite for alternative alternative");
+                }
+            } else {
+                SPDLOG_ERROR("FName::get_to_string (inlined): Failed to find function begin for alternative alternative");
             }
         }
 
         if (result) {
             SPDLOG_INFO("FName::get_to_string (inlined alternative): result={:x}", (uintptr_t)*result);
+        } else {
+            SPDLOG_ERROR("FName::get_to_string (inlined alternative): Failed to find ToString function");
         }
 
         return result;
@@ -287,7 +313,7 @@ std::optional<FName::ToStringFn> standard_find_to_string() {
 
         if (std::string_view{ix.Mnemonic}.starts_with("CALL") && !ix.BranchInfo.IsIndirect) {
             last_direct_call = utility::calculate_absolute((ip + ix.Length) - 4);
-            SPDLOG_INFO("Found a direct call to {:x}", *last_direct_call);
+            SPDLOG_INFO("Found a direct call to {:x} at {:x}", *last_direct_call, ip);
         }
 
         if (std::string_view{ix.Mnemonic}.starts_with("CALL")) {
@@ -347,6 +373,13 @@ FName::FName(std::wstring_view name, EFindName find_type) {
 }
 
 std::wstring FName::to_string() const {
+    static bool once = true;
+
+    if (once) {
+        SPDLOG_INFO("Calling FName::to_string for the first time");
+        once = false;
+    }
+
     const auto to_string = get_to_string();
 
     if (!to_string) {
