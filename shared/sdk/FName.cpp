@@ -64,7 +64,7 @@ Present in both (and 5.0.3+):
 + 0x4 FNavigationMetaData
 */
 namespace detail {
-std::optional<FName::ConstructorFn> get_constructor_from_candidate(std::wstring_view module_candidate, std::wstring_view str_candidate) {
+std::optional<FName::ConstructorFn> get_constructor_from_candidate(std::wstring_view module_candidate, std::wstring_view str_candidate) try {
     SPDLOG_INFO("FName::get_constructor_from_candidate: str_candidate={}", utility::narrow(str_candidate.data()));
 
     const auto module = sdk::get_ue_module(module_candidate.data());
@@ -133,6 +133,9 @@ std::optional<FName::ConstructorFn> get_constructor_from_candidate(std::wstring_
 
     SPDLOG_INFO("FName::get_constructor_from_candidate: result={:x}", (uintptr_t)*result);
     return result;
+} catch(...) {
+    SPDLOG_ERROR("FName::get_constructor_from_candidate: Failed to get constructor from candidate due to exception");
+    return std::nullopt;
 }
 }
 
@@ -170,7 +173,7 @@ std::optional<FName::ConstructorFn> FName::get_constructor() {
 namespace detail {
 // Alternative for ToString if a majority of the calls are inlined
 // not all of them are though.
-std::optional<FName::ToStringFn> inlined_find_to_string() {
+std::optional<FName::ToStringFn> inlined_find_to_string() try {
     SPDLOG_INFO("FName::get_to_string: inlined_find_to_string");
 
     const auto module = sdk::get_ue_module(L"AnimGraphRuntime");
@@ -263,6 +266,9 @@ std::optional<FName::ToStringFn> inlined_find_to_string() {
         return result;
     }
 
+    return std::nullopt;
+} catch(...) {
+    SPDLOG_ERROR("FName::get_to_string (inlined): Failed to find ToString function due to exception");
     return std::nullopt;
 }
 
