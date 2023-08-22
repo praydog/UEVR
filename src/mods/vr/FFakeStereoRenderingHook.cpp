@@ -94,6 +94,11 @@ void FFakeStereoRenderingHook::on_frame() {
     attempt_hook_slate_thread();
     attempt_hook_fsceneview_constructor();
 
+    // TODO: see if this can be threaded; it might not be able to because of TLS or something
+    sdk::FName::get_constructor();
+    sdk::FName::get_to_string();
+    sdk::FUObjectArray::get();
+
     // Ideally we want to do all hooking
     // from game engine tick. if it fails
     // we will fall back to doing it here.
