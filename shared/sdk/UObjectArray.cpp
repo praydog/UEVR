@@ -1,4 +1,5 @@
 #include <unordered_map>
+#include <unordered_set>
 #include <shared_mutex>
 
 #include <spdlog/spdlog.h>
@@ -6,11 +7,15 @@
 #include <utility/String.hpp>
 
 #include "EngineModule.hpp"
+#include "UEngine.hpp"
+#include "UGameplayStatics.hpp"
+#include "APlayerController.hpp"
 
 #include "UObject.hpp"
 #include "UClass.hpp"
 #include "UProperty.hpp"
 #include "FName.hpp"
+#include "FField.hpp"
 #include "UObjectArray.hpp"
 
 namespace sdk {
@@ -55,7 +60,7 @@ UObjectBase* find_uobject(const std::wstring& full_name, bool cached) {
     return nullptr;
 }
 
-FUObjectArray* FUObjectArray::get() {
+FUObjectArray* FUObjectArray::get() try {
     static auto result = []() -> FUObjectArray* {
         SPDLOG_INFO("[FUObjectArray::get] Searching for FUObjectArray...");
 
@@ -356,7 +361,90 @@ FUObjectArray* FUObjectArray::get() {
         sdk::UScriptStruct::update_offsets();
         sdk::UProperty::update_offsets();
 
-        for (auto i = 0; i < result->get_object_count(); ++i) {
+        try {
+            const auto world = sdk::UEngine::get()->get_world();
+
+            SPDLOG_INFO("[FUObjectArray::get] World: 0x{:x}", (uintptr_t)world);
+
+            // Testing caching
+            const auto world2 = sdk::UEngine::get()->get_world();
+
+            SPDLOG_INFO("[FUObjectArray::get] World2: 0x{:x}", (uintptr_t)world2);
+
+            const auto world_name = world->get_full_name();
+            SPDLOG_INFO("[FUObjectArray::get] World name: {}", utility::narrow(world_name));
+
+            const auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
+            SPDLOG_INFO("[FUObjectArray::get] PlayerController: 0x{:x}", (uintptr_t)player_controller);
+
+            const auto pawn = sdk::UEngine::get()->get_localpawn(0);
+            SPDLOG_INFO("[FUObjectArray::get] Pawn: 0x{:x}", (uintptr_t)pawn);
+
+            if (player_controller != nullptr) {
+                SPDLOG_INFO("[FUObjectArray::get] Pawn2: 0x{:x}", (uintptr_t)player_controller->get_acknowledged_pawn());
+            }   
+        } catch(...) {
+            SPDLOG_ERROR("[FUObjectArray::get] Unknown exception occurred while performing tests on GUObjectArray");
+        }
+
+        std::unordered_set<std::wstring> possible_field_types{};
+
+        const auto class_t = sdk::UClass::static_class();
+
+        for (auto i = 0; i < result->get_object_count(); ++i) try {
+            const auto item = result->get_object(i);
+            if (item == nullptr) {
+                continue;
+            }
+            
+            const auto obj = (sdk::UObject*)item->object;
+
+            if (obj == nullptr) {
+                continue;
+            }
+
+            if (!obj->is_a(class_t)) {
+                continue;
+            }
+
+            const auto c = (sdk::UClass*)obj;
+
+            for (auto f = c->get_child_properties(); f != nullptr; f = f->get_next()) {
+                // TODO: the other one
+                if (FField::is_ufield_only()) {
+                    const auto ufield = (sdk::UField*)f;
+                    const auto f_class = ufield->get_class();
+
+                    if (f_class == nullptr) {
+                        continue;
+                    }
+
+                    const auto f_class_name = f_class->get_full_name();
+
+                    if (!possible_field_types.contains(f_class_name)) {
+                        SPDLOG_INFO("[FUObjectArray::get] Possible field type: {}", utility::narrow(f_class_name));
+                        possible_field_types.insert(f_class_name);
+                    }
+                } else {
+                    const auto f_class = f->get_class();
+
+                    if (f_class == nullptr) {
+                        continue;
+                    }
+
+                    const auto f_class_name = f_class->get_name().to_string();
+
+                    if (!possible_field_types.contains(f_class_name)) {
+                        SPDLOG_INFO("[FUObjectArray::get] Possible field type: {}", utility::narrow(f_class_name));
+                        possible_field_types.insert(f_class_name);
+                    }
+                }
+            }
+        } catch(...) {
+            continue;
+        }
+
+        for (auto i = 0; i < result->get_object_count(); ++i) try {
             auto item = result->get_object(i);
             if (item == nullptr) {
                 continue;
@@ -375,9 +463,19 @@ FUObjectArray* FUObjectArray::get() {
             } catch(...) {
                 SPDLOG_ERROR("Failed to get name {}", i);
             }
+        } catch(...) {
+            SPDLOG_ERROR("[FUObjectArray::get] Exception: failed to get object {}", i);
         }
     };
 
     return result;
+} catch(...) {
+    static bool once = true;
+    if (once) {
+        SPDLOG_ERROR("[FUObjectArray::get] Failed to get GUObjectArray, prevented a crash");
+        once = false;
+    }
+
+    return nullptr;
 }
 }
