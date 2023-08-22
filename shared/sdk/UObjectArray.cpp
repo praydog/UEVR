@@ -271,6 +271,10 @@ FUObjectArray* FUObjectArray::get() try {
             // Now comes the real test, we need to check the entire size of the array and make sure that the pointers are valid
             // Locate the distance between FUObjectItems
             const auto potential_result = (FUObjectArray*)*displacement;
+            if (potential_result->get_object_count() <= 10) {
+                SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to extremely small object count", *displacement);
+                return utility::ExhaustionResult::CONTINUE;
+            }
             const auto first_item = potential_result->get_object(0);
             bool distance_determined = false;
 
