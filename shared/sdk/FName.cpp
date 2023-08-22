@@ -1,7 +1,11 @@
 #include <spdlog/spdlog.h>
 
+#include <bdshemu.h>
+
 #include <utility/Scan.hpp>
 #include <utility/String.hpp>
+#include <utility/Emulation.hpp>
+
 #include "EngineModule.hpp"
 
 #include "FName.hpp"
@@ -231,7 +235,7 @@ std::optional<FName::ToStringFn> inlined_find_to_string() {
 
         auto result = attempt_find_from_addr(*str_ref);
 
-        // very alternative scan
+        // very alternative scan, for when this isn't inlined...
         if (!result) {
             SPDLOG_INFO("Attempting to perform alternative scan to the alternative scan");
 
@@ -337,6 +341,55 @@ std::optional<FName::ToStringFn> standard_find_to_string() {
         SPDLOG_ERROR("FName::get_to_string: Failed to find ToString function");
         return std::nullopt;
     }
+
+    // Check the ToString function's code to see if it's accessing memory that's >= sizeof(FName)
+    // because compiler optimizations can turn the function into UClass::GetName() which isn't inlined which calls GetFName().ToString()
+    // if it is, we can get the first function it calls and use that instead.
+    utility::ShemuContext ctx{module};
+    ctx.ctx->Registers.RegRip = (uintptr_t)*result;
+    ctx.ctx->Registers.RegRcx = 0x12345678; // magic number
+
+    utility::emulate(module, (uintptr_t)*result, 100, ctx, [&](const utility::ShemuContextExtended& ctx) -> utility::ExhaustionResult {
+        if (ctx.next.writes_to_memory || std::string_view{ctx.next.ix.Mnemonic}.starts_with("CALL")) {
+            return utility::ExhaustionResult::STEP_OVER;
+        }
+        
+        const auto& nix = ctx.next.ix;
+
+        if (nix.OperandsCount < 2) {
+            return utility::ExhaustionResult::CONTINUE;
+        }
+
+        if (nix.Operands[1].Type == ND_OP_MEM && nix.Operands[1].Info.Memory.HasBase && 
+            nix.Operands[1].Info.Memory.HasDisp && nix.Operands[1].Info.Memory.Disp >= 8) 
+        {
+            const auto reg_value = ((ND_UINT64*)&ctx.ctx->ctx->Registers)[nix.Operands[1].Info.Memory.Base];
+
+            if (reg_value == 0x12345678) {
+                char text[ND_MIN_BUF_SIZE];
+                NdToText(&nix, 0, sizeof(text), text);
+                SPDLOG_INFO("{}", text);
+                SPDLOG_INFO("FName::get_to_string: Found function is not inlined (UClass::GetName)");
+
+                const auto next_call = utility::scan_mnemonic(ctx.ctx->ctx->Registers.RegRip, 20, "CALL");
+
+                if (next_call) {
+                    const auto resolved_call = utility::resolve_displacement(*next_call);
+
+                    if (resolved_call) {
+                        *result = (FName::ToStringFn)utility::calculate_absolute(*next_call + 1);
+                        SPDLOG_INFO("FName::get_to_string: Found function to use instead {:x}", (uintptr_t)*result);
+                    } else {
+                        SPDLOG_ERROR("FName::get_to_string: Failed to resolve displacement for next call");
+                    }
+                }
+
+                return utility::ExhaustionResult::BREAK;
+            }
+        }
+
+        return utility::ExhaustionResult::CONTINUE;
+    });
 
     SPDLOG_INFO("FName::get_to_string: result={:x}", (uintptr_t)*result);
 
