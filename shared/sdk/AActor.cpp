@@ -1,6 +1,7 @@
 #include <vector>
 #include "UObjectArray.hpp"
 #include "ScriptVector.hpp"
+#include "ScriptRotator.hpp"
 
 #include "AActor.hpp"
 
@@ -69,7 +70,7 @@ glm::vec3 AActor::get_actor_location() {
 }
 bool AActor::set_actor_rotation(const glm::vec3& rotation, bool teleport) {
     static const auto func = static_class()->find_function(L"K2_SetActorRotation");
-    static const auto frotator = sdk::find_uobject<UScriptStruct>(L"ScriptStruct /Script/CoreUObject.Rotator");
+    const auto frotator = sdk::ScriptRotator::static_struct();
 
     const auto is_ue5 = frotator->get_struct_size() == sizeof(glm::vec<3, double>);
 
