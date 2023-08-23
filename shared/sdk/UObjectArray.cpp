@@ -70,8 +70,20 @@ FUObjectArray* FUObjectArray::get() try {
             return nullptr;
         }
 
-        const auto object_base_init_fn = utility::find_function_with_string_refs(core_uobject, L"gc.MaxObjectsNotConsideredByGC", 
-                                                                                               L"/Script/Engine.GarbageCollectionSettings");
+        auto object_base_init_fn = utility::find_function_with_string_refs(core_uobject, L"gc.MaxObjectsNotConsideredByGC", 
+                                                                                         L"/Script/Engine.GarbageCollectionSettings");
+
+        // Alternative scan for REALLY old versions of UE4
+        // MaxObjectsNotConsideredByGC
+        // SizeOfPermanentObjectPool
+        if (!object_base_init_fn) {
+            object_base_init_fn = utility::find_function_with_string_refs(core_uobject, L"MaxObjectsNotConsideredByGC", 
+                                                                                        L"SizeOfPermanentObjectPool");
+            
+            if (object_base_init_fn) {
+                SPDLOG_INFO("[FUObjectArray::get] Found object base init function for old UE4 versions");
+            }
+        }
 
         if (!object_base_init_fn) {
             SPDLOG_ERROR("[FUObjectArray::get] Failed to find object base init function");
@@ -120,6 +132,7 @@ FUObjectArray* FUObjectArray::get() try {
             int32_t& potential_obj_max_objects_not_consid_by_gc = *(int32_t*)(*displacement + 0x8);
             bool& potential_obj_is_open_for_disregard_for_gc = *(bool*)(*displacement + 0xC);
 
+            // TODO: Possibly see if we can do some analysis to automatically find these offsets
             // array of structures, unknown size
             void*& potential_obj_obj_objects = *(void**)(*displacement + 0x10);
             int32_t& potential_obj_obj_max = *(int32_t*)(*displacement + 0x18);
@@ -268,13 +281,16 @@ FUObjectArray* FUObjectArray::get() try {
                 SPDLOG_INFO("GUObjectArray appears to not be chunked (max_chunks: {}, num_chunks: {})", potential_max_chunks, potential_num_chunks);
             }
 
-            // Now comes the real test, we need to check the entire size of the array and make sure that the pointers are valid
-            // Locate the distance between FUObjectItems
+            // Make sure the GUObjectArray has a valid object count. It usually has at least thousands. Small counts are invalid.
+            // This could change if we are trying to find the GUObjectArray right when the game starts.
             const auto potential_result = (FUObjectArray*)*displacement;
             if (potential_result->get_object_count() <= 10) {
                 SPDLOG_INFO("Skipping potential GUObjectArray at 0x{:x} due to extremely small object count", *displacement);
                 return utility::ExhaustionResult::CONTINUE;
             }
+
+            // Now comes the real test, we need to check the entire size of the array and make sure that the pointers are valid
+            // Locate the distance between FUObjectItems
             const auto first_item = potential_result->get_object(0);
             bool distance_determined = false;
 
