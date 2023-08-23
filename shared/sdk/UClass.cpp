@@ -14,6 +14,8 @@
 #include "FProperty.hpp"
 #include "FField.hpp"
 #include "FProperty.hpp"
+#include "ScriptVector.hpp"
+#include "ScriptMatrix.hpp"
 
 #include "UClass.hpp"
 
@@ -43,8 +45,8 @@ void UField::update_offsets() {
 }
 
 void UStruct::resolve_field_offsets(uint32_t child_search_start) {
-    const auto matrix_scriptstruct = sdk::find_uobject(L"ScriptStruct /Script/CoreUObject.Matrix");
-    const auto vector_scriptstruct = sdk::find_uobject(L"ScriptStruct /Script/CoreUObject.Vector");
+    const auto matrix_scriptstruct = sdk::ScriptMatrix::static_struct();
+    const auto vector_scriptstruct = sdk::ScriptVector::static_struct();
     const auto float_property = sdk::find_uobject(L"Class /Script/CoreUObject.FloatProperty");
     const auto double_property = sdk::find_uobject(L"Class /Script/CoreUObject.DoubleProperty");
 
@@ -511,8 +513,8 @@ void UScriptStruct::update_offsets() {
 
     SPDLOG_INFO("[UScriptStruct] Bruteforcing offsets...");
 
-    const auto matrix_scriptstruct = sdk::find_uobject(L"ScriptStruct /Script/CoreUObject.Matrix");
-    const auto vector_scriptstruct = sdk::find_uobject(L"ScriptStruct /Script/CoreUObject.Vector");
+    const auto matrix_scriptstruct = sdk::ScriptMatrix::static_struct();
+    const auto vector_scriptstruct = sdk::ScriptVector::static_struct();
 
     if (matrix_scriptstruct == nullptr || vector_scriptstruct == nullptr) {
         SPDLOG_ERROR("[UScriptStruct] Failed to find Matrix/Vector!");
