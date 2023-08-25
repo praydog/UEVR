@@ -561,10 +561,10 @@ void OpenXR::destroy() {
         xrDestroySession(this->session);
     }
 
-    if (this->instance != nullptr) {
+    /*if (this->instance != nullptr) {
         xrDestroyInstance(this->instance);
         this->instance = nullptr;
-    }
+    }*/
 
     this->session = nullptr;
     this->session_ready = false;

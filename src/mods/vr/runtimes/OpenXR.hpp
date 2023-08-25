@@ -181,7 +181,10 @@ public:
     std::recursive_mutex event_mtx{};
     std::recursive_mutex swapchain_mtx{};
 
-    XrInstance instance{XR_NULL_HANDLE};
+    // Making it static because for some reason destroying it doesn't actually completely destroy everything.
+    // So we must make sure it always exists if we ever re-initialize OpenXR.
+    static inline XrInstance instance{XR_NULL_HANDLE};
+
     XrSession session{XR_NULL_HANDLE};
     XrSpace stage_space{XR_NULL_HANDLE};
     XrSpace view_space{XR_NULL_HANDLE}; // for generating view matrices
