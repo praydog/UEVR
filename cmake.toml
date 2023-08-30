@@ -169,6 +169,17 @@ type = "plugin"
 sources = ["examples/example_plugin/**.cpp", "examples/example_plugin/**.c"]
 headers = ["examples/example_plugin/**.hpp", "examples/example_plugin/**.h"]
 
+[target.sdk-test]
+type = "shared"
+sources = ["side-projects/sdk-test/**.cpp", "side-projects/sdk-test/**.c"]
+headers = ["side-projects/sdk-test/**.hpp", "side-projects/sdk-test/**.h"]
+include-directories = ["shared/", "include/"]
+compile-features = ["cxx_std_23"]
+link-libraries = [
+    "kananlib",
+    "sdk"
+]
+
 [target.vr-plugin-nullifier]
 type = "shared"
 sources = ["vr-plugin-nullifier/**.cpp", "vr-plugin-nullifier/**.c"]

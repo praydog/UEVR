@@ -639,6 +639,47 @@ target_link_libraries(example_plugin PUBLIC
 unset(CMKR_TARGET)
 unset(CMKR_SOURCES)
 
+unset(CMKR_TARGET)
+unset(CMKR_SOURCES)
+
+# Target sdk-test
+set(CMKR_TARGET sdk-test)
+set(sdk-test_SOURCES "")
+
+list(APPEND sdk-test_SOURCES
+	"side-projects/sdk-test/Main.cpp"
+)
+
+list(APPEND sdk-test_SOURCES
+	cmake.toml
+)
+
+set(CMKR_SOURCES ${sdk-test_SOURCES})
+add_library(sdk-test SHARED)
+
+if(sdk-test_SOURCES)
+	target_sources(sdk-test PRIVATE ${sdk-test_SOURCES})
+endif()
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${sdk-test_SOURCES})
+
+target_compile_features(sdk-test PUBLIC
+	cxx_std_23
+)
+
+target_include_directories(sdk-test PUBLIC
+	"shared/"
+	"include/"
+)
+
+target_link_libraries(sdk-test PUBLIC
+	kananlib
+	sdk
+)
+
+unset(CMKR_TARGET)
+unset(CMKR_SOURCES)
+
 # Target vr-plugin-nullifier
 set(CMKR_TARGET vr-plugin-nullifier)
 set(vr-plugin-nullifier_SOURCES "")
