@@ -326,6 +326,7 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/FProperty.cpp"
 	"shared/sdk/FRenderTargetPool.cpp"
 	"shared/sdk/FSceneView.cpp"
+	"shared/sdk/FStructProperty.cpp"
 	"shared/sdk/FViewportInfo.cpp"
 	"shared/sdk/Globals.cpp"
 	"shared/sdk/ScriptMatrix.cpp"
@@ -335,6 +336,7 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/StereoStuff.cpp"
 	"shared/sdk/UClass.cpp"
 	"shared/sdk/UEngine.cpp"
+	"shared/sdk/UEnum.cpp"
 	"shared/sdk/UFunction.cpp"
 	"shared/sdk/UGameEngine.cpp"
 	"shared/sdk/UGameViewportClient.cpp"
@@ -357,6 +359,7 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/FProperty.hpp"
 	"shared/sdk/FRenderTargetPool.hpp"
 	"shared/sdk/FSceneView.hpp"
+	"shared/sdk/FStructProperty.hpp"
 	"shared/sdk/FViewportInfo.hpp"
 	"shared/sdk/Globals.hpp"
 	"shared/sdk/Math.hpp"
@@ -369,6 +372,7 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/TArray.hpp"
 	"shared/sdk/UClass.hpp"
 	"shared/sdk/UEngine.hpp"
+	"shared/sdk/UEnum.hpp"
 	"shared/sdk/UFunction.hpp"
 	"shared/sdk/UGameEngine.hpp"
 	"shared/sdk/UGameViewportClient.hpp"
@@ -419,6 +423,7 @@ target_link_libraries(sdk PUBLIC
 
 target_link_libraries(sdk PUBLIC
 	kananlib
+	Version
 )
 
 unset(CMKR_TARGET)
@@ -441,6 +446,7 @@ list(APPEND sdk-nolog_SOURCES
 	"shared/sdk/FProperty.cpp"
 	"shared/sdk/FRenderTargetPool.cpp"
 	"shared/sdk/FSceneView.cpp"
+	"shared/sdk/FStructProperty.cpp"
 	"shared/sdk/FViewportInfo.cpp"
 	"shared/sdk/Globals.cpp"
 	"shared/sdk/ScriptMatrix.cpp"
@@ -450,6 +456,7 @@ list(APPEND sdk-nolog_SOURCES
 	"shared/sdk/StereoStuff.cpp"
 	"shared/sdk/UClass.cpp"
 	"shared/sdk/UEngine.cpp"
+	"shared/sdk/UEnum.cpp"
 	"shared/sdk/UFunction.cpp"
 	"shared/sdk/UGameEngine.cpp"
 	"shared/sdk/UGameViewportClient.cpp"
@@ -472,6 +479,7 @@ list(APPEND sdk-nolog_SOURCES
 	"shared/sdk/FProperty.hpp"
 	"shared/sdk/FRenderTargetPool.hpp"
 	"shared/sdk/FSceneView.hpp"
+	"shared/sdk/FStructProperty.hpp"
 	"shared/sdk/FViewportInfo.hpp"
 	"shared/sdk/Globals.hpp"
 	"shared/sdk/Math.hpp"
@@ -484,6 +492,7 @@ list(APPEND sdk-nolog_SOURCES
 	"shared/sdk/TArray.hpp"
 	"shared/sdk/UClass.hpp"
 	"shared/sdk/UEngine.hpp"
+	"shared/sdk/UEnum.hpp"
 	"shared/sdk/UFunction.hpp"
 	"shared/sdk/UGameEngine.hpp"
 	"shared/sdk/UGameViewportClient.hpp"

@@ -16,6 +16,7 @@
 #include "UProperty.hpp"
 #include "FName.hpp"
 #include "FField.hpp"
+#include "FStructProperty.hpp"
 #include "UObjectArray.hpp"
 
 namespace sdk {
@@ -380,6 +381,7 @@ FUObjectArray* FUObjectArray::get() try {
         sdk::UStruct::update_offsets();
         sdk::UScriptStruct::update_offsets();
         sdk::UProperty::update_offsets();
+        sdk::FStructProperty::update_offsets();
 
         try {
             const auto world = sdk::UEngine::get()->get_world();

@@ -136,6 +136,7 @@ link-libraries = [
 type = "sdk-template"
 link-libraries = [
     "kananlib",
+    "Version"
 ]
 
 [target.sdk-nolog]

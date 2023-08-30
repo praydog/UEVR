@@ -7,6 +7,7 @@
 
 namespace sdk {
 class UProperty;
+class FStructProperty;
 
 class FProperty : public FField {
 public:
@@ -22,5 +23,6 @@ private:
 
     friend class UStruct;
     friend class UProperty;
+    friend class FStructProperty;
 };
 }
