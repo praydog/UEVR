@@ -2062,29 +2062,37 @@ void VR::on_draw_ui() {
         m_fake_stereo_hook->on_draw_ui();
     }
 
-    ImGui::Separator();
-    ImGui::Text("Debug info");
+    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+    if (ImGui::TreeNode("Compatibility Options")) {
+        m_compatibility_skip_pip->draw("Skip PostInitProperties");
+        ImGui::TreePop();
+    }
+    
+    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+    if (ImGui::TreeNode("Debug Info")) {
+        ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
+        ImGui::DragFloat4("Right Bounds", (float*)&m_right_bounds, 0.005f, -2.0f, 2.0f);
+        ImGui::DragFloat4("Left Bounds", (float*)&m_left_bounds, 0.005f, -2.0f, 2.0f);
+        ImGui::Checkbox("Disable Projection Matrix Override", &m_disable_projection_matrix_override);
+        ImGui::Checkbox("Disable View Matrix Override", &m_disable_view_matrix_override);
+        ImGui::Checkbox("Disable Backbuffer Size Override", &m_disable_backbuffer_size_override);
+        ImGui::Checkbox("Disable VR Overlay", &m_disable_overlay);
+        ImGui::Checkbox("Stereo Emulation Mode", &m_stereo_emulation_mode);
+        ImGui::Checkbox("Wait for Present", &m_wait_for_present);
+        ImGui::Checkbox("Controllers allowed", &m_controllers_allowed);
+        ImGui::Checkbox("Controller test mode", &m_controller_test_mode);
 
-    ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
-    ImGui::DragFloat4("Right Bounds", (float*)&m_right_bounds, 0.005f, -2.0f, 2.0f);
-    ImGui::DragFloat4("Left Bounds", (float*)&m_left_bounds, 0.005f, -2.0f, 2.0f);
-    ImGui::Checkbox("Disable Projection Matrix Override", &m_disable_projection_matrix_override);
-    ImGui::Checkbox("Disable View Matrix Override", &m_disable_view_matrix_override);
-    ImGui::Checkbox("Disable Backbuffer Size Override", &m_disable_backbuffer_size_override);
-    ImGui::Checkbox("Disable VR Overlay", &m_disable_overlay);
-    ImGui::Checkbox("Stereo Emulation Mode", &m_stereo_emulation_mode);
-    ImGui::Checkbox("Wait for Present", &m_wait_for_present);
-    ImGui::Checkbox("Controllers allowed", &m_controllers_allowed);
-    ImGui::Checkbox("Controller test mode", &m_controller_test_mode);
+        const double min_ = 0.0;
+        const double max_ = 25.0;
+        ImGui::SliderScalar("Prediction Scale", ImGuiDataType_Double, &m_openxr->prediction_scale, &min_, &max_);
 
-    const double min_ = 0.0;
-    const double max_ = 25.0;
-    ImGui::SliderScalar("Prediction Scale", ImGuiDataType_Double, &m_openxr->prediction_scale, &min_, &max_);
+        ImGui::DragFloat4("Raw Left", (float*)&m_raw_projections[0], 0.01f, -100.0f, 100.0f);
+        ImGui::DragFloat4("Raw Right", (float*)&m_raw_projections[1], 0.01f, -100.0f, 100.0f);
 
-    ImGui::DragFloat4("Raw Left", (float*)&m_raw_projections[0], 0.01f, -100.0f, 100.0f);
-    ImGui::DragFloat4("Raw Right", (float*)&m_raw_projections[1], 0.01f, -100.0f, 100.0f);
+        ImGui::TextWrapped("Hardware scheduling: %s", m_has_hw_scheduling ? "Enabled" : "Disabled");
 
-    ImGui::TextWrapped("Hardware scheduling: %s", m_has_hw_scheduling ? "Enabled" : "Disabled");
+        ImGui::TreePop();
+    }
 }
 
 Vector4f VR::get_position(uint32_t index, bool grip) const {

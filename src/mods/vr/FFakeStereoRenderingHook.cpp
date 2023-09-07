@@ -4111,31 +4111,38 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
     SPDLOG_INFO_ONCE("calculate stereo projection matrix called! {} from {:x}", view_index, (uintptr_t)_ReturnAddress() - (uintptr_t)utility::get_module_within((uintptr_t)_ReturnAddress()).value_or(nullptr));
 #endif
 
-    if (!g_hook->m_fixed_localplayer_view_count) {
-        if (!g_hook->m_calculate_stereo_projection_matrix_post_hook) {
-            const auto return_address = (uintptr_t)_ReturnAddress();
-            SPDLOG_INFO("Inserting midhook after CalculateStereoProjectionMatrix... @ {:x}", return_address);
+    auto& vr = VR::get();
 
-            constexpr auto max_stack_depth = 100;
-            uintptr_t stack[max_stack_depth]{};
-
-            const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
-
-            for (int i = 0; i < depth; i++) {
-                g_hook->m_projection_matrix_stack.push_back(stack[i]);
-                SPDLOG_INFO(" {:x}", (uintptr_t)stack[i]);
-            }
-
-            g_hook->m_calculate_stereo_projection_matrix_post_hook = safetyhook::create_mid((void*)return_address, &FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix);
-
+    // Only call PostInitProperties if ghosting fix enabled or native stereo is being used.
+    // Also, if we don't have a hook on GetDesiredNumberOfViews, we need to call PostInitProperties
+    //if (!vr->is_using_afr() || vr->is_ghosting_fix_enabled() || !g_hook->m_get_desired_number_of_views_hook) {
+    if (!vr->should_skip_post_init_properties()) {
+        if (!g_hook->m_fixed_localplayer_view_count) {
             if (!g_hook->m_calculate_stereo_projection_matrix_post_hook) {
-                SPDLOG_ERROR("Failed to insert midhook after CalculateStereoProjectionMatrix!");
+                const auto return_address = (uintptr_t)_ReturnAddress();
+                SPDLOG_INFO("Inserting midhook after CalculateStereoProjectionMatrix... @ {:x}", return_address);
+
+                constexpr auto max_stack_depth = 100;
+                uintptr_t stack[max_stack_depth]{};
+
+                const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
+
+                for (int i = 0; i < depth; i++) {
+                    g_hook->m_projection_matrix_stack.push_back(stack[i]);
+                    SPDLOG_INFO(" {:x}", (uintptr_t)stack[i]);
+                }
+
+                g_hook->m_calculate_stereo_projection_matrix_post_hook = safetyhook::create_mid((void*)return_address, &FFakeStereoRenderingHook::post_calculate_stereo_projection_matrix);
+
+                if (!g_hook->m_calculate_stereo_projection_matrix_post_hook) {
+                    SPDLOG_ERROR("Failed to insert midhook after CalculateStereoProjectionMatrix!");
+                }
             }
-        }
-    } else if (g_hook->m_calculate_stereo_projection_matrix_post_hook) {
-        SPDLOG_INFO("Removing midhook after CalculateStereoProjectionMatrix, job is done...");
-        g_hook->m_calculate_stereo_projection_matrix_post_hook = {};
-        g_hook->m_get_projection_data_pre_hook = {};
+        } else if (g_hook->m_calculate_stereo_projection_matrix_post_hook) {
+            SPDLOG_INFO("Removing midhook after CalculateStereoProjectionMatrix, job is done...");
+            g_hook->m_calculate_stereo_projection_matrix_post_hook = {};
+            g_hook->m_get_projection_data_pre_hook = {};
+        }   
     }
 
     if (!g_framework->is_game_data_intialized()) {
@@ -4208,7 +4215,6 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
     if (out != nullptr) {
         auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
     
-        auto& vr = VR::get();
         if (vr->is_using_afr()) {
             true_index = g_frame_count % 2;
         }

@@ -455,6 +455,10 @@ public:
         return m_roomscale_movement_actor_rotation->value();
     }
 
+    bool should_skip_post_init_properties() const {
+        return m_compatibility_skip_pip->value();
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;
@@ -695,6 +699,8 @@ private:
     const ModToggle::Ptr m_splitscreen_compatibility_mode{ ModToggle::create(generate_name("SplitscreenCompatibilityMode"), false) };
     const ModInt32::Ptr m_splitscreen_view_index{ ModInt32::create(generate_name("SplitscreenViewIndex"), 0) };
 
+    const ModToggle::Ptr m_compatibility_skip_pip{ ModToggle::create(generate_name("Compatibility_SkipPostInitProperties"), false) };
+
     struct DecoupledPitchData {
         mutable std::shared_mutex mtx{};
         glm::quat pre_flattened_rotation{};
@@ -749,6 +755,7 @@ private:
         *m_ghosting_fix,
         *m_splitscreen_compatibility_mode,
         *m_splitscreen_view_index,
+        *m_compatibility_skip_pip
     };
     
 
