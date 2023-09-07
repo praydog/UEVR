@@ -890,6 +890,9 @@ void Framework::on_frontend_command(UEVRSharedMemory::Command command) {
         });
 
         break;
+    case UEVRSharedMemory::Command::CONFIG_SETUP_ACKNOWLEDGED:
+        m_uevr_shared_memory->data().signal_frontend_config_setup = false;
+        break;
     default:
         spdlog::error("Unknown frontend command received: {}", (int)command);
         break;
@@ -947,6 +950,11 @@ void Framework::save_config() {
     }
 
     spdlog::info("Saved config");
+
+    if (auto& sm = g_framework->get_shared_memory(); sm) {
+        sm->data().signal_frontend_config_setup = true;
+        spdlog::info("Signaled frontend config setup");
+    }
 }
 
 void Framework::reset_config() try {

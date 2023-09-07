@@ -27,6 +27,7 @@ public:
 
     enum Command {
         RELOAD_CONFIG = 0,
+        CONFIG_SETUP_ACKNOWLEDGED = 1,
     };
 
 public:
@@ -43,6 +44,7 @@ public:
         uint32_t pid{}; // Process ID of the game
         uint32_t main_thread_id{}; // Main thread ID of the game
         uint32_t command_thread_id{}; // Thread ID commands are sent to (via PostThreadMessage)
+        bool signal_frontend_config_setup{false};
     };
     #pragma pack(pop)
 
@@ -172,6 +174,10 @@ public:
 
     auto& get_frame_worker() {
         return m_frame_worker;
+    }
+
+    auto& get_shared_memory() {
+        return m_uevr_shared_memory;
     }
 
 private:
