@@ -1052,6 +1052,8 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
             return "Failed to enumerate swapchain images.";
         }
 
+        SPDLOG_INFO("[VR] Runtime wants {} images for swapchain {}", image_count, i);
+
         auto& ctx = this->contexts[i];
 
         ctx.textures.clear();
@@ -1060,33 +1062,13 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
         ctx.texture_contexts.resize(image_count);
 
         for (uint32_t j = 0; j < image_count; ++j) {
-            spdlog::info("[VR] Creating swapchain image {} for swapchain {}", j, i);
-
             ctx.textures[j] = {XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR};
             ctx.texture_contexts[j] = std::make_unique<d3d12::TextureContext>();
             ctx.texture_contexts[j]->commands.setup((std::wstring{L"OpenXR commands "} + std::to_wstring(i) + L" " + std::to_wstring(j)).c_str());
-
-            auto resource_state = D3D12_RESOURCE_STATE_RENDER_TARGET;
-
-            if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
-                resource_state = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-            }
-
-            if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc, resource_state, nullptr, IID_PPV_ARGS(&ctx.textures[j].texture)))) {
-                spdlog::error("[VR] Failed to create swapchain texture {} {}", i, j);
-                return "Failed to create swapchain texture.";
-            }
-
-            ctx.textures[j].texture->SetName(L"OpenXR Swapchain Texture");
-
-            ctx.textures[j].texture->AddRef();
-            const auto ref_count = ctx.textures[j].texture->Release();
-
-            spdlog::info("[VR] BEFORE Swapchain texture {} {} ref count: {}", i, j, ref_count);
         }
 
         result = xrEnumerateSwapchainImages(swapchain.handle, image_count, &image_count, (XrSwapchainImageBaseHeader*)&ctx.textures[0]);
-
+        
         if (result != XR_SUCCESS) {
             spdlog::error("[VR] Failed to enumerate swapchain images after texture creation.");
             return "Failed to enumerate swapchain images after texture creation.";
