@@ -422,15 +422,15 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             auto& openxr_overlay = vr->get_overlay_component().get_openxr();
 
             if (vr->m_2d_screen_mode->value()) {
-                const auto left_quad = openxr_overlay.generate_slate_quad(runtimes::OpenXR::SwapchainIndex::UI, XrEyeVisibility::XR_EYE_VISIBILITY_LEFT);
-                const auto right_quad = openxr_overlay.generate_slate_quad(runtimes::OpenXR::SwapchainIndex::UI_RIGHT, XrEyeVisibility::XR_EYE_VISIBILITY_RIGHT);
+                const auto left_layer = openxr_overlay.generate_slate_layer(runtimes::OpenXR::SwapchainIndex::UI, XrEyeVisibility::XR_EYE_VISIBILITY_LEFT);
+                const auto right_layer = openxr_overlay.generate_slate_layer(runtimes::OpenXR::SwapchainIndex::UI_RIGHT, XrEyeVisibility::XR_EYE_VISIBILITY_RIGHT);
 
-                if (left_quad) {
-                    quad_layers.push_back((XrCompositionLayerBaseHeader*)&left_quad->get());
+                if (left_layer) {
+                    quad_layers.push_back((XrCompositionLayerBaseHeader*)&left_layer->get());
                 }
 
-                if (right_quad) {
-                    quad_layers.push_back((XrCompositionLayerBaseHeader*)&right_quad->get());
+                if (right_layer) {
+                    quad_layers.push_back((XrCompositionLayerBaseHeader*)&right_layer->get());
                 }
             } else {
                 const auto slate_layer = openxr_overlay.generate_slate_layer();
