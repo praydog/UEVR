@@ -442,7 +442,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             
             const auto framework_quad = openxr_overlay.generate_framework_ui_quad();
             if (framework_quad) {
-                quad_layers.push_back((XrCompositionLayerBaseHeader*)&framework_quad);
+                quad_layers.push_back((XrCompositionLayerBaseHeader*)&framework_quad->get());
             }
 
             auto result = vr->m_openxr->end_frame(quad_layers, scene_depth_tex.Get() != nullptr);
