@@ -734,11 +734,12 @@ std::optional<std::reference_wrapper<XrCompositionLayerCylinderKHR>> OverlayComp
     // radius is the non-negative radius of the cylinder. Values of zero or floating point positive infinity are treated as an infinite cylinder.
     // centralAngle is the angle of the visible section of the cylinder, based at 0 radians, in the range of [0, 2π). It grows symmetrically around the 0 radian angle.
     // aspectRatio is the ratio of the visible cylinder section width / height. The height of the cylinder is given by: (cylinder radius × cylinder angle) / aspectRatio.
-    layer.radius = meters_w / 2.0f;
-    layer.centralAngle = glm::radians(m_parent->m_slate_cylinder_angle->value());
-    layer.aspectRatio = meters_w / meters_h;
+    layer.centralAngle = glm::max<float>(1.0f, glm::radians(m_parent->m_slate_cylinder_angle->value()));
+    layer.aspectRatio = (meters_w / meters_h);
+    layer.radius = (meters_h / layer.centralAngle) * layer.aspectRatio;
 
     glm_matrix[3] -= glm_matrix[2] * m_parent->m_slate_distance->value();
+    glm_matrix[3] += glm_matrix[2] * layer.radius;
     glm_matrix[3] += m_parent->m_slate_x_offset->value() * glm_matrix[0];
     glm_matrix[3] += m_parent->m_slate_y_offset->value() * glm_matrix[1];
     glm_matrix[3].w = 1.0f;
