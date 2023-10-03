@@ -111,6 +111,10 @@ struct VRRuntime {
         return false;
     }
 
+    virtual bool is_cylinder_layer_allowed() const {
+        return false;
+    }
+
     virtual void on_config_load(const utility::Config& cfg, bool set_defaults) {}
     virtual void on_config_save(utility::Config& cfg) {}
     virtual void on_draw_ui() {}

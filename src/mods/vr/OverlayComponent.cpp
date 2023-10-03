@@ -91,6 +91,14 @@ void OverlayComponent::on_config_load(const utility::Config& cfg, bool set_defau
 void OverlayComponent::on_draw_ui() {
     ImGui::SetNextItemOpen(true, ImGuiCond_Once);
     if (ImGui::TreeNode("Overlay Options")) {
+        if (VR::get()->get_runtime()->is_cylinder_layer_allowed()) {
+            m_slate_overlay_type->draw("Overlay Type");
+
+            if ((OverlayType)m_slate_overlay_type->value() == OverlayType::CYLINDER)  {
+                m_slate_cylinder_angle->draw("UI Cylinder Angle");
+            }
+        }
+
         float ui_offset[] { m_slate_x_offset->value(), m_slate_y_offset->value(), m_slate_distance->value() };
 
         if (ImGui::SliderFloat3("UI Offset", ui_offset, -10.0f, 10.0f)) {
@@ -670,7 +678,108 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
     return layer;
 }
 
-std::optional<std::reference_wrapper<XrCompositionLayerQuad>>  OverlayComponent::OpenXR::generate_framework_ui_quad() {
+std::optional<std::reference_wrapper<XrCompositionLayerCylinderKHR>> OverlayComponent::OpenXR::generate_slate_cylinder(
+    runtimes::OpenXR::SwapchainIndex swapchain, 
+    XrEyeVisibility eye) 
+{
+    auto& vr = VR::get();
+
+    if (!vr->is_gui_enabled()) {
+        return std::nullopt;
+    }
+
+    if (!vr->m_openxr->swapchains.contains((uint32_t)swapchain)) {
+        return std::nullopt;
+    }
+
+    const auto is_left_eye = eye == XR_EYE_VISIBILITY_BOTH || eye == XR_EYE_VISIBILITY_LEFT;
+
+    auto& layer = is_left_eye ? this->m_slate_layer_cylinder : this->m_slate_layer_cylinder_right;
+
+    layer.type = XR_TYPE_COMPOSITION_LAYER_CYLINDER_KHR;
+    const auto& ui_swapchain = vr->m_openxr->swapchains[(uint32_t)swapchain];
+    layer.subImage.swapchain = ui_swapchain.handle;
+    layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+    layer.subImage.imageRect.offset.x = 0;
+    layer.subImage.imageRect.offset.y = 0;
+    layer.subImage.imageRect.extent.width = ui_swapchain.width;
+    layer.subImage.imageRect.extent.height = ui_swapchain.height;
+    layer.eyeVisibility = eye;
+    
+    auto glm_matrix = glm::identity<glm::mat4>();
+
+    if (vr->m_overlay_component.m_ui_follows_view->value()) {
+        layer.space = vr->m_openxr->view_space;
+    } else {
+        auto rotation_offset = glm::inverse(vr->get_rotation_offset());
+
+        if (vr->is_decoupled_pitch_enabled() && vr->is_decoupled_pitch_ui_adjust_enabled()) {
+            const auto pre_flat_rotation = vr->get_pre_flattened_rotation();
+            const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
+
+            // Add the inverse of the pitch rotation to the rotation offset
+            rotation_offset = glm::normalize(glm::inverse(pre_flat_pitch * vr->get_rotation_offset()));
+        }
+
+        glm_matrix = Matrix4x4f{rotation_offset};   
+        glm_matrix[3] += vr->get_standing_origin();
+        layer.space = vr->m_openxr->stage_space;
+    }
+
+    const auto size_meters = m_parent->m_slate_size->value();
+    const auto meters_w = (float)ui_swapchain.width / (float)ui_swapchain.height * size_meters;
+    const auto meters_h = size_meters;
+
+    // OpenXR Docs:
+    // radius is the non-negative radius of the cylinder. Values of zero or floating point positive infinity are treated as an infinite cylinder.
+    // centralAngle is the angle of the visible section of the cylinder, based at 0 radians, in the range of [0, 2π). It grows symmetrically around the 0 radian angle.
+    // aspectRatio is the ratio of the visible cylinder section width / height. The height of the cylinder is given by: (cylinder radius × cylinder angle) / aspectRatio.
+    layer.radius = meters_w / 2.0f;
+    layer.centralAngle = glm::radians(m_parent->m_slate_cylinder_angle->value());
+    layer.aspectRatio = meters_w / meters_h;
+
+    glm_matrix[3] -= glm_matrix[2] * m_parent->m_slate_distance->value();
+    glm_matrix[3] += m_parent->m_slate_x_offset->value() * glm_matrix[0];
+    glm_matrix[3] += m_parent->m_slate_y_offset->value() * glm_matrix[1];
+    glm_matrix[3].w = 1.0f;
+
+    layer.pose.orientation = runtimes::OpenXR::to_openxr(glm::quat_cast(glm_matrix));
+    layer.pose.position = runtimes::OpenXR::to_openxr(glm_matrix[3]);
+
+    return layer;
+}
+
+std::optional<std::reference_wrapper<XrCompositionLayerBaseHeader>> OverlayComponent::OpenXR::generate_slate_layer(
+    runtimes::OpenXR::SwapchainIndex swapchain, 
+    XrEyeVisibility eye)
+{
+    switch ((OverlayComponent::OverlayType)m_parent->m_slate_overlay_type->value()) {
+    default:
+    case OverlayComponent::OverlayType::QUAD:
+        if (auto result = generate_slate_quad(swapchain, eye); result.has_value()) {
+            return *(XrCompositionLayerBaseHeader*)&result.value().get();
+        }
+
+        return std::nullopt;
+    case OverlayComponent::OverlayType::CYLINDER:
+        if (!VR::get()->get_runtime()->is_cylinder_layer_allowed()) {
+            if (auto result = generate_slate_quad(swapchain, eye); result.has_value()) {
+                return *(XrCompositionLayerBaseHeader*)&result.value().get();
+            }
+
+            return std::nullopt;
+        }
+
+        if (auto result = generate_slate_cylinder(swapchain, eye); result.has_value()) {
+            return *(XrCompositionLayerBaseHeader*)&result.value().get();
+        }
+
+        return std::nullopt;
+    };
+}
+
+
+std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::OpenXR::generate_framework_ui_quad() {
     if (!g_framework->is_drawing_anything()) {
         return std::nullopt;
     }

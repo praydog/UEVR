@@ -443,18 +443,18 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             }
 
             LOG_VERBOSE("Ending frame");
-            std::vector<XrCompositionLayerQuad> quad_layers{};
+            std::vector<XrCompositionLayerBaseHeader*> quad_layers{};
 
             auto& openxr_overlay = vr->get_overlay_component().get_openxr();
-            const auto slate_quad = openxr_overlay.generate_slate_quad();
-            if (slate_quad) {
-                quad_layers.push_back(*slate_quad);
+            const auto slate_layer = openxr_overlay.generate_slate_layer();
+            if (slate_layer) {
+                quad_layers.push_back(&slate_layer->get());
             }
 
             const auto framework_quad = openxr_overlay.generate_framework_ui_quad();
 
             if (framework_quad) {
-                quad_layers.push_back(*framework_quad);
+                quad_layers.push_back((XrCompositionLayerBaseHeader*)&framework_quad->get());
             }
             
             auto result = vr->m_openxr->end_frame(quad_layers, scene_depth_tex != nullptr);
@@ -1524,7 +1524,7 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
 
     }
     // Depth textures
-    if (vr->get_openxr_runtime()->enabled_extensions.contains(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME)) {
+    if (vr->get_openxr_runtime()->is_depth_allowed()) {
         // Even when using AFR, the depth tex is always the size of a double wide.
         // That's kind of unfortunate in terms of how many copies we have to do but whatever.
         auto depth_swapchain_create_info = standard_swapchain_create_info;

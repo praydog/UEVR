@@ -53,6 +53,10 @@ struct OpenXR final : public VRRuntime {
         return this->enabled_extensions.contains(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME);
     }
 
+    bool is_cylinder_layer_allowed() const override {
+        return this->enabled_extensions.contains(XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME);
+    }
+
     void on_system_properties_acquired(const XrSystemProperties& props);
 
     void on_config_load(const utility::Config& cfg, bool set_defaults) override;
@@ -132,7 +136,7 @@ public:
     std::optional<std::string> initialize_actions(const std::string& json_string);
 
     XrResult begin_frame();
-    XrResult end_frame(const std::vector<XrCompositionLayerQuad>& quad_layers, bool has_depth = false);
+    XrResult end_frame(const std::vector<XrCompositionLayerBaseHeader*>& quad_layers, bool has_depth = false);
 
     void begin_profile() {
         if (!this->profile_calls) {

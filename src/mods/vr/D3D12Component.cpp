@@ -417,7 +417,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 vr->m_openxr->begin_frame();
             }
 
-            std::vector<XrCompositionLayerQuad> quad_layers{};
+            std::vector<XrCompositionLayerBaseHeader*> quad_layers{};
 
             auto& openxr_overlay = vr->get_overlay_component().get_openxr();
 
@@ -426,23 +426,23 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 const auto right_quad = openxr_overlay.generate_slate_quad(runtimes::OpenXR::SwapchainIndex::UI_RIGHT, XrEyeVisibility::XR_EYE_VISIBILITY_RIGHT);
 
                 if (left_quad) {
-                    quad_layers.push_back(*left_quad);
+                    quad_layers.push_back((XrCompositionLayerBaseHeader*)&left_quad->get());
                 }
 
                 if (right_quad) {
-                    quad_layers.push_back(*right_quad);
+                    quad_layers.push_back((XrCompositionLayerBaseHeader*)&right_quad->get());
                 }
             } else {
-                const auto slate_quad = openxr_overlay.generate_slate_quad();
+                const auto slate_layer = openxr_overlay.generate_slate_layer();
 
-                if (slate_quad) {
-                    quad_layers.push_back(*slate_quad);
+                if (slate_layer) {
+                    quad_layers.push_back(&slate_layer->get());
                 }   
             }
             
             const auto framework_quad = openxr_overlay.generate_framework_ui_quad();
             if (framework_quad) {
-                quad_layers.push_back(*framework_quad);
+                quad_layers.push_back((XrCompositionLayerBaseHeader*)&framework_quad);
             }
 
             auto result = vr->m_openxr->end_frame(quad_layers, scene_depth_tex.Get() != nullptr);

@@ -286,6 +286,7 @@ std::optional<std::string> VR::initialize_openxr() {
 
                 const std::unordered_set<std::string> wanted_extensions {
                     XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
+                    XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME
                     // To be seen if we need more!
                 };
 
@@ -294,7 +295,6 @@ std::optional<std::string> VR::initialize_openxr() {
                         spdlog::info("[VR] Enabling {} extension", extension_property.extensionName);
                         m_openxr->enabled_extensions.insert(extension_property.extensionName);
                         extensions.push_back(extension_property.extensionName);
-                        break;
                     }
                 }
             }

@@ -1572,7 +1572,7 @@ XrResult OpenXR::begin_frame() {
     return result;
 }
 
-XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layers, bool has_depth) {
+XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& quad_layers, bool has_depth) {
     std::scoped_lock _{sync_mtx};
 
     if (!this->ready() || !this->got_first_poses || !this->frame_synced) {
@@ -1761,7 +1761,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerQuad>& quad_layer
         }
 
         for (auto& l : quad_layers) {   
-            layers.push_back((XrCompositionLayerBaseHeader*)&l);
+            layers.push_back(l);
         }
     }
 

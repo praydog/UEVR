@@ -68,10 +68,24 @@ private:
     bool m_just_closed_ui{false};
     bool m_just_opened_ui{false};
 
+    enum OverlayType {
+        DEFAULT = 0,
+        QUAD = 0,
+        CYLINDER = 1,
+        MAX
+    };
+
+    static const inline std::vector<std::string> s_overlay_type_names{
+        "Quad",
+        "Cylinder"
+    };
+
+    const ModCombo::Ptr m_slate_overlay_type{ ModCombo::create("UI_OverlayType", s_overlay_type_names) };
     const ModSlider::Ptr m_slate_distance{ ModSlider::create("UI_Distance", 0.5f, 10.0f, 2.0f) };
     const ModSlider::Ptr m_slate_x_offset{ ModSlider::create("UI_X_Offset", -10.0f, 10.0f, 0.0f) };
     const ModSlider::Ptr m_slate_y_offset{ ModSlider::create("UI_Y_Offset", -10.0f, 10.0f, 0.0f) };
     const ModSlider::Ptr m_slate_size{ ModSlider::create("UI_Size", 0.5f, 10.0f, 2.0f) };
+    const ModSlider::Ptr m_slate_cylinder_angle{ ModSlider::create("UI_Cylinder_Angle", 0.0f, 360.0f, 90.0f) };
     const ModToggle::Ptr m_ui_follows_view{ ModToggle::create("UI_FollowView", false) };
 
     const ModSlider::Ptr m_framework_distance{ ModSlider::create("UI_Framework_Distance", 0.5f, 10.0f, 1.75f) };
@@ -80,10 +94,12 @@ private:
     const ModToggle::Ptr m_framework_wrist_ui{ ModToggle::create("UI_Framework_WristUI", false) };
 
     Mod::ValueList m_options{
+        *m_slate_overlay_type,
         *m_slate_x_offset,
         *m_slate_y_offset,
         *m_slate_distance,
         *m_slate_size,
+        *m_slate_cylinder_angle,
         *m_ui_follows_view,
         *m_framework_distance,
         *m_framework_size,
@@ -105,11 +121,21 @@ private:
             runtimes::OpenXR::SwapchainIndex swapchain = runtimes::OpenXR::SwapchainIndex::UI, 
             XrEyeVisibility eye = XR_EYE_VISIBILITY_BOTH
         );
+        std::optional<std::reference_wrapper<XrCompositionLayerCylinderKHR>> generate_slate_cylinder(
+            runtimes::OpenXR::SwapchainIndex swapchain = runtimes::OpenXR::SwapchainIndex::UI, 
+            XrEyeVisibility eye = XR_EYE_VISIBILITY_BOTH
+        );
+        std::optional<std::reference_wrapper<XrCompositionLayerBaseHeader>> generate_slate_layer(
+            runtimes::OpenXR::SwapchainIndex swapchain = runtimes::OpenXR::SwapchainIndex::UI, 
+            XrEyeVisibility eye = XR_EYE_VISIBILITY_BOTH
+        );
         std::optional<std::reference_wrapper<XrCompositionLayerQuad>> generate_framework_ui_quad();
         
     private:
         XrCompositionLayerQuad m_slate_layer{};
         XrCompositionLayerQuad m_slate_layer_right{};
+        XrCompositionLayerCylinderKHR m_slate_layer_cylinder{};
+        XrCompositionLayerCylinderKHR m_slate_layer_cylinder_right{};
         XrCompositionLayerQuad m_framework_ui_layer{};
         OverlayComponent* m_parent{ nullptr };
         
