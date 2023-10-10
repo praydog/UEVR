@@ -287,6 +287,10 @@ UEVR_UStructFunctions g_ustruct_functions {
     [](UEVR_UStructHandle strct) {
         return (UEVR_FFieldHandle)USTRUCT(strct)->get_child_properties();
     },
+    // find_function
+    [](UEVR_UStructHandle strct, const wchar_t* name) {
+        return (UEVR_UFunctionHandle)USTRUCT(strct)->find_function(name);
+    },
 };
 
 #define UCLASS(x) ((sdk::UClass*)x)

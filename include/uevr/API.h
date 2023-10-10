@@ -191,6 +191,7 @@ typedef struct {
 typedef struct {
     UEVR_UStructHandle (*get_super_struct)(UEVR_UStructHandle klass);
     UEVR_FFieldHandle (*get_child_properties)(UEVR_UStructHandle klass);
+    UEVR_UFunctionHandle (*find_function)(UEVR_UStructHandle klass, const wchar_t* name);
 } UEVR_UStructFunctions;
 
 typedef struct {
