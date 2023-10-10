@@ -13,6 +13,11 @@
 
 #include <sdk/UEngine.hpp>
 #include <sdk/CVar.hpp>
+#include <sdk/UObjectArray.hpp>
+#include <sdk/UObject.hpp>
+#include <sdk/FField.hpp>
+#include <sdk/FProperty.hpp>
+#include <sdk/UFunction.hpp>
 
 #include "VR.hpp"
 
@@ -138,6 +143,9 @@ UEVR_SDKFunctions g_sdk_functions {
         } else {
             set_cvar(cvars[name], value);
         }
+    },
+    []() -> UEVR_UObjectArrayHandle {
+        return (UEVR_UObjectArrayHandle)sdk::FUObjectArray::get();
     }
 };
 
@@ -218,9 +226,97 @@ UEVR_SDKCallbacks g_sdk_callbacks {
     uevr::on_post_viewport_client_draw
 };
 
+#define UOBJECT(x) ((sdk::UObject*)x)
+
+UEVR_UObjectFunctions g_uobject_functions {
+    // get_class
+    [](UEVR_UObjectHandle obj) {
+        return (UEVR_UClassHandle)UOBJECT(obj)->get_class();
+    },
+    // get_outer
+    [](UEVR_UObjectHandle obj) {
+        return (UEVR_UObjectHandle)UOBJECT(obj)->get_outer();
+    },
+    // get_property_data
+    [](UEVR_UObjectHandle obj, const wchar_t* name) {
+        return (void*)UOBJECT(obj)->get_property_data(name);
+    },
+    // is_a
+    [](UEVR_UObjectHandle obj, UEVR_UClassHandle cmp) {
+        return UOBJECT(obj)->is_a((sdk::UClass*)cmp);
+    },
+    // process_event
+    [](UEVR_UObjectHandle obj, UEVR_UFunctionHandle func, void* params) {
+        UOBJECT(obj)->process_event((sdk::UFunction*)func, params);
+    },
+};
+
+UEVR_UObjectArrayFunctions g_uobject_array_functions {
+    // find_uobject
+    [](const wchar_t* name) {
+        return (UEVR_UObjectHandle)sdk::find_uobject(name);
+    },
+};
+
+#define FFIELD(x) ((sdk::FField*)x)
+
+UEVR_FFieldFunctions g_ffield_functions {
+    // get_next
+    [](UEVR_FFieldHandle field) {
+        return (UEVR_FFieldHandle)FFIELD(field)->get_next();
+    },
+};
+
+#define FPROPERTY(x) ((sdk::FProperty*)x)
+
+UEVR_FPropertyFunctions g_fproperty_functions {
+    // get_offset
+    [](UEVR_FPropertyHandle prop) -> int {
+        return FPROPERTY(prop)->get_offset();
+    },
+};
+
+#define USTRUCT(x) ((sdk::UStruct*)x)
+
+UEVR_UStructFunctions g_ustruct_functions {
+    // get_super_struct
+    [](UEVR_UStructHandle strct) {
+        return (UEVR_UStructHandle)USTRUCT(strct)->get_super_struct();
+    },
+    // get_child_properties
+    [](UEVR_UStructHandle strct) {
+        return (UEVR_FFieldHandle)USTRUCT(strct)->get_child_properties();
+    },
+};
+
+#define UCLASS(x) ((sdk::UClass*)x)
+
+UEVR_UClassFunctions g_uclass_functions {
+    // get_class_default_object
+    [](UEVR_UClassHandle klass) {
+        return (UEVR_UObjectHandle)UCLASS(klass)->get_class_default_object();
+    },
+};
+
+#define UFUNCTION(x) ((sdk::UFunction*)x)
+
+UEVR_UFunctionFunctions g_ufunction_functions {
+    // get_native_function
+    [](UEVR_UFunctionHandle func) {
+        return (void*)UFUNCTION(func)->get_native_function();
+    },
+};
+
 UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
-    &g_sdk_callbacks
+    &g_sdk_callbacks,
+    &g_uobject_functions,
+    &g_uobject_array_functions,
+    &g_ffield_functions,
+    &g_fproperty_functions,
+    &g_ustruct_functions,
+    &g_uclass_functions,
+    &g_ufunction_functions
 };
 
 namespace uevr {

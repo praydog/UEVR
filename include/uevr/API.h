@@ -35,6 +35,13 @@ DECLARE_UEVR_HANDLE(UEVR_FViewportInfoHandle);
 DECLARE_UEVR_HANDLE(UEVR_UGameViewportClientHandle);
 DECLARE_UEVR_HANDLE(UEVR_FViewportHandle);
 DECLARE_UEVR_HANDLE(UEVR_FCanvasHandle);
+DECLARE_UEVR_HANDLE(UEVR_UObjectArrayHandle);
+DECLARE_UEVR_HANDLE(UEVR_UObjectHandle);
+DECLARE_UEVR_HANDLE(UEVR_FFieldHandle);
+DECLARE_UEVR_HANDLE(UEVR_FPropertyHandle);
+DECLARE_UEVR_HANDLE(UEVR_UStructHandle);
+DECLARE_UEVR_HANDLE(UEVR_UClassHandle);
+DECLARE_UEVR_HANDLE(UEVR_UFunctionHandle);
 
 // OpenXR stuff
 DECLARE_UEVR_HANDLE(UEVR_XrInstance);
@@ -166,11 +173,55 @@ typedef struct {
 typedef struct {
     UEVR_UEngineHandle (*get_uengine)();
     void (*set_cvar_int)(const char* module_name, const char* name, int value);
+    UEVR_UObjectArrayHandle (*get_uobject_array)();
 } UEVR_SDKFunctions;
+
+typedef struct {
+    UEVR_UObjectHandle (*find_uobject)(const wchar_t* name);
+} UEVR_UObjectArrayFunctions;
+
+typedef struct {
+    UEVR_FFieldHandle (*get_next)(UEVR_FFieldHandle field);
+} UEVR_FFieldFunctions;
+
+typedef struct {
+    int (*get_offset)(UEVR_FPropertyHandle prop);
+} UEVR_FPropertyFunctions;
+
+typedef struct {
+    UEVR_UStructHandle (*get_super_struct)(UEVR_UStructHandle klass);
+    UEVR_FFieldHandle (*get_child_properties)(UEVR_UStructHandle klass);
+} UEVR_UStructFunctions;
+
+typedef struct {
+    UEVR_UObjectHandle (*get_class_default_object)(UEVR_UClassHandle klass);
+} UEVR_UClassFunctions;
+
+typedef struct {
+    void* (*get_native_function)(UEVR_UFunctionHandle function);
+} UEVR_UFunctionFunctions;
+
+typedef struct {
+    UEVR_UClassHandle (*get_class)(UEVR_UObjectHandle object);
+    UEVR_UObjectHandle (*get_outer)(UEVR_UObjectHandle object);
+
+    /* pointer to the property data, not the UProperty/FProperty */
+    void* (*get_property_data)(UEVR_UObjectHandle object, const wchar_t* name);
+    bool (*is_a)(UEVR_UObjectHandle object, UEVR_UClassHandle other);
+
+    void (*process_event)(UEVR_UObjectHandle object, UEVR_UFunctionHandle function, void* params);
+} UEVR_UObjectFunctions;
 
 typedef struct {
     const UEVR_SDKFunctions* functions;
     const UEVR_SDKCallbacks* callbacks;
+    const UEVR_UObjectFunctions* uobject;
+    const UEVR_UObjectArrayFunctions* uobject_array;
+    const UEVR_FFieldFunctions* ffield;
+    const UEVR_FPropertyFunctions* fproperty;
+    const UEVR_UStructFunctions* ustruct;
+    const UEVR_UClassFunctions* uclass;
+    const UEVR_UFunctionFunctions* ufunction;
 } UEVR_SDKData;
 
 DECLARE_UEVR_HANDLE(UEVR_IVRSystem);
