@@ -305,8 +305,11 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
         this->grip_matrices[i][3] = Vector4f{*(Vector3f*)&hand.grip_location.pose.position, 1.0f};
     }
 
+    if (!this->got_first_poses) {
+        this->got_first_poses = (this->view_space_location.locationFlags & (XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) != 0;
+    }
+
     this->needs_pose_update = false;
-    this->got_first_poses = true;
     return VRRuntime::Error::SUCCESS;
 }
 
