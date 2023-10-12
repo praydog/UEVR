@@ -17,6 +17,7 @@ VRRuntime::Error OpenVR::synchronize_frame(std::optional<uint32_t> frame_count) 
     auto ret = vr::VRCompositor()->WaitGetPoses(this->real_render_poses.data(), vr::k_unMaxTrackedDeviceCount, this->real_game_poses.data(), vr::k_unMaxTrackedDeviceCount);
 
     if (ret == vr::VRCompositorError_None) {
+        this->got_first_valid_poses = true;
         this->got_first_sync = true;
         this->frame_synced = true;
     }
