@@ -133,7 +133,7 @@ std::optional<uintptr_t> UEngine::get_emulatestereo_string_ref_address() {
         for (auto str = utility::scan_string(mod, L"emulatestereo"); str; str = utility::scan_string(*str + 1, (end - (*str + 1)) - 0x1000, L"emulatestereo")) {
             SPDLOG_INFO("On string at {:x}", (uintptr_t)*str);
 
-            for (auto ref = utility::scan_displacement_reference(mod, *str); ref; ref = utility::scan_displacement_reference(*ref + 1, (end - (*ref + 1)) - 0x1000, *str)) {
+            for (auto ref = utility::scan_displacement_reference(mod, *str); ref; ref = utility::scan_displacement_reference(*ref + 4, (end - (*ref + 4)) - 0x1000, *str)) {
                 SPDLOG_INFO("On reference at {:x}", (uintptr_t)*ref);
 
                 // InitializeHMDDevice has always been guaranteed to be a virtual function

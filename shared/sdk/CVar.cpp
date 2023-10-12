@@ -587,7 +587,7 @@ std::optional<uintptr_t> vr::get_slate_draw_to_vr_render_target_usage_location()
 
             for (auto ref = utility::scan_displacement_reference(module, cvar_addr); 
                 ref; 
-                ref = utility::scan_displacement_reference(*ref + 1, (module_end - (*ref + 1)), cvar_addr)) 
+                ref = utility::scan_displacement_reference(*ref + 4, (module_end - (*ref + 4)), cvar_addr)) 
             {
                 SPDLOG_INFO("Checking if Slate.DrawToVRRenderTarget is used at {:x}", *ref);
 
