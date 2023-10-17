@@ -1239,6 +1239,14 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
                 sdk::set_cvar_int(L"Renderer", L"r.HZBOcclusion", 0);
             }
         }
+
+        if (m_disable_instance_culling->value()) {
+            const auto r_instance_culling_value = sdk::get_cvar_int(L"Renderer", L"r.InstanceCulling.OcclusionCull");
+
+            if (r_instance_culling_value && *r_instance_culling_value != 0) {
+                sdk::set_cvar_int(L"Renderer", L"r.InstanceCulling.OcclusionCull", 0);
+            }
+        }
     }
 
     if (frame_count != 0 && is_using_afr() && frame_count % 2 == 0) {
@@ -1951,6 +1959,7 @@ void VR::on_draw_ui() {
 
     ImGui::BeginGroup();
     m_disable_hzbocclusion->draw("Disable HZBOcclusion");
+    m_disable_instance_culling->draw("Disable Instance Culling");
     m_disable_hdr_compositing->draw("Disable HDR Composition");
     m_disable_blur_widgets->draw("Disable Blur Widgets");
     m_uncap_framerate->draw("Uncap Framerate");
