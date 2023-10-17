@@ -120,11 +120,14 @@ struct IStereoRenderTargetManager {
     }
 
     // additional padding for unknown functions (necessary for 5.1+)
-    virtual bool pad1() { return false; }
-    virtual bool pad2() { return false; }
-    virtual bool pad3() { return false; }
-    virtual bool pad4() { return false; }
-    virtual bool pad5() { return false; }
+    // On 5.1, pad1 is AcquireColorTexture
+    // this is okay to just return 0, because it matches GetNumberOfBufferedFrames
+    // but something we may need to look into later if wanting to touch GetNumberOfBufferedFrames
+    virtual void* pad1() { return nullptr; }
+    virtual void* pad2() { return nullptr; }
+    virtual void* pad3() { return nullptr; }
+    virtual void* pad4() { return nullptr; }
+    virtual void* pad5() { return nullptr; }
 };
 
 struct IStereoRenderTargetManager_Special {
