@@ -31,6 +31,17 @@ detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
         SPDLOG_INFO("Found version {}.{} from executable (disk version)", HIWORD(version.dwFileVersionMS), LOWORD(version.dwFileVersionMS));
     }
 
+    // TODO: actually dump 5.2-5.3
+    // >= 5.3
+    if (version.dwFileVersionMS == 0x50003 || str_version.starts_with("5.3")) {
+        return ue5_1::IXRTrackingSystemVT::get();
+    }
+
+    // >= 5.2
+    if (version.dwFileVersionMS == 0x50002 || str_version.starts_with("5.2")) {
+        return ue5_1::IXRTrackingSystemVT::get();
+    }
+
     // >= 5.1
     if (version.dwFileVersionMS == 0x50001 || str_version.starts_with("5.1")) {
         return ue5_1::IXRTrackingSystemVT::get();

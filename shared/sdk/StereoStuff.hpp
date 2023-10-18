@@ -154,11 +154,11 @@ struct IStereoRenderTargetManager_Special {
         return false;
     }
 
-    virtual bool pad1() { return false; }
-    virtual bool pad2() { return false; }
-    virtual bool pad3() { return false; }
-    virtual bool pad4() { return false; }
-    virtual bool pad5() { return false; }
+    virtual void* pad1() { return nullptr; }
+    virtual void* pad2() { return nullptr; }
+    virtual void* pad3() { return nullptr; }
+    virtual void* pad4() { return nullptr; }
+    virtual void* pad5() { return nullptr; }
 };
 
 // says 418 but its actually 4.23 or 4.24 or so and below.
@@ -181,11 +181,11 @@ struct IStereoRenderTargetManager_418 {
         return false;
     }
 
-    virtual bool pad1() { return false; }
-    virtual bool pad2() { return false; }
-    virtual bool pad3() { return false; }
-    virtual bool pad4() { return false; }
-    virtual bool pad5() { return false; }
+    virtual void* pad1() { return nullptr; }
+    virtual void* pad2() { return nullptr; }
+    virtual void* pad3() { return nullptr; }
+    virtual void* pad4() { return nullptr; }
+    virtual void* pad5() { return nullptr; }
 };
 
 struct FFakeStereoRendering {
