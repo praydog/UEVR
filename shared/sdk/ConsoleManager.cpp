@@ -31,7 +31,9 @@ sdk::FConsoleManager** try_find_console_manager(const std::wstring& string_candi
     SPDLOG_INFO("Found {} stringref: {:x}", utility::narrow(string_candidate), (uintptr_t)*candidate_stringref);
 
     // This might need to be improved a bit, it can be insanely slow on obfuscated builds
-    const auto containing_function = utility::find_function_start_with_call(*candidate_stringref);
+    const auto containing_function = string_candidate != L"Current detail mode;" ? 
+                                    utility::find_function_start_with_call(*candidate_stringref) :
+                                    utility::find_function_start(*candidate_stringref);
 
     if (!containing_function) {
         SPDLOG_ERROR("Failed to find containing function");
@@ -85,7 +87,8 @@ FConsoleManager* FConsoleManager::get() {
     static auto result = []() -> FConsoleManager** {
         std::vector<std::wstring> candidates {
             L"r.DumpingMovie",
-            L"vr.pixeldensity"
+            L"vr.pixeldensity",
+            L"Current detail mode;",
         };
 
         const auto now = std::chrono::steady_clock::now();
