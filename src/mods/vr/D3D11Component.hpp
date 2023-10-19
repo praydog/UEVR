@@ -141,7 +141,10 @@ private:
 
     ComPtr<ID3D11Texture2D> m_backbuffer{};
     ComPtr<ID3D11RenderTargetView> m_backbuffer_rtv{};
-    ComPtr<ID3D11Texture2D> m_copied_backbuffer{};
+    ComPtr<ID3D11Texture2D> m_spectator_view_backbuffer{};
+    ComPtr<ID3D11Texture2D> m_extreme_compat_backbuffer{};
+    ComPtr<ID3D11Texture2D> m_converted_backbuffer{};
+    TextureContext m_extreme_compat_backbuffer_ctx{};
     std::array<uint32_t, 2> m_backbuffer_size{};
     std::array<uint32_t, 2> m_real_backbuffer_size{};
 
@@ -159,11 +162,23 @@ private:
         void destroy_swapchains();
         void copy(uint32_t swapchain_idx, ID3D11Texture2D* resource, D3D11_BOX* src_box = nullptr);
 
+        bool ever_acquired(uint32_t swapchain_idx) {
+            std::scoped_lock _{this->mtx};
+
+            auto it = this->contexts.find(swapchain_idx);
+            if (it == this->contexts.end()) {
+                return false;
+            }
+
+            return it->second.ever_acquired;
+        }
+
         XrGraphicsBindingD3D11KHR binding{XR_TYPE_GRAPHICS_BINDING_D3D11_KHR};
 
         struct SwapchainContext {
             std::vector<XrSwapchainImageD3D11KHR> textures{};
             uint32_t num_textures_acquired{0};
+            bool ever_acquired{false};
         };
 
         std::unordered_map<uint32_t, SwapchainContext> contexts{};

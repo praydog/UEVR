@@ -243,6 +243,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         backbuffer = (ID3D11Texture2D*)ue4_texture->get_native_resource();
     }
 
+    if (vr->is_extreme_compatibility_mode_enabled()) {
+        backbuffer = real_backbuffer;
+    }
+
     if (backbuffer == nullptr) {
         spdlog::error("[VR] Failed to get back buffer.");
         m_engine_tex_ref.reset();
@@ -266,7 +270,87 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     }
 
     // We use SRGB for the RTV but not for the SRV because it screws up the colors when drawing the spectator view
-    m_engine_tex_ref.set(backbuffer.Get(), DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM);
+    if (!vr->is_extreme_compatibility_mode_enabled()) {
+        m_engine_tex_ref.set(backbuffer.Get(), DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM);
+    } else {
+        // We need to use a shader to convert the real backbuffer
+        // to a VR compatible format.
+        DX11StateBackup backup{context.Get()};
+
+        // this backbuffer is a copy of the real backbuffer
+        // except it can be used as a shader resource
+        if (m_extreme_compat_backbuffer == nullptr) {
+            D3D11_TEXTURE2D_DESC desc{};
+            real_backbuffer->GetDesc(&desc);
+
+            desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+            desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
+            if (FAILED(device->CreateTexture2D(&desc, nullptr, &m_extreme_compat_backbuffer))) {
+                spdlog::error("[VR] Failed to create extreme compatibility backbuffer");
+                return vr::VRCompositorError_None;
+            }
+        }
+
+        context->CopyResource(m_extreme_compat_backbuffer.Get(), backbuffer.Get());
+
+        if (m_converted_backbuffer == nullptr) {
+            D3D11_TEXTURE2D_DESC desc{};
+            real_backbuffer->GetDesc(&desc);
+
+            desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+            desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+            desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
+            if (FAILED(device->CreateTexture2D(&desc, nullptr, &m_converted_backbuffer))) {
+                spdlog::error("[VR] Failed to create converted backbuffer");
+                return vr::VRCompositorError_None;
+            }
+        }
+
+        if (!m_engine_tex_ref.set(m_converted_backbuffer.Get(), std::nullopt, std::nullopt)) {
+            spdlog::error("[VR] Failed to set engine tex ref");
+            return vr::VRCompositorError_None;
+        }
+
+        if (!m_extreme_compat_backbuffer_ctx.set(m_extreme_compat_backbuffer.Get(), std::nullopt, std::nullopt)) {
+            spdlog::error("[VR] Failed to set extreme compat backbuffer ctx");
+            return vr::VRCompositorError_None;
+        }
+
+        float clear_color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+        m_engine_tex_ref.clear_rtv(&clear_color[0]);
+
+        // Finally do the rendering.
+        ID3D11RenderTargetView* views[] = { m_engine_tex_ref };
+        context->OMSetRenderTargets(1, views, nullptr);
+
+        m_backbuffer_batch->Begin();
+
+        D3D11_VIEWPORT viewport{};
+        viewport.Width = m_backbuffer_size[0];
+        viewport.Height = m_backbuffer_size[1];
+        m_backbuffer_batch->SetViewport(viewport);
+
+        context->RSSetViewports(1, &viewport);
+        
+        D3D11_RECT scissor_rect{};
+        scissor_rect.left = 0;
+        scissor_rect.top = 0;
+        scissor_rect.right = m_backbuffer_size[0];
+        scissor_rect.bottom = m_backbuffer_size[1];
+        context->RSSetScissorRects(1, &scissor_rect);
+
+        RECT dest_rect{};
+        dest_rect.left = 0;
+        dest_rect.top = 0;
+        dest_rect.right = m_backbuffer_size[0];
+        dest_rect.bottom = m_backbuffer_size[1];
+
+        m_backbuffer_batch->Draw(m_extreme_compat_backbuffer_ctx, dest_rect, DirectX::Colors::White);
+
+        m_backbuffer_batch->End();
+
+        backbuffer = m_converted_backbuffer;
+    }
 
     // Update the UI overlay.
     const auto& ffsr = VR::get()->m_fake_stereo_hook;
@@ -275,26 +359,26 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     if (ui_target != nullptr) {
         // We use SRGB for the RTV but not for the SRV because it screws up the colors when drawing the spectator view
         m_engine_ui_ref.set((ID3D11Texture2D*)ui_target->get_native_resource(), DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM);
-
-        // Duplicate frames can sometimes cause the UI to get stuck on the screen.
-        // and can lock up the compositor.
-        if (is_right_eye_frame) {
-            if (runtime->is_openvr() && get_ui_tex().Get() != nullptr && m_engine_ui_ref.has_texture()) {
-                copy_tex(m_engine_ui_ref, get_ui_tex().Get());
-            } else if (runtime->is_openxr() && vr->m_openxr->frame_began) {
-                if (m_engine_ui_ref.has_texture()) {
-                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, m_engine_ui_ref);
-                }
-
-                auto fw_rt = g_framework->get_rendertarget_d3d11();
-
-                if (fw_rt != nullptr && g_framework->is_drawing_anything()) {
-                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, fw_rt.Get());
-                }
-            }
-        }
     } else {
         m_engine_ui_ref.reset();
+    }
+
+    // Duplicate frames can sometimes cause the UI to get stuck on the screen.
+    // and can lock up the compositor.
+    if (is_right_eye_frame) {
+        if (runtime->is_openvr() && get_ui_tex().Get() != nullptr && m_engine_ui_ref.has_texture()) {
+            copy_tex(m_engine_ui_ref, get_ui_tex().Get());
+        } else if (runtime->is_openxr() && vr->m_openxr->frame_began) {
+            if (m_engine_ui_ref.has_texture()) {
+                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, m_engine_ui_ref);
+            }
+
+            auto fw_rt = g_framework->get_rendertarget_d3d11();
+
+            if (fw_rt != nullptr && g_framework->is_drawing_anything()) {
+                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, fw_rt.Get());
+            }
+        }
     }
 
     utility::ScopeGuard engine_ui_guard([&]() {
@@ -337,11 +421,17 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             //m_openxr.copy(0, backbuffer.Get());
             D3D11_BOX src_box{};
             src_box.left = 0;
-            src_box.right = m_backbuffer_size[0] / 2;
             src_box.top = 0;
             src_box.bottom = m_backbuffer_size[1];
             src_box.front = 0;
             src_box.back = 1;
+
+            if (vr->is_extreme_compatibility_mode_enabled()) {
+                src_box.right = m_backbuffer_size[0];
+            } else {
+                src_box.right = m_backbuffer_size[0] / 2;
+            }
+
             m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_LEFT_EYE, backbuffer.Get(), &src_box);
 
             if (scene_depth_tex != nullptr) {
@@ -356,11 +446,16 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         if (runtime->is_openvr()) {
             D3D11_BOX src_box{};
             src_box.left = 0;
-            src_box.right = m_backbuffer_size[0] / 2;
             src_box.top = 0;
             src_box.bottom = m_backbuffer_size[1];
             src_box.front = 0;
             src_box.back = 1;
+
+            if (vr->is_extreme_compatibility_mode_enabled()) {
+                src_box.right = m_backbuffer_size[0];
+            } else {
+                src_box.right = m_backbuffer_size[0] / 2;
+            }
 
             context->CopySubresourceRegion(m_left_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
 
@@ -396,11 +491,17 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 LOG_VERBOSE("Copying left eye");
                 D3D11_BOX src_box{};
                 src_box.left = 0;
-                src_box.right = m_backbuffer_size[0] / 2;
                 src_box.top = 0;
                 src_box.bottom = m_backbuffer_size[1];
                 src_box.front = 0;
                 src_box.back = 1;
+
+                if (vr->is_extreme_compatibility_mode_enabled()) {
+                    src_box.right = m_backbuffer_size[0];
+                } else {
+                    src_box.right = m_backbuffer_size[0] / 2;
+                }
+
                 m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_LEFT_EYE, backbuffer.Get(), &src_box);
 
                 if (scene_depth_tex != nullptr) {
@@ -412,16 +513,25 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
             if (is_actually_afr) {
                 D3D11_BOX src_box{};
-                if (!is_afr) {
-                    src_box.left = m_backbuffer_size[0] / 2;
-                    src_box.right = m_backbuffer_size[0];
-                    src_box.top = 0;
-                    src_box.bottom = m_backbuffer_size[1];
-                    src_box.front = 0;
-                    src_box.back = 1;
-                } else { // Copy the left eye on AFR
+                if (!vr->is_extreme_compatibility_mode_enabled()) {
+                    if (!is_afr) {
+                        src_box.left = m_backbuffer_size[0] / 2;
+                        src_box.right = m_backbuffer_size[0];
+                        src_box.top = 0;
+                        src_box.bottom = m_backbuffer_size[1];
+                        src_box.front = 0;
+                        src_box.back = 1;
+                    } else { // Copy the left eye on AFR
+                        src_box.left = 0;
+                        src_box.right = m_backbuffer_size[0] / 2;
+                        src_box.top = 0;
+                        src_box.bottom = m_backbuffer_size[1];
+                        src_box.front = 0;
+                        src_box.back = 1;
+                    }   
+                } else {
                     src_box.left = 0;
-                    src_box.right = m_backbuffer_size[0] / 2;
+                    src_box.right = m_backbuffer_size[0];
                     src_box.top = 0;
                     src_box.bottom = m_backbuffer_size[1];
                     src_box.front = 0;
@@ -446,15 +556,20 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             std::vector<XrCompositionLayerBaseHeader*> quad_layers{};
 
             auto& openxr_overlay = vr->get_overlay_component().get_openxr();
-            const auto slate_layer = openxr_overlay.generate_slate_layer();
-            if (slate_layer) {
-                quad_layers.push_back(&slate_layer->get());
+
+            if (m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::UI)) {
+                const auto slate_layer = openxr_overlay.generate_slate_layer();
+                if (slate_layer) {
+                    quad_layers.push_back(&slate_layer->get());
+                }
             }
 
-            const auto framework_quad = openxr_overlay.generate_framework_ui_quad();
+            if (m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI)) {
+                const auto framework_quad = openxr_overlay.generate_framework_ui_quad();
 
-            if (framework_quad) {
-                quad_layers.push_back((XrCompositionLayerBaseHeader*)&framework_quad->get());
+                if (framework_quad) {
+                    quad_layers.push_back((XrCompositionLayerBaseHeader*)&framework_quad->get());
+                }
             }
             
             auto result = vr->m_openxr->end_frame(quad_layers, scene_depth_tex != nullptr);
@@ -472,11 +587,16 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             if (!is_afr) {
                 D3D11_BOX src_box{};
                 src_box.left = 0;
-                src_box.right = m_backbuffer_size[0] / 2;
                 src_box.top = 0;
                 src_box.bottom = m_backbuffer_size[1];
                 src_box.front = 0;
                 src_box.back = 1;
+
+                if (vr->is_extreme_compatibility_mode_enabled()) {
+                    src_box.right = m_backbuffer_size[0];
+                } else {
+                    src_box.right = m_backbuffer_size[0] / 2;
+                }
 
                 context->CopySubresourceRegion(m_left_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
 
@@ -503,16 +623,25 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
             // Copy the back buffer to the right eye texture.
             D3D11_BOX src_box{};
-            if (!is_afr) {
-                src_box.left = m_backbuffer_size[0] / 2;
-                src_box.right = m_backbuffer_size[0];
-                src_box.top = 0;
-                src_box.bottom = m_backbuffer_size[1];
-                src_box.front = 0;
-                src_box.back = 1;
-            } else { // Copy the left eye on AFR
+            if (!vr->is_extreme_compatibility_mode_enabled()) {
+                if (!is_afr) {
+                    src_box.left = m_backbuffer_size[0] / 2;
+                    src_box.right = m_backbuffer_size[0];
+                    src_box.top = 0;
+                    src_box.bottom = m_backbuffer_size[1];
+                    src_box.front = 0;
+                    src_box.back = 1;
+                } else { // Copy the left eye on AFR
+                    src_box.left = 0;
+                    src_box.right = m_backbuffer_size[0] / 2;
+                    src_box.top = 0;
+                    src_box.bottom = m_backbuffer_size[1];
+                    src_box.front = 0;
+                    src_box.back = 1;
+                }   
+            } else {
                 src_box.left = 0;
-                src_box.right = m_backbuffer_size[0] / 2;
+                src_box.right = m_backbuffer_size[0];
                 src_box.top = 0;
                 src_box.bottom = m_backbuffer_size[1];
                 src_box.front = 0;
@@ -641,30 +770,30 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             ComPtr<ID3D11Texture2D> real_backbuffer{};
             swapchain->GetBuffer(0, IID_PPV_ARGS(&real_backbuffer));
 
-            if (m_copied_backbuffer == nullptr && real_backbuffer != nullptr) {
+            if (m_spectator_view_backbuffer == nullptr && real_backbuffer != nullptr) {
                 D3D11_TEXTURE2D_DESC real_backbuffer_desc{};
                 real_backbuffer->GetDesc(&real_backbuffer_desc);
-                if (FAILED(device->CreateTexture2D(&real_backbuffer_desc, nullptr, &m_copied_backbuffer))) {
+                if (FAILED(device->CreateTexture2D(&real_backbuffer_desc, nullptr, &m_spectator_view_backbuffer))) {
                     spdlog::error("[VR] Failed to create copied backbuffer for desktop view");
                 }
             }
 
             // Copy over the backbuffer every other frame
-            if (real_backbuffer != nullptr && m_copied_backbuffer != nullptr) {
-                context->CopyResource(m_copied_backbuffer.Get(), real_backbuffer.Get());
+            if (real_backbuffer != nullptr && m_spectator_view_backbuffer != nullptr) {
+                context->CopyResource(m_spectator_view_backbuffer.Get(), real_backbuffer.Get());
             }
         } else {
-            m_copied_backbuffer.Reset(); // Free as we have no use for it
+            m_spectator_view_backbuffer.Reset(); // Free as we have no use for it
         }
     }
 
     // Copy the previous right eye frame to the backbuffer if we're using AFR on an non-right eye frame
-    if (is_actually_afr && !is_right_eye_frame && should_draw_desktop && m_copied_backbuffer != nullptr) {
+    if (is_actually_afr && !is_right_eye_frame && should_draw_desktop && m_spectator_view_backbuffer != nullptr) {
         ComPtr<ID3D11Texture2D> real_backbuffer{};
         swapchain->GetBuffer(0, IID_PPV_ARGS(&real_backbuffer));
 
         if (real_backbuffer != nullptr) {
-            context->CopyResource(real_backbuffer.Get(), m_copied_backbuffer.Get());
+            context->CopyResource(real_backbuffer.Get(), m_spectator_view_backbuffer.Get());
         }
     }
 
@@ -715,7 +844,10 @@ void D3D11Component::on_reset(VR* vr) {
 
     m_backbuffer_rtv.Reset();
     m_backbuffer.Reset();
-    m_copied_backbuffer.Reset();
+    m_spectator_view_backbuffer.Reset();
+    m_extreme_compat_backbuffer.Reset();
+    m_converted_backbuffer.Reset();
+    m_extreme_compat_backbuffer_ctx.reset();
     m_left_eye_tex.Reset();
     m_right_eye_tex.Reset();
     m_left_eye_rtv.Reset();
@@ -787,7 +919,8 @@ void D3D11Component::copy_tex(ID3D11Resource* src, ID3D11Resource* dst) {
 bool D3D11Component::setup() {
     SPDLOG_INFO_EVERY_N_SEC(1, "[VR] Setting up D3D11 textures...");
 
-    on_reset(VR::get().get());
+    auto& vr = VR::get();
+    on_reset(vr.get());
 
     // Get device and swapchain.
     auto& hook = g_framework->get_d3d11_hook();
@@ -799,14 +932,23 @@ bool D3D11Component::setup() {
     device->GetImmediateContext(&context);
 
     // Get back buffer.
-    //ComPtr<ID3D11Texture2D> backbuffer{};
-    // swapchain->GetBuffer(0, IID_PPV_ARGS(&backbuffer));
+    ComPtr<ID3D11Texture2D> real_backbuffer{};
+    swapchain->GetBuffer(0, IID_PPV_ARGS(&real_backbuffer));
+
+    if (real_backbuffer == nullptr) {
+        SPDLOG_ERROR_EVERY_N_SEC(1, "[VR] Failed to get real back buffer (D3D11).");
+        return false;
+    }
 
     ComPtr<ID3D11Texture2D> backbuffer{};
-    auto ue4_texture = VR::get()->m_fake_stereo_hook->get_render_target_manager()->get_render_target();
+    auto ue4_texture = vr->m_fake_stereo_hook->get_render_target_manager()->get_render_target();
 
     if (ue4_texture != nullptr) {
         backbuffer = (ID3D11Texture2D*)ue4_texture->get_native_resource();
+    }
+
+    if (vr->is_extreme_compatibility_mode_enabled()) {
+        backbuffer = real_backbuffer;
     }
 
     if (backbuffer == nullptr) {
@@ -825,8 +967,6 @@ bool D3D11Component::setup() {
     m_backbuffer_size[1] = backbuffer_desc.Height;
 
     D3D11_TEXTURE2D_DESC real_backbuffer_desc{};
-    ComPtr<ID3D11Texture2D> real_backbuffer{};
-    swapchain->GetBuffer(0, IID_PPV_ARGS(&real_backbuffer));
 
     if (real_backbuffer != nullptr) {
         real_backbuffer->GetDesc(&real_backbuffer_desc);
@@ -835,7 +975,11 @@ bool D3D11Component::setup() {
         m_real_backbuffer_size[1] = real_backbuffer_desc.Height;
     }
 
-    backbuffer_desc.Width = backbuffer_desc.Width / 2;
+    if (!vr->is_extreme_compatibility_mode_enabled()) {
+        backbuffer_desc.Width = backbuffer_desc.Width / 2;
+    } else {
+        backbuffer_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    }
 
     spdlog::info("[VR] W: {}, H: {}", backbuffer_desc.Width, backbuffer_desc.Height);
     spdlog::info("[VR] Format: {}", backbuffer_desc.Format);
@@ -875,8 +1019,10 @@ bool D3D11Component::setup() {
     clear_tex(m_ui_tex.Get());
 
     // copy backbuffer into right eye
-    context->CopyResource(m_right_eye_tex.Get(), backbuffer.Get());
-    context->CopyResource(m_left_eye_tex.Get(), backbuffer.Get());
+    if (!vr->is_extreme_compatibility_mode_enabled()) {
+        context->CopyResource(m_right_eye_tex.Get(), backbuffer.Get());
+        context->CopyResource(m_left_eye_tex.Get(), backbuffer.Get());
+    }
 
     D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
     srv_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
@@ -1714,6 +1860,7 @@ void D3D11Component::OpenXR::copy(uint32_t swapchain_idx, ID3D11Texture2D* resou
             }
 
             ctx.num_textures_acquired--;
+            ctx.ever_acquired = true;
         }
     }
 }
