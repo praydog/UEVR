@@ -4449,7 +4449,7 @@ IStereoRenderTargetManager* FFakeStereoRenderingHook::get_render_target_manager_
 
     auto vr = VR::get();
 
-    if (vr->is_stereo_emulation_enabled()) {
+    if (vr->is_stereo_emulation_enabled() || vr->is_extreme_compatibility_mode_enabled()) {
         return nullptr;
     }
 
