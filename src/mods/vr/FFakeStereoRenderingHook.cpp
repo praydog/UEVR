@@ -923,6 +923,10 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
             
                 auto vr = VR::get();
 
+                if (vr->is_extreme_compatibility_mode_enabled()) {
+                    return false;
+                }
+
                 if (vr->is_hmd_active() && !vr->is_stereo_emulation_enabled()) {
                     g_hook->get_embedded_rtm().should_use_separate_rt_called = true;
                     return true;
