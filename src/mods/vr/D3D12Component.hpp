@@ -53,8 +53,11 @@ private:
     ComPtr<ID3D12Resource> m_prev_backbuffer{};
     std::array<d3d12::CommandContext, 3> m_generic_commands{};
 
+    d3d12::TextureContext m_backbuffer_copy{};
+
     d3d12::TextureContext m_game_ui_tex{};
     d3d12::TextureContext m_game_tex{};
+    std::array<d3d12::CommandContext, 3> m_game_tex_commands{};
     std::array<d3d12::TextureContext, 2> m_2d_screen_tex{};
     std::array<d3d12::TextureContext, 3> m_backbuffer_textures{};
 
@@ -171,6 +174,17 @@ private:
             }
         }
 
+        bool ever_acquired(uint32_t swapchain_idx) {
+            std::scoped_lock _{this->mtx};
+
+            auto it = this->contexts.find(swapchain_idx);
+            if (it == this->contexts.end()) {
+                return false;
+            }
+
+            return it->second.ever_acquired;
+        }
+
         XrGraphicsBindingD3D12KHR binding{XR_TYPE_GRAPHICS_BINDING_D3D12_KHR};
 
         struct SwapchainContext {
@@ -178,6 +192,7 @@ private:
             std::vector<std::unique_ptr<d3d12::TextureContext>> texture_contexts{};
             uint32_t num_textures_acquired{0};
             uint32_t last_acquired_texture{0};
+            bool ever_acquired{false};
         };
 
         std::unordered_map<uint32_t, SwapchainContext> contexts{};

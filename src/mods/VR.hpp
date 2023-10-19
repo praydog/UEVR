@@ -332,11 +332,13 @@ public:
 
     bool is_using_afr() const {
         return m_rendering_method->value() == RenderingMethod::ALTERNATING || 
-               m_rendering_method->value() == RenderingMethod::SYNCHRONIZED;
+               m_rendering_method->value() == RenderingMethod::SYNCHRONIZED ||
+               m_extreme_compat_mode->value() == true;
     }
 
     bool is_using_synchronized_afr() const {
-        return m_rendering_method->value() == RenderingMethod::SYNCHRONIZED;
+        return m_rendering_method->value() == RenderingMethod::SYNCHRONIZED ||
+               (m_extreme_compat_mode->value() && m_rendering_method->value() == RenderingMethod::NATIVE_STEREO);
     }
 
     SyncedSequentialMethod get_synced_sequential_method() const {
@@ -457,6 +459,10 @@ public:
 
     bool should_skip_post_init_properties() const {
         return m_compatibility_skip_pip->value();
+    }
+
+    bool is_extreme_compatibility_mode_enabled() const {
+        return m_extreme_compat_mode->value();
     }
 
 private:
@@ -658,6 +664,7 @@ private:
 
     const ModCombo::Ptr m_rendering_method{ ModCombo::create(generate_name("RenderingMethod"), s_rendering_method_names) };
     const ModCombo::Ptr m_synced_afr_method{ ModCombo::create(generate_name("SyncedSequentialMethod"), s_synced_afr_method_names, 1) };
+    const ModToggle::Ptr m_extreme_compat_mode{ ModToggle::create(generate_name("ExtremeCompatibilityMode"), false) };
     const ModToggle::Ptr m_uncap_framerate{ ModToggle::create(generate_name("UncapFramerate"), true) };
     const ModToggle::Ptr m_disable_blur_widgets{ ModToggle::create(generate_name("DisableBlurWidgets"), true) };
     const ModToggle::Ptr m_disable_hdr_compositing{ ModToggle::create(generate_name("DisableHDRCompositing"), true) };
@@ -727,6 +734,7 @@ private:
     ValueList m_options{
         *m_rendering_method,
         *m_synced_afr_method,
+        *m_extreme_compat_mode,
         *m_uncap_framerate,
         *m_disable_hdr_compositing,
         *m_disable_hzbocclusion,

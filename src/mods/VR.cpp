@@ -1823,7 +1823,7 @@ void VR::on_post_present() {
 }
 
 uint32_t VR::get_hmd_width() const {
-    if (m_2d_screen_mode->value()) {
+    if (m_2d_screen_mode->value() || m_extreme_compat_mode->value()) {
         return g_framework->get_rt_size().x;
     }
 
@@ -1831,7 +1831,7 @@ uint32_t VR::get_hmd_width() const {
 }
 
 uint32_t VR::get_hmd_height() const {
-    if (m_2d_screen_mode->value()) {
+    if (m_2d_screen_mode->value() || m_extreme_compat_mode->value()) {
         return g_framework->get_rt_size().y;
     }
 
@@ -2061,6 +2061,7 @@ void VR::on_draw_ui() {
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
     if (ImGui::TreeNode("Compatibility Options")) {
         m_compatibility_skip_pip->draw("Skip PostInitProperties");
+        m_extreme_compat_mode->draw("Extreme Compatibility Mode");
         ImGui::TreePop();
     }
     
