@@ -88,7 +88,10 @@ bool D3D12::initialize() {
         this->rt_height = (uint32_t)desc.Height;
     }
 
-    if (!ImGui_ImplDX12_Init(device, 1, DXGI_FORMAT_R8G8B8A8_UNORM, this->srv_desc_heap.Get(),
+    auto& backbuffer = this->get_rt(D3D12::RTV::BACKBUFFER_0);
+    auto desc = backbuffer->GetDesc();
+
+    if (!ImGui_ImplDX12_Init(device, 1, desc.Format, this->srv_desc_heap.Get(),
         this->get_cpu_srv(device, D3D12::SRV::IMGUI_FONT), this->get_gpu_srv(device, D3D12::SRV::IMGUI_FONT))) 
     {
         return false;
@@ -104,19 +107,21 @@ void D3D12::render_imgui() {
     this->cmd_allocator->Reset();
     this->cmd_list->Reset(g_d3d12.cmd_allocator.Get(), nullptr);
 
+    auto device = (ID3D12Device*)renderer_data->device;
+    float clear_color[]{0.0f, 0.0f, 0.0f, 0.0f};
+    D3D12_CPU_DESCRIPTOR_HANDLE rts[1]{};
+
     // Draw to our render target.
     D3D12_RESOURCE_BARRIER barrier{};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barrier.Transition.pResource = this->get_rt(D3D12::RTV::IMGUI).Get();
+    
+    /*barrier.Transition.pResource = this->get_rt(D3D12::RTV::IMGUI).Get();
     barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     this->cmd_list->ResourceBarrier(1, &barrier);
 
-    float clear_color[]{0.0f, 0.0f, 0.0f, 0.0f};
-    auto device = (ID3D12Device*)renderer_data->device;
-    D3D12_CPU_DESCRIPTOR_HANDLE rts[1]{};
     this->cmd_list->ClearRenderTargetView(this->get_cpu_rtv(device, D3D12::RTV::IMGUI), clear_color, 0, nullptr);
     rts[0] = this->get_cpu_rtv(device, D3D12::RTV::IMGUI);
     this->cmd_list->OMSetRenderTargets(1, rts, FALSE, NULL);
@@ -124,7 +129,7 @@ void D3D12::render_imgui() {
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), this->cmd_list.Get());
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    this->cmd_list->ResourceBarrier(1, &barrier);
+    this->cmd_list->ResourceBarrier(1, &barrier);*/
 
     // Draw to the back buffer.
     auto swapchain = (IDXGISwapChain3*)renderer_data->swapchain;
