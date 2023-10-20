@@ -1823,7 +1823,15 @@ void VR::on_post_present() {
 }
 
 uint32_t VR::get_hmd_width() const {
-    if (m_2d_screen_mode->value() || m_extreme_compat_mode->value()) {
+    if (m_2d_screen_mode->value()) {
+        if (get_runtime()->is_openxr()) {
+            return g_framework->get_rt_size().x * m_openxr->resolution_scale->value();
+        }
+
+        return g_framework->get_rt_size().x;
+    }
+
+    if (m_extreme_compat_mode->value()) {
         return g_framework->get_rt_size().x;
     }
 
@@ -1831,7 +1839,15 @@ uint32_t VR::get_hmd_width() const {
 }
 
 uint32_t VR::get_hmd_height() const {
-    if (m_2d_screen_mode->value() || m_extreme_compat_mode->value()) {
+    if (m_2d_screen_mode->value()) {
+        if (get_runtime()->is_openxr()) {
+            return g_framework->get_rt_size().y * m_openxr->resolution_scale->value();
+        }
+
+        return g_framework->get_rt_size().y;
+    }
+
+    if (m_extreme_compat_mode->value()) {
         return g_framework->get_rt_size().y;
     }
 
