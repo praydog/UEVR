@@ -389,15 +389,25 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         context->ClearRenderTargetView(m_engine_tex_ref, clear_color);
     };
 
+    if (is_2d_screen) {
+        draw_2d_view();
+    }
+
     // Duplicate frames can sometimes cause the UI to get stuck on the screen.
     // and can lock up the compositor.
-    if (is_right_eye_frame) {
-        if (runtime->is_openvr() && get_ui_tex().Get() != nullptr && m_engine_ui_ref.has_texture()) {
-            copy_tex(m_engine_ui_ref, get_ui_tex().Get());
-        } else if (runtime->is_openxr() && vr->m_openxr->frame_began) {
+    if (runtime->is_openvr() && get_ui_tex().Get() != nullptr) {
+        if (is_right_eye_frame) {
             if (is_2d_screen) {
-                draw_2d_view();
-
+                copy_tex(m_2d_screen_tex[0], get_ui_tex().Get());
+            } else if (m_engine_ui_ref.has_texture()) {
+                copy_tex(m_engine_ui_ref, get_ui_tex().Get());
+            }
+        } else if (is_2d_screen) {
+            copy_tex(m_2d_screen_tex[0], get_ui_tex().Get());
+        }
+    } else if (runtime->is_openxr() && vr->m_openxr->frame_began) {
+        if (is_right_eye_frame) {
+            if (is_2d_screen) {
                 if (is_afr) {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI_RIGHT, m_2d_screen_tex[0]);
                 } else {
@@ -415,6 +425,8 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             if (fw_rt != nullptr && g_framework->is_drawing_anything()) {
                 m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, fw_rt.Get());
             }
+        } else if (is_2d_screen) {
+            m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, m_2d_screen_tex[0]);
         }
     }
 
