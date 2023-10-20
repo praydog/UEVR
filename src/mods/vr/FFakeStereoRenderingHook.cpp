@@ -664,6 +664,11 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         }
 
         auto ip = (uint8_t*)potential_func;
+        if (*(uint8_t*)ip == 0xE9) {
+            ip = (uint8_t*)utility::calculate_absolute(potential_func + 1);
+            SPDLOG_INFO("Found JMP at {:x}, jumping to {:x}", (uintptr_t)potential_func, (uintptr_t)ip);
+        }
+
         bool found = false;
 
         SPDLOG_INFO("Scanning {:x}...", (uintptr_t)ip);
