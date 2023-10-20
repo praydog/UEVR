@@ -319,35 +319,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         float clear_color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
         m_engine_tex_ref.clear_rtv(&clear_color[0]);
 
-        // Finally do the rendering.
-        ID3D11RenderTargetView* views[] = { m_engine_tex_ref };
-        context->OMSetRenderTargets(1, views, nullptr);
-
-        m_backbuffer_batch->Begin();
-
-        D3D11_VIEWPORT viewport{};
-        viewport.Width = m_backbuffer_size[0];
-        viewport.Height = m_backbuffer_size[1];
-        m_backbuffer_batch->SetViewport(viewport);
-
-        context->RSSetViewports(1, &viewport);
-        
-        D3D11_RECT scissor_rect{};
-        scissor_rect.left = 0;
-        scissor_rect.top = 0;
-        scissor_rect.right = m_backbuffer_size[0];
-        scissor_rect.bottom = m_backbuffer_size[1];
-        context->RSSetScissorRects(1, &scissor_rect);
-
-        RECT dest_rect{};
-        dest_rect.left = 0;
-        dest_rect.top = 0;
-        dest_rect.right = m_backbuffer_size[0];
-        dest_rect.bottom = m_backbuffer_size[1];
-
-        m_backbuffer_batch->Draw(m_extreme_compat_backbuffer_ctx, dest_rect, DirectX::Colors::White);
-
-        m_backbuffer_batch->End();
+        render_srv_to_rtv(m_backbuffer_batch.get(), m_extreme_compat_backbuffer_ctx, m_engine_tex_ref, m_backbuffer_size[0], m_backbuffer_size[1]);
 
         backbuffer = m_converted_backbuffer;
     }
@@ -363,14 +335,79 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         m_engine_ui_ref.reset();
     }
 
+    const auto is_2d_screen = vr->is_using_2d_screen();
+
+    auto draw_2d_view = [&]() {
+        if (!is_2d_screen || !m_engine_tex_ref.has_texture() || !m_engine_tex_ref.has_srv()) {
+            return;
+        }
+
+        DX11StateBackup backup{context.Get()};
+
+        float clear_color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+        // Clear previous frame
+        for (auto& screen : m_2d_screen_tex) {
+            context->ClearRenderTargetView(screen, clear_color);
+        }
+
+        // Render left side to left screen tex
+        render_srv_to_rtv(
+            m_game_batch.get(),
+            m_engine_tex_ref,
+            m_2d_screen_tex[0],
+            RECT{0, 0, (LONG)((float)m_backbuffer_size[0] / 2.0f), (LONG)m_backbuffer_size[1]}
+        );
+
+        if (m_engine_ui_ref.has_texture() && m_engine_ui_ref.has_srv()) {
+            render_srv_to_rtv(
+                m_game_batch.get(),
+                m_engine_ui_ref,
+                m_2d_screen_tex[0]
+            );
+        }
+
+        if (!is_afr) {
+            // Render right side to right screen tex
+            render_srv_to_rtv(
+                m_game_batch.get(),
+                m_engine_tex_ref,
+                m_2d_screen_tex[1],
+                RECT{(LONG)((float)m_backbuffer_size[0] / 2.0f), 0, (LONG)((float)m_backbuffer_size[0]), (LONG)m_backbuffer_size[1]}
+            );
+
+            if (m_engine_ui_ref.has_texture() && m_engine_ui_ref.has_srv()) {
+                render_srv_to_rtv(
+                    m_game_batch.get(),
+                    m_engine_ui_ref,
+                    m_2d_screen_tex[1]
+                );
+            }
+        }
+
+        // Clear the RT so the entire background is black when submitting to the compositor
+        context->ClearRenderTargetView(m_engine_tex_ref, clear_color);
+    };
+
     // Duplicate frames can sometimes cause the UI to get stuck on the screen.
     // and can lock up the compositor.
     if (is_right_eye_frame) {
         if (runtime->is_openvr() && get_ui_tex().Get() != nullptr && m_engine_ui_ref.has_texture()) {
             copy_tex(m_engine_ui_ref, get_ui_tex().Get());
         } else if (runtime->is_openxr() && vr->m_openxr->frame_began) {
-            if (m_engine_ui_ref.has_texture()) {
-                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, m_engine_ui_ref);
+            if (is_2d_screen) {
+                draw_2d_view();
+
+                if (is_afr) {
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI_RIGHT, m_2d_screen_tex[0]);
+                } else {
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, m_2d_screen_tex[0]);
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI_RIGHT, m_2d_screen_tex[1]);
+                }
+            } else {
+                if (m_engine_ui_ref.has_texture()) {
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, m_engine_ui_ref);
+                }
             }
 
             auto fw_rt = g_framework->get_rendertarget_d3d11();
@@ -557,11 +594,23 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
             auto& openxr_overlay = vr->get_overlay_component().get_openxr();
 
-            if (m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::UI)) {
+            if (vr->m_2d_screen_mode->value()) {
+                const auto left_layer = openxr_overlay.generate_slate_layer(runtimes::OpenXR::SwapchainIndex::UI, XrEyeVisibility::XR_EYE_VISIBILITY_LEFT);
+                const auto right_layer = openxr_overlay.generate_slate_layer(runtimes::OpenXR::SwapchainIndex::UI_RIGHT, XrEyeVisibility::XR_EYE_VISIBILITY_RIGHT);
+
+                if (left_layer && m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::UI)) {
+                    quad_layers.push_back((XrCompositionLayerBaseHeader*)&left_layer->get());
+                }
+
+                if (right_layer && m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::UI_RIGHT)) {
+                    quad_layers.push_back((XrCompositionLayerBaseHeader*)&right_layer->get());
+                }
+            } else if (m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::UI)) {
                 const auto slate_layer = openxr_overlay.generate_slate_layer();
+
                 if (slate_layer) {
                     quad_layers.push_back(&slate_layer->get());
-                }
+                }   
             }
 
             if (m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI)) {
@@ -916,6 +965,137 @@ void D3D11Component::copy_tex(ID3D11Resource* src, ID3D11Resource* dst) {
     context->CopyResource(dst, src);
 }
 
+void D3D11Component::render_srv_to_rtv(DirectX::DX11::SpriteBatch* batch, TextureContext& srv, TextureContext& rtv, float w, float h) {
+    auto& hook = g_framework->get_d3d11_hook();
+    auto device = hook->get_device();
+
+    ComPtr<ID3D11DeviceContext> context{};
+    device->GetImmediateContext(&context);
+
+    // Finally do the rendering.
+    ID3D11RenderTargetView* views[] = { rtv };
+    context->OMSetRenderTargets(1, views, nullptr);
+
+    batch->Begin();
+
+    D3D11_VIEWPORT viewport{};
+    viewport.Width = w;
+    viewport.Height = h;
+    batch->SetViewport(viewport);
+
+    context->RSSetViewports(1, &viewport);
+    
+    D3D11_RECT scissor_rect{};
+    scissor_rect.left = 0;
+    scissor_rect.top = 0;
+    scissor_rect.right = w;
+    scissor_rect.bottom = h;
+    context->RSSetScissorRects(1, &scissor_rect);
+
+    RECT dest_rect{};
+    dest_rect.left = 0;
+    dest_rect.top = 0;
+    dest_rect.right = w;
+    dest_rect.bottom = h;
+
+    batch->Draw(srv, dest_rect, DirectX::Colors::White);
+    batch->End();
+}
+
+void D3D11Component::render_srv_to_rtv(DirectX::DX11::SpriteBatch* batch, TextureContext& srv, TextureContext& rtv) {
+    // get src and dest descs
+    D3D11_TEXTURE2D_DESC src_desc{};
+    D3D11_TEXTURE2D_DESC dest_desc{};
+
+    ((ID3D11Texture2D*)srv.tex.Get())->GetDesc(&src_desc);
+    ((ID3D11Texture2D*)rtv.tex.Get())->GetDesc(&dest_desc);
+    
+    auto& hook = g_framework->get_d3d11_hook();
+    auto device = hook->get_device();
+
+    ComPtr<ID3D11DeviceContext> context{};
+    device->GetImmediateContext(&context);
+
+    // Finally do the rendering.
+    ID3D11RenderTargetView* views[] = { rtv };
+    context->OMSetRenderTargets(1, views, nullptr);
+
+    batch->Begin();
+
+    D3D11_VIEWPORT viewport{};
+    viewport.Width = dest_desc.Width;
+    viewport.Height = dest_desc.Height;
+    batch->SetViewport(viewport);
+
+    context->RSSetViewports(1, &viewport);
+    
+    D3D11_RECT scissor_rect{};
+    scissor_rect.left = 0;
+    scissor_rect.top = 0;
+    scissor_rect.right = dest_desc.Width;
+    scissor_rect.bottom = dest_desc.Height;
+    context->RSSetScissorRects(1, &scissor_rect);
+
+    RECT dest_rect{};
+    dest_rect.left = 0;
+    dest_rect.top = 0;
+    dest_rect.right = dest_desc.Width;
+    dest_rect.bottom = dest_desc.Height;
+
+    RECT src_rect{};
+    src_rect.left = 0;
+    src_rect.top = 0;
+    src_rect.right = src_desc.Width;
+    src_rect.bottom = src_desc.Height;
+
+    batch->Draw(srv, dest_rect, &src_rect, DirectX::Colors::White);
+    batch->End();
+}
+
+void D3D11Component::render_srv_to_rtv(DirectX::DX11::SpriteBatch* batch, TextureContext& srv, TextureContext& rtv, const RECT& src_rect) {
+    // get src and dest descs
+    D3D11_TEXTURE2D_DESC src_desc{};
+    D3D11_TEXTURE2D_DESC dest_desc{};
+
+    ((ID3D11Texture2D*)srv.tex.Get())->GetDesc(&src_desc);
+    ((ID3D11Texture2D*)rtv.tex.Get())->GetDesc(&dest_desc);
+    
+    auto& hook = g_framework->get_d3d11_hook();
+    auto device = hook->get_device();
+
+    ComPtr<ID3D11DeviceContext> context{};
+    device->GetImmediateContext(&context);
+
+    // Finally do the rendering.
+    ID3D11RenderTargetView* views[] = { rtv };
+    context->OMSetRenderTargets(1, views, nullptr);
+
+    batch->Begin();
+
+    D3D11_VIEWPORT viewport{};
+    viewport.Width = dest_desc.Width;
+    viewport.Height = dest_desc.Height;
+    batch->SetViewport(viewport);
+
+    context->RSSetViewports(1, &viewport);
+    
+    D3D11_RECT scissor_rect{};
+    scissor_rect.left = 0;
+    scissor_rect.top = 0;
+    scissor_rect.right = dest_desc.Width;
+    scissor_rect.bottom = dest_desc.Height;
+    context->RSSetScissorRects(1, &scissor_rect);
+
+    RECT dest_rect{};
+    dest_rect.left = 0;
+    dest_rect.top = 0;
+    dest_rect.right = dest_desc.Width;
+    dest_rect.bottom = dest_desc.Height;
+
+    batch->Draw(srv, dest_rect, &src_rect, DirectX::Colors::White);
+    batch->End();
+}
+
 bool D3D11Component::setup() {
     SPDLOG_INFO_EVERY_N_SEC(1, "[VR] Setting up D3D11 textures...");
 
@@ -1009,7 +1189,13 @@ bool D3D11Component::setup() {
             continue;
         }
 
-        if (!ctx.set(tex.Get(), DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)) {
+        std::optional<DXGI_FORMAT> tex_format{};
+        
+        if (!vr->is_extreme_compatibility_mode_enabled()) {
+            tex_format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        }
+
+        if (!ctx.set(tex.Get(), tex_format, tex_format)) {
             spdlog::error("[VR] Failed to setup 2D screen texture context (D3D11).");
             continue;
         }
@@ -1662,6 +1848,10 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
 
     // The UI texture
     if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, desktop_rt_swapchain_create_info, desktop_rt_desc)) {
+        return err;
+    }
+
+    if (auto err = create_swapchain((uint32_t)runtimes::OpenXR::SwapchainIndex::UI_RIGHT, desktop_rt_swapchain_create_info, desktop_rt_desc)) {
         return err;
     }
 

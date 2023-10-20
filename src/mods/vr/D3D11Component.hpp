@@ -40,6 +40,24 @@ public:
 
 private:
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
+    struct TextureContext;
+
+    void render_srv_to_rtv(
+        DirectX::DX11::SpriteBatch* batch,
+        TextureContext& srv,
+        TextureContext& rtv,
+        float w, float h);
+
+    void render_srv_to_rtv(
+        DirectX::DX11::SpriteBatch* batch,
+        TextureContext& srv,
+        TextureContext& rtv);
+
+    void render_srv_to_rtv(
+        DirectX::DX11::SpriteBatch* batch,
+        TextureContext& srv,
+        TextureContext& rtv,
+        const RECT& src_rect);
 
     struct ShaderGlobals {
         DirectX::XMMATRIX mvp{};
