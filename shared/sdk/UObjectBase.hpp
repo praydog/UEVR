@@ -38,11 +38,19 @@ public:
         return s_outer_private_offset + sizeof(void*);
     }
 
+    static std::optional<uintptr_t> get_vtable();
     static std::optional<uintptr_t> get_destructor();
+    static std::optional<uintptr_t> get_add_object();
 
 private:
     using ProcessEventFn = void(*)(UObjectBase*, UFunction*, void*);
     static void update_process_event_index();
+    static void update_offsets_post_uobjectarray();
+
+    static inline bool s_updated_post_uobjectarray{false};
+    static inline std::optional<uintptr_t> s_vtable{};
+    static inline std::optional<uintptr_t> s_destructor{};
+    static inline std::optional<uintptr_t> s_add_object{};
 
     static inline bool s_attempted_update_offsets{false};
     static inline uint32_t s_object_flags_offset{0x8};

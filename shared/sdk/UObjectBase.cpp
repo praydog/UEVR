@@ -8,6 +8,7 @@
 #include "UObjectArray.hpp"
 #include "UObjectBase.hpp"
 #include "UObject.hpp"
+#include "EngineModule.hpp"
 
 namespace sdk {
 void UObjectBase::update_offsets() {
@@ -176,70 +177,160 @@ void UObjectBase::update_process_event_index() try {
     SPDLOG_ERROR("[UObjectBase] Failed to update ProcessEvent index");
 }
 
-std::optional<uintptr_t> UObjectBase::get_destructor() {
-    static auto result = []() -> std::optional<uintptr_t> {
-        SPDLOG_INFO("[UObjectBase] Searching for destructor...");
+void UObjectBase::update_offsets_post_uobjectarray() {
+    if (s_updated_post_uobjectarray) {
+        return;
+    }
 
-        const auto uobject_class = sdk::UObject::static_class();
+    s_updated_post_uobjectarray = true;
 
-        if (uobject_class == nullptr) {
-            SPDLOG_ERROR("[UObjectBase] Failed to find UObject class, cannot find destructor");
-            return {};
+    SPDLOG_INFO("[UObjectBase] Searching for destructor...");
+
+    const auto uobject_class = sdk::UObject::static_class();
+
+    if (uobject_class == nullptr) {
+        SPDLOG_ERROR("[UObjectBase] Failed to find UObject class, cannot find destructor");
+        return;
+    }
+
+    const auto default_object = uobject_class->get_class_default_object();
+
+    if (default_object == nullptr) {
+        SPDLOG_ERROR("[UObjectBase] Failed to find default UObject, cannot find destructor");
+        return;
+    }
+
+    const auto uobject_vtable = *(void***)default_object;
+
+    if (uobject_vtable == nullptr || IsBadReadPtr(uobject_vtable, sizeof(void*))) {
+        SPDLOG_ERROR("[UObjectBase] Failed to find UObject vtable, cannot find destructor");
+        return;
+    }
+
+    const auto uobject_destructor = uobject_vtable[0];
+
+    if (uobject_destructor == nullptr || IsBadReadPtr(uobject_destructor, sizeof(void*))) {
+        SPDLOG_ERROR("[UObjectBase] Failed to find UObject destructor, cannot find destructor");
+        return;
+    }
+
+    // Now we need to exhaustively decode the destructor, looking for a call to the destructor of parent class
+    utility::exhaustive_decode((uint8_t*)uobject_destructor, 100, [&](utility::ExhaustionContext& ctx) -> utility::ExhaustionResult {
+        if (s_destructor && s_vtable) {
+            return utility::ExhaustionResult::BREAK;
         }
 
-        const auto default_object = uobject_class->get_class_default_object();
-
-        if (default_object == nullptr) {
-            SPDLOG_ERROR("[UObjectBase] Failed to find default UObject, cannot find destructor");
-            return {};
-        }
-
-        const auto uobject_vtable = *(void***)default_object;
-
-        if (uobject_vtable == nullptr || IsBadReadPtr(uobject_vtable, sizeof(void*))) {
-            SPDLOG_ERROR("[UObjectBase] Failed to find UObject vtable, cannot find destructor");
-            return {};
-        }
-
-        const auto uobject_destructor = uobject_vtable[0];
-
-        if (uobject_destructor == nullptr || IsBadReadPtr(uobject_destructor, sizeof(void*))) {
-            SPDLOG_ERROR("[UObjectBase] Failed to find UObject destructor, cannot find destructor");
-            return {};
-        }
-
-        // Now we need to exhaustively decode the destructor, looking for a call to the destructor of parent class
-        std::optional<uintptr_t> out{};
-
-        utility::exhaustive_decode((uint8_t*)uobject_destructor, 100, [&](utility::ExhaustionContext& ctx) -> utility::ExhaustionResult {
-            if (out) {
-                return utility::ExhaustionResult::BREAK;
-            }
-
-            if (ctx.instrux.BranchInfo.IsBranch) {
-                return utility::ExhaustionResult::CONTINUE;
-            }
-
-            const auto disp = utility::resolve_displacement(ctx.addr);
-
-            if (disp && *disp != (uintptr_t)uobject_vtable) {
-                out = ctx.branch_start;
-                return utility::ExhaustionResult::BREAK;
-            }
-
+        if (ctx.instrux.BranchInfo.IsBranch) {
             return utility::ExhaustionResult::CONTINUE;
-        });
-
-        if (out) {
-            SPDLOG_INFO("[UObjectBase] Found destructor at 0x{:X}", *out);
-        } else {
-            SPDLOG_ERROR("[UObjectBase] Failed to find destructor");
         }
 
-        return out;
-    }();
+        const auto disp = utility::resolve_displacement(ctx.addr);
 
-    return result;
+        if (disp && *disp != (uintptr_t)uobject_vtable) {
+            s_destructor = ctx.branch_start;
+            s_vtable = *disp;
+            return utility::ExhaustionResult::BREAK;
+        }
+
+        return utility::ExhaustionResult::CONTINUE;
+    });
+
+    if (s_destructor) {
+        SPDLOG_INFO("[UObjectBase] Found destructor at 0x{:X}", *s_destructor);
+    } else {
+        SPDLOG_ERROR("[UObjectBase] Failed to find destructor");
+    }
+
+    if (s_vtable) {
+        SPDLOG_INFO("[UObjectBase] Found vtable at 0x{:X}", *s_vtable);
+    } else {
+        SPDLOG_ERROR("[UObjectBase] Failed to find vtable");
+    }
+
+    if (!s_destructor) {
+        SPDLOG_ERROR("[UObjectBase] Failed to find AddObject because destructor is unknown");
+        return;
+    }
+
+    if (!s_vtable) {
+        SPDLOG_ERROR("[UObjectBase] Failed to find AddObject because vtable is unknown");
+        return;
+    }
+
+    const auto core_uobject = sdk::get_ue_module(L"CoreUObject");
+    auto vtable_references = utility::scan_displacement_references(core_uobject, *s_vtable);
+
+    if (vtable_references.empty()) {
+        SPDLOG_ERROR("[UObjectBase] Failed to find AddObject because vtable has no references 1");
+        return;
+    }
+
+    // Filter out references that are within the destructor
+    vtable_references.erase(std::remove_if(vtable_references.begin(), vtable_references.end(), [&](const auto& ref) {
+        return ref >= *s_destructor && ref <= *s_destructor + 0x100;
+    }), vtable_references.end());
+    
+    if (vtable_references.empty()) {
+        SPDLOG_ERROR("[UObjectBase] Failed to find AddObject because vtable has no references 2");
+        return;
+    }
+
+    // Filter out references that are <= 0x50 from a function start (a constructor usually)
+    vtable_references.erase(std::remove_if(vtable_references.begin(), vtable_references.end(), [&](const auto& ref) {
+        const auto function_start = utility::find_function_start_with_call(ref);
+
+        // If we're unable to find a function start - just filter it out anyways.
+        if (!function_start) {
+            return true;
+        }
+
+        return ref - *function_start <= 0x20;
+    }), vtable_references.end());
+
+    if (vtable_references.empty()) {
+        SPDLOG_ERROR("[UObjectBase] Failed to find AddObject because vtable has no references 3");
+        return;
+    }
+
+    if (vtable_references.size() != 1) {
+        SPDLOG_ERROR("[UObjectBase] Failed to find AddObject, unable to filter down to one reference");
+        return;
+    }
+
+    const auto ref = vtable_references[0];
+
+    // Locate the first call after the reference
+    const auto post_instruction = ref + 4;
+    const auto callsite = utility::scan_mnemonic(post_instruction, 100, "CALL");
+
+    if (!callsite) {
+        SPDLOG_ERROR("[UObjectBase] Failed to find AddObject, unable to find callsite");
+        return;
+    }
+
+    SPDLOG_INFO("[UObjectBase] Callsite: 0x{:x}", *callsite);
+
+    s_add_object = utility::calculate_absolute(*callsite + 1);
+
+    SPDLOG_INFO("[UObjectBase] AddObject: 0x{:x}", *s_add_object);
+}
+
+std::optional<uintptr_t> UObjectBase::get_destructor() {
+    update_offsets_post_uobjectarray();
+
+    return s_destructor;
+}
+
+std::optional<uintptr_t> UObjectBase::get_vtable() {
+    update_offsets_post_uobjectarray();
+
+    return s_vtable;
+}
+
+std::optional<uintptr_t> UObjectBase::get_add_object() {
+    update_offsets_post_uobjectarray();
+
+    return s_add_object;
 }
 
 std::wstring UObjectBase::get_full_name() const {
