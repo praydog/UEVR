@@ -301,11 +301,19 @@ void UObjectBase::update_offsets_post_uobjectarray() {
 
     // Locate the first call after the reference
     const auto post_instruction = ref + 4;
-    const auto callsite = utility::scan_mnemonic(post_instruction, 100, "CALL");
+    auto callsite = utility::scan_mnemonic(post_instruction, 100, "CALL");
 
     if (!callsite) {
         SPDLOG_ERROR("[UObjectBase] Failed to find AddObject, unable to find callsite");
         return;
+    }
+
+    const auto potential_add_object = utility::calculate_absolute(*callsite + 1);
+
+    // Happens on debug/modular builds, it's some function that checks validity
+    if (utility::find_string_reference_in_path(potential_add_object, "ClassPrivate", false) || utility::find_string_reference_in_path(potential_add_object, L"ClassPrivate", false)) {
+        SPDLOG_INFO("[UObjectBase] Skipping first callsite because it references ClassPrivate");
+        callsite = utility::scan_mnemonic(*callsite + utility::decode_one((uint8_t*)*callsite)->Length, 100, "CALL");
     }
 
     SPDLOG_INFO("[UObjectBase] Callsite: 0x{:x}", *callsite);
