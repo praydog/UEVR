@@ -240,6 +240,10 @@ void UObjectBase::update_offsets_post_uobjectarray() {
 
                 // Go through the called function, look for a displacement. That's the vtable.
                 utility::exhaustive_decode((uint8_t*)*call_ip, 100, [&](utility::ExhaustionContext& ctx2) -> utility::ExhaustionResult {
+                    if (!std::string_view{ctx2.instrux.Mnemonic}.starts_with("LEA")) {
+                        return utility::ExhaustionResult::CONTINUE;
+                    }
+
                     const auto disp = utility::resolve_displacement(ctx2.addr);
 
                     if (disp && *disp != (uintptr_t)uobject_vtable) {
@@ -253,7 +257,7 @@ void UObjectBase::update_offsets_post_uobjectarray() {
             }
 
             return utility::ExhaustionResult::STEP_OVER;
-        } else if (!ctx.instrux.BranchInfo.IsBranch) {
+        } else if (!ctx.instrux.BranchInfo.IsBranch && std::string_view{ctx.instrux.Mnemonic}.starts_with("LEA")) {
             // Otherwise, check the displacements at the current callstack level.
             const auto disp = utility::resolve_displacement(ctx.addr);
 
@@ -304,11 +308,6 @@ void UObjectBase::update_offsets_post_uobjectarray() {
     
     if (vtable_references.empty()) {
         SPDLOG_ERROR("[UObjectBase] Failed to find AddObject because vtable has no references 2");
-        return;
-    }
-
-    if (vtable_references.empty()) {
-        SPDLOG_ERROR("[UObjectBase] Failed to find AddObject because vtable has no references 3");
         return;
     }
 
