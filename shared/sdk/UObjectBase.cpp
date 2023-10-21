@@ -221,16 +221,47 @@ void UObjectBase::update_offsets_post_uobjectarray() {
             return utility::ExhaustionResult::BREAK;
         }
 
-        if (ctx.instrux.BranchInfo.IsBranch) {
-            return utility::ExhaustionResult::CONTINUE;
-        }
+        if (std::string_view{ctx.instrux.Mnemonic}.starts_with("CALL")) {
+            std::optional<uintptr_t> call_ip{};
 
-        const auto disp = utility::resolve_displacement(ctx.addr);
+            // Check where the call lands. We do it like this because it could be indirect because of modular builds or compiler optimizations.
+            // And exhaustive_decode automatically handles both cases (indirect and direct (far and near)))
+            utility::exhaustive_decode((uint8_t*)ctx.addr, 1, [&](utility::ExhaustionContext& ctx2) -> utility::ExhaustionResult {
+                if (ctx2.branch_start != ctx.addr) {
+                    call_ip = ctx2.addr;
+                    return utility::ExhaustionResult::BREAK;
+                }
 
-        if (disp && *disp != (uintptr_t)uobject_vtable) {
-            s_destructor = ctx.branch_start;
-            s_vtable = *disp;
-            return utility::ExhaustionResult::BREAK;
+                return utility::ExhaustionResult::CONTINUE;
+            });
+
+            if (call_ip) {
+                SPDLOG_INFO("[UObjectBase] Examining called function at 0x{:X}", *call_ip);
+
+                // Go through the called function, look for a displacement. That's the vtable.
+                utility::exhaustive_decode((uint8_t*)*call_ip, 100, [&](utility::ExhaustionContext& ctx2) -> utility::ExhaustionResult {
+                    const auto disp = utility::resolve_displacement(ctx2.addr);
+
+                    if (disp && *disp != (uintptr_t)uobject_vtable) {
+                        s_destructor = ctx2.branch_start;
+                        s_vtable = *disp;
+                        return utility::ExhaustionResult::BREAK;
+                    }
+
+                    return utility::ExhaustionResult::CONTINUE;
+                });
+            }
+
+            return utility::ExhaustionResult::STEP_OVER;
+        } else if (!ctx.instrux.BranchInfo.IsBranch) {
+            // Otherwise, check the displacements at the current callstack level.
+            const auto disp = utility::resolve_displacement(ctx.addr);
+
+            if (disp && *disp != (uintptr_t)uobject_vtable) {
+                s_destructor = ctx.branch_start;
+                s_vtable = *disp;
+                return utility::ExhaustionResult::BREAK;
+            }
         }
 
         return utility::ExhaustionResult::CONTINUE;
