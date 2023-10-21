@@ -276,7 +276,7 @@ void UObjectBase::update_offsets_post_uobjectarray() {
     }
 
     // Filter out references that are <= 0x50 from a function start (a constructor usually)
-    vtable_references.erase(std::remove_if(vtable_references.begin(), vtable_references.end(), [&](const auto& ref) {
+    /*vtable_references.erase(std::remove_if(vtable_references.begin(), vtable_references.end(), [&](const auto& ref) {
         const auto function_start = utility::find_function_start_with_call(ref);
 
         // If we're unable to find a function start - just filter it out anyways.
@@ -285,23 +285,34 @@ void UObjectBase::update_offsets_post_uobjectarray() {
         }
 
         return ref - *function_start <= 0x20;
-    }), vtable_references.end());
+    }), vtable_references.end());*/
 
     if (vtable_references.empty()) {
         SPDLOG_ERROR("[UObjectBase] Failed to find AddObject because vtable has no references 3");
         return;
     }
 
-    if (vtable_references.size() != 1) {
+    /*if (vtable_references.size() != 1) {
         SPDLOG_ERROR("[UObjectBase] Failed to find AddObject, unable to filter down to one reference");
+        return;
+    }*/
+
+    std::optional<uintptr_t> correct_ref{};
+
+    for (auto ref : vtable_references) {
+        if (utility::find_mnemonic_in_path(ref + 4, 100, "CALL", false)) {
+            correct_ref = ref + 4;
+            break;
+        }
+    }
+
+    if (!correct_ref) {
+        SPDLOG_ERROR("[UObjectBase] Failed to find AddObject, unable to find correct reference");
         return;
     }
 
-    const auto ref = vtable_references[0];
-
     // Locate the first call after the reference
-    const auto post_instruction = ref + 4;
-    auto callsite = utility::scan_mnemonic(post_instruction, 100, "CALL");
+    auto callsite = utility::scan_mnemonic(*correct_ref, 100, "CALL");
 
     if (!callsite) {
         SPDLOG_ERROR("[UObjectBase] Failed to find AddObject, unable to find callsite");
