@@ -7,6 +7,7 @@
 #include "UClass.hpp"
 #include "UObjectArray.hpp"
 #include "UObjectBase.hpp"
+#include "UObject.hpp"
 
 namespace sdk {
 void UObjectBase::update_offsets() {
@@ -173,6 +174,72 @@ void UObjectBase::update_process_event_index() try {
     }
 } catch(...) {
     SPDLOG_ERROR("[UObjectBase] Failed to update ProcessEvent index");
+}
+
+std::optional<uintptr_t> UObjectBase::get_destructor() {
+    static auto result = []() -> std::optional<uintptr_t> {
+        SPDLOG_INFO("[UObjectBase] Searching for destructor...");
+
+        const auto uobject_class = sdk::UObject::static_class();
+
+        if (uobject_class == nullptr) {
+            SPDLOG_ERROR("[UObjectBase] Failed to find UObject class, cannot find destructor");
+            return {};
+        }
+
+        const auto default_object = uobject_class->get_class_default_object();
+
+        if (default_object == nullptr) {
+            SPDLOG_ERROR("[UObjectBase] Failed to find default UObject, cannot find destructor");
+            return {};
+        }
+
+        const auto uobject_vtable = *(void***)default_object;
+
+        if (uobject_vtable == nullptr || IsBadReadPtr(uobject_vtable, sizeof(void*))) {
+            SPDLOG_ERROR("[UObjectBase] Failed to find UObject vtable, cannot find destructor");
+            return {};
+        }
+
+        const auto uobject_destructor = uobject_vtable[0];
+
+        if (uobject_destructor == nullptr || IsBadReadPtr(uobject_destructor, sizeof(void*))) {
+            SPDLOG_ERROR("[UObjectBase] Failed to find UObject destructor, cannot find destructor");
+            return {};
+        }
+
+        // Now we need to exhaustively decode the destructor, looking for a call to the destructor of parent class
+        std::optional<uintptr_t> out{};
+
+        utility::exhaustive_decode((uint8_t*)uobject_destructor, 100, [&](utility::ExhaustionContext& ctx) -> utility::ExhaustionResult {
+            if (out) {
+                return utility::ExhaustionResult::BREAK;
+            }
+
+            if (ctx.instrux.BranchInfo.IsBranch) {
+                return utility::ExhaustionResult::CONTINUE;
+            }
+
+            const auto disp = utility::resolve_displacement(ctx.addr);
+
+            if (disp && *disp != (uintptr_t)uobject_vtable) {
+                out = ctx.branch_start;
+                return utility::ExhaustionResult::BREAK;
+            }
+
+            return utility::ExhaustionResult::CONTINUE;
+        });
+
+        if (out) {
+            SPDLOG_INFO("[UObjectBase] Found destructor at 0x{:X}", *out);
+        } else {
+            SPDLOG_ERROR("[UObjectBase] Failed to find destructor");
+        }
+
+        return out;
+    }();
+
+    return result;
 }
 
 std::wstring UObjectBase::get_full_name() const {

@@ -38,6 +38,8 @@ public:
         return s_outer_private_offset + sizeof(void*);
     }
 
+    static std::optional<uintptr_t> get_destructor();
+
 private:
     using ProcessEventFn = void(*)(UObjectBase*, UFunction*, void*);
     static void update_process_event_index();
