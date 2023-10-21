@@ -341,17 +341,19 @@ void UObjectBase::update_offsets_post_uobjectarray() {
         });
 
         if (num_instructions_until_ret < 15) {
+            SPDLOG_INFO("Skipping reference at 0x{:X} because it terminates too early", ref);
             continue;
         }
 
         if (utility::find_string_reference_in_path(ref + 4, "UObject(FVTableHelper& Helper)", false) || 
             utility::find_string_reference_in_path(ref + 4, L"UObject(FVTableHelper& Helper)", false)) 
         {
+            SPDLOG_INFO("Skipping reference at 0x{:X} because it references UObject(FVTableHelper& Helper)", ref);
             continue;
         }
 
         // Make sure there's a mov [reg+something], 0xFFFFFFFF somewhere really close by in the path
-        utility::exhaustive_decode((uint8_t*)ref + 4, 10, [&](utility::ExhaustionContext& ctx) -> utility::ExhaustionResult {
+        utility::exhaustive_decode((uint8_t*)ref + 4, 15, [&](utility::ExhaustionContext& ctx) -> utility::ExhaustionResult {
             if (std::string_view{ctx.instrux.Mnemonic}.starts_with("CALL")) {
                 return utility::ExhaustionResult::STEP_OVER;
             }
