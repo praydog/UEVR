@@ -3,6 +3,7 @@
 #include <Windows.h>
 #include <spdlog/spdlog.h>
 #include <utility/Scan.hpp>
+#include <utility/Module.hpp>
 
 #include "UClass.hpp"
 #include "UObjectArray.hpp"
@@ -275,33 +276,70 @@ void UObjectBase::update_offsets_post_uobjectarray() {
         return;
     }
 
-    // Filter out references that are <= 0x50 from a function start (a constructor usually)
-    /*vtable_references.erase(std::remove_if(vtable_references.begin(), vtable_references.end(), [&](const auto& ref) {
-        const auto function_start = utility::find_function_start_with_call(ref);
-
-        // If we're unable to find a function start - just filter it out anyways.
-        if (!function_start) {
-            return true;
-        }
-
-        return ref - *function_start <= 0x20;
-    }), vtable_references.end());*/
-
     if (vtable_references.empty()) {
         SPDLOG_ERROR("[UObjectBase] Failed to find AddObject because vtable has no references 3");
         return;
     }
 
-    /*if (vtable_references.size() != 1) {
-        SPDLOG_ERROR("[UObjectBase] Failed to find AddObject, unable to filter down to one reference");
-        return;
-    }*/
+    SPDLOG_INFO("[UObjectBase] Vtable references: {}", vtable_references.size());
+
+    for (auto ref : vtable_references) {
+        if (utility::find_mnemonic_in_path(ref + 4, 100, "CALL", false)) {
+            SPDLOG_INFO("[UObjectBase] Vtable reference: 0x{:X}", ref);
+        }
+    }
 
     std::optional<uintptr_t> correct_ref{};
 
     for (auto ref : vtable_references) {
-        if (utility::find_mnemonic_in_path(ref + 4, 100, "CALL", false)) {
-            correct_ref = ref + 4;
+        if (!utility::find_mnemonic_in_path(ref + 4, 100, "CALL", false)) {
+            continue;
+        }
+
+        // Ensure this one doesn't terminate way too early. Usually the constructor if it does.
+        uint32_t num_instructions_until_ret = 0;
+
+        utility::exhaustive_decode((uint8_t*)ref + 4, 100, [&](utility::ExhaustionContext& ctx) -> utility::ExhaustionResult {
+            ++num_instructions_until_ret;
+
+            if (std::string_view{ctx.instrux.Mnemonic}.starts_with("CALL")) {
+                return utility::ExhaustionResult::STEP_OVER;
+            }
+
+            return utility::ExhaustionResult::CONTINUE;
+        });
+
+        if (num_instructions_until_ret < 15) {
+            continue;
+        }
+
+        if (utility::find_string_reference_in_path(ref + 4, "UObject(FVTableHelper& Helper)", false) || 
+            utility::find_string_reference_in_path(ref + 4, L"UObject(FVTableHelper& Helper)", false)) 
+        {
+            continue;
+        }
+
+        // Make sure there's a mov [reg+something], 0xFFFFFFFF somewhere really close by in the path
+        utility::exhaustive_decode((uint8_t*)ref + 4, 10, [&](utility::ExhaustionContext& ctx) -> utility::ExhaustionResult {
+            if (std::string_view{ctx.instrux.Mnemonic}.starts_with("CALL")) {
+                return utility::ExhaustionResult::STEP_OVER;
+            }
+
+            if (std::string_view{ctx.instrux.Mnemonic}.starts_with("MOV")) {
+                for (auto i = 0; i < ctx.instrux.OperandsCount; ++i) {
+                    const auto& op = ctx.instrux.Operands[i];
+
+                    if (op.Type == ND_OP_IMM && op.Info.Immediate.Imm & 0xFFFFFFFF == 0xFFFFFFFF) {
+                        correct_ref = ref + 4;
+                        return utility::ExhaustionResult::BREAK;
+                    }
+                }
+            }
+
+            return utility::ExhaustionResult::CONTINUE;
+        });
+
+        if (correct_ref) {
             break;
         }
     }
@@ -311,25 +349,71 @@ void UObjectBase::update_offsets_post_uobjectarray() {
         return;
     }
 
-    // Locate the first call after the reference
-    auto callsite = utility::scan_mnemonic(*correct_ref, 100, "CALL");
+    SPDLOG_INFO("[UObjectBase] Examining reference at 0x{:X}", *correct_ref);
 
-    if (!callsite) {
-        SPDLOG_ERROR("[UObjectBase] Failed to find AddObject, unable to find callsite");
+    utility::exhaustive_decode((uint8_t*)*correct_ref, 100, [&](utility::ExhaustionContext& ctx) -> utility::ExhaustionResult {
+        if (s_add_object) {
+            return utility::ExhaustionResult::BREAK;
+        }
+
+        // Examine each call. Check to see if anywhere in its path it calls EnterCriticalSection. This is the right one.
+        if (std::string_view{ctx.instrux.Mnemonic}.starts_with("CALL")) {
+            auto fn = utility::resolve_displacement(ctx.addr);
+
+            if (!fn) {
+                return utility::ExhaustionResult::STEP_OVER;
+            }
+
+            uint8_t* ip = (uint8_t*)ctx.addr;
+
+            if (ctx.instrux.IsRipRelative && ip[0] == 0xFF && ip[1] == 0x15) {
+                if (*fn != 0 && fn != ctx.addr && !IsBadReadPtr((void*)*fn, sizeof(void*))) {
+                    const auto real_dest = *(uintptr_t*)*fn;
+
+                    if (real_dest != 0 && real_dest != (uintptr_t)ip && !IsBadReadPtr((void*)real_dest, sizeof(void*))) {
+                        fn = real_dest;
+                    } else {
+                        return utility::ExhaustionResult::STEP_OVER;
+                    }
+                } else {
+                    return utility::ExhaustionResult::STEP_OVER;
+                }
+            }
+
+            if (utility::find_string_reference_in_path(*fn, "ClassPrivate", false) || utility::find_string_reference_in_path(*fn, L"ClassPrivate", false)) {
+                SPDLOG_INFO("[UObjectBase] Skipping callsite because it references ClassPrivate");
+                return utility::ExhaustionResult::STEP_OVER;
+            }
+
+            // This is usually the right one, but based on compiler optimizations
+            // it may not be.
+            if (auto resolved = utility::find_pointer_in_path(*fn, &EnterCriticalSection, true); resolved.has_value()) {
+                const auto module = utility::get_module_within(resolved->addr);
+
+                if (module.has_value()) {
+                    SPDLOG_INFO("[UObjectBase] Module: {}", *utility::get_module_path(*module));
+
+                    if (module != sdk::get_ue_module(L"CoreUObject")) {
+                        SPDLOG_INFO("[UObjectBase] Skipping callsite because EnterCriticalSection call is not in CoreUObject");
+                        return utility::ExhaustionResult::STEP_OVER;
+                    }
+                }
+
+                s_add_object = fn;
+                SPDLOG_INFO("[UObjectBase] Found AddObject via EnterCriticalSection reference: 0x{:x}", *s_add_object);
+                return utility::ExhaustionResult::BREAK;
+            }
+
+            return utility::ExhaustionResult::STEP_OVER;
+        }
+
+        return utility::ExhaustionResult::CONTINUE;
+    });
+
+    if (!s_add_object) {
+        SPDLOG_ERROR("[UObjectBase] Failed to find AddObject");
         return;
     }
-
-    const auto potential_add_object = utility::calculate_absolute(*callsite + 1);
-
-    // Happens on debug/modular builds, it's some function that checks validity
-    if (utility::find_string_reference_in_path(potential_add_object, "ClassPrivate", false) || utility::find_string_reference_in_path(potential_add_object, L"ClassPrivate", false)) {
-        SPDLOG_INFO("[UObjectBase] Skipping first callsite because it references ClassPrivate");
-        callsite = utility::scan_mnemonic(*callsite + utility::decode_one((uint8_t*)*callsite)->Length, 100, "CALL");
-    }
-
-    SPDLOG_INFO("[UObjectBase] Callsite: 0x{:x}", *callsite);
-
-    s_add_object = utility::calculate_absolute(*callsite + 1);
 
     SPDLOG_INFO("[UObjectBase] AddObject: 0x{:x}", *s_add_object);
 }
