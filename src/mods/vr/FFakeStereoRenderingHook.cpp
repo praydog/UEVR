@@ -236,6 +236,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
         }
     }
 
+    // TODO: move this to a better place
     m_tick_hook = safetyhook::create_inline((void*)*func, +[](sdk::UGameEngine* engine, float delta, bool idle) -> void* {
         ZoneScopedN("UGameEngine::Tick Hook");
         FrameMarkStart("UGameEngine::Tick");
@@ -270,6 +271,9 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
             hook->m_ignore_next_engine_tick = false;
             return nullptr;
         }
+        
+        g_framework->enable_engine_thread();
+        g_framework->run_imgui_frame(false);
 
         delta += hook->m_ignored_engine_delta;
         hook->m_ignored_engine_delta = 0.0f;

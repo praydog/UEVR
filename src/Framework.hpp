@@ -180,6 +180,10 @@ public:
         return m_uevr_shared_memory;
     }
 
+    void enable_engine_thread() {
+        m_has_engine_thread = true;
+    }
+
 private:
     void consume_input();
     void update_fonts();
@@ -278,6 +282,7 @@ private:
 
     bool m_sent_message{false};
     bool m_message_hook_requested{false};
+    bool m_has_engine_thread{false};
 
     RendererType m_renderer_type{RendererType::D3D11};
 

@@ -372,8 +372,13 @@ Framework::~Framework() {
 
     m_terminating = true;
     m_d3d_monitor_thread->request_stop();
+    m_command_thread->request_stop();
     if (m_d3d_monitor_thread->joinable()) {
         m_d3d_monitor_thread->join();
+    }
+
+    if (m_command_thread->joinable()) {
+        m_command_thread->join();
     }
 
     if (m_is_d3d11) {
@@ -470,7 +475,9 @@ void Framework::on_frame_d3d11() {
 
             ImGui_ImplDX11_NewFrame();
             // hooks don't run until after initialization, so we just render the imgui window while initalizing.
-            run_imgui_frame(false);
+            if (!m_has_engine_thread) {
+                run_imgui_frame(false);
+            }
    /*     } else {   
             return;
         }
@@ -573,7 +580,9 @@ void Framework::on_frame_d3d12() {
             invalidate_device_objects();
             ImGui_ImplDX12_NewFrame();
             // hooks don't run until after initialization, so we just render the imgui window while initalizing.
-            run_imgui_frame(false);
+            if (!m_has_engine_thread) {
+                run_imgui_frame(false);
+            }
     /*    } else {   
             return;
         }
