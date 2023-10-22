@@ -27,6 +27,11 @@ public:
         return {};
     }
 
+    bool exists(sdk::UObjectBase* object) const {
+        std::shared_lock _{m_mutex};
+        return m_objects.contains(object);
+    }
+
     void activate();
 
 protected:
@@ -36,6 +41,8 @@ protected:
 private:
     void hook();
     void add_new_object(sdk::UObjectBase* object);
+
+    void ui_handle_object(sdk::UObject* object);
 
     static void* add_object(void* rcx, void* rdx, void* r8, void* r9);
     static void* destructor(sdk::UObjectBase* object, void* rdx, void* r8, void* r9);

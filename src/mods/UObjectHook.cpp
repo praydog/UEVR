@@ -9,6 +9,7 @@
 #include <sdk/FField.hpp>
 #include <sdk/FProperty.hpp>
 #include <sdk/UFunction.hpp>
+#include <sdk/AActor.hpp>
 #include <sdk/threading/GameThreadWorker.hpp>
 
 #include "UObjectHook.hpp"
@@ -226,83 +227,7 @@ void UObjectHook::on_draw_ui() {
                 if (ImGui::TreeNode(uclass_name.data())) {
                     for (const auto& object : objects) {
                         if (ImGui::TreeNode(utility::narrow(m_meta_objects[object]->full_name).data())) {
-                            std::vector<sdk::FField*> sorted_fields{};
-                            std::vector<sdk::UFunction*> sorted_functions{};
-
-                            const auto ufunction_t = sdk::UFunction::static_class();
-                            
-                            for (auto super = (sdk::UStruct*)uclass; super != nullptr; super = super->get_super_struct()) {
-                                auto props = super->get_child_properties();
-
-                                for (auto prop = props; prop != nullptr; prop = prop->get_next()) {
-                                    sorted_fields.push_back(prop);
-                                }
-
-                                auto funcs = super->get_children();
-
-                                for (auto func = funcs; func != nullptr; func = func->get_next()) {
-                                    if (func->get_class()->is_a(ufunction_t)) {
-                                        sorted_functions.push_back((sdk::UFunction*)func);
-                                    }
-                                }
-                            }
-
-                            std::sort(sorted_fields.begin(), sorted_fields.end(), [](sdk::FField* a, sdk::FField* b) {
-                                return a->get_field_name().to_string() < b->get_field_name().to_string();
-                            });
-
-                            std::sort(sorted_functions.begin(), sorted_functions.end(), [](sdk::UFunction* a, sdk::UFunction* b) {
-                                return a->get_fname().to_string() < b->get_fname().to_string();
-                            });
-
-                            if (ImGui::TreeNode("Functions")) {
-                                for (auto func : sorted_functions) {
-                                    /*if (ImGui::Button(utility::narrow(func->get_class()->get_fname().to_string()).data())) {
-                                        func->process_event(object, nullptr);
-                                    }*/
-                                    
-                                    if (ImGui::TreeNode(utility::narrow(func->get_fname().to_string()).data())) {
-                                        auto parameters = func->get_child_properties();
-
-                                        for (auto param = parameters; param != nullptr; param = param->get_next()) {
-                                            ImGui::Text("%s %s", utility::narrow(param->get_class()->get_name().to_string()), utility::narrow(param->get_field_name().to_string()).data());
-                                        }
-
-                                        ImGui::TreePop();
-                                    }
-                                }
-
-                                ImGui::TreePop();
-                            }
-
-                            for (auto prop : sorted_fields) {
-                                auto propc = prop->get_class();
-
-                                const auto propc_type = utility::narrow(propc->get_name().to_string());
-
-                                switch (utility::hash(propc_type)) {
-                                case "FloatProperty"_fnv:
-                                    {
-                                        auto& value = *(float*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
-                                        ImGui::DragFloat(utility::narrow(prop->get_field_name().to_string()).data(), &value, 0.01f);
-                                    }
-                                    break;
-                                case "IntProperty"_fnv:
-                                    {
-                                        auto& value = *(int32_t*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
-                                        ImGui::DragInt(utility::narrow(prop->get_field_name().to_string()).data(), &value, 1);
-                                    }
-                                    break;
-                                case "BoolProperty"_fnv:
-                                    {
-                                        auto& value = *(bool*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
-                                        ImGui::Checkbox(utility::narrow(prop->get_field_name().to_string()).data(), &value);
-                                    }
-                                    break;
-                                default:
-                                    ImGui::Text("%s %s", utility::narrow(propc->get_name().to_string()), utility::narrow(prop->get_field_name().to_string()).data());
-                                };
-                            }
+                            ui_handle_object((sdk::UObject*)object);
                             
                             ImGui::TreePop();
                         }
@@ -314,6 +239,161 @@ void UObjectHook::on_draw_ui() {
 
             ImGui::TreePop();
         }
+    }
+}
+
+void UObjectHook::ui_handle_object(sdk::UObject* object) {
+    if (object == nullptr) {
+        return;
+    }
+
+    const auto uclass = object->get_class();
+
+    std::vector<sdk::FField*> sorted_fields{};
+    std::vector<sdk::UFunction*> sorted_functions{};
+
+    const auto ufunction_t = sdk::UFunction::static_class();
+    
+    for (auto super = (sdk::UStruct*)uclass; super != nullptr; super = super->get_super_struct()) {
+        auto props = super->get_child_properties();
+
+        for (auto prop = props; prop != nullptr; prop = prop->get_next()) {
+            sorted_fields.push_back(prop);
+        }
+
+        auto funcs = super->get_children();
+
+        for (auto func = funcs; func != nullptr; func = func->get_next()) {
+            if (func->get_class()->is_a(ufunction_t)) {
+                sorted_functions.push_back((sdk::UFunction*)func);
+            }
+        }
+    }
+
+    std::sort(sorted_fields.begin(), sorted_fields.end(), [](sdk::FField* a, sdk::FField* b) {
+        return a->get_field_name().to_string() < b->get_field_name().to_string();
+    });
+
+    std::sort(sorted_functions.begin(), sorted_functions.end(), [](sdk::UFunction* a, sdk::UFunction* b) {
+        return a->get_fname().to_string() < b->get_fname().to_string();
+    });
+
+    if (uclass->is_a(sdk::AActor::static_class())) {
+        static char component_add_name[256]{};
+
+        if (ImGui::InputText("Add Component", component_add_name, sizeof(component_add_name), ImGuiInputTextFlags_::ImGuiInputTextFlags_EnterReturnsTrue)) {
+            const auto component_c = sdk::find_uobject<sdk::UClass>(utility::widen(component_add_name));
+
+            if (component_c != nullptr) {
+                GameThreadWorker::get().enqueue([=, this]() {
+                    if (!this->exists(object)) {
+                        return;
+                    }
+
+                    auto actor = (sdk::AActor*)object;
+                    auto component = (sdk::UObject*)actor->add_component_by_class(component_c);
+
+                    if (component != nullptr) {
+                        if (component->get_class()->is_a(sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.SphereComponent"))) {
+                            struct SphereRadiusParams {
+                                float radius{};
+                            };
+
+                            auto params = SphereRadiusParams{};
+                            params.radius = 100.f;
+
+                            const auto fn = component->get_class()->find_function(L"SetSphereRadius");
+
+                            if (fn != nullptr) {
+                                component->process_event(fn, &params);
+                            }
+                        }
+
+                        struct {
+                            bool hidden{false};
+                            bool propagate{true};
+                        } set_hidden_params{};
+
+                        const auto fn = component->get_class()->find_function(L"SetHiddenInGame");
+
+                        if (fn != nullptr) {
+                            component->process_event(fn, &set_hidden_params);
+                        }
+
+                        actor->finish_add_component(component);
+
+                        // Set component_add_name to empty
+                        component_add_name[0] = '\0';
+                    } else {
+                        component_add_name[0] = 'e';
+                        component_add_name[1] = 'r';
+                        component_add_name[2] = 'r';
+                        component_add_name[3] = '\0';
+                    }
+                });
+            } else {
+                strcpy_s(component_add_name, "Nonexistent component");
+            }
+        }
+    }
+
+    if (ImGui::TreeNode("Functions")) {
+        for (auto func : sorted_functions) {
+            /*if (ImGui::Button(utility::narrow(func->get_class()->get_fname().to_string()).data())) {
+                func->process_event(object, nullptr);
+            }*/
+            
+            if (ImGui::TreeNode(utility::narrow(func->get_fname().to_string()).data())) {
+                auto parameters = func->get_child_properties();
+
+                for (auto param = parameters; param != nullptr; param = param->get_next()) {
+                    ImGui::Text("%s %s", utility::narrow(param->get_class()->get_name().to_string()), utility::narrow(param->get_field_name().to_string()).data());
+                }
+
+                ImGui::TreePop();
+            }
+        }
+
+        ImGui::TreePop();
+    }
+
+    for (auto prop : sorted_fields) {
+        auto propc = prop->get_class();
+
+        const auto propc_type = utility::narrow(propc->get_name().to_string());
+
+        switch (utility::hash(propc_type)) {
+        case "FloatProperty"_fnv:
+            {
+                auto& value = *(float*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                ImGui::DragFloat(utility::narrow(prop->get_field_name().to_string()).data(), &value, 0.01f);
+            }
+            break;
+        case "IntProperty"_fnv:
+            {
+                auto& value = *(int32_t*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                ImGui::DragInt(utility::narrow(prop->get_field_name().to_string()).data(), &value, 1);
+            }
+            break;
+        case "BoolProperty"_fnv:
+            {
+                auto& value = *(bool*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                ImGui::Checkbox(utility::narrow(prop->get_field_name().to_string()).data(), &value);
+            }
+            break;
+        case "ObjectProperty"_fnv:
+            {
+                auto& value = *(sdk::UObject**)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                
+                if (ImGui::TreeNode(utility::narrow(prop->get_field_name().to_string()).data())) {
+                    ui_handle_object(value);
+                    ImGui::TreePop();
+                }
+            }
+            break;
+        default:
+            ImGui::Text("%s %s", utility::narrow(propc->get_name().to_string()), utility::narrow(prop->get_field_name().to_string()).data());
+        };
     }
 }
 
