@@ -249,6 +249,17 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
 
     const auto uclass = object->get_class();
 
+    // Display inheritance tree
+    if (ImGui::TreeNode("Inheritance")) {
+        for (auto super = (sdk::UStruct*)uclass; super != nullptr; super = super->get_super_struct()) {
+            if (ImGui::TreeNode(utility::narrow(super->get_full_name()).data())) {
+                ImGui::TreePop();
+            }
+        }
+
+        ImGui::TreePop();
+    }
+
     std::vector<sdk::FField*> sorted_fields{};
     std::vector<sdk::UFunction*> sorted_functions{};
 
