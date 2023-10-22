@@ -1,3 +1,5 @@
+#include <unordered_set>
+
 #include <utility/Scan.hpp>
 #include <utility/Module.hpp>
 #include <spdlog/spdlog.h>
@@ -40,7 +42,9 @@ FMalloc* FMalloc::get() {
 
         FMalloc** result = nullptr;
 
-        utility::exhaustive_decode((uint8_t*)*object_base_init_fn, 0x1000, [&](utility::ExhaustionContext& ctx) -> utility::ExhaustionResult {
+        std::unordered_set<uintptr_t> seen_displacements{};
+
+        utility::exhaustive_decode((uint8_t*)*object_base_init_fn, 100, [&](utility::ExhaustionContext& ctx) -> utility::ExhaustionResult {
             if (result != nullptr) {
                 return utility::ExhaustionResult::BREAK;
             }
@@ -54,6 +58,12 @@ FMalloc* FMalloc::get() {
             if (!disp) {
                 return utility::ExhaustionResult::CONTINUE;
             }
+
+            if (seen_displacements.contains(*disp)) {
+                return utility::ExhaustionResult::CONTINUE;
+            }
+
+            seen_displacements.insert(*disp);
 
             if (IsBadReadPtr((void*)*disp, sizeof(void*))) {
                 return utility::ExhaustionResult::CONTINUE;
@@ -86,6 +96,11 @@ FMalloc* FMalloc::get() {
                 uint32_t distance_to_ret = 0;
                 utility::exhaustive_decode((uint8_t*)fn, 100, [&](utility::ExhaustionContext& ctx2) -> utility::ExhaustionResult {
                     ++distance_to_ret;
+
+                    if (ctx2.instrux.BranchInfo.IsBranch && std::string_view{ctx2.instrux.Mnemonic}.starts_with("CALL")) {
+                        return utility::ExhaustionResult::STEP_OVER;
+                    }
+
                     return utility::ExhaustionResult::CONTINUE;
                 });
 
