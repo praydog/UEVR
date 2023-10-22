@@ -138,7 +138,7 @@ void UObjectHook::on_draw_ui() {
 
         if (ImGui::TreeNode("Objects by class")) {
             for (auto& [uclass, objects] : m_objects_by_class) {
-                const auto uclass_name = utility::narrow(uclass->get_full_name());
+                const auto uclass_name = utility::narrow(m_meta_objects[uclass]->full_name);
 
                 if (ImGui::TreeNode(uclass_name.data())) {
                     for (auto& object : objects) {
