@@ -122,6 +122,92 @@ FMalloc* FMalloc::get() {
             return nullptr;
         }
 
+        // Since we found it now, go through the vtable and try to determine the indices
+        // for Malloc, Realloc, and Free.
+        const auto vtable = *(void***)*result;
+
+        for (auto i = 1; i < 30; ++i) {
+            const auto fn = (uintptr_t)vtable[i];
+
+            if (IsBadReadPtr((void*)fn, sizeof(void*))) {
+                break;
+            }
+
+            if (utility::find_pointer_in_path(fn, &VirtualAlloc)) {
+                SPDLOG_INFO("[FMalloc::get] Found Malloc at index {}", i);
+                s_malloc_index = i;
+                break;
+            }
+        }
+
+        if (!s_malloc_index.has_value()) {
+            SPDLOG_ERROR("[FMalloc::get] Failed to find FMalloc::Malloc");
+            return result;
+        }
+
+        /*for (auto i = *s_malloc_index + 1; i < 30; ++i) {
+            const auto fn = (uintptr_t)vtable[i];
+
+            if (IsBadReadPtr((void*)fn, sizeof(void*))) {
+                break;
+            }
+
+            if (utility::find_pointer_in_path(fn, &VirtualAlloc) || utility::find_pointer_in_path(fn, &VirtualFree)) {
+                SPDLOG_INFO("[FMalloc::get] Found Realloc at index {}", i);
+                s_realloc_index = i;
+                break;
+            }
+        }*/
+
+        // The right one is whichever one doesn't return really early after malloc.
+        // We can scan for VirtualAlloc/Free in SOME builds, but this doesn't always work.
+        // Because in some builds, Realloc calls Malloc via an indirect call, which exhaustive_decode doesn't handle.
+        // I could handle it with emulation but I don't want to.
+        for (auto i = *s_malloc_index + 1; i < 30; ++i) {
+            const auto fn = (uintptr_t)vtable[i];
+
+            if (IsBadReadPtr((void*)fn, sizeof(void*))) {
+                break;
+            }
+
+            uint32_t distance_from_ret = 0;
+
+            utility::exhaustive_decode((uint8_t*)fn, 100, [&](utility::ExhaustionContext& ctx) -> utility::ExhaustionResult {
+                ++distance_from_ret;
+                return utility::ExhaustionResult::CONTINUE;
+            });
+
+            if (distance_from_ret > 10) {
+                s_realloc_index = i;
+                SPDLOG_INFO("[FMalloc::get] Found Realloc at index {}", i);
+                break;
+            }
+        }
+
+        if (!s_realloc_index.has_value()) {
+            SPDLOG_ERROR("[FMalloc::get] Failed to find FMalloc::Realloc");
+            return result;
+        }
+
+        for (auto i = *s_realloc_index + 1; i < 30; ++i) {
+            const auto fn = (uintptr_t)vtable[i];
+
+            if (IsBadReadPtr((void*)fn, sizeof(void*))) {
+                break;
+            }
+
+            if (utility::find_pointer_in_path(fn, &VirtualFree)) {
+                SPDLOG_INFO("[FMalloc::get] Found Free at index {}", i);
+                s_free_index = i;
+                break;
+            }
+        }
+
+        if (!s_free_index.has_value()) {
+            SPDLOG_ERROR("[FMalloc::get] Failed to find FMalloc::Free");
+            return result;
+        }
+
         return result;
     }();
 
