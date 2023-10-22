@@ -59,4 +59,7 @@ private:
 
     SafetyHookInline m_add_object_hook{};
     SafetyHookInline m_destructor_hook{};
+
+    std::chrono::steady_clock::time_point m_last_sort_time{};
+    std::vector<sdk::UClass*> m_sorted_classes{};
 };

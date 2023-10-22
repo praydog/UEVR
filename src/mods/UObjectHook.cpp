@@ -1,3 +1,5 @@
+#include <future>
+
 #include <utility/Logging.hpp>
 #include <utility/String.hpp>
 
@@ -115,6 +117,8 @@ void UObjectHook::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     }
 }
 
+std::future<std::vector<sdk::UClass*>> sorting_task{};
+
 void UObjectHook::on_draw_ui() {
     if (ImGui::CollapsingHeader("UObjectHook")) {
         activate();
@@ -137,11 +141,58 @@ void UObjectHook::on_draw_ui() {
         }
 
         if (ImGui::TreeNode("Objects by class")) {
-            for (auto& [uclass, objects] : m_objects_by_class) {
+            const auto now = std::chrono::steady_clock::now();
+            bool needs_sort = now - m_last_sort_time >= std::chrono::seconds(1) || m_sorted_classes.empty();
+
+            if (sorting_task.valid()) {
+                // Check if the sorting task is finished
+                if (sorting_task.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                    // Do something if needed when sorting is done
+                    m_sorted_classes = sorting_task.get();
+                    needs_sort = true;
+                } else {
+                    needs_sort = false;
+                }
+            } else {
+                needs_sort = true;
+            }
+
+            if (needs_sort) {
+                auto sort_classes = [this](std::vector<sdk::UClass*> classes) {
+                    std::sort(classes.begin(), classes.end(), [this](sdk::UClass* a, sdk::UClass* b) {
+                        std::shared_lock _{m_mutex};
+                        if (!m_objects.contains(a) || !m_objects.contains(b)) {
+                            return false;
+                        }
+
+                        return m_meta_objects[a]->full_name < m_meta_objects[b]->full_name;
+                    });
+
+                    return classes;
+                };
+
+                auto unsorted_classes = std::vector<sdk::UClass*>{};
+
+                for (auto& [c, set]: m_objects_by_class) {
+                    unsorted_classes.push_back(c);
+                }
+
+                // Launch sorting in a separate thread
+                sorting_task = std::async(std::launch::async, sort_classes, unsorted_classes);
+                m_last_sort_time = now;
+            }
+
+            for (auto uclass : m_sorted_classes) {
+                const auto& objects = m_objects_by_class[uclass];
+
+                if (objects.empty()) {
+                    continue;
+                }
+
                 const auto uclass_name = utility::narrow(m_meta_objects[uclass]->full_name);
 
                 if (ImGui::TreeNode(uclass_name.data())) {
-                    for (auto& object : objects) {
+                    for (const auto& object : objects) {
                         ImGui::Text("%s", utility::narrow(m_meta_objects[object]->full_name).data());
                     }
 
