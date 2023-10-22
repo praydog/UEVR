@@ -458,8 +458,7 @@ std::wstring FName::to_string() const {
     fn(this, &buffer);
 
     if (buffer.data != nullptr) {
-        std::wstring result = buffer.data;
-        return result;
+        return buffer.data;
     }
 
     return std::wstring{};

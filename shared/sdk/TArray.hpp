@@ -17,6 +17,8 @@ struct TArray {
             return;
         }
 
+        // TODO: call destructors?
+
         if (auto m = FMalloc::get(); m != nullptr) {
             m->free(data);
         }

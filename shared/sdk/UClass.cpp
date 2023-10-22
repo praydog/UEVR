@@ -99,6 +99,7 @@ void UStruct::resolve_field_offsets(uint32_t child_search_start) {
 
                     if (class_offset) {
                         FField::s_class_offset = *class_offset - (uintptr_t)potential_field;
+                        FFieldClass::s_name_offset = UObjectBase::s_fname_offset;
                         found_ufield_class_offset = true;
                         SPDLOG_INFO("[UStruct] Found FField/UField Class at offset 0x{:X}", FField::s_class_offset);
                     }
@@ -110,6 +111,7 @@ void UStruct::resolve_field_offsets(uint32_t child_search_start) {
 
                     if (class_offset) {
                         FField::s_class_offset = *class_offset - (uintptr_t)potential_field;
+                        FFieldClass::s_name_offset = UObjectBase::s_fname_offset;
                         found_ufield_class_offset = true;
                         SPDLOG_INFO("[UStruct] Found FField/UField Class at offset 0x{:X}", FField::s_class_offset);
                     }
