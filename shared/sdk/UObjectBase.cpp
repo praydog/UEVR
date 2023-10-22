@@ -417,6 +417,26 @@ void UObjectBase::update_offsets_post_uobjectarray() {
                 return utility::ExhaustionResult::STEP_OVER;
             }
 
+            if (utility::find_string_reference_in_path(*fn, "Assertion failed: %s", false) || utility::find_string_reference_in_path(*fn, L"Assertion failed: %s", false)) {
+                SPDLOG_INFO("[UObjectBase] Skipping callsite because it references Assertion Failed");
+                return utility::ExhaustionResult::STEP_OVER;
+            }
+
+            if (utility::find_string_reference_in_path(*fn, "CRASHED", false) || utility::find_string_reference_in_path(*fn, L"CRASHED", false)) {
+                SPDLOG_INFO("[UObjectBase] Skipping callsite because it references CRASHED");
+                return utility::ExhaustionResult::STEP_OVER;
+            }
+
+            if (utility::find_pointer_in_path(*fn, &DebugBreak, false)) {
+                SPDLOG_INFO("[UObjectBase] Skipping callsite because it calls DebugBreak");
+                return utility::ExhaustionResult::STEP_OVER;
+            }
+
+            if (utility::find_pointer_in_path(*fn, &MessageBoxW, false)) {
+                SPDLOG_INFO("[UObjectBase] Skipping callsite because it calls MessageBoxW");
+                return utility::ExhaustionResult::STEP_OVER;
+            }
+
             // This is usually the right one, but based on compiler optimizations
             // it may not be.
             if (auto resolved = utility::find_pointer_in_path(*fn, &EnterCriticalSection, true); resolved.has_value()) {
