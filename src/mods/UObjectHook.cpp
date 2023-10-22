@@ -379,43 +379,45 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
         ImGui::TreePop();
     }
 
-    for (auto prop : sorted_fields) {
-        auto propc = prop->get_class();
+    if (ImGui::TreeNode("Properties")) {
+        for (auto prop : sorted_fields) {
+            auto propc = prop->get_class();
 
-        const auto propc_type = utility::narrow(propc->get_name().to_string());
+            const auto propc_type = utility::narrow(propc->get_name().to_string());
 
-        switch (utility::hash(propc_type)) {
-        case "FloatProperty"_fnv:
-            {
-                auto& value = *(float*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
-                ImGui::DragFloat(utility::narrow(prop->get_field_name().to_string()).data(), &value, 0.01f);
-            }
-            break;
-        case "IntProperty"_fnv:
-            {
-                auto& value = *(int32_t*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
-                ImGui::DragInt(utility::narrow(prop->get_field_name().to_string()).data(), &value, 1);
-            }
-            break;
-        case "BoolProperty"_fnv:
-            {
-                auto& value = *(bool*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
-                ImGui::Checkbox(utility::narrow(prop->get_field_name().to_string()).data(), &value);
-            }
-            break;
-        case "ObjectProperty"_fnv:
-            {
-                auto& value = *(sdk::UObject**)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
-                
-                if (ImGui::TreeNode(utility::narrow(prop->get_field_name().to_string()).data())) {
-                    ui_handle_object(value);
-                    ImGui::TreePop();
+            switch (utility::hash(propc_type)) {
+            case "FloatProperty"_fnv:
+                {
+                    auto& value = *(float*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                    ImGui::DragFloat(utility::narrow(prop->get_field_name().to_string()).data(), &value, 0.01f);
                 }
-            }
-            break;
-        default:
-            ImGui::Text("%s %s", utility::narrow(propc->get_name().to_string()), utility::narrow(prop->get_field_name().to_string()).data());
-        };
+                break;
+            case "IntProperty"_fnv:
+                {
+                    auto& value = *(int32_t*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                    ImGui::DragInt(utility::narrow(prop->get_field_name().to_string()).data(), &value, 1);
+                }
+                break;
+            case "BoolProperty"_fnv:
+                {
+                    auto& value = *(bool*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                    ImGui::Checkbox(utility::narrow(prop->get_field_name().to_string()).data(), &value);
+                }
+                break;
+            case "ObjectProperty"_fnv:
+                {
+                    auto& value = *(sdk::UObject**)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                    
+                    if (ImGui::TreeNode(utility::narrow(prop->get_field_name().to_string()).data())) {
+                        ui_handle_object(value);
+                        ImGui::TreePop();
+                    }
+                }
+                break;
+            default:
+                ImGui::Text("%s %s", utility::narrow(propc->get_name().to_string()), utility::narrow(prop->get_field_name().to_string()).data());
+            };
+        }
     }
 }
 
