@@ -457,6 +457,11 @@ std::wstring FName::to_string() const {
 
     fn(this, &buffer);
 
-    return buffer.data;
+    if (buffer.data != nullptr) {
+        std::wstring result = buffer.data;
+        return result;
+    }
+
+    return std::wstring{};
 }
 }

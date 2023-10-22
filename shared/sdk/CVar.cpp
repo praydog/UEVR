@@ -747,7 +747,7 @@ bool IConsoleCommand::Execute(const wchar_t* args) {
 }
 
 bool IConsoleCommand::Execute(const std::vector<std::wstring>& args) {
-    std::vector<sdk::TArray<wchar_t>> args_vec{};
+    std::vector<sdk::TArrayLite<wchar_t>> args_vec{};
 
     for (const auto& arg : args) {
         auto& arr = args_vec.emplace_back();
@@ -758,7 +758,7 @@ bool IConsoleCommand::Execute(const std::vector<std::wstring>& args) {
     }
 
     FakeOutputDevice fake_output_device{};
-    sdk::TArray<sdk::TArray<wchar_t>> fake_args_vec{};
+    sdk::TArrayLite<sdk::TArrayLite<wchar_t>> fake_args_vec{};
 
     fake_args_vec.data = args_vec.data();
     fake_args_vec.count = args_vec.size();
@@ -768,7 +768,7 @@ bool IConsoleCommand::Execute(const std::vector<std::wstring>& args) {
     return execute_internal(fake_args_vec, nullptr, &fake_output_device);
 }
 
-bool IConsoleCommand::execute_internal(const sdk::TArray<sdk::TArray<wchar_t>>& args, void* world, void* output_device) {
+bool IConsoleCommand::execute_internal(const sdk::TArrayLite<sdk::TArrayLite<wchar_t>>& args, void* world, void* output_device) {
     const auto info = locate_vtable_indices();
 
     if (!info) {
@@ -782,7 +782,7 @@ bool IConsoleCommand::execute_internal(const sdk::TArray<sdk::TArray<wchar_t>>& 
         return false;
     }
 
-    using ExecuteFn = bool(*)(IConsoleCommand*, sdk::TArray<sdk::TArray<wchar_t>> const*, void*, void*);
+    using ExecuteFn = bool(*)(IConsoleCommand*, sdk::TArrayLite<sdk::TArrayLite<wchar_t>> const*, void*, void*);
     const auto func = (*(ExecuteFn**)this)[info->execute_index];
 
     return func(this, &args, world, output_device);

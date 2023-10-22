@@ -4,6 +4,7 @@
 #include "ScriptRotator.hpp"
 #include "UCameraComponent.hpp"
 #include "TArray.hpp"
+#include "FMalloc.hpp"
 
 #include "AActor.hpp"
 
@@ -219,23 +220,24 @@ std::vector<UActorComponent*> AActor::get_components_by_class(UClass* uclass) {
         TArray<UActorComponent*> ReturnValue{}; // 0x8
     }; // Size: 0x18
 
-    static Params_K2_GetComponentsByClass params{};
-
+    Params_K2_GetComponentsByClass params{};
     params.ComponentClass = uclass;
 
     this->process_event(func, &params);
 
     std::vector<UActorComponent*> ret{};
 
-    for (int i = 0; i < params.ReturnValue.count; ++i) {
-        ret.push_back(params.ReturnValue.data[i]);
+    if (params.ReturnValue.data != nullptr) {
+        for (int i = 0; i < params.ReturnValue.count; ++i) {
+            ret.push_back(params.ReturnValue.data[i]);
+        }
     }
 
     return ret;
 }
 
 std::vector<UActorComponent*> AActor::get_all_components() {
-    const auto actor_component_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.ActorComponent");
+    static const auto actor_component_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.ActorComponent");
 
     if (actor_component_t == nullptr) {
         return {};

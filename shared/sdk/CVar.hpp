@@ -104,7 +104,7 @@ struct IConsoleCommand : IConsoleObject {
     bool Execute(const std::vector<std::wstring>& args);
 
 protected:
-    bool execute_internal(const sdk::TArray<sdk::TArray<wchar_t>>& args, void* world, void* output_device);
+    bool execute_internal(const sdk::TArrayLite<sdk::TArrayLite<wchar_t>>& args, void* world, void* output_device);
 };
 
 struct IConsoleVariable : IConsoleObject {

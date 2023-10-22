@@ -171,7 +171,6 @@ FMalloc* FMalloc::get() {
             }
 
             uint32_t distance_from_ret = 0;
-
             utility::exhaustive_decode((uint8_t*)fn, 100, [&](utility::ExhaustionContext& ctx) -> utility::ExhaustionResult {
                 ++distance_from_ret;
                 return utility::ExhaustionResult::CONTINUE;
