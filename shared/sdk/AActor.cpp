@@ -163,6 +163,11 @@ struct FTransform {
     glm::vec4 Scale3D{1.0f, 1.0f, 1.0f, 1.0f};
 };
 
+struct FTransformUE5 {
+    glm::vec<4, double> Rotation{0.0, 0.0, 0.0, 1.0}; // quat
+    glm::vec<4, double> Translation{0.0, 0.0, 0.0, 1.0};
+    glm::vec<4, double> Scale3D{1.0, 1.0, 1.0, 1.0};
+};
 
 UActorComponent* AActor::add_component_by_class(UClass* uclass) {
     static const auto func = AActor::static_class()->find_function(L"AddComponentByClass");
@@ -171,22 +176,46 @@ UActorComponent* AActor::add_component_by_class(UClass* uclass) {
         return nullptr;
     }
 
-    struct {
-        sdk::UClass* uclass;
-        bool bManualAttachment{false};
-        char pad_9[0x7];
-        FTransform RelativeTransform{};
-        bool bDeferredFinish{false};
-        char pad_41[0x7];
-        sdk::UActorComponent* ret{nullptr};
-    } params;
+    std::vector<uint8_t> params{};
+    
+    // Add a uclass pointer
+    params.insert(params.end(), (uint8_t*)&uclass, (uint8_t*)&uclass + sizeof(UClass*));
 
-    params.uclass = uclass;
-    params.ret = nullptr;
+    // Add a bool
+    bool bManualAttachment = false;
+    params.insert(params.end(), (uint8_t*)&bManualAttachment, (uint8_t*)&bManualAttachment + sizeof(bool));
 
-    this->process_event(func, &params);
+    // Align
+    params.insert(params.end(), 7, 0);
 
-    return params.ret;
+    const auto fvector = sdk::ScriptVector::static_struct();
+    const auto is_ue5 = fvector->get_struct_size() == sizeof(glm::vec<3, double>);
+
+    // Add a FTransform or FTransformUE5
+    if (!is_ue5) {
+        FTransform transform{};
+        params.insert(params.end(), (uint8_t*)&transform, (uint8_t*)&transform + sizeof(FTransform));
+    } else {
+        FTransformUE5 transform{};
+        params.insert(params.end(), (uint8_t*)&transform, (uint8_t*)&transform + sizeof(FTransformUE5));
+    }
+
+    // Add a bool
+    bool bDeferredFinish = false;
+    params.insert(params.end(), (uint8_t*)&bDeferredFinish, (uint8_t*)&bDeferredFinish + sizeof(bool));
+
+    // Align
+    params.insert(params.end(), 7, 0);
+    
+    const auto ret_offset = params.size();
+
+    // Add a ucomponent pointer
+    UActorComponent* ret = nullptr;
+    params.insert(params.end(), (uint8_t*)&ret, (uint8_t*)&ret + sizeof(UActorComponent*));
+
+    this->process_event(func, params.data());
+
+    return *(UActorComponent**)(params.data() + ret_offset);
 }
 
 void AActor::finish_add_component(sdk::UObject* component) {
@@ -196,16 +225,35 @@ void AActor::finish_add_component(sdk::UObject* component) {
         return;
     }
 
-    struct {
+    /*struct {
         sdk::UObject* Component{}; // 0x0
         bool bManualAttachment{}; // 0x8
         char pad_9[0x7];
         FTransform RelativeTransform{}; // 0x10
     } params;
 
-    params.Component = component;
+    params.Component = component;*/
 
-    this->process_event(func, &params);
+    std::vector<uint8_t> params{};
+    params.insert(params.end(), (uint8_t*)&component, (uint8_t*)&component + sizeof(UObject*));
+
+    bool bManualAttachment = false;
+    params.insert(params.end(), (uint8_t*)&bManualAttachment, (uint8_t*)&bManualAttachment + sizeof(bool));
+
+    params.insert(params.end(), 7, 0);
+
+    static const auto fvector = sdk::ScriptVector::static_struct();
+    const auto is_ue5 = fvector->get_struct_size() == sizeof(glm::vec<3, double>);
+
+    if (!is_ue5) {
+        FTransform transform{};
+        params.insert(params.end(), (uint8_t*)&transform, (uint8_t*)&transform + sizeof(FTransform));
+    } else {
+        FTransformUE5 transform{};
+        params.insert(params.end(), (uint8_t*)&transform, (uint8_t*)&transform + sizeof(FTransformUE5));
+    }
+
+    this->process_event(func, params.data());
 }
 
 std::vector<UActorComponent*> AActor::get_components_by_class(UClass* uclass) {
