@@ -2,6 +2,7 @@
 #include "UObjectArray.hpp"
 #include "ScriptVector.hpp"
 #include "ScriptRotator.hpp"
+#include "UCameraComponent.hpp"
 
 #include "AActor.hpp"
 
@@ -99,4 +100,79 @@ bool AActor::set_actor_rotation(const glm::vec3& rotation, bool teleport) {
 
     return ret;
 };
+
+USceneComponent* AActor::get_component_by_class(UClass* uclass) {
+    static const auto func = AActor::static_class()->find_function(L"GetComponentByClass");
+
+    if (func == nullptr) {
+        return nullptr;
+    }
+
+    struct {
+        sdk::UClass* uclass;
+        sdk::USceneComponent* ret;
+    } params;
+
+    params.uclass = uclass;
+    params.ret = nullptr;
+
+    this->process_event(func, &params);
+
+    return params.ret;
+}
+
+UCameraComponent* AActor::get_camera_component() {
+    return (UCameraComponent*)get_component_by_class(UCameraComponent::static_class());
+}
+
+struct FTransform {
+    glm::vec4 Rotation{0.0f, 0.0f, 0.0f, 1.0f}; // quat
+    glm::vec4 Translation{0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 Scale3D{1.0f, 1.0f, 1.0f, 1.0f};
+};
+
+
+USceneComponent* AActor::add_component_by_class(UClass* uclass) {
+    static const auto func = AActor::static_class()->find_function(L"AddComponentByClass");
+
+    if (func == nullptr) {
+        return nullptr;
+    }
+
+    struct {
+        sdk::UClass* uclass;
+        bool bManualAttachment{false};
+        char pad_9[0x7];
+        FTransform RelativeTransform{};
+        bool bDeferredFinish{false};
+        char pad_41[0x7];
+        sdk::USceneComponent* ret{nullptr};
+    } params;
+
+    params.uclass = uclass;
+    params.ret = nullptr;
+
+    this->process_event(func, &params);
+
+    return params.ret;
+}
+
+void AActor::finish_add_component(sdk::UObject* component) {
+    static const auto func = AActor::static_class()->find_function(L"FinishAddComponent");
+
+    if (func == nullptr) {
+        return;
+    }
+
+    struct {
+        sdk::UObject* Component{}; // 0x0
+        bool bManualAttachment{}; // 0x8
+        char pad_9[0x7];
+        FTransform RelativeTransform{}; // 0x10
+    } params;
+
+    params.Component = component;
+
+    this->process_event(func, &params);
+}
 }
