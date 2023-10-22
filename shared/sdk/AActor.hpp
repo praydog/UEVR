@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "Math.hpp"
 
 #include "UClass.hpp"
@@ -7,6 +9,9 @@
 namespace sdk {
 class UCameraComponent;
 class USceneComponent;
+class UActorComponent : public UObject {
+
+};
 
 class AActor : public UObject {
 public:
@@ -21,8 +26,11 @@ public:
     USceneComponent* get_component_by_class(UClass* uclass);
     UCameraComponent* get_camera_component();
 
-    USceneComponent* add_component_by_class(UClass* uclass);
+    UActorComponent* add_component_by_class(UClass* uclass);
     void finish_add_component(sdk::UObject* component);
+
+    std::vector<UActorComponent*> get_components_by_class(UClass* uclass);
+    std::vector<UActorComponent*> get_all_components();
 
 protected:
 };

@@ -279,6 +279,8 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
     });
 
     if (uclass->is_a(sdk::AActor::static_class())) {
+        auto actor = (sdk::AActor*)object;
+
         static char component_add_name[256]{};
 
         if (ImGui::InputText("Add Component", component_add_name, sizeof(component_add_name), ImGuiInputTextFlags_::ImGuiInputTextFlags_EnterReturnsTrue)) {
@@ -290,7 +292,6 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
                         return;
                     }
 
-                    auto actor = (sdk::AActor*)object;
                     auto component = (sdk::UObject*)actor->add_component_by_class(component_c);
 
                     if (component != nullptr) {
@@ -334,6 +335,27 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
             } else {
                 strcpy_s(component_add_name, "Nonexistent component");
             }
+        }
+
+        if (ImGui::TreeNode("Components")) {
+            auto components = actor->get_all_components();
+
+            std::sort(components.begin(), components.end(), [](sdk::UObject* a, sdk::UObject* b) {
+                return a->get_full_name() < b->get_full_name();
+            });
+
+            for (auto comp : components) {
+                auto comp_obj = (sdk::UObject*)comp;
+
+                ImGui::PushID(comp_obj);
+                if (ImGui::TreeNode(utility::narrow(comp_obj->get_full_name()).data())) {
+                    ui_handle_object(comp_obj);
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+
+            ImGui::TreePop();
         }
     }
 

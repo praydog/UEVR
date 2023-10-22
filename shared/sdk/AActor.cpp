@@ -3,6 +3,7 @@
 #include "ScriptVector.hpp"
 #include "ScriptRotator.hpp"
 #include "UCameraComponent.hpp"
+#include "TArray.hpp"
 
 #include "AActor.hpp"
 
@@ -132,7 +133,7 @@ struct FTransform {
 };
 
 
-USceneComponent* AActor::add_component_by_class(UClass* uclass) {
+UActorComponent* AActor::add_component_by_class(UClass* uclass) {
     static const auto func = AActor::static_class()->find_function(L"AddComponentByClass");
 
     if (func == nullptr) {
@@ -146,7 +147,7 @@ USceneComponent* AActor::add_component_by_class(UClass* uclass) {
         FTransform RelativeTransform{};
         bool bDeferredFinish{false};
         char pad_41[0x7];
-        sdk::USceneComponent* ret{nullptr};
+        sdk::UActorComponent* ret{nullptr};
     } params;
 
     params.uclass = uclass;
@@ -174,5 +175,42 @@ void AActor::finish_add_component(sdk::UObject* component) {
     params.Component = component;
 
     this->process_event(func, &params);
+}
+
+std::vector<UActorComponent*> AActor::get_components_by_class(UClass* uclass) {
+    static const auto func = AActor::static_class()->find_function(L"K2_GetComponentsByClass");
+
+    if (func == nullptr) {
+        return {};
+    }
+
+    struct Params_K2_GetComponentsByClass {
+        UClass* ComponentClass{}; // 0x0
+        TArray<UActorComponent*> ReturnValue{}; // 0x8
+    }; // Size: 0x18
+
+    static Params_K2_GetComponentsByClass params{};
+
+    params.ComponentClass = uclass;
+
+    this->process_event(func, &params);
+
+    std::vector<UActorComponent*> ret{};
+
+    for (int i = 0; i < params.ReturnValue.count; ++i) {
+        ret.push_back(params.ReturnValue.data[i]);
+    }
+
+    return ret;
+}
+
+std::vector<UActorComponent*> AActor::get_all_components() {
+    const auto actor_component_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.ActorComponent");
+
+    if (actor_component_t == nullptr) {
+        return {};
+    }
+
+    return get_components_by_class(actor_component_t);
 }
 }
