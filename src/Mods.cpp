@@ -5,11 +5,13 @@
 #include "mods/FrameworkConfig.hpp"
 #include "mods/VR.hpp"
 #include "mods/PluginLoader.hpp"
+#include "mods/UObjectHook.hpp"
 #include "Mods.hpp"
 
 Mods::Mods() {
     m_mods.emplace_back(FrameworkConfig::get());
     m_mods.emplace_back(VR::get());
+    m_mods.emplace_back(UObjectHook::get());
 
     m_mods.emplace_back(PluginLoader::get());
 }
