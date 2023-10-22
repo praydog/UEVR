@@ -278,6 +278,14 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
         return a->get_fname().to_string() < b->get_fname().to_string();
     });
 
+    if (uclass->is_a(sdk::UActorComponent::static_class())) {
+        if (ImGui::Button("Destroy Component")) {
+            auto comp = (sdk::UActorComponent*)object;
+
+            comp->destroy_component();
+        }
+    }
+
     if (uclass->is_a(sdk::AActor::static_class())) {
         auto actor = (sdk::AActor*)object;
 
@@ -398,6 +406,8 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
                     ImGui::DragInt(utility::narrow(prop->get_field_name().to_string()).data(), &value, 1);
                 }
                 break;
+
+            // TODO: handle bitfields
             case "BoolProperty"_fnv:
                 {
                     auto& value = *(bool*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());

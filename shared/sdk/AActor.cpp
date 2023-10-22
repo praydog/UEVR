@@ -8,6 +8,36 @@
 #include "AActor.hpp"
 
 namespace sdk {
+UClass* UActorComponent::static_class() {
+    return sdk::find_uobject<UClass>(L"Class /Script/Engine.ActorComponent");
+}
+
+AActor* UActorComponent::get_owner() {
+    static const auto func = UActorComponent::static_class()->find_function(L"GetOwner");
+
+    if (func == nullptr) {
+        return nullptr;
+    }
+
+    struct {
+        AActor* ReturnValue;
+    } params;
+
+    params.ReturnValue = nullptr;
+
+    this->process_event(func, &params);
+
+    return params.ReturnValue;
+}
+
+void UActorComponent::destroy_component() {
+    auto owner = this->get_owner();
+
+    if (owner != nullptr) {
+        owner->destroy_component(this);
+    }
+}
+
 UClass* AActor::static_class() {
     return sdk::find_uobject<UClass>(L"Class /Script/Engine.Actor");
 }
@@ -212,5 +242,21 @@ std::vector<UActorComponent*> AActor::get_all_components() {
     }
 
     return get_components_by_class(actor_component_t);
+}
+
+void AActor::destroy_component(UActorComponent* component) {
+    static const auto func = AActor::static_class()->find_function(L"K2_DestroyComponent");
+
+    if (func == nullptr) {
+        return;
+    }
+
+    struct {
+        UActorComponent* Component;
+    } params;
+
+    params.Component = component;
+
+    this->process_event(func, &params);
 }
 }

@@ -9,8 +9,13 @@
 namespace sdk {
 class UCameraComponent;
 class USceneComponent;
+class AActor;
 class UActorComponent : public UObject {
-
+public:
+    static UClass* static_class();
+    
+    AActor* get_owner();
+    void destroy_component();
 };
 
 class AActor : public UObject {
@@ -31,6 +36,8 @@ public:
 
     std::vector<UActorComponent*> get_components_by_class(UClass* uclass);
     std::vector<UActorComponent*> get_all_components();
+
+    void destroy_component(UActorComponent* component);
 
 protected:
 };
