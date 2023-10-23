@@ -320,6 +320,7 @@ void UObjectBase::update_offsets_post_uobjectarray() {
     }
 
     std::optional<uintptr_t> correct_ref{};
+    std::vector<uintptr_t> backup_functions{};
 
     for (auto ref : vtable_references) {
         if (!utility::find_mnemonic_in_path(ref + 4, 100, "CALL", false)) {
@@ -451,9 +452,36 @@ void UObjectBase::update_offsets_post_uobjectarray() {
                     }
                 }
 
-                s_add_object = fn;
-                SPDLOG_INFO("[UObjectBase] Found AddObject via EnterCriticalSection reference: 0x{:x}", *s_add_object);
-                return utility::ExhaustionResult::BREAK;
+                bool valid = false;
+                backup_functions.push_back(*fn);
+
+                // Now make sure there's an indirect call (non riprel) at least once within the function.
+                // This indirect call is responsible for calling the GUObjectArray FUObjectCreateListener callbacks.
+                utility::exhaustive_decode((uint8_t*)*fn, 200, [&](utility::ExhaustionContext& ctx2) -> utility::ExhaustionResult {
+                    if (valid) {
+                        return utility::ExhaustionResult::BREAK;
+                    }
+
+                    // Look into using this as a fallback, to add the FUObjectCreateListener callback if we are unable to hook for some reason.
+                    if (std::string_view{ctx2.instrux.Mnemonic}.starts_with("CALL") && ctx2.instrux.BranchInfo.IsIndirect && !ctx2.instrux.IsRipRelative) {
+                        SPDLOG_INFO("[UObjectBase] Found indirect call at 0x{:X}", ctx2.addr);
+                        valid = true;
+
+                        return utility::ExhaustionResult::BREAK;
+                    }
+
+                    if (std::string_view{ctx2.instrux.Mnemonic}.starts_with("CALL")) {
+                        return utility::ExhaustionResult::STEP_OVER;
+                    }
+
+                    return utility::ExhaustionResult::CONTINUE;
+                });
+
+                if (valid) {
+                    s_add_object = fn;
+                    SPDLOG_INFO("[UObjectBase] Found AddObject via EnterCriticalSection reference: 0x{:x}", *s_add_object);
+                    return utility::ExhaustionResult::BREAK;
+                }
             }
 
             return utility::ExhaustionResult::STEP_OVER;
@@ -461,6 +489,11 @@ void UObjectBase::update_offsets_post_uobjectarray() {
 
         return utility::ExhaustionResult::CONTINUE;
     });
+
+    if (!s_add_object && !backup_functions.empty()) {
+        SPDLOG_INFO("[UObjectBase] Using first backup function, unable to fully verify");
+        s_add_object = backup_functions[0];
+    }
 
     if (!s_add_object) {
         SPDLOG_ERROR("[UObjectBase] Failed to find AddObject");
