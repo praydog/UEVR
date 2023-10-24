@@ -6,6 +6,8 @@
 #include <utility/Scan.hpp>
 #include <utility/Module.hpp>
 
+#include <tracy/Tracy.hpp>
+
 #include "EngineModule.hpp"
 
 #include "UGameViewportClient.hpp"
@@ -13,6 +15,7 @@
 namespace sdk {
 std::optional<uintptr_t> UGameViewportClient::get_draw_function() {
     static auto result = []() -> std::optional<uintptr_t> {
+        ZoneScopedN("sdk::UGameViewportClient::get_draw_function static init");
         const auto engine_module = sdk::get_ue_module(L"Engine");
         const auto canvas_object_strings = utility::scan_strings(engine_module, L"CanvasObject", true);
 
@@ -84,7 +87,7 @@ std::optional<uintptr_t> UGameViewportClient::get_draw_function() {
                         }*/
 
                         if (ix.BranchInfo.IsBranch && !ix.BranchInfo.IsConditional) {
-                            if (auto resolved = utility::resolve_displacement(ip); *resolved == possible_function) {
+                            if (auto resolved = utility::resolve_displacement(ip); resolved.has_value() && *resolved == possible_function) {
                                 impossible_functions.insert(other_function);
                                 SPDLOG_INFO("Found possible function within function at {:x} (insn {:x})", (uintptr_t)other_function, ip);
                                 return utility::ExhaustionResult::BREAK;
