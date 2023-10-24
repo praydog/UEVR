@@ -4992,7 +4992,7 @@ __declspec(noinline) bool VRRenderTargetManager::NeedReAllocateShadingRateTextur
 }
 
 void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const FViewport& vp, class SViewport* vp_widget) {
-    SPDLOG_INFO_ONCE("VRRenderTargetManager_Base::update_viewport called!");
+    SPDLOG_INFO_ONCE("VRRenderTargetManager_Base::update_viewport called! {} {:x} {:x}", use_separate_rt, (uintptr_t)&vp, (uintptr_t)vp_widget);
 
     if (!g_framework->is_game_data_intialized()) {
         return;
