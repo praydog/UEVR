@@ -471,7 +471,7 @@ FUObjectArray* FUObjectArray::get() try {
             continue;
         }
 
-        for (auto i = 0; i < result->get_object_count(); ++i) try {
+        /*for (auto i = 0; i < result->get_object_count(); ++i) try {
             auto item = result->get_object(i);
             if (item == nullptr) {
                 continue;
@@ -492,7 +492,7 @@ FUObjectArray* FUObjectArray::get() try {
             }
         } catch(...) {
             SPDLOG_ERROR("[FUObjectArray::get] Exception: failed to get object {}", i);
-        }
+        }*/
     };
 
     return result;
