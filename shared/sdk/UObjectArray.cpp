@@ -65,7 +65,7 @@ UObjectBase* find_uobject(const std::wstring& full_name, bool cached) {
 
 FUObjectArray* FUObjectArray::get() try {
     static auto result = []() -> FUObjectArray* {
-        ZoneScopedN("FUObjectArray::get static init");
+        ZoneScopedN("sdk::FUObjectArray::get static init");
         SPDLOG_INFO("[FUObjectArray::get] Searching for FUObjectArray...");
 
         const auto core_uobject = sdk::get_ue_module(L"CoreUObject");
@@ -388,6 +388,7 @@ FUObjectArray* FUObjectArray::get() try {
         sdk::UProperty::update_offsets();
         sdk::FStructProperty::update_offsets();
 
+#ifdef TESTING_GUOBJECTARRAY
         try {
             const auto world = sdk::UEngine::get()->get_world();
 
@@ -493,6 +494,7 @@ FUObjectArray* FUObjectArray::get() try {
         } catch(...) {
             SPDLOG_ERROR("[FUObjectArray::get] Exception: failed to get object {}", i);
         }*/
+#endif
     };
 
     return result;
