@@ -6,6 +6,8 @@
 #include <utility/Scan.hpp>
 #include <utility/String.hpp>
 
+#include <tracy/Tracy.hpp>
+
 #include "EngineModule.hpp"
 #include "UEngine.hpp"
 #include "UGameplayStatics.hpp"
@@ -63,6 +65,7 @@ UObjectBase* find_uobject(const std::wstring& full_name, bool cached) {
 
 FUObjectArray* FUObjectArray::get() try {
     static auto result = []() -> FUObjectArray* {
+        ZoneScopedN("FUObjectArray::get static init");
         SPDLOG_INFO("[FUObjectArray::get] Searching for FUObjectArray...");
 
         const auto core_uobject = sdk::get_ue_module(L"CoreUObject");
@@ -375,6 +378,8 @@ FUObjectArray* FUObjectArray::get() try {
         if (result == nullptr) {
             return nullptr;
         }
+
+        ZoneScopedN("FUObjectArray::get static init phase 2");
 
         // Attempt to find the SuperStruct offset
         sdk::UClass::update_offsets();

@@ -137,13 +137,8 @@ link-libraries = [
 type = "sdk-template"
 link-libraries = [
     "kananlib",
-    "Version"
-]
-
-[target.sdk-nolog]
-type = "sdk-template"
-link-libraries = [
-    "kananlib-nolog",
+    "Version",
+    "TracyClient"
 ]
 
 [target.plugin_renderlib]
@@ -276,17 +271,4 @@ cmake-after="""
 add_custom_command(
     TARGET ue4poc POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openvr> $<TARGET_FILE_DIR:ue4poc>)
-"""
-
-[target.ue4poc-nolog]
-type="ue4template"
-compile-definitions = ["SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_OFF"]
-link-libraries = [
-    "kananlib-nolog",
-    "sdk-nolog"
-]
-cmake-after="""
-add_custom_command(
-    TARGET ue4poc-nolog POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openvr> $<TARGET_FILE_DIR:ue4poc-nolog>)
 """

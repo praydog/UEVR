@@ -1,5 +1,6 @@
 #include <spdlog/spdlog.h>
 #include <utility/Scan.hpp>
+#include <tracy/Tracy.hpp>
 
 #include "EngineModule.hpp"
 
@@ -8,6 +9,7 @@
 namespace sdk {
 std::optional<uintptr_t> UGameEngine::get_tick_address() {
     static auto addr = []() -> uintptr_t {
+        ZoneScopedN("sdk::UGameEngine::get_tick_address static init");
         SPDLOG_INFO("UGameEngine::get_tick_address: scanning for address");
 
         const auto module = sdk::get_ue_module(L"Engine");

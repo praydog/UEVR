@@ -1,6 +1,7 @@
 #include <spdlog/spdlog.h>
 
 #include <utility/Scan.hpp>
+#include <tracy/Tracy.hpp>
 
 #include "EngineModule.hpp"
 #include "CVar.hpp"
@@ -10,6 +11,7 @@ namespace sdk {
 namespace slate {
 std::optional<uintptr_t> locate_draw_window_renderthread_fn() {
     static auto result = []() -> std::optional<uintptr_t> {
+        ZoneScopedN("sdk::slate::locate_draw_window_renderthread_fn static init");
         SPDLOG_INFO("Attempting to locate SlateRHIRenderer::DrawWindow_RenderThread");
 
         const auto module = sdk::get_ue_module(L"SlateRHIRenderer");

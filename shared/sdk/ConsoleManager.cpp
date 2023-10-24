@@ -3,12 +3,15 @@
 #include <utility/Module.hpp>
 #include <utility/String.hpp>
 
+#include <tracy/Tracy.hpp>
+
 #include "EngineModule.hpp"
 
 #include "ConsoleManager.hpp"
 
 namespace detail {
 sdk::FConsoleManager** try_find_console_manager(const std::wstring& string_candidate) {
+    ZoneScopedN("sdk::FConsoleManager::try_find_console_manager");
     SPDLOG_INFO("Finding IConsoleManager...");
 
     const auto now = std::chrono::steady_clock::now();
@@ -85,6 +88,8 @@ sdk::FConsoleManager** try_find_console_manager(const std::wstring& string_candi
 namespace sdk {
 FConsoleManager* FConsoleManager::get() {
     static auto result = []() -> FConsoleManager** {
+        ZoneScopedN("sdk::FConsoleManager::get static init");
+
         std::vector<std::wstring> candidates {
             L"r.DumpingMovie",
             L"vr.pixeldensity",

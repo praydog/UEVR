@@ -6,6 +6,8 @@
 #include <utility/Module.hpp>
 #include <utility/Emulation.hpp>
 
+#include <tracy/Tracy.hpp>
+
 #include "CVar.hpp"
 
 #include "EngineModule.hpp"
@@ -16,6 +18,7 @@
 namespace sdk {
 UEngine** UEngine::get_lvalue() {
     static auto engine = []() -> UEngine** {
+        ZoneScopedN("UEngine::get_lvalue static init");
         SPDLOG_INFO("Attempting to locate GEngine...");
 
         const auto module = sdk::get_ue_module(L"Engine");
@@ -122,6 +125,7 @@ UWorld* UEngine::get_world() {
 
 std::optional<uintptr_t> UEngine::get_emulatestereo_string_ref_address() {
     static const auto addr = []() -> std::optional<uintptr_t> {
+        ZoneScopedN("UEngine::get_emulatestereo_string_ref_address static init");
         SPDLOG_INFO("Searching for correct string reference to \"emulatestereo\"...");
 
         const auto mod = sdk::get_ue_module(L"Engine");
@@ -156,6 +160,7 @@ std::optional<uintptr_t> UEngine::get_emulatestereo_string_ref_address() {
 
 std::optional<uintptr_t> UEngine::get_stereo_rendering_device_offset() {
     static const auto offset = []() -> std::optional<uintptr_t> {
+        ZoneScopedN("UEngine::get_stereo_rendering_device_offset static init");
         SPDLOG_INFO("Searching for StereoRenderingDevice offset...");
 
         const auto game_viewport_client_draw = UGameViewportClient::get_draw_function();
@@ -288,6 +293,7 @@ std::optional<uintptr_t> UEngine::get_stereo_rendering_device_offset() {
 
 std::optional<uintptr_t> UEngine::get_initialize_hmd_device_address() {
     static const auto addr = []() -> std::optional<uintptr_t> {
+        ZoneScopedN("UEngine::get_initialize_hmd_device_address static init");
         SPDLOG_INFO("Searching for InitializeHMDDevice function...");
 
         // For older UE versions.

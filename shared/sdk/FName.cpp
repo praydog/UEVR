@@ -6,6 +6,8 @@
 #include <utility/String.hpp>
 #include <utility/Emulation.hpp>
 
+#include <tracy/Tracy.hpp>
+
 #include "EngineModule.hpp"
 
 #include "FName.hpp"
@@ -65,6 +67,7 @@ Present in both (and 5.0.3+):
 */
 namespace detail {
 std::optional<FName::ConstructorFn> get_constructor_from_candidate(std::wstring_view module_candidate, std::wstring_view str_candidate) try {
+    ZoneScopedN("sdk::detail::get_constructor_from_candidate");
     SPDLOG_INFO("FName::get_constructor_from_candidate: str_candidate={}", utility::narrow(str_candidate.data()));
 
     const auto module = sdk::get_ue_module(module_candidate.data());
@@ -141,6 +144,8 @@ std::optional<FName::ConstructorFn> get_constructor_from_candidate(std::wstring_
 
 std::optional<FName::ConstructorFn> FName::get_constructor() {
     static auto result = []() -> std::optional<FName::ConstructorFn> {
+        ZoneScopedN("sdk::FName::get_constructor static init");
+
         struct Candidate {
             std::wstring_view module;
             std::wstring_view str;
@@ -174,6 +179,7 @@ namespace detail {
 // Alternative for ToString if a majority of the calls are inlined
 // not all of them are though.
 std::optional<FName::ToStringFn> inlined_find_to_string() try {
+    ZoneScopedN("sdk::detail::inlined_find_to_string");
     SPDLOG_INFO("FName::get_to_string: inlined_find_to_string");
 
     const auto module = sdk::get_ue_module(L"AnimGraphRuntime");
@@ -273,6 +279,7 @@ std::optional<FName::ToStringFn> inlined_find_to_string() try {
 }
 
 std::optional<FName::ToStringFn> standard_find_to_string() {
+    ZoneScopedN("sdk::detail::standard_find_to_string");
     SPDLOG_INFO("FName::get_to_string: standard_find_to_string");
 
     const auto module = sdk::get_ue_module(L"Engine");
@@ -409,6 +416,7 @@ std::optional<FName::ToStringFn> standard_find_to_string() {
 
 std::optional<FName::ToStringFn> FName::get_to_string() {
     static auto result = []() -> std::optional<FName::ToStringFn> {
+        ZoneScopedN("sdk::FName::get_to_string static init");
         SPDLOG_INFO("FName::get_to_string");
 
         const auto inlined_result = detail::inlined_find_to_string();

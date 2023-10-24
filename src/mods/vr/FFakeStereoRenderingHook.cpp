@@ -142,6 +142,7 @@ void FFakeStereoRenderingHook::attempt_hooking() {
 
 namespace detail{
 bool pre_find_engine_tick() {
+    ZoneScopedN(__FUNCTION__);
     sdk::UGameEngine::get_tick_address(); // this takes a LONG time to find
     sdk::UGameEngine::get_initialize_hmd_device_address();
     return true;
@@ -493,6 +494,7 @@ bool FFakeStereoRenderingHook::hook() {
 }
 
 bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
+    ZoneScopedN(__FUNCTION__);
     SPDLOG_INFO("Performing standard fake stereo hook");
 
     const auto game = sdk::get_ue_module(L"Engine");
@@ -1752,6 +1754,7 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_cli
     static bool run_anyways = false;
 
     if (hook_attempts < 100 && !g_hook->m_hooked_game_engine_tick && g_hook->m_attempted_hook_game_engine_tick) {
+        ZoneScopedN("UGameViewportClient::Draw (hook UGameEngine::Tick)");
         SPDLOG_INFO("Performing alternative UGameEngine::Tick hook for synced AFR.");
 
         ++hook_attempts;
@@ -6002,6 +6005,7 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
     this->allocate_texture_called = true;
 
     if (!this->set_up_texture_hook) {
+        ZoneScopedN("VRRenderTargetManager_Base::allocate_render_target_texture initialization");
         SPDLOG_INFO("AllocateRenderTargetTexture retaddr: {:x}", return_address);
 
         g_hook->attempt_hook_update_viewport_rhi(return_address);

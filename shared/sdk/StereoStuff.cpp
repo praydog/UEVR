@@ -4,6 +4,7 @@
 #include <windows.h>
 
 #include <utility/Module.hpp>
+#include <tracy/Tracy.hpp>
 
 #include "StereoStuff.hpp"
 
@@ -13,6 +14,7 @@
 void* FRHITexture::get_native_resource() const {
     static std::optional<uintptr_t> offset_to_resource{}; // this is some shit that happens on D3D12 on old UE versions
     static auto vtable_index = [](const FRHITexture* tex) -> size_t {
+        ZoneScopedN("FRHITexture::get_native_resource static init");
         SPDLOG_INFO("Attempting to get vtable index for FRHITexture::GetNativeResource");
 
         auto vtable = *(void* (***)(const FRHITexture*, void*))tex;

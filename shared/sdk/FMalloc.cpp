@@ -4,6 +4,8 @@
 #include <utility/Module.hpp>
 #include <spdlog/spdlog.h>
 
+#include <tracy/Tracy.hpp>
+
 #include "EngineModule.hpp"
 
 #include "FMalloc.hpp"
@@ -12,6 +14,7 @@ namespace sdk {
 // There are many different ways to find this because the pointer is used all over.
 FMalloc* FMalloc::get() {
     static FMalloc** result = []() -> FMalloc** {
+        ZoneScopedN("sdk::FMalloc::get static init");
         SPDLOG_INFO("[FMalloc::get] Finding GMalloc...");
 
         const auto core_uobject = sdk::get_ue_module(L"CoreUObject");
