@@ -11,6 +11,8 @@
 #include <sdk/UFunction.hpp>
 #include <sdk/AActor.hpp>
 #include <sdk/threading/GameThreadWorker.hpp>
+#include <sdk/FMalloc.hpp>
+#include <sdk/FStructProperty.hpp>
 
 #include "UObjectHook.hpp"
 
@@ -39,7 +41,7 @@ void UObjectHook::hook() {
         return;
     }
 
-    SPDLOG_INFO("[UObjectHook} Hooking UObjectBase");
+    SPDLOG_INFO("[UObjectHook] Hooking UObjectBase");
 
     m_hooked = true;
     m_wants_activate = false;
@@ -108,7 +110,40 @@ void UObjectHook::add_new_object(sdk::UObjectBase* object) {
     meta_object->uclass = object->get_class();
 
     m_meta_objects[object] = std::move(meta_object);
-    m_objects_by_class[object->get_class()].insert(object);
+
+    m_most_recent_objects.push_front((sdk::UObject*)object);
+
+    if (m_most_recent_objects.size() > 50) {
+        m_most_recent_objects.pop_back();
+    }
+
+    for (auto super = (sdk::UStruct*)object->get_class(); super != nullptr; super = super->get_super_struct()) {
+        m_objects_by_class[(sdk::UClass*)super].insert(object);
+
+        if (auto it = m_on_creation_add_component_jobs.find((sdk::UClass*)super); it != m_on_creation_add_component_jobs.end()) {
+            GameThreadWorker::get().enqueue([object, this]() {
+                if (!this->exists(object)) {
+                    return;
+                }
+
+                for (auto super = (sdk::UStruct*)object->get_class(); super != nullptr; super = super->get_super_struct()) {
+                    std::function<void(sdk::UObject*)> job{};
+
+                    {
+                        std::shared_lock _{m_mutex};
+
+                        if (auto it = this->m_on_creation_add_component_jobs.find((sdk::UClass*)super); it != this->m_on_creation_add_component_jobs.end()) {
+                            job = it->second;
+                        }
+                    }
+
+                    if (job) {
+                        job((sdk::UObject*)object);
+                    }
+                }
+            });
+        }
+    }
 
 #ifdef VERBOSE_UOBJECTHOOK
     SPDLOG_INFO("Adding object {:x} {:s}", (uintptr_t)object, utility::narrow(m_meta_objects[object]->full_name));
@@ -116,6 +151,8 @@ void UObjectHook::add_new_object(sdk::UObjectBase* object) {
 }
 
 void UObjectHook::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
+    sdk::FMalloc::get();
+
     if (m_wants_activate) {
         hook();
     }
@@ -136,9 +173,16 @@ void UObjectHook::on_draw_ui() {
 
         ImGui::Text("Objects: %zu (%zu actual)", m_objects.size(), sdk::FUObjectArray::get()->get_object_count());
 
-        if (ImGui::TreeNode("Objects")) {
-            for (auto& [object, meta_object] : m_meta_objects) {
-                ImGui::Text("%s", utility::narrow(meta_object->full_name).data());
+        if (ImGui::TreeNode("Recent Objects")) {
+            for (auto& object : m_most_recent_objects) {
+                if (!this->exists_unsafe(object)) {
+                    continue;
+                }
+
+                if (ImGui::TreeNode(utility::narrow(object->get_full_name()).data())) {
+                    ui_handle_object(object);
+                    ImGui::TreePop();
+                }
             }
 
             ImGui::TreePop();
@@ -194,9 +238,9 @@ void UObjectHook::on_draw_ui() {
             const auto wide_filter = utility::widen(filter);
 
             for (auto uclass : m_sorted_classes) {
-                const auto& objects = m_objects_by_class[uclass];
+                const auto& objects_ref = m_objects_by_class[uclass];
 
-                if (objects.empty()) {
+                if (objects_ref.empty()) {
                     continue;
                 }
 
@@ -225,8 +269,108 @@ void UObjectHook::on_draw_ui() {
                 }
 
                 if (ImGui::TreeNode(uclass_name.data())) {
+                    std::vector<sdk::UObjectBase*> objects{};
+
+                    for (auto object : objects_ref) {
+                        objects.push_back(object);
+                    }
+
+                    std::sort(objects.begin(), objects.end(), [this](sdk::UObjectBase* a, sdk::UObjectBase* b) {
+                        return m_meta_objects[a]->full_name < m_meta_objects[b]->full_name;
+                    });
+
+                    if (uclass->is_a(sdk::AActor::static_class())) {
+                        static char component_add_name[256]{};
+
+                        if (ImGui::InputText("Add Component Permanently", component_add_name, sizeof(component_add_name), ImGuiInputTextFlags_::ImGuiInputTextFlags_EnterReturnsTrue)) {
+                            const auto component_c = sdk::find_uobject<sdk::UClass>(utility::widen(component_add_name));
+
+                            if (component_c != nullptr) {
+                                m_on_creation_add_component_jobs[uclass] = [this, component_c](sdk::UObject* object) {
+                                    if (!this->exists(object)) {
+                                        return;
+                                    }
+
+                                    if (object == object->get_class()->get_class_default_object()) {
+                                        return;
+                                    }
+
+                                    auto actor = (sdk::AActor*)object;
+                                    auto component = (sdk::UObject*)actor->add_component_by_class(component_c);
+
+                                    if (component != nullptr) {
+                                        if (component->get_class()->is_a(sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.SphereComponent"))) {
+                                            struct SphereRadiusParams {
+                                                float radius{};
+                                            };
+
+                                            auto params = SphereRadiusParams{};
+                                            params.radius = 100.f;
+
+                                            const auto fn = component->get_class()->find_function(L"SetSphereRadius");
+
+                                            if (fn != nullptr) {
+                                                component->process_event(fn, &params);
+                                            }
+                                        }
+
+                                        struct {
+                                            bool hidden{false};
+                                            bool propagate{true};
+                                        } set_hidden_params{};
+
+                                        const auto fn = component->get_class()->find_function(L"SetHiddenInGame");
+
+                                        if (fn != nullptr) {
+                                            component->process_event(fn, &set_hidden_params);
+                                        }
+
+                                        actor->finish_add_component(component);
+
+                                        // Set component_add_name to empty
+                                        component_add_name[0] = '\0';
+                                    } else {
+                                        component_add_name[0] = 'e';
+                                        component_add_name[1] = 'r';
+                                        component_add_name[2] = 'r';
+                                        component_add_name[3] = '\0';
+                                    }
+                                };
+                            } else {
+                                strcpy_s(component_add_name, "Nonexistent component");
+                            }
+                        }
+                    }
+
                     for (const auto& object : objects) {
-                        if (ImGui::TreeNode(utility::narrow(m_meta_objects[object]->full_name).data())) {
+                        const auto made = ImGui::TreeNode(utility::narrow(m_meta_objects[object]->full_name).data());
+                        // make right click context
+                        if (ImGui::BeginPopupContextItem()) {
+                            auto sc = [](const std::string& text) {
+                                if (OpenClipboard(NULL)) {
+                                    EmptyClipboard();
+                                    HGLOBAL hcd = GlobalAlloc(GMEM_DDESHARE, text.size() + 1);
+                                    char* data = (char*)GlobalLock(hcd);
+                                    strcpy(data, text.c_str());
+                                    GlobalUnlock(hcd);
+                                    SetClipboardData(CF_TEXT, hcd);
+                                    CloseClipboard();
+                                }
+                            };
+
+                            if (ImGui::Button("Copy Name")) {
+                                sc(utility::narrow(m_meta_objects[object]->full_name));
+                            }
+
+                            if (ImGui::Button("Copy Address")) {
+                                const auto hex = (std::stringstream{} << std::hex << (uintptr_t)object).str();
+                                sc(hex);
+                            }
+
+                            ImGui::EndPopup();
+                        }
+
+                        if (made) {
                             ui_handle_object((sdk::UObject*)object);
                             
                             ImGui::TreePop();
@@ -260,18 +404,10 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
         ImGui::TreePop();
     }
 
-    std::vector<sdk::FField*> sorted_fields{};
     std::vector<sdk::UFunction*> sorted_functions{};
-
     const auto ufunction_t = sdk::UFunction::static_class();
-    
+
     for (auto super = (sdk::UStruct*)uclass; super != nullptr; super = super->get_super_struct()) {
-        auto props = super->get_child_properties();
-
-        for (auto prop = props; prop != nullptr; prop = prop->get_next()) {
-            sorted_fields.push_back(prop);
-        }
-
         auto funcs = super->get_children();
 
         for (auto func = funcs; func != nullptr; func = func->get_next()) {
@@ -281,13 +417,118 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
         }
     }
 
-    std::sort(sorted_fields.begin(), sorted_fields.end(), [](sdk::FField* a, sdk::FField* b) {
-        return a->get_field_name().to_string() < b->get_field_name().to_string();
-    });
-
     std::sort(sorted_functions.begin(), sorted_functions.end(), [](sdk::UFunction* a, sdk::UFunction* b) {
         return a->get_fname().to_string() < b->get_fname().to_string();
     });
+
+    static const auto material_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.MaterialInterface");
+
+    if (uclass->is_a(material_t)) {
+        if (ImGui::Button("Apply to all actors")) {
+            static const auto mesh_component_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.StaticMeshComponent");
+            static const auto create_dynamic_mat = mesh_component_t->find_function(L"CreateDynamicMaterialInstance");
+            static const auto set_material_fn = mesh_component_t->find_function(L"SetMaterial");
+            static const auto get_num_materials_fn = mesh_component_t->find_function(L"GetNumMaterials");
+
+            //const auto actors = m_objects_by_class[sdk::AActor::static_class()];
+            const auto components = m_objects_by_class[mesh_component_t];
+
+            //auto components = actor->get_all_components();
+
+            for (auto comp_obj : components) {
+                auto comp = (sdk::UObject*)comp_obj;
+                if (comp->is_a(mesh_component_t)) {
+                    if (comp == comp->get_class()->get_class_default_object()) {
+                        continue;
+                    }
+
+                    struct {
+                        int32_t num{};
+                    } get_num_materials_params{};
+
+                    comp->process_event(get_num_materials_fn, &get_num_materials_params);
+
+                    for (int i = 0; i < get_num_materials_params.num; ++i) {
+                        GameThreadWorker::get().enqueue([this, i, object, comp]() {
+                            if (!this->exists(comp) || !this->exists(object)) {
+                                return;
+                            }
+
+                            /*struct {
+                                int32_t index{};
+                                sdk::UObject* material{};
+                            } params{};
+
+                            params.index = i;
+                            params.material = object;
+
+                            comp->process_event(set_material_fn, &params);*/
+
+                            struct {
+                                int32_t index{};
+                                sdk::UObject* material{};
+                                sdk::FName name{L"None"};
+                                sdk::UObject* ret{};
+                            } params{};
+
+                            params.index = i;
+                            params.material = object;
+
+                            comp->process_event(create_dynamic_mat, &params);
+
+                            if (params.ret != nullptr && object->get_full_name().find(L"GizmoMaterial") != std::wstring::npos) {
+                                const auto c = params.ret->get_class();
+                                static const auto set_vector_param_fn = c->find_function(L"SetVectorParameterValue");
+
+                                struct {
+                                    sdk::FName name{L"GizmoColor"};
+                                    glm::vec4 color{};
+                                } set_vector_param_params{};
+
+                                set_vector_param_params.color.x = 1.0f;
+                                set_vector_param_params.color.y = 0.0f;
+                                set_vector_param_params.color.z = 0.0f;
+                                set_vector_param_params.color.w = 1.0f;
+
+                                params.ret->process_event(set_vector_param_fn, &set_vector_param_params);
+                            }
+
+                            if (params.ret != nullptr && object->get_full_name().find(L"BasicShapeMaterial") != std::wstring::npos) {
+                                const auto c = params.ret->get_class();
+                                static const auto set_vector_param_fn = c->find_function(L"SetVectorParameterValue");
+
+                                struct {
+                                    sdk::FName name{L"Color"};
+                                    glm::vec4 color{};
+                                } set_vector_param_params{};
+
+                                set_vector_param_params.color.x = 1.0f;
+                                set_vector_param_params.color.y = 0.0f;
+                                set_vector_param_params.color.z = 0.0f;
+                                set_vector_param_params.color.w = 1.0f;
+
+                                params.ret->process_event(set_vector_param_fn, &set_vector_param_params);
+                            }
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    if (uclass->is_a(sdk::find_uobject<sdk::UClass>(L"Class /Script/UMG.WidgetComponent"))) {
+        if (ImGui::Button("Set to Screen Space")) {
+            static const auto set_widget_space_fn = uclass->find_function(L"SetWidgetSpace");
+
+            if (set_widget_space_fn != nullptr) {
+                struct {
+                    uint32_t space{1};
+                } params{};
+
+                object->process_event(set_widget_space_fn, &params);
+            }
+        }
+    }
 
     if (uclass->is_a(sdk::UActorComponent::static_class())) {
         if (ImGui::Button("Destroy Component")) {
@@ -367,7 +608,8 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
                 auto comp_obj = (sdk::UObject*)comp;
 
                 ImGui::PushID(comp_obj);
-                if (ImGui::TreeNode(utility::narrow(comp_obj->get_full_name()).data())) {
+                const auto made = ImGui::TreeNode(utility::narrow(comp_obj->get_full_name()).data());
+                if (made) {
                     ui_handle_object(comp_obj);
                     ImGui::TreePop();
                 }
@@ -387,6 +629,45 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
             if (ImGui::TreeNode(utility::narrow(func->get_fname().to_string()).data())) {
                 auto parameters = func->get_child_properties();
 
+                if (parameters == nullptr) {
+                    if (ImGui::Button("Call")) {
+                        struct {
+                            char poop[0x100]{};
+                        } params{};
+
+                        object->process_event(func, &params);
+                    }
+                } else if (parameters->get_next() == nullptr) {
+                    switch (utility::hash(utility::narrow(parameters->get_class()->get_name().to_string()))) {
+                    case "BoolProperty"_fnv:
+                        {
+                            if (ImGui::Button("Enable")) {
+                                struct {
+                                    bool enabled{true};
+                                    char padding[0x10];
+                                } params{};
+
+                                object->process_event(func, &params);
+                            }
+
+                            ImGui::SameLine();
+
+                            if (ImGui::Button("Disable")) {
+                                struct {
+                                    bool enabled{false};
+                                    char padding[0x10];
+                                } params{};
+
+                                object->process_event(func, &params);
+                            }
+                        }
+                        break;
+
+                    default:
+                        break;
+                    };
+                }
+
                 for (auto param = parameters; param != nullptr; param = param->get_next()) {
                     ImGui::Text("%s %s", utility::narrow(param->get_class()->get_name().to_string()), utility::narrow(param->get_field_name().to_string()).data());
                 }
@@ -399,47 +680,101 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
     }
 
     if (ImGui::TreeNode("Properties")) {
-        for (auto prop : sorted_fields) {
-            auto propc = prop->get_class();
+        ui_handle_properties(object, uclass);
+        ImGui::TreePop();
+    }
+}
 
-            const auto propc_type = utility::narrow(propc->get_name().to_string());
+void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
+    if (object == nullptr || uclass == nullptr) {
+        return;
+    }
 
-            switch (utility::hash(propc_type)) {
-            case "FloatProperty"_fnv:
-                {
-                    auto& value = *(float*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
-                    ImGui::DragFloat(utility::narrow(prop->get_field_name().to_string()).data(), &value, 0.01f);
-                }
-                break;
-            case "IntProperty"_fnv:
-                {
-                    auto& value = *(int32_t*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
-                    ImGui::DragInt(utility::narrow(prop->get_field_name().to_string()).data(), &value, 1);
-                }
-                break;
+    std::vector<sdk::FField*> sorted_fields{};
 
-            // TODO: handle bitfields
-            case "BoolProperty"_fnv:
-                {
-                    auto& value = *(bool*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
-                    ImGui::Checkbox(utility::narrow(prop->get_field_name().to_string()).data(), &value);
-                }
-                break;
-            case "ObjectProperty"_fnv:
-                {
-                    auto& value = *(sdk::UObject**)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
-                    
-                    if (ImGui::TreeNode(utility::narrow(prop->get_field_name().to_string()).data())) {
-                        ui_handle_object(value);
-                        ImGui::TreePop();
-                    }
-                }
-                break;
-            default:
-                ImGui::Text("%s %s", utility::narrow(propc->get_name().to_string()), utility::narrow(prop->get_field_name().to_string()).data());
-            };
+    for (auto super = (sdk::UStruct*)uclass; super != nullptr; super = super->get_super_struct()) {
+        auto props = super->get_child_properties();
+
+        for (auto prop = props; prop != nullptr; prop = prop->get_next()) {
+            sorted_fields.push_back(prop);
         }
     }
+
+    std::sort(sorted_fields.begin(), sorted_fields.end(), [](sdk::FField* a, sdk::FField* b) {
+        return a->get_field_name().to_string() < b->get_field_name().to_string();
+    });
+
+    for (auto prop : sorted_fields) {
+        auto propc = prop->get_class();
+
+        const auto propc_type = utility::narrow(propc->get_name().to_string());
+
+        switch (utility::hash(propc_type)) {
+        case "FloatProperty"_fnv:
+            {
+                auto& value = *(float*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                ImGui::DragFloat(utility::narrow(prop->get_field_name().to_string()).data(), &value, 0.01f);
+            }
+            break;
+        case "DoubleProperty"_fnv:
+            {
+                auto& value = *(double*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                ImGui::DragFloat(utility::narrow(prop->get_field_name().to_string()).data(), (float*)&value, 0.01f);
+            }
+            break;
+        case "IntProperty"_fnv:
+            {
+                auto& value = *(int32_t*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                ImGui::DragInt(utility::narrow(prop->get_field_name().to_string()).data(), &value, 1);
+            }
+            break;
+
+        // TODO: handle bitfields
+        case "BoolProperty"_fnv:
+            {
+                auto& value = *(bool*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                ImGui::Checkbox(utility::narrow(prop->get_field_name().to_string()).data(), &value);
+            }
+            break;
+        case "ObjectProperty"_fnv:
+            {
+                auto& value = *(sdk::UObject**)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                
+                if (ImGui::TreeNode(utility::narrow(prop->get_field_name().to_string()).data())) {
+                    ui_handle_object(value);
+                    ImGui::TreePop();
+                }
+            }
+            break;
+        case "StructProperty"_fnv:
+            {
+                void* addr = (void*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+
+                if (ImGui::TreeNode(utility::narrow(prop->get_field_name().to_string()).data())) {
+                    ui_handle_struct(addr, ((sdk::FStructProperty*)prop)->get_struct());
+                    ImGui::TreePop();
+                }
+            }
+            break;
+        case "Function"_fnv:
+            break;
+        default:
+            {
+                const auto name = utility::narrow(propc->get_name().to_string());
+                const auto field_name = utility::narrow(prop->get_field_name().to_string());
+                ImGui::Text("%s %s", name.data(), field_name.data());
+            }
+            break;
+        };
+    }
+}
+
+void UObjectHook::ui_handle_struct(void* addr, sdk::UScriptStruct* definition) {
+    if (addr == nullptr || definition == nullptr) {
+        return;
+    }
+
+    ui_handle_properties(addr, definition);
 }
 
 void* UObjectHook::add_object(void* rcx, void* rdx, void* r8, void* r9) {
@@ -485,7 +820,12 @@ void* UObjectHook::destructor(sdk::UObjectBase* object, void* rdx, void* r8, voi
             SPDLOG_INFO("Removing object {:x} {:s}", (uintptr_t)object, utility::narrow(it->second->full_name));
 #endif
             hook->m_objects.erase(object);
-            hook->m_objects_by_class[it->second->uclass].erase(object);
+
+            for (auto super = (sdk::UStruct*)it->second->uclass; super != nullptr; super = super->get_super_struct()) {
+                hook->m_objects_by_class[(sdk::UClass*)super].erase(object);
+            }
+
+            //hook->m_objects_by_class[it->second->uclass].erase(object);
 
             hook->m_reusable_meta_objects.push_back(std::move(it->second));
             hook->m_meta_objects.erase(object);

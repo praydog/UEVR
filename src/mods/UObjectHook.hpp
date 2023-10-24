@@ -13,6 +13,9 @@ namespace sdk {
 class UObjectBase;
 class UObject;
 class UClass;
+class FFieldClass;
+class FStructProperty;
+class UScriptStruct;
 }
 
 class UObjectHook : public Mod {
@@ -29,7 +32,7 @@ public:
 
     bool exists(sdk::UObjectBase* object) const {
         std::shared_lock _{m_mutex};
-        return m_objects.contains(object);
+        return exists_unsafe(object);
     }
 
     void activate();
@@ -39,10 +42,16 @@ protected:
     void on_draw_ui() override;
 
 private:
+    bool exists_unsafe(sdk::UObjectBase* object) const {
+        return m_objects.contains(object);
+    }
+
     void hook();
     void add_new_object(sdk::UObjectBase* object);
 
     void ui_handle_object(sdk::UObject* object);
+    void ui_handle_properties(void* object, sdk::UStruct* definition);
+    void ui_handle_struct(void* addr, sdk::UScriptStruct* definition);
 
     static void* add_object(void* rcx, void* rdx, void* r8, void* r9);
     static void* destructor(sdk::UObjectBase* object, void* rdx, void* r8, void* r9);
@@ -69,4 +78,8 @@ private:
 
     std::chrono::steady_clock::time_point m_last_sort_time{};
     std::vector<sdk::UClass*> m_sorted_classes{};
+
+    std::unordered_map<sdk::UClass*, std::function<void (sdk::UObject*)>> m_on_creation_add_component_jobs{};
+
+    std::deque<sdk::UObject*> m_most_recent_objects{};
 };
