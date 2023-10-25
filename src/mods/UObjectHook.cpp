@@ -553,127 +553,14 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
 
     const auto uclass = object->get_class();
 
-    // Display inheritance tree
-    if (ImGui::TreeNode("Inheritance")) {
-        for (auto super = (sdk::UStruct*)uclass; super != nullptr; super = super->get_super_struct()) {
-            if (ImGui::TreeNode(utility::narrow(super->get_full_name()).data())) {
-                ImGui::TreePop();
-            }
-        }
-
-        ImGui::TreePop();
+    if (uclass == nullptr) {
+        return;
     }
-
-    std::vector<sdk::UFunction*> sorted_functions{};
-    const auto ufunction_t = sdk::UFunction::static_class();
-
-    for (auto super = (sdk::UStruct*)uclass; super != nullptr; super = super->get_super_struct()) {
-        auto funcs = super->get_children();
-
-        for (auto func = funcs; func != nullptr; func = func->get_next()) {
-            if (func->get_class()->is_a(ufunction_t)) {
-                sorted_functions.push_back((sdk::UFunction*)func);
-            }
-        }
-    }
-
-    std::sort(sorted_functions.begin(), sorted_functions.end(), [](sdk::UFunction* a, sdk::UFunction* b) {
-        return a->get_fname().to_string() < b->get_fname().to_string();
-    });
 
     static const auto material_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.MaterialInterface");
 
     if (uclass->is_a(material_t)) {
-        if (ImGui::Button("Apply to all actors")) {
-            static const auto mesh_component_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.StaticMeshComponent");
-            static const auto create_dynamic_mat = mesh_component_t->find_function(L"CreateDynamicMaterialInstance");
-            static const auto set_material_fn = mesh_component_t->find_function(L"SetMaterial");
-            static const auto get_num_materials_fn = mesh_component_t->find_function(L"GetNumMaterials");
-
-            //const auto actors = m_objects_by_class[sdk::AActor::static_class()];
-            const auto components = m_objects_by_class[mesh_component_t];
-
-            //auto components = actor->get_all_components();
-
-            for (auto comp_obj : components) {
-                auto comp = (sdk::UObject*)comp_obj;
-                if (comp->is_a(mesh_component_t)) {
-                    if (comp == comp->get_class()->get_class_default_object()) {
-                        continue;
-                    }
-
-                    struct {
-                        int32_t num{};
-                    } get_num_materials_params{};
-
-                    comp->process_event(get_num_materials_fn, &get_num_materials_params);
-
-                    for (int i = 0; i < get_num_materials_params.num; ++i) {
-                        GameThreadWorker::get().enqueue([this, i, object, comp]() {
-                            if (!this->exists(comp) || !this->exists(object)) {
-                                return;
-                            }
-
-                            /*struct {
-                                int32_t index{};
-                                sdk::UObject* material{};
-                            } params{};
-
-                            params.index = i;
-                            params.material = object;
-
-                            comp->process_event(set_material_fn, &params);*/
-
-                            struct {
-                                int32_t index{};
-                                sdk::UObject* material{};
-                                sdk::FName name{L"None"};
-                                sdk::UObject* ret{};
-                            } params{};
-
-                            params.index = i;
-                            params.material = object;
-
-                            comp->process_event(create_dynamic_mat, &params);
-
-                            if (params.ret != nullptr && object->get_full_name().find(L"GizmoMaterial") != std::wstring::npos) {
-                                const auto c = params.ret->get_class();
-                                static const auto set_vector_param_fn = c->find_function(L"SetVectorParameterValue");
-
-                                struct {
-                                    sdk::FName name{L"GizmoColor"};
-                                    glm::vec4 color{};
-                                } set_vector_param_params{};
-
-                                set_vector_param_params.color.x = 1.0f;
-                                set_vector_param_params.color.y = 0.0f;
-                                set_vector_param_params.color.z = 0.0f;
-                                set_vector_param_params.color.w = 1.0f;
-
-                                params.ret->process_event(set_vector_param_fn, &set_vector_param_params);
-                            }
-
-                            if (params.ret != nullptr && object->get_full_name().find(L"BasicShapeMaterial") != std::wstring::npos) {
-                                const auto c = params.ret->get_class();
-                                static const auto set_vector_param_fn = c->find_function(L"SetVectorParameterValue");
-
-                                struct {
-                                    sdk::FName name{L"Color"};
-                                    glm::vec4 color{};
-                                } set_vector_param_params{};
-
-                                set_vector_param_params.color.x = 1.0f;
-                                set_vector_param_params.color.y = 0.0f;
-                                set_vector_param_params.color.z = 0.0f;
-                                set_vector_param_params.color.w = 1.0f;
-
-                                params.ret->process_event(set_vector_param_fn, &set_vector_param_params);
-                            }
-                        });
-                    }
-                }
-            }
-        }
+        ui_handle_material_interface(object);
     }
 
     static auto widget_component_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/UMG.WidgetComponent");
@@ -707,160 +594,294 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
     }
 
     if (uclass->is_a(sdk::AActor::static_class())) {
-        if (ImGui::Button("Attach to motion controller")) {
-            m_motion_controller_attached_objects.insert(object);
-        }
+        ui_handle_actor(object);
+    }
 
-        auto actor = (sdk::AActor*)object;
+    ui_handle_struct(object, uclass);
+}
 
-        static char component_add_name[256]{};
+void UObjectHook::ui_handle_material_interface(sdk::UObject* object) {
+    if (object == nullptr) {
+        return;
+    }
 
-        if (ImGui::InputText("Add Component", component_add_name, sizeof(component_add_name), ImGuiInputTextFlags_::ImGuiInputTextFlags_EnterReturnsTrue)) {
-            const auto component_c = sdk::find_uobject<sdk::UClass>(utility::widen(component_add_name));
+    const auto uclass = object->get_class();
 
-            if (component_c != nullptr) {
-                GameThreadWorker::get().enqueue([=, this]() {
-                    if (!this->exists(object)) {
-                        return;
-                    }
+    if (uclass == nullptr) {
+        return;
+    }
 
-                    auto component = (sdk::UObject*)actor->add_component_by_class(component_c);
+    if (ImGui::Button("Apply to all actors")) {
+        static const auto mesh_component_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.StaticMeshComponent");
+        static const auto create_dynamic_mat = mesh_component_t->find_function(L"CreateDynamicMaterialInstance");
+        static const auto set_material_fn = mesh_component_t->find_function(L"SetMaterial");
+        static const auto get_num_materials_fn = mesh_component_t->find_function(L"GetNumMaterials");
 
-                    if (component != nullptr) {
-                        if (component->get_class()->is_a(sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.SphereComponent"))) {
-                            struct SphereRadiusParams {
-                                float radius{};
-                            };
+        //const auto actors = m_objects_by_class[sdk::AActor::static_class()];
+        const auto components = m_objects_by_class[mesh_component_t];
 
-                            auto params = SphereRadiusParams{};
-                            params.radius = 100.f;
+        //auto components = actor->get_all_components();
 
-                            const auto fn = component->get_class()->find_function(L"SetSphereRadius");
+        for (auto comp_obj : components) {
+            auto comp = (sdk::UObject*)comp_obj;
+            if (comp->is_a(mesh_component_t)) {
+                if (comp == comp->get_class()->get_class_default_object()) {
+                    continue;
+                }
 
-                            if (fn != nullptr) {
-                                component->process_event(fn, &params);
-                            }
+                struct {
+                    int32_t num{};
+                } get_num_materials_params{};
+
+                comp->process_event(get_num_materials_fn, &get_num_materials_params);
+
+                for (int i = 0; i < get_num_materials_params.num; ++i) {
+                    GameThreadWorker::get().enqueue([this, i, object, comp]() {
+                        if (!this->exists(comp) || !this->exists(object)) {
+                            return;
                         }
+
+                        /*struct {
+                            int32_t index{};
+                            sdk::UObject* material{};
+                        } params{};
+
+                        params.index = i;
+                        params.material = object;
+
+                        comp->process_event(set_material_fn, &params);*/
 
                         struct {
-                            bool hidden{false};
-                            bool propagate{true};
-                        } set_hidden_params{};
+                            int32_t index{};
+                            sdk::UObject* material{};
+                            sdk::FName name{L"None"};
+                            sdk::UObject* ret{};
+                        } params{};
 
-                        const auto fn = component->get_class()->find_function(L"SetHiddenInGame");
+                        params.index = i;
+                        params.material = object;
 
-                        if (fn != nullptr) {
-                            component->process_event(fn, &set_hidden_params);
+                        comp->process_event(create_dynamic_mat, &params);
+
+                        if (params.ret != nullptr && object->get_full_name().find(L"GizmoMaterial") != std::wstring::npos) {
+                            const auto c = params.ret->get_class();
+                            static const auto set_vector_param_fn = c->find_function(L"SetVectorParameterValue");
+
+                            struct {
+                                sdk::FName name{L"GizmoColor"};
+                                glm::vec4 color{};
+                            } set_vector_param_params{};
+
+                            set_vector_param_params.color.x = 1.0f;
+                            set_vector_param_params.color.y = 0.0f;
+                            set_vector_param_params.color.z = 0.0f;
+                            set_vector_param_params.color.w = 1.0f;
+
+                            params.ret->process_event(set_vector_param_fn, &set_vector_param_params);
                         }
 
-                        actor->finish_add_component(component);
+                        if (params.ret != nullptr && object->get_full_name().find(L"BasicShapeMaterial") != std::wstring::npos) {
+                            const auto c = params.ret->get_class();
+                            static const auto set_vector_param_fn = c->find_function(L"SetVectorParameterValue");
 
-                        // Set component_add_name to empty
-                        component_add_name[0] = '\0';
-                    } else {
-                        component_add_name[0] = 'e';
-                        component_add_name[1] = 'r';
-                        component_add_name[2] = 'r';
-                        component_add_name[3] = '\0';
-                    }
-                });
-            } else {
-                strcpy_s(component_add_name, "Nonexistent component");
+                            struct {
+                                sdk::FName name{L"Color"};
+                                glm::vec4 color{};
+                            } set_vector_param_params{};
+
+                            set_vector_param_params.color.x = 1.0f;
+                            set_vector_param_params.color.y = 0.0f;
+                            set_vector_param_params.color.z = 0.0f;
+                            set_vector_param_params.color.w = 1.0f;
+
+                            params.ret->process_event(set_vector_param_fn, &set_vector_param_params);
+                        }
+                    });
+                }
             }
         }
+    }
+}
 
-        if (ImGui::TreeNode("Components")) {
-            auto components = actor->get_all_components();
+void UObjectHook::ui_handle_actor(sdk::UObject* object) {
+    if (object == nullptr) {
+        return;
+    }
 
-            std::sort(components.begin(), components.end(), [](sdk::UObject* a, sdk::UObject* b) {
-                return a->get_full_name() < b->get_full_name();
-            });
+    const auto uclass = object->get_class();
 
-            for (auto comp : components) {
-                auto comp_obj = (sdk::UObject*)comp;
+    if (uclass == nullptr) {
+        return;
+    }
 
-                ImGui::PushID(comp_obj);
-                const auto made = ImGui::TreeNode(utility::narrow(comp_obj->get_full_name()).data());
-                if (made) {
-                    ui_handle_object(comp_obj);
-                    ImGui::TreePop();
+    if (ImGui::Button("Attach to motion controller")) {
+        m_motion_controller_attached_objects.insert(object);
+    }
+
+    auto actor = (sdk::AActor*)object;
+
+    static char component_add_name[256]{};
+
+    if (ImGui::InputText("Add Component", component_add_name, sizeof(component_add_name), ImGuiInputTextFlags_::ImGuiInputTextFlags_EnterReturnsTrue)) {
+        const auto component_c = sdk::find_uobject<sdk::UClass>(utility::widen(component_add_name));
+
+        if (component_c != nullptr) {
+            GameThreadWorker::get().enqueue([=, this]() {
+                if (!this->exists(object)) {
+                    return;
                 }
-                ImGui::PopID();
+
+                auto component = (sdk::UObject*)actor->add_component_by_class(component_c);
+
+                if (component != nullptr) {
+                    if (component->get_class()->is_a(sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.SphereComponent"))) {
+                        struct SphereRadiusParams {
+                            float radius{};
+                        };
+
+                        auto params = SphereRadiusParams{};
+                        params.radius = 100.f;
+
+                        const auto fn = component->get_class()->find_function(L"SetSphereRadius");
+
+                        if (fn != nullptr) {
+                            component->process_event(fn, &params);
+                        }
+                    }
+
+                    struct {
+                        bool hidden{false};
+                        bool propagate{true};
+                    } set_hidden_params{};
+
+                    const auto fn = component->get_class()->find_function(L"SetHiddenInGame");
+
+                    if (fn != nullptr) {
+                        component->process_event(fn, &set_hidden_params);
+                    }
+
+                    actor->finish_add_component(component);
+
+                    // Set component_add_name to empty
+                    component_add_name[0] = '\0';
+                } else {
+                    component_add_name[0] = 'e';
+                    component_add_name[1] = 'r';
+                    component_add_name[2] = 'r';
+                    component_add_name[3] = '\0';
+                }
+            });
+        } else {
+            strcpy_s(component_add_name, "Nonexistent component");
+        }
+    }
+
+    if (ImGui::TreeNode("Components")) {
+        auto components = actor->get_all_components();
+
+        std::sort(components.begin(), components.end(), [](sdk::UObject* a, sdk::UObject* b) {
+            return a->get_full_name() < b->get_full_name();
+        });
+
+        for (auto comp : components) {
+            auto comp_obj = (sdk::UObject*)comp;
+
+            ImGui::PushID(comp_obj);
+            const auto made = ImGui::TreeNode(utility::narrow(comp_obj->get_full_name()).data());
+            if (made) {
+                ui_handle_object(comp_obj);
+                ImGui::TreePop();
+            }
+            ImGui::PopID();
+        }
+
+        ImGui::TreePop();
+    }
+}
+
+void UObjectHook::ui_handle_functions(void* object, sdk::UStruct* uclass) {
+    if (uclass == nullptr) {
+        return;
+    }
+
+    const bool is_real_object = object != nullptr && m_objects.contains((sdk::UObject*)object);
+    auto object_real = (sdk::UObject*)object;
+
+    std::vector<sdk::UFunction*> sorted_functions{};
+    static const auto ufunction_t = sdk::UFunction::static_class();
+
+    for (auto super = (sdk::UStruct*)uclass; super != nullptr; super = super->get_super_struct()) {
+        auto funcs = super->get_children();
+
+        for (auto func = funcs; func != nullptr; func = func->get_next()) {
+            if (func->get_class()->is_a(ufunction_t)) {
+                sorted_functions.push_back((sdk::UFunction*)func);
+            }
+        }
+    }
+
+    std::sort(sorted_functions.begin(), sorted_functions.end(), [](sdk::UFunction* a, sdk::UFunction* b) {
+        return a->get_fname().to_string() < b->get_fname().to_string();
+    });
+
+    for (auto func : sorted_functions) {
+        if (is_real_object && ImGui::TreeNode(utility::narrow(func->get_fname().to_string()).data())) {
+            auto parameters = func->get_child_properties();
+
+            if (parameters == nullptr) {
+                if (ImGui::Button("Call")) {
+                    struct {
+                        char poop[0x100]{};
+                    } params{};
+
+                    object_real->process_event(func, &params);
+                }
+            } else if (parameters->get_next() == nullptr) {
+                switch (utility::hash(utility::narrow(parameters->get_class()->get_name().to_string()))) {
+                case "BoolProperty"_fnv:
+                    {
+                        if (ImGui::Button("Enable")) {
+                            struct {
+                                bool enabled{true};
+                                char padding[0x10];
+                            } params{};
+
+                            object_real->process_event(func, &params);
+                        }
+
+                        ImGui::SameLine();
+
+                        if (ImGui::Button("Disable")) {
+                            struct {
+                                bool enabled{false};
+                                char padding[0x10];
+                            } params{};
+
+                            object_real->process_event(func, &params);
+                        }
+                    }
+                    break;
+
+                default:
+                    break;
+                };
+            }
+
+            for (auto param = parameters; param != nullptr; param = param->get_next()) {
+                ImGui::Text("%s %s", utility::narrow(param->get_class()->get_name().to_string()), utility::narrow(param->get_field_name().to_string()).data());
             }
 
             ImGui::TreePop();
         }
     }
-
-    if (ImGui::TreeNode("Functions")) {
-        for (auto func : sorted_functions) {
-            /*if (ImGui::Button(utility::narrow(func->get_class()->get_fname().to_string()).data())) {
-                func->process_event(object, nullptr);
-            }*/
-            
-            if (ImGui::TreeNode(utility::narrow(func->get_fname().to_string()).data())) {
-                auto parameters = func->get_child_properties();
-
-                if (parameters == nullptr) {
-                    if (ImGui::Button("Call")) {
-                        struct {
-                            char poop[0x100]{};
-                        } params{};
-
-                        object->process_event(func, &params);
-                    }
-                } else if (parameters->get_next() == nullptr) {
-                    switch (utility::hash(utility::narrow(parameters->get_class()->get_name().to_string()))) {
-                    case "BoolProperty"_fnv:
-                        {
-                            if (ImGui::Button("Enable")) {
-                                struct {
-                                    bool enabled{true};
-                                    char padding[0x10];
-                                } params{};
-
-                                object->process_event(func, &params);
-                            }
-
-                            ImGui::SameLine();
-
-                            if (ImGui::Button("Disable")) {
-                                struct {
-                                    bool enabled{false};
-                                    char padding[0x10];
-                                } params{};
-
-                                object->process_event(func, &params);
-                            }
-                        }
-                        break;
-
-                    default:
-                        break;
-                    };
-                }
-
-                for (auto param = parameters; param != nullptr; param = param->get_next()) {
-                    ImGui::Text("%s %s", utility::narrow(param->get_class()->get_name().to_string()), utility::narrow(param->get_field_name().to_string()).data());
-                }
-
-                ImGui::TreePop();
-            }
-        }
-
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Properties")) {
-        ui_handle_properties(object, uclass);
-        ImGui::TreePop();
-    }
 }
 
 void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
-    if (object == nullptr || uclass == nullptr) {
+    if (uclass == nullptr) {
         return;
     }
+
+    const bool is_real_object = object != nullptr && m_objects.contains((sdk::UObject*)object);
 
     std::vector<sdk::FField*> sorted_fields{};
 
@@ -878,8 +899,15 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
 
     for (auto prop : sorted_fields) {
         auto propc = prop->get_class();
-
         const auto propc_type = utility::narrow(propc->get_name().to_string());
+
+        if (!is_real_object) {
+            const auto name = utility::narrow(propc->get_name().to_string());
+            const auto field_name = utility::narrow(prop->get_field_name().to_string());
+            ImGui::Text("%s %s", name.data(), field_name.data());
+
+            continue;
+        }
 
         switch (utility::hash(propc_type)) {
         case "FloatProperty"_fnv:
@@ -941,12 +969,32 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
     }
 }
 
-void UObjectHook::ui_handle_struct(void* addr, sdk::UScriptStruct* definition) {
-    if (addr == nullptr || definition == nullptr) {
+void UObjectHook::ui_handle_struct(void* addr, sdk::UStruct* uclass) {
+    if (uclass == nullptr) {
         return;
     }
 
-    ui_handle_properties(addr, definition);
+    // Display inheritance tree
+    if (ImGui::TreeNode("Inheritance")) {
+        for (auto super = (sdk::UStruct*)uclass; super != nullptr; super = super->get_super_struct()) {
+            if (ImGui::TreeNode(utility::narrow(super->get_full_name()).data())) {
+                ui_handle_struct(addr, super);
+                ImGui::TreePop();
+            }
+        }
+
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Functions")) {
+        ui_handle_functions(addr, uclass);
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Properties")) {
+        ui_handle_properties(addr, uclass);
+        ImGui::TreePop();
+    }
 }
 
 void* UObjectHook::add_object(void* rcx, void* rdx, void* r8, void* r9) {

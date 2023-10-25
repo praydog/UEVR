@@ -56,7 +56,11 @@ private:
 
     void ui_handle_object(sdk::UObject* object);
     void ui_handle_properties(void* object, sdk::UStruct* definition);
-    void ui_handle_struct(void* addr, sdk::UScriptStruct* definition);
+    void ui_handle_functions(void* object, sdk::UStruct* definition);
+    void ui_handle_struct(void* addr, sdk::UStruct* definition);
+
+    void ui_handle_material_interface(sdk::UObject* object);
+    void ui_handle_actor(sdk::UObject* object);
 
     static void* add_object(void* rcx, void* rdx, void* r8, void* r9);
     static void* destructor(sdk::UObjectBase* object, void* rdx, void* r8, void* r9);
