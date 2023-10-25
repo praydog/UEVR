@@ -16,6 +16,8 @@ class UClass;
 class FFieldClass;
 class FStructProperty;
 class UScriptStruct;
+class USceneComponent;
+class UActorComponent;
 }
 
 class UObjectHook : public Mod {
@@ -40,6 +42,9 @@ public:
 protected:
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
     void on_draw_ui() override;
+
+    void on_pre_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
+                                             const float world_to_meters, Vector3f* view_location, bool is_double) override;
 
 private:
     bool exists_unsafe(sdk::UObjectBase* object) const {
@@ -82,4 +87,6 @@ private:
     std::unordered_map<sdk::UClass*, std::function<void (sdk::UObject*)>> m_on_creation_add_component_jobs{};
 
     std::deque<sdk::UObject*> m_most_recent_objects{};
+    std::unordered_set<sdk::UObject*> m_motion_controller_attached_objects{};
+    std::unordered_set<sdk::USceneComponent*> m_motion_controller_attached_components{};
 };

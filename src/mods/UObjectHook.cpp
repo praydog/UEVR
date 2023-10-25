@@ -13,6 +13,9 @@
 #include <sdk/threading/GameThreadWorker.hpp>
 #include <sdk/FMalloc.hpp>
 #include <sdk/FStructProperty.hpp>
+#include <sdk/USceneComponent.hpp>
+
+#include "VR.hpp"
 
 #include "UObjectHook.hpp"
 
@@ -151,11 +154,168 @@ void UObjectHook::add_new_object(sdk::UObjectBase* object) {
 }
 
 void UObjectHook::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
-    sdk::FMalloc::get();
-
     if (m_wants_activate) {
         hook();
     }
+}
+
+void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
+                                        const float world_to_meters, Vector3f* view_location, bool is_double)
+{
+    auto& vr = VR::get();
+
+    if (!vr->is_hmd_active()) {
+        return;
+    }
+
+    if ((view_index + 1) % 2 == 0) {
+        const auto view_d = (Vector3d*)view_location;
+        const auto rot_d = (Rotator<double>*)view_rotation;
+
+        const auto view_mat = !is_double ? 
+            glm::yawPitchRoll(
+                glm::radians(view_rotation->yaw),
+                glm::radians(view_rotation->pitch),
+                glm::radians(view_rotation->roll)) : 
+            glm::yawPitchRoll(
+                glm::radians((float)rot_d->yaw),
+                glm::radians((float)rot_d->pitch),
+                glm::radians((float)rot_d->roll));
+
+        const auto view_mat_inverse = !is_double ? 
+            glm::yawPitchRoll(
+                glm::radians(-view_rotation->yaw),
+                glm::radians(view_rotation->pitch),
+                glm::radians(-view_rotation->roll)) : 
+            glm::yawPitchRoll(
+                glm::radians(-(float)rot_d->yaw),
+                glm::radians((float)rot_d->pitch),
+                glm::radians(-(float)rot_d->roll));
+
+        const auto view_quat_inverse = glm::quat {
+            view_mat_inverse
+        };
+
+        const auto view_quat = glm::quat {
+            view_mat
+        };
+
+        const auto quat_converter = glm::quat{Matrix4x4f {
+            0, 0, -1, 0,
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 0, 1
+        }};
+
+        auto vqi_norm = glm::normalize(view_quat_inverse);
+        const auto vqi_norm_unmodified = vqi_norm;
+
+        // Decoupled Pitch
+        if (vr->is_decoupled_pitch_enabled()) {
+            vr->set_pre_flattened_rotation(vqi_norm);
+            vqi_norm = utility::math::flatten(vqi_norm);
+        }
+
+        const auto rotation_offset = vr->get_rotation_offset();
+        const auto hmd_origin = glm::vec3{vr->get_transform(0)[3]};
+        const auto pos = glm::vec3{rotation_offset * (hmd_origin - glm::vec3{vr->get_standing_origin()})};
+
+        const auto view_quat_inverse_flat = utility::math::flatten(view_quat_inverse);
+        const auto offset1 = quat_converter* (glm::normalize(view_quat_inverse_flat) * (pos * world_to_meters));
+
+        glm::vec3 final_position{};
+
+        if (is_double) {
+            final_position = glm::vec3{*view_location} - offset1;
+        } else {
+            final_position = *view_location - offset1;
+        }
+
+        if (vr->is_using_controllers()) {
+            Vector3f right_hand_position = vr->get_grip_position(vr->get_right_controller_index());
+            glm::quat right_hand_rotation = vr->get_grip_rotation(vr->get_right_controller_index());
+
+            Vector3f left_hand_position = vr->get_grip_position(vr->get_left_controller_index());
+            glm::quat left_hand_rotation = vr->get_grip_rotation(vr->get_left_controller_index());
+
+            right_hand_position = glm::vec3{rotation_offset * (right_hand_position - hmd_origin)};
+            left_hand_position = glm::vec3{rotation_offset * (left_hand_position - hmd_origin)};
+
+            right_hand_position = quat_converter * (glm::normalize(view_quat_inverse_flat) * (right_hand_position * world_to_meters));
+            left_hand_position = quat_converter * (glm::normalize(view_quat_inverse_flat) * (left_hand_position * world_to_meters));
+
+            right_hand_position = final_position - right_hand_position;
+            left_hand_position = final_position - left_hand_position;
+
+            right_hand_rotation = rotation_offset * right_hand_rotation;
+            right_hand_rotation = (glm::normalize(view_quat_inverse_flat) * right_hand_rotation);
+
+            left_hand_rotation = rotation_offset * left_hand_rotation;
+            left_hand_rotation = (glm::normalize(view_quat_inverse_flat) * left_hand_rotation);
+
+            /*const auto right_hand_offset_q = glm::quat{glm::yawPitchRoll(
+                glm::radians(m_right_hand_rotation_offset.Yaw),
+                glm::radians(m_right_hand_rotation_offset.Pitch),
+                glm::radians(m_right_hand_rotation_offset.Roll))
+            };
+
+            const auto left_hand_offset_q = glm::quat{glm::yawPitchRoll(
+                glm::radians(m_left_hand_rotation_offset.Yaw),
+                glm::radians(m_left_hand_rotation_offset.Pitch),
+                glm::radians(m_left_hand_rotation_offset.Roll))
+            };*/
+
+            const auto right_hand_offset_q = glm::quat{glm::yawPitchRoll(
+                glm::radians(0.f),
+                glm::radians(0.f),
+                glm::radians(0.f))
+            };
+
+            const auto left_hand_offset_q = glm::quat{glm::yawPitchRoll(
+                glm::radians(0.f),
+                glm::radians(0.f),
+                glm::radians(0.f))
+            };
+
+            right_hand_rotation = glm::normalize(right_hand_rotation * right_hand_offset_q);
+            auto right_hand_euler = glm::degrees(utility::math::euler_angles_from_steamvr(right_hand_rotation));
+
+            left_hand_rotation = glm::normalize(left_hand_rotation * left_hand_offset_q);
+            auto left_hand_euler = glm::degrees(utility::math::euler_angles_from_steamvr(left_hand_rotation));
+
+            auto with_mutex = [this](auto fn) {
+                std::shared_lock _{m_mutex};
+                auto result = fn();
+
+                return result;
+            };
+
+            const auto objs = with_mutex([this]() { return m_motion_controller_attached_objects; });
+            
+            for (auto object : objs) {
+                if (!this->exists(object)) {
+                    continue;
+                }
+
+                auto actor = (sdk::AActor*)object;
+
+                actor->set_actor_location(right_hand_position, false, false);
+                actor->set_actor_rotation(right_hand_euler, false);
+            }
+
+            const auto comps =  with_mutex([this]() { return m_motion_controller_attached_components; });
+
+            for (auto comp : comps) {
+                if (!this->exists(comp)) {
+                    continue;
+                }
+
+                comp->set_world_location(right_hand_position, false, false);
+                comp->set_world_rotation(right_hand_euler, false);
+            }
+        }
+    }
+
 }
 
 std::future<std::vector<sdk::UClass*>> sorting_task{};
@@ -516,7 +676,9 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
         }
     }
 
-    if (uclass->is_a(sdk::find_uobject<sdk::UClass>(L"Class /Script/UMG.WidgetComponent"))) {
+    static auto widget_component_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/UMG.WidgetComponent");
+
+    if (uclass->is_a(widget_component_t)) {
         if (ImGui::Button("Set to Screen Space")) {
             static const auto set_widget_space_fn = uclass->find_function(L"SetWidgetSpace");
 
@@ -538,7 +700,17 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
         }
     }
 
+    if (uclass->is_a(sdk::USceneComponent::static_class())) {
+        if (ImGui::Button("Attach to motion controller")) {
+            m_motion_controller_attached_components.insert((sdk::USceneComponent*)object);
+        }
+    }
+
     if (uclass->is_a(sdk::AActor::static_class())) {
+        if (ImGui::Button("Attach to motion controller")) {
+            m_motion_controller_attached_objects.insert(object);
+        }
+
         auto actor = (sdk::AActor*)object;
 
         static char component_add_name[256]{};
