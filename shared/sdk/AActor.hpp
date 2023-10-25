@@ -9,14 +9,8 @@
 namespace sdk {
 class UCameraComponent;
 class USceneComponent;
+class UActorComponent;
 class AActor;
-class UActorComponent : public UObject {
-public:
-    static UClass* static_class();
-    
-    AActor* get_owner();
-    void destroy_component();
-};
 
 class AActor : public UObject {
 public:
