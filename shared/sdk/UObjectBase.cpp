@@ -393,6 +393,12 @@ void UObjectBase::update_offsets_post_uobjectarray() {
             return utility::ExhaustionResult::BREAK;
         }
 
+        if (!backup_functions.empty() && std::string_view{ctx.instrux.Mnemonic}.starts_with("JMP")) {
+            SPDLOG_INFO("[UObjectBase] Encountered jmp, using backup function {:x}", backup_functions[0]);
+            s_add_object = backup_functions[0];
+            return utility::ExhaustionResult::BREAK;
+        }
+
         // Examine each call. Check to see if anywhere in its path it calls EnterCriticalSection. This is the right one.
         if (std::string_view{ctx.instrux.Mnemonic}.starts_with("CALL")) {
             auto fn = utility::resolve_displacement(ctx.addr);
