@@ -15,6 +15,8 @@
 #include <sdk/FStructProperty.hpp>
 #include <sdk/USceneComponent.hpp>
 #include <sdk/UGameplayStatics.hpp>
+#include <sdk/APlayerController.hpp>
+#include <sdk/APawn.hpp>
 
 #include "VR.hpp"
 
@@ -511,6 +513,50 @@ void UObjectHook::on_draw_ui() {
                     ui_handle_object(object);
                     ImGui::TreePop();
                 }
+            }
+
+            ImGui::TreePop();
+        }
+
+        // Display common objects like things related to the player
+        if (ImGui::TreeNode("Common Objects")) {
+            auto world = sdk::UGameEngine::get()->get_world();
+
+            if (world != nullptr) {
+                if (ImGui::TreeNode("PlayerController")) {
+                    auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
+
+                    if (player_controller != nullptr) {
+                        ui_handle_object(player_controller);
+                    } else {
+                        ImGui::Text("No player controller");
+                    }
+
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNode("Acknowledged Pawn")) {
+                    auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
+
+                    if (player_controller != nullptr) {
+                        auto pawn = player_controller->get_acknowledged_pawn();
+
+                        if (pawn != nullptr) {
+                            ui_handle_object(pawn);
+                        } else {
+                            ImGui::Text("No pawn");
+                        }
+                    }
+
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNode("World")) {
+                    ui_handle_object(world);
+                    ImGui::TreePop();
+                }
+            } else {
+                ImGui::Text("No world");
             }
 
             ImGui::TreePop();
