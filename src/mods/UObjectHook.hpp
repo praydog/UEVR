@@ -18,6 +18,7 @@ class FStructProperty;
 class UScriptStruct;
 class USceneComponent;
 class UActorComponent;
+class AActor;
 }
 
 class UObjectHook : public Mod {
@@ -92,5 +93,13 @@ private:
 
     std::deque<sdk::UObject*> m_most_recent_objects{};
     std::unordered_set<sdk::UObject*> m_motion_controller_attached_objects{};
-    std::unordered_set<sdk::USceneComponent*> m_motion_controller_attached_components{};
+
+    struct MotionControllerState {
+        sdk::AActor* adjustment_visualizer{nullptr};
+        glm::quat rotation_offset{glm::identity<glm::quat>()};
+        glm::vec3 location_offset{0.0f, 0.0f, 0.0f};
+        bool adjusting{false};
+    };
+
+    std::unordered_map<sdk::USceneComponent*, MotionControllerState> m_motion_controller_attached_components{};
 };

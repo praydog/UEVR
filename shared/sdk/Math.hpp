@@ -72,6 +72,10 @@ static vec3 glm_to_ue4(const glm::vec3 v) {
     return vec3{ -v.z, v.x, v.y };
 }
 
+static vec3 ue4_to_glm(const glm::vec3 v) {
+    return vec3{ v.y, v.z, -v.x };
+}
+
 static float fix_angle(float ang) {
     auto angDeg = glm::degrees(ang);
 

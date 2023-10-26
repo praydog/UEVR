@@ -14,6 +14,7 @@
 #include <sdk/FMalloc.hpp>
 #include <sdk/FStructProperty.hpp>
 #include <sdk/USceneComponent.hpp>
+#include <sdk/UGameplayStatics.hpp>
 
 #include "VR.hpp"
 
@@ -221,7 +222,7 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
         const auto pos = glm::vec3{rotation_offset * (hmd_origin - glm::vec3{vr->get_standing_origin()})};
 
         const auto view_quat_inverse_flat = utility::math::flatten(view_quat_inverse);
-        const auto offset1 = quat_converter* (glm::normalize(view_quat_inverse_flat) * (pos * world_to_meters));
+        const auto offset1 = quat_converter * (glm::normalize(view_quat_inverse_flat) * (pos * world_to_meters));
 
         glm::vec3 final_position{};
 
@@ -232,39 +233,6 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
         }
 
         if (vr->is_using_controllers()) {
-            Vector3f right_hand_position = vr->get_grip_position(vr->get_right_controller_index());
-            glm::quat right_hand_rotation = vr->get_grip_rotation(vr->get_right_controller_index());
-
-            Vector3f left_hand_position = vr->get_grip_position(vr->get_left_controller_index());
-            glm::quat left_hand_rotation = vr->get_grip_rotation(vr->get_left_controller_index());
-
-            right_hand_position = glm::vec3{rotation_offset * (right_hand_position - hmd_origin)};
-            left_hand_position = glm::vec3{rotation_offset * (left_hand_position - hmd_origin)};
-
-            right_hand_position = quat_converter * (glm::normalize(view_quat_inverse_flat) * (right_hand_position * world_to_meters));
-            left_hand_position = quat_converter * (glm::normalize(view_quat_inverse_flat) * (left_hand_position * world_to_meters));
-
-            right_hand_position = final_position - right_hand_position;
-            left_hand_position = final_position - left_hand_position;
-
-            right_hand_rotation = rotation_offset * right_hand_rotation;
-            right_hand_rotation = (glm::normalize(view_quat_inverse_flat) * right_hand_rotation);
-
-            left_hand_rotation = rotation_offset * left_hand_rotation;
-            left_hand_rotation = (glm::normalize(view_quat_inverse_flat) * left_hand_rotation);
-
-            /*const auto right_hand_offset_q = glm::quat{glm::yawPitchRoll(
-                glm::radians(m_right_hand_rotation_offset.Yaw),
-                glm::radians(m_right_hand_rotation_offset.Pitch),
-                glm::radians(m_right_hand_rotation_offset.Roll))
-            };
-
-            const auto left_hand_offset_q = glm::quat{glm::yawPitchRoll(
-                glm::radians(m_left_hand_rotation_offset.Yaw),
-                glm::radians(m_left_hand_rotation_offset.Pitch),
-                glm::radians(m_left_hand_rotation_offset.Roll))
-            };*/
-
             const auto right_hand_offset_q = glm::quat{glm::yawPitchRoll(
                 glm::radians(0.f),
                 glm::radians(0.f),
@@ -277,10 +245,37 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                 glm::radians(0.f))
             };
 
-            right_hand_rotation = glm::normalize(right_hand_rotation * right_hand_offset_q);
+            Vector3f right_hand_position = vr->get_grip_position(vr->get_right_controller_index());
+            glm::quat right_hand_rotation = vr->get_aim_rotation(vr->get_right_controller_index());
+
+            const auto original_right_hand_rotation = right_hand_rotation;
+            const auto original_right_hand_position = right_hand_position - hmd_origin;
+
+            Vector3f left_hand_position = vr->get_grip_position(vr->get_left_controller_index());
+            glm::quat left_hand_rotation = vr->get_aim_rotation(vr->get_left_controller_index());
+
+            right_hand_position = glm::vec3{rotation_offset * (right_hand_position - hmd_origin)};
+            left_hand_position = glm::vec3{rotation_offset * (left_hand_position - hmd_origin)};
+
+            right_hand_position = quat_converter * (glm::normalize(view_quat_inverse_flat) * (right_hand_position * world_to_meters));
+            left_hand_position = quat_converter * (glm::normalize(view_quat_inverse_flat) * (left_hand_position * world_to_meters));
+
+            right_hand_position = final_position - right_hand_position;
+            left_hand_position = final_position - left_hand_position;
+
+            right_hand_rotation = rotation_offset * right_hand_rotation;
+            const auto right_hand_rotation_relative = glm::normalize(right_hand_rotation * right_hand_offset_q);
+            const auto right_hand_euler_relative = glm::degrees(utility::math::euler_angles_from_steamvr(right_hand_rotation_relative));
+            
+            right_hand_rotation = (glm::normalize(view_quat_inverse_flat) * right_hand_rotation);
+
+            left_hand_rotation = rotation_offset * left_hand_rotation;
+            left_hand_rotation = (glm::normalize(view_quat_inverse_flat) * left_hand_rotation);
+
+            //right_hand_rotation = glm::normalize(right_hand_rotation * right_hand_offset_q);
             auto right_hand_euler = glm::degrees(utility::math::euler_angles_from_steamvr(right_hand_rotation));
 
-            left_hand_rotation = glm::normalize(left_hand_rotation * left_hand_offset_q);
+            //left_hand_rotation = glm::normalize(left_hand_rotation * left_hand_offset_q);
             auto left_hand_euler = glm::degrees(utility::math::euler_angles_from_steamvr(left_hand_rotation));
 
             auto with_mutex = [this](auto fn) {
@@ -305,13 +300,133 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
 
             const auto comps =  with_mutex([this]() { return m_motion_controller_attached_components; });
 
-            for (auto comp : comps) {
+            for (auto it : comps) {
+                auto comp = it.first;
                 if (!this->exists(comp)) {
                     continue;
                 }
+                
+                const auto& state = it.second;
+                const auto orig_position = comp->get_world_location();
+                const auto orig_rotation = comp->get_world_rotation();
 
-                comp->set_world_location(right_hand_position, false, false);
-                comp->set_world_rotation(right_hand_euler, false);
+                const auto adjusted_rotation = glm::normalize(view_quat_inverse_flat * ((rotation_offset * original_right_hand_rotation) * state.rotation_offset));
+                const auto adjusted_euler = glm::degrees(utility::math::euler_angles_from_steamvr(adjusted_rotation));
+
+                const auto adjusted_location = right_hand_position + (quat_converter * (adjusted_rotation * state.location_offset));
+                //const auto new_r = (glm::normalize(view_quat_inverse_flat) * (((rotation_offset * original_right_hand_position) - (rotation_offset * state.location_offset)) * world_to_meters));
+                //const auto adjusted_location = final_position - (quat_converter * new_r);
+
+                if (state.adjusting) {
+                    //comp->set_world_rotation(right_hand_euler, false, false);
+                    // Create a temporary actor that visualizes how we're adjusting the component
+                    if (state.adjustment_visualizer == nullptr) {
+                        auto ugs = sdk::UGameplayStatics::get();
+                        auto visualizer = ugs->spawn_actor(sdk::UGameEngine::get()->get_world(), sdk::AActor::static_class(), orig_position);
+
+                        if (visualizer != nullptr) {
+                            auto add_comp = [&](sdk::UClass* c, std::function<void(sdk::UActorComponent*)> fn) -> sdk::UActorComponent* {
+                                if (c == nullptr) {
+                                    return nullptr;
+                                }
+
+                                auto new_comp = visualizer->add_component_by_class(c);
+
+                                if (new_comp != nullptr) {
+                                    fn(new_comp);
+
+                                    struct {
+                                        bool hidden{false};
+                                        bool propagate{true};
+                                    } set_hidden_params{};
+
+                                    const auto fn2 = new_comp->get_class()->find_function(L"SetHiddenInGame");
+
+                                    if (fn2 != nullptr) {
+                                        new_comp->process_event(fn2, &set_hidden_params);
+                                    }
+
+                                    visualizer->finish_add_component(new_comp);
+                                }
+                                
+                                return new_comp;
+                            };
+
+                            add_comp(sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.SphereComponent"), [](sdk::UActorComponent* new_comp) {
+                                struct SphereRadiusParams {
+                                    float radius{};
+                                    bool update_overlaps{false};
+                                };
+
+                                auto params = SphereRadiusParams{};
+                                params.radius = 10.f;
+
+                                const auto fn = new_comp->get_class()->find_function(L"SetSphereRadius");
+
+                                if (fn != nullptr) {
+                                    new_comp->process_event(fn, &params);
+                                }
+                            });
+
+                            add_comp(sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.ArrowComponent"), [](sdk::UActorComponent* new_comp) {
+                                struct {
+                                    float color[4]{1.0f, 0.0f, 0.0f, 1.0f};
+                                } params{};
+
+                                const auto fn = new_comp->get_class()->find_function(L"SetArrowColor");
+
+                                if (fn != nullptr) {
+                                    new_comp->process_event(fn, &params);
+                                }
+                            });
+
+                            std::unique_lock _{m_mutex};
+                            m_motion_controller_attached_components[comp].adjustment_visualizer = visualizer;
+                        } else {
+                            SPDLOG_ERROR("Failed to spawn actor for adjustment visualizer");
+                        }
+                    } else {
+                        state.adjustment_visualizer->set_actor_location(right_hand_position, false, false);
+                        state.adjustment_visualizer->set_actor_rotation(right_hand_euler, false);
+                    }
+
+                    std::unique_lock _{m_mutex};
+                    const auto mat_inverse = 
+                        glm::yawPitchRoll(
+                            glm::radians(-orig_rotation.y),
+                            glm::radians(orig_rotation.x),
+                            glm::radians(-orig_rotation.z));
+
+                    m_motion_controller_attached_components[comp].rotation_offset = glm::inverse(rotation_offset * original_right_hand_rotation);
+                    m_motion_controller_attached_components[comp].location_offset = glm::inverse(glm::quat{mat_inverse}) * utility::math::ue4_to_glm(right_hand_position - orig_position);
+                    //m_motion_controller_attached_components[comp].location_offset = rotation_offset * original_right_hand_position;
+                } else {
+                    if (state.adjustment_visualizer != nullptr) {
+                        state.adjustment_visualizer->destroy_actor();
+
+                        std::unique_lock _{m_mutex};
+                        m_motion_controller_attached_components[comp].adjustment_visualizer = nullptr;
+                    }
+
+                    comp->set_world_location(adjusted_location, false, false);
+                    comp->set_world_rotation(adjusted_euler, false, false);
+                }
+
+                /*if (vr->is_controller_aim_enabled()) {
+                    const auto euler = glm::degrees(utility::math::euler_angles_from_steamvr(utility::math::flatten(right_hand_euler_relative)));
+                    comp->add_local_rotation(euler, false);
+                } else {
+                    comp->add_local_rotation(right_hand_euler_relative, false);
+                }*/
+
+                GameThreadWorker::get().enqueue([this, comp, orig_position, orig_rotation]() {
+                    if (!this->exists(comp)) {
+                        return;
+                    }
+
+                    comp->set_world_location(orig_position, false, false);
+                    comp->set_world_rotation(orig_rotation, false, false);
+                });
             }
         }
     }
@@ -557,6 +672,8 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
         return;
     }
 
+    ImGui::Text("%s", utility::narrow(object->get_full_name()).data());
+
     static const auto material_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.MaterialInterface");
 
     if (uclass->is_a(material_t)) {
@@ -589,7 +706,14 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
 
     if (uclass->is_a(sdk::USceneComponent::static_class())) {
         if (ImGui::Button("Attach to motion controller")) {
-            m_motion_controller_attached_components.insert((sdk::USceneComponent*)object);
+            m_motion_controller_attached_components[((sdk::USceneComponent*)object)] = MotionControllerState{};
+        }
+
+        if (m_motion_controller_attached_components.contains((sdk::USceneComponent*)object)) {
+            ImGui::SameLine();
+            auto& state = m_motion_controller_attached_components[(sdk::USceneComponent*)object];
+
+            ImGui::Checkbox("Adjust", &state.adjusting);
         }
     }
 
@@ -787,7 +911,9 @@ void UObjectHook::ui_handle_actor(sdk::UObject* object) {
             auto comp_obj = (sdk::UObject*)comp;
 
             ImGui::PushID(comp_obj);
-            const auto made = ImGui::TreeNode(utility::narrow(comp_obj->get_full_name()).data());
+            // not using full_name because its HUGE
+            std::wstring comp_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
+            const auto made = ImGui::TreeNode(utility::narrow(comp_name).data());
             if (made) {
                 ui_handle_object(comp_obj);
                 ImGui::TreePop();
@@ -901,7 +1027,7 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
         auto propc = prop->get_class();
         const auto propc_type = utility::narrow(propc->get_name().to_string());
 
-        if (!is_real_object) {
+        if (object == nullptr) {
             const auto name = utility::narrow(propc->get_name().to_string());
             const auto field_name = utility::narrow(prop->get_field_name().to_string());
             ImGui::Text("%s %s", name.data(), field_name.data());
@@ -991,6 +1117,7 @@ void UObjectHook::ui_handle_struct(void* addr, sdk::UStruct* uclass) {
         ImGui::TreePop();
     }
 
+    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
     if (ImGui::TreeNode("Properties")) {
         ui_handle_properties(addr, uclass);
         ImGui::TreePop();
