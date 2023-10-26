@@ -62,7 +62,7 @@ bool is_using_double_precision(uintptr_t addr) {
 
     bool result = false;
 
-    utility::exhaustive_decode((uint8_t*)addr, 30, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
+    utility::exhaustive_decode((uint8_t*)addr, 50, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
         if (std::string_view{ix.Mnemonic}.starts_with("CALL")) {
             return utility::ExhaustionResult::STEP_OVER;
         }
