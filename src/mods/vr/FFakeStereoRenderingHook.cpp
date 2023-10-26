@@ -3582,7 +3582,7 @@ std::optional<uint32_t> FFakeStereoRenderingHook::get_stereo_view_offset_index(u
         // We do an exhaustive decode (disassemble all possible code paths) that correctly follows the control flow
         // because some games are obfuscated and do huge jumps across gaps of junk code.
         // so we can't just linearly scan forward as the disassembler will fail at some point.
-        utility::exhaustive_decode((uint8_t*)func, 30, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
+        utility::exhaustive_decode((uint8_t*)func, 50, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
             if (found) {
                 return utility::ExhaustionResult::BREAK;
             }

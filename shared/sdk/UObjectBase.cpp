@@ -393,9 +393,9 @@ void UObjectBase::update_offsets_post_uobjectarray() {
             return utility::ExhaustionResult::BREAK;
         }
 
-        if (!backup_functions.empty() && std::string_view{ctx.instrux.Mnemonic}.starts_with("JMP")) {
-            SPDLOG_INFO("[UObjectBase] Encountered jmp, using backup function {:x}", backup_functions[0]);
-            s_add_object = backup_functions[0];
+        if (!backup_functions.empty() && std::string_view{ctx.instrux.Mnemonic}.starts_with("JMP") && ctx.instrux.IsRipRelative) {
+            SPDLOG_INFO("[UObjectBase] Encountered jmp, using backup function {:x}", backup_functions.back());
+            s_add_object = backup_functions.back();
             return utility::ExhaustionResult::BREAK;
         }
 
