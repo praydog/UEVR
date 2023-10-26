@@ -279,4 +279,18 @@ void AActor::destroy_component(UActorComponent* component) {
 
     this->process_event(func, &params);
 }
+
+void AActor::destroy_actor() {
+    static const auto func = AActor::static_class()->find_function(L"K2_DestroyActor");
+
+    if (func == nullptr) {
+        return;
+    }
+
+    struct {
+        char padding[0x10]{};
+    } params{};
+
+    this->process_event(func, &params);
+}
 }

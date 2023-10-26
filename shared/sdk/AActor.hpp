@@ -32,6 +32,7 @@ public:
     std::vector<UActorComponent*> get_all_components();
 
     void destroy_component(UActorComponent* component);
+    void destroy_actor();
 
 protected:
 };
