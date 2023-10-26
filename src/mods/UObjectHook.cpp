@@ -310,7 +310,15 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                 const auto orig_position = comp->get_world_location();
                 const auto orig_rotation = comp->get_world_rotation();
 
-                const auto adjusted_rotation = glm::normalize(view_quat_inverse_flat * ((rotation_offset * original_right_hand_rotation) * state.rotation_offset));
+                // Convert orig_rotation to quat
+                const auto orig_rotation_mat = glm::yawPitchRoll(
+                    glm::radians(-orig_rotation.y),
+                    glm::radians(orig_rotation.x),
+                    glm::radians(-orig_rotation.z));
+                const auto orig_rotation_quat = glm::quat{orig_rotation_mat};
+            
+                //const auto adjusted_rotation = glm::normalize(view_quat_inverse_flat * ((rotation_offset * original_right_hand_rotation) * state.rotation_offset));
+                const auto adjusted_rotation = right_hand_rotation * glm::inverse(state.rotation_offset);
                 const auto adjusted_euler = glm::degrees(utility::math::euler_angles_from_steamvr(adjusted_rotation));
 
                 const auto adjusted_location = right_hand_position + (quat_converter * (adjusted_rotation * state.location_offset));
@@ -318,7 +326,6 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                 //const auto adjusted_location = final_position - (quat_converter * new_r);
 
                 if (state.adjusting) {
-                    //comp->set_world_rotation(right_hand_euler, false, false);
                     // Create a temporary actor that visualizes how we're adjusting the component
                     if (state.adjustment_visualizer == nullptr) {
                         auto ugs = sdk::UGameplayStatics::get();
@@ -397,8 +404,12 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                             glm::radians(orig_rotation.x),
                             glm::radians(-orig_rotation.z));
 
-                    m_motion_controller_attached_components[comp].rotation_offset = glm::inverse(rotation_offset * original_right_hand_rotation);
-                    m_motion_controller_attached_components[comp].location_offset = glm::inverse(glm::quat{mat_inverse}) * utility::math::ue4_to_glm(right_hand_position - orig_position);
+                    const auto mq = glm::quat{mat_inverse};
+                    const auto mqi = glm::inverse(mq);
+
+                    //m_motion_controller_attached_components[comp].rotation_offset = glm::inverse(rotation_offset * original_right_hand_rotation);
+                    m_motion_controller_attached_components[comp].rotation_offset = mqi * right_hand_rotation;
+                    m_motion_controller_attached_components[comp].location_offset = mqi * utility::math::ue4_to_glm(right_hand_position - orig_position);
                     //m_motion_controller_attached_components[comp].location_offset = rotation_offset * original_right_hand_position;
                 } else {
                     if (state.adjustment_visualizer != nullptr) {
@@ -430,7 +441,25 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
             }
         }
     }
+}
 
+void UObjectHook::on_post_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
+                                                    const float world_to_meters, Vector3f* view_location, bool is_double)
+{
+    if (!VR::get()->is_hmd_active()) {
+        return;
+    }
+
+    std::shared_lock _{m_mutex};
+    bool any_adjusting = false;
+    for (auto it : m_motion_controller_attached_components) {
+        if (it.second.adjusting) {
+            any_adjusting = true;
+            break;
+        }
+    }
+
+    VR::get()->set_aim_allowed(!any_adjusting);
 }
 
 std::future<std::vector<sdk::UClass*>> sorting_task{};

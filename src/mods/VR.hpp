@@ -381,7 +381,15 @@ public:
         m_decoupled_pitch->value() = value;
     }
 
+    void set_aim_allowed(bool value) {
+        m_aim_temp_disabled = !value;
+    }
+
     AimMethod get_aim_method() const {
+        if (m_aim_temp_disabled) {
+            return AimMethod::GAME;
+        }
+
         return (AimMethod)m_aim_method->value();
     }
 
@@ -398,16 +406,16 @@ public:
     }
     
     bool is_any_aim_method_active() const {
-        return m_aim_method->value() > AimMethod::GAME;
+        return m_aim_method->value() > AimMethod::GAME && !m_aim_temp_disabled;
     }
 
     bool is_headlocked_aim_enabled() const {
-        return m_aim_method->value() == AimMethod::HEAD;
+        return m_aim_method->value() == AimMethod::HEAD && !m_aim_temp_disabled;
     }
 
     bool is_controller_aim_enabled() const {
         const auto value = m_aim_method->value();
-        return value == AimMethod::LEFT_CONTROLLER || value == AimMethod::RIGHT_CONTROLLER || value == AimMethod::TWO_HANDED_LEFT || value == AimMethod::TWO_HANDED_RIGHT;
+        return !m_aim_temp_disabled && (value == AimMethod::LEFT_CONTROLLER || value == AimMethod::RIGHT_CONTROLLER || value == AimMethod::TWO_HANDED_LEFT || value == AimMethod::TWO_HANDED_RIGHT);
     }
 
     bool is_controller_movement_enabled() const {
@@ -789,6 +797,7 @@ private:
     bool m_init_finished{false};
     bool m_has_hw_scheduling{false}; // hardware accelerated GPU scheduling
     bool m_spoofed_gamepad_connection{false};
+    bool m_aim_temp_disabled{false};
 
     struct {
         bool draw{false};
