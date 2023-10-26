@@ -546,6 +546,26 @@ void UObjectHook::on_draw_ui() {
                         } else {
                             ImGui::Text("No pawn");
                         }
+                    } else {
+                        ImGui::Text("No player controller");
+                    }
+
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNode("Camera Manager")) {
+                    auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
+
+                    if (player_controller != nullptr) {
+                        auto camera_manager = player_controller->get_player_camera_manager();
+
+                        if (camera_manager != nullptr) {
+                            ui_handle_object((sdk::UObject*)camera_manager);
+                        } else {
+                            ImGui::Text("No camera manager");
+                        }
+                    } else {
+                        ImGui::Text("No player controller");
                     }
 
                     ImGui::TreePop();
