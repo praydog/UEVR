@@ -475,6 +475,30 @@ void UObjectHook::on_draw_ui() {
 
         std::shared_lock _{m_mutex};
 
+        if (!m_motion_controller_attached_components.empty()) {
+            if (ImGui::Button("Detach all")) {
+                for (auto it : m_motion_controller_attached_components) {
+                    auto comp = it.first;
+                    auto& state = it.second;
+
+                    if (state.adjustment_visualizer != nullptr) {
+                        auto vis = state.adjustment_visualizer;
+                        GameThreadWorker::get().enqueue([this, vis]() {
+                            if (!this->exists(vis)) {
+                                return;
+                            }
+
+                            vis->destroy_actor();
+                        });
+
+                        state.adjustment_visualizer = nullptr;
+                    }
+                }
+
+                m_motion_controller_attached_components.clear();
+            }
+        }
+
         ImGui::Text("Objects: %zu (%zu actual)", m_objects.size(), sdk::FUObjectArray::get()->get_object_count());
 
         if (ImGui::TreeNode("Recent Objects")) {
