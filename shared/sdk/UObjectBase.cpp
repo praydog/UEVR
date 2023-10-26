@@ -5,6 +5,8 @@
 #include <utility/Scan.hpp>
 #include <utility/Module.hpp>
 
+#include <tracy/Tracy.hpp>
+
 #include "UClass.hpp"
 #include "UObjectArray.hpp"
 #include "UObjectBase.hpp"
@@ -52,6 +54,7 @@ void UObjectBase::update_offsets() {
 }
 
 void UObjectBase::update_process_event_index() try {
+    ZoneScopedN("sdk::UObjectBase::update_process_event_index");
     const auto object_class = (sdk::UClass*)sdk::find_uobject(L"Class /Script/CoreUObject.Object");
 
     if (object_class == nullptr) {
@@ -182,7 +185,8 @@ void UObjectBase::update_offsets_post_uobjectarray() {
     if (s_updated_post_uobjectarray) {
         return;
     }
-
+    
+    ZoneScopedN("sdk::UObjectBase::update_offsets_post_uobjectarray");
     s_updated_post_uobjectarray = true;
 
     SPDLOG_INFO("[UObjectBase] Searching for destructor...");

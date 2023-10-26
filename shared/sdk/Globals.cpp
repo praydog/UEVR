@@ -2,6 +2,8 @@
 
 #include <utility/Scan.hpp>
 
+#include <tracy/Tracy.hpp>
+
 #include "EngineModule.hpp"
 #include "Globals.hpp"
 
@@ -13,6 +15,7 @@ float& get_near_clipping_plane() {
     // But there's also, "bEnableOnScreenDebugMessages", GNearClippingPlane is set shortly after that
     // We'll use the latter for now, we can use r.SetNearClipPlane as a fallback later on
     static float* result = []() -> float* {
+        ZoneScopedN("sdk::globals::get_near_clipping_plane static init");
         SPDLOG_INFO("Attempting to find GNearClippingPlane");
 
         const auto engine = sdk::get_ue_module(L"Engine");
