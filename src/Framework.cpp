@@ -781,7 +781,8 @@ bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_para
         return true;
     }
 
-    if (!WindowFilter::get().is_filtered(wnd)) {
+    // If we called is_filtered during a WM_GETTEXT message we would deadlock.
+    if (message != WM_GETTEXT && !WindowFilter::get().is_filtered(wnd)) {
         m_uevr_shared_memory->data().main_thread_id = GetCurrentThreadId();
     }
 
@@ -807,6 +808,9 @@ bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_para
         }
         break;
     case WM_KILLFOCUS:
+        std::fill(std::begin(m_last_keys), std::end(m_last_keys), false);
+        break;
+    case WM_SETFOCUS:
         std::fill(std::begin(m_last_keys), std::end(m_last_keys), false);
         break;
     case WM_ACTIVATE:
