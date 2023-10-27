@@ -313,11 +313,14 @@ void AActor::finish_add_component_ex(sdk::UObject* new_comp) {
 }
 
 std::vector<UActorComponent*> AActor::get_components_by_class(UClass* uclass) {
-    static const auto func = AActor::static_class()->find_function(L"K2_GetComponentsByClass");
+    static const auto func_candidate_1 = AActor::static_class()->find_function(L"K2_GetComponentsByClass");
+    static const auto func_candidate_2 = AActor::static_class()->find_function(L"GetComponentsByClass");
 
-    if (func == nullptr) {
+    if (func_candidate_1 == nullptr && func_candidate_2 == nullptr) {
         return {};
     }
+
+    auto func = func_candidate_1 != nullptr ? func_candidate_1 : func_candidate_2;
 
     struct Params_K2_GetComponentsByClass {
         UClass* ComponentClass{}; // 0x0
