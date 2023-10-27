@@ -255,4 +255,22 @@ bool USceneComponent::attach_to(USceneComponent* parent, const std::wstring& soc
 
     return params.result;
 }
+
+void USceneComponent::set_hidden_in_game(bool hidden, bool propagate) {
+    static const auto func = static_class()->find_function(L"SetHiddenInGame");
+
+    if (func == nullptr) {
+        return;
+    }
+
+    struct {
+        bool hidden{};
+        bool propagate{};
+    } params{};
+
+    params.hidden = hidden;
+    params.propagate = propagate;
+
+    this->process_event(func, &params);
+}
 }

@@ -17,6 +17,7 @@
 #include <sdk/UGameplayStatics.hpp>
 #include <sdk/APlayerController.hpp>
 #include <sdk/APawn.hpp>
+#include <sdk/ScriptVector.hpp>
 
 #include "VR.hpp"
 
@@ -27,6 +28,22 @@
 std::shared_ptr<UObjectHook>& UObjectHook::get() {
     static std::shared_ptr<UObjectHook> instance = std::make_shared<UObjectHook>();
     return instance;
+}
+
+UObjectHook::MotionControllerState::~MotionControllerState() {
+    if (this->adjustment_visualizer != nullptr) {
+        GameThreadWorker::get().enqueue([vis = this->adjustment_visualizer]() {
+            SPDLOG_INFO("[UObjectHook::MotionControllerState] Destroying adjustment visualizer for component {:x}", (uintptr_t)vis);
+
+            if (!UObjectHook::get()->exists(vis)) {
+                return;
+            }
+
+            vis->destroy_actor();
+
+            SPDLOG_INFO("[UObjectHook::MotionControllerState] Destroyed adjustment visualizer for component {:x}", (uintptr_t)vis);
+        });
+    }
 }
 
 void UObjectHook::activate() {
@@ -300,15 +317,15 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                 actor->set_actor_rotation(right_hand_euler, false);
             }
 
-            const auto comps =  with_mutex([this]() { return m_motion_controller_attached_components; });
+            auto comps = with_mutex([this]() { return m_motion_controller_attached_components; });
 
-            for (auto it : comps) {
+            for (auto& it : comps) {
                 auto comp = it.first;
-                if (!this->exists(comp)) {
+                if (!this->exists(comp) || it.second == nullptr) {
                     continue;
                 }
                 
-                const auto& state = it.second;
+                auto& state = *it.second;
                 const auto orig_position = comp->get_world_location();
                 const auto orig_rotation = comp->get_world_rotation();
 
@@ -318,14 +335,11 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                     glm::radians(orig_rotation.x),
                     glm::radians(-orig_rotation.z));
                 const auto orig_rotation_quat = glm::quat{orig_rotation_mat};
-            
-                //const auto adjusted_rotation = glm::normalize(view_quat_inverse_flat * ((rotation_offset * original_right_hand_rotation) * state.rotation_offset));
+
                 const auto adjusted_rotation = right_hand_rotation * glm::inverse(state.rotation_offset);
                 const auto adjusted_euler = glm::degrees(utility::math::euler_angles_from_steamvr(adjusted_rotation));
 
                 const auto adjusted_location = right_hand_position + (quat_converter * (adjusted_rotation * state.location_offset));
-                //const auto new_r = (glm::normalize(view_quat_inverse_flat) * (((rotation_offset * original_right_hand_position) - (rotation_offset * state.location_offset)) * world_to_meters));
-                //const auto adjusted_location = final_position - (quat_converter * new_r);
 
                 if (state.adjusting) {
                     // Create a temporary actor that visualizes how we're adjusting the component
@@ -336,6 +350,7 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                         if (visualizer != nullptr) {
                             auto add_comp = [&](sdk::UClass* c, std::function<void(sdk::UActorComponent*)> fn) -> sdk::UActorComponent* {
                                 if (c == nullptr) {
+                                    SPDLOG_ERROR("[UObjectHook] Cannot add component of null class");
                                     return nullptr;
                                 }
 
@@ -344,18 +359,14 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                                 if (new_comp != nullptr) {
                                     fn(new_comp);
 
-                                    struct {
-                                        bool hidden{false};
-                                        bool propagate{true};
-                                    } set_hidden_params{};
-
-                                    const auto fn2 = new_comp->get_class()->find_function(L"SetHiddenInGame");
-
-                                    if (fn2 != nullptr) {
-                                        new_comp->process_event(fn2, &set_hidden_params);
+                                    if (new_comp->is_a(sdk::USceneComponent::static_class())) {
+                                        auto scene_comp = (sdk::USceneComponent*)new_comp;
+                                        scene_comp->set_hidden_in_game(false);
                                     }
 
                                     visualizer->finish_add_component(new_comp);
+                                } else {
+                                    SPDLOG_ERROR("[UObjectHook] Failed to add component {} to adjustment visualizer", utility::narrow(c->get_full_name()));
                                 }
                                 
                                 return new_comp;
@@ -377,7 +388,7 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                                 }
                             });
 
-                            add_comp(sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.ArrowComponent"), [](sdk::UActorComponent* new_comp) {
+                            /*add_comp(sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.ArrowComponent"), [](sdk::UActorComponent* new_comp) {
                                 struct {
                                     float color[4]{1.0f, 0.0f, 0.0f, 1.0f};
                                 } params{};
@@ -387,12 +398,50 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                                 if (fn != nullptr) {
                                     new_comp->process_event(fn, &params);
                                 }
-                            });
+                            });*/
+
+                            // Ghetto way of making a "mesh" out of the box components
+                            for (auto j = 0; j < 3; ++j) {
+                                for (auto i = 1; i < 25; ++i) {
+                                    add_comp(sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.BoxComponent"), [i, j](sdk::UActorComponent* new_comp) {
+                                        auto color = (uint8_t*)new_comp->get_property_data(L"ShapeColor");
+
+                                        if (color != nullptr) {
+                                            color[0] = 255;
+                                            color[1] = 255;
+                                            color[2] = 0;
+                                            color[3] = 0;
+                                        }
+
+                                        auto extent = (void*)new_comp->get_property_data(L"BoxExtent");
+
+                                        if (extent != nullptr) {
+                                            static const bool is_ue5 = sdk::ScriptVector::static_struct()->get_struct_size() == sizeof(glm::vec<3, double>);
+
+                                            const auto ratio = (float)i / 100.0f;
+
+                                            const auto x = j == 0 ? ratio * 25.0f : 25.0f;
+                                            const auto y = j == 1 ? ratio * 5.0f : 5.0f;
+                                            const auto z = j == 2 ? ratio * 5.0f : 5.0f;
+
+                                            glm::vec3 wanted_ext = glm::vec3{x, y, z};
+
+                                            if (is_ue5) {
+                                                *((glm::vec<3, double>*)extent) = wanted_ext;
+                                            } else {
+                                                *((glm::vec3*)extent) = wanted_ext;
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+
+                            //ugs->finish_spawning_actor(visualizer, orig_position);
 
                             std::unique_lock _{m_mutex};
-                            m_motion_controller_attached_components[comp].adjustment_visualizer = visualizer;
+                            state.adjustment_visualizer = visualizer;
                         } else {
-                            SPDLOG_ERROR("Failed to spawn actor for adjustment visualizer");
+                            SPDLOG_ERROR("[UObjectHook] Failed to spawn actor for adjustment visualizer");
                         }
                     } else {
                         state.adjustment_visualizer->set_actor_location(right_hand_position, false, false);
@@ -409,28 +458,19 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                     const auto mq = glm::quat{mat_inverse};
                     const auto mqi = glm::inverse(mq);
 
-                    //m_motion_controller_attached_components[comp].rotation_offset = glm::inverse(rotation_offset * original_right_hand_rotation);
-                    m_motion_controller_attached_components[comp].rotation_offset = mqi * right_hand_rotation;
-                    m_motion_controller_attached_components[comp].location_offset = mqi * utility::math::ue4_to_glm(right_hand_position - orig_position);
-                    //m_motion_controller_attached_components[comp].location_offset = rotation_offset * original_right_hand_position;
+                    state.rotation_offset = mqi * right_hand_rotation;
+                    state.location_offset = mqi * utility::math::ue4_to_glm(right_hand_position - orig_position);
                 } else {
                     if (state.adjustment_visualizer != nullptr) {
                         state.adjustment_visualizer->destroy_actor();
 
                         std::unique_lock _{m_mutex};
-                        m_motion_controller_attached_components[comp].adjustment_visualizer = nullptr;
+                        state.adjustment_visualizer = nullptr;
                     }
 
                     comp->set_world_location(adjusted_location, false, false);
                     comp->set_world_rotation(adjusted_euler, false, false);
                 }
-
-                /*if (vr->is_controller_aim_enabled()) {
-                    const auto euler = glm::degrees(utility::math::euler_angles_from_steamvr(utility::math::flatten(right_hand_euler_relative)));
-                    comp->add_local_rotation(euler, false);
-                } else {
-                    comp->add_local_rotation(right_hand_euler_relative, false);
-                }*/
 
                 GameThreadWorker::get().enqueue([this, comp, orig_position, orig_rotation]() {
                     if (!this->exists(comp)) {
@@ -454,8 +494,8 @@ void UObjectHook::on_post_calculate_stereo_view_offset(void* stereo_device, cons
 
     std::shared_lock _{m_mutex};
     bool any_adjusting = false;
-    for (auto it : m_motion_controller_attached_components) {
-        if (it.second.adjusting) {
+    for (auto& it : m_motion_controller_attached_components) {
+        if (it.second->adjusting) {
             any_adjusting = true;
             break;
         }
@@ -479,24 +519,6 @@ void UObjectHook::on_draw_ui() {
 
         if (!m_motion_controller_attached_components.empty()) {
             if (ImGui::Button("Detach all")) {
-                for (auto it : m_motion_controller_attached_components) {
-                    auto comp = it.first;
-                    auto& state = it.second;
-
-                    if (state.adjustment_visualizer != nullptr) {
-                        auto vis = state.adjustment_visualizer;
-                        GameThreadWorker::get().enqueue([this, vis]() {
-                            if (!this->exists(vis)) {
-                                return;
-                            }
-
-                            vis->destroy_actor();
-                        });
-
-                        state.adjustment_visualizer = nullptr;
-                    }
-                }
-
                 m_motion_controller_attached_components.clear();
             }
         }
@@ -824,15 +846,21 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
     }
 
     if (uclass->is_a(sdk::USceneComponent::static_class())) {
-        if (ImGui::Button("Attach to motion controller")) {
-            m_motion_controller_attached_components[((sdk::USceneComponent*)object)] = MotionControllerState{};
+        auto comp = (sdk::USceneComponent*)object;
+        bool attached = m_motion_controller_attached_components.contains(comp);
+        if (ImGui::Checkbox("Attach to motion controller", &attached)) {
+            if (attached) {
+                m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
+            } else {
+                m_motion_controller_attached_components.erase(comp);
+            }
         }
 
-        if (m_motion_controller_attached_components.contains((sdk::USceneComponent*)object)) {
+        if (m_motion_controller_attached_components.contains(comp)) {
             ImGui::SameLine();
-            auto& state = m_motion_controller_attached_components[(sdk::USceneComponent*)object];
+            auto& state = m_motion_controller_attached_components[comp];
 
-            ImGui::Checkbox("Adjust", &state.adjusting);
+            ImGui::Checkbox("Adjust", &state->adjusting);
         }
     }
 

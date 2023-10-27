@@ -21,5 +21,6 @@ public:
     glm::vec3 get_world_rotation();
 
     bool attach_to(USceneComponent* parent, const std::wstring& socket_name = L"None", uint8_t attach_type = 0, bool weld = false);
+    void set_hidden_in_game(bool hidden, bool propagate_to_children = true);
 };
 }
