@@ -336,10 +336,14 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                     glm::radians(-orig_rotation.z));
                 const auto orig_rotation_quat = glm::quat{orig_rotation_mat};
 
-                const auto adjusted_rotation = right_hand_rotation * glm::inverse(state.rotation_offset);
+                const auto& hand_rotation = state.hand == 1 ? right_hand_rotation : left_hand_rotation;
+                const auto& hand_position = state.hand == 1 ? right_hand_position : left_hand_position;
+                const auto& hand_euler = state.hand == 1 ? right_hand_euler : left_hand_euler;
+
+                const auto adjusted_rotation = hand_rotation * glm::inverse(state.rotation_offset);
                 const auto adjusted_euler = glm::degrees(utility::math::euler_angles_from_steamvr(adjusted_rotation));
 
-                const auto adjusted_location = right_hand_position + (quat_converter * (adjusted_rotation * state.location_offset));
+                const auto adjusted_location = hand_position + (quat_converter * (adjusted_rotation * state.location_offset));
 
                 if (state.adjusting) {
                     // Create a temporary actor that visualizes how we're adjusting the component
@@ -444,8 +448,8 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                             SPDLOG_ERROR("[UObjectHook] Failed to spawn actor for adjustment visualizer");
                         }
                     } else {
-                        state.adjustment_visualizer->set_actor_location(right_hand_position, false, false);
-                        state.adjustment_visualizer->set_actor_rotation(right_hand_euler, false);
+                        state.adjustment_visualizer->set_actor_location(hand_position, false, false);
+                        state.adjustment_visualizer->set_actor_rotation(hand_euler, false);
                     }
 
                     std::unique_lock _{m_mutex};
@@ -458,8 +462,8 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                     const auto mq = glm::quat{mat_inverse};
                     const auto mqi = glm::inverse(mq);
 
-                    state.rotation_offset = mqi * right_hand_rotation;
-                    state.location_offset = mqi * utility::math::ue4_to_glm(right_hand_position - orig_position);
+                    state.rotation_offset = mqi * hand_rotation;
+                    state.location_offset = mqi * utility::math::ue4_to_glm(hand_position - orig_position);
                 } else {
                     if (state.adjustment_visualizer != nullptr) {
                         state.adjustment_visualizer->destroy_actor();
@@ -848,19 +852,28 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
     if (uclass->is_a(sdk::USceneComponent::static_class())) {
         auto comp = (sdk::USceneComponent*)object;
         bool attached = m_motion_controller_attached_components.contains(comp);
-        if (ImGui::Checkbox("Attach to motion controller", &attached)) {
-            if (attached) {
-                m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
-            } else {
+
+        if (attached) {
+            if (ImGui::Button("Detach")) {
                 m_motion_controller_attached_components.erase(comp);
             }
-        }
 
-        if (m_motion_controller_attached_components.contains(comp)) {
             ImGui::SameLine();
             auto& state = m_motion_controller_attached_components[comp];
 
             ImGui::Checkbox("Adjust", &state->adjusting);
+        } else {
+            if (ImGui::Button("Attach left")) {
+                m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
+                m_motion_controller_attached_components[comp]->hand = 0;
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Attach right")) {
+                m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
+                m_motion_controller_attached_components[comp]->hand = 1;
+            }
         }
     }
 

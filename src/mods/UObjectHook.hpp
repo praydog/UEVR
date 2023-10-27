@@ -104,6 +104,7 @@ private:
         glm::quat rotation_offset{glm::identity<glm::quat>()};
         glm::vec3 location_offset{0.0f, 0.0f, 0.0f};
         bool adjusting{false};
+        uint8_t hand{1};
     };
 
     std::unordered_map<sdk::USceneComponent*, std::shared_ptr<MotionControllerState>> m_motion_controller_attached_components{};
