@@ -19,5 +19,7 @@ public:
 
     glm::vec3 get_world_location();
     glm::vec3 get_world_rotation();
+
+    bool attach_to(USceneComponent* parent, const std::wstring& socket_name = L"None", uint8_t attach_type = 0, bool weld = false);
 };
 }

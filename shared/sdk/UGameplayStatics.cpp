@@ -135,4 +135,25 @@ AActor* UGameplayStatics::finish_spawning_actor(AActor* actor, const glm::vec3& 
     this->process_event(func, &params_ue4); 
     return params_ue4.result;
 }
+
+UObject* UGameplayStatics::spawn_object(UClass* uclass, UObject* outer) {
+    static const auto func = static_class()->find_function(L"SpawnObject");
+
+    if (func == nullptr) {
+        return nullptr;
+    }
+
+    struct {
+        UClass* uclass{};
+        UObject* outer{};
+        UObject* result{};
+    } params{};
+
+    params.uclass = uclass;
+    params.outer = outer;
+
+    this->process_event(func, &params);
+
+    return params.result;
+}
 }

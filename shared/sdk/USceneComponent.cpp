@@ -230,4 +230,29 @@ glm::vec3 USceneComponent::get_world_rotation() {
         
     return *(glm::vec<3, double>*)params.data();
 }
+
+bool USceneComponent::attach_to(USceneComponent* parent, const std::wstring& socket_name, uint8_t attach_type, bool weld) {
+    static const auto func = static_class()->find_function(L"K2_AttachTo");
+
+    if (func == nullptr) {
+        return false;
+    }
+
+    struct {
+        USceneComponent* parent{};
+        FName socket_name{L"None"};
+        uint8_t attach_type{};
+        bool weld{};
+        bool result{};
+    } params{};
+
+    params.parent = parent;
+    params.socket_name = FName{socket_name};
+    params.attach_type = attach_type;
+    params.weld = weld;
+
+    this->process_event(func, &params);
+
+    return params.result;
+}
 }

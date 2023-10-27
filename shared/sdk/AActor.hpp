@@ -11,6 +11,7 @@ class UCameraComponent;
 class USceneComponent;
 class UActorComponent;
 class AActor;
+class UWorld;
 
 class AActor : public UObject {
 public:
@@ -25,14 +26,22 @@ public:
     USceneComponent* get_component_by_class(UClass* uclass);
     UCameraComponent* get_camera_component();
 
-    UActorComponent* add_component_by_class(UClass* uclass);
+    UActorComponent* add_component_by_class(UClass* uclass, bool deferred = false);
+    UActorComponent* add_component_by_class_ex(UClass* uclass, bool deferred = false);
     void finish_add_component(sdk::UObject* component);
+    void finish_add_component_ex(sdk::UObject* component);
 
     std::vector<UActorComponent*> get_components_by_class(UClass* uclass);
     std::vector<UActorComponent*> get_all_components();
 
     void destroy_component(UActorComponent* component);
     void destroy_actor();
+
+    USceneComponent* get_root_component();
+    void set_root_component(USceneComponent* component);
+
+    UObject* get_level();
+    UWorld* get_world();
 
 protected:
 };

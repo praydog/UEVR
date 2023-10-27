@@ -28,6 +28,8 @@ public:
         return nullptr;
     }
 
+    UObject* spawn_object(UClass* uclass, UObject* outer);
+
 protected:
 };
 }

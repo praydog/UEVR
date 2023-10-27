@@ -1,10 +1,17 @@
 #include <vector>
+#include <utility/String.hpp>
+
 #include "UObjectArray.hpp"
 #include "ScriptVector.hpp"
 #include "ScriptRotator.hpp"
 #include "UCameraComponent.hpp"
 #include "TArray.hpp"
 #include "FMalloc.hpp"
+#include "UGameplayStatics.hpp"
+#include "UFunction.hpp"
+#include "FField.hpp"
+#include "FProperty.hpp"
+#include "UGameEngine.hpp"
 
 #include "AActor.hpp"
 
@@ -139,11 +146,11 @@ struct FTransformUE5 {
     glm::vec<4, double> Scale3D{1.0, 1.0, 1.0, 1.0};
 };
 
-UActorComponent* AActor::add_component_by_class(UClass* uclass) {
+UActorComponent* AActor::add_component_by_class(UClass* uclass, bool deferred) {
     static const auto func = AActor::static_class()->find_function(L"AddComponentByClass");
 
     if (func == nullptr) {
-        return nullptr;
+        return add_component_by_class_ex(uclass, deferred);
     }
 
     std::vector<uint8_t> params{};
@@ -171,8 +178,7 @@ UActorComponent* AActor::add_component_by_class(UClass* uclass) {
     }
 
     // Add a bool
-    bool bDeferredFinish = false;
-    params.insert(params.end(), (uint8_t*)&bDeferredFinish, (uint8_t*)&bDeferredFinish + sizeof(bool));
+    params.insert(params.end(), (uint8_t*)&deferred, (uint8_t*)&deferred + sizeof(bool));
 
     // Align
     params.insert(params.end(), 7, 0);
@@ -188,12 +194,36 @@ UActorComponent* AActor::add_component_by_class(UClass* uclass) {
     return *(UActorComponent**)(params.data() + ret_offset);
 }
 
+UActorComponent* AActor::add_component_by_class_ex(UClass* uclass, bool deferred) {
+    auto ugs = sdk::UGameplayStatics::get();
+
+    if (ugs == nullptr) {
+        return nullptr;
+    }
+
+    auto new_comp = ugs->spawn_object(uclass, this);
+
+    if (new_comp == nullptr) {
+        return nullptr;
+    }
+
+    if (!deferred) {
+        this->finish_add_component(new_comp);
+    }
+
+    return (UActorComponent*)new_comp;
+}
+
 void AActor::finish_add_component(sdk::UObject* component) {
     static const auto func = AActor::static_class()->find_function(L"FinishAddComponent");
 
     if (func == nullptr) {
+        finish_add_component_ex(component);
         return;
     }
+
+    static const auto fvector = sdk::ScriptVector::static_struct();
+    const auto is_ue5 = fvector->get_struct_size() == sizeof(glm::vec<3, double>);
 
     /*struct {
         sdk::UObject* Component{}; // 0x0
@@ -212,9 +242,6 @@ void AActor::finish_add_component(sdk::UObject* component) {
 
     params.insert(params.end(), 7, 0);
 
-    static const auto fvector = sdk::ScriptVector::static_struct();
-    const auto is_ue5 = fvector->get_struct_size() == sizeof(glm::vec<3, double>);
-
     if (!is_ue5) {
         FTransform transform{};
         params.insert(params.end(), (uint8_t*)&transform, (uint8_t*)&transform + sizeof(FTransform));
@@ -222,8 +249,67 @@ void AActor::finish_add_component(sdk::UObject* component) {
         FTransformUE5 transform{};
         params.insert(params.end(), (uint8_t*)&transform, (uint8_t*)&transform + sizeof(FTransformUE5));
     }
+    
+    /*std::vector<uint8_t> params{};
+    uint32_t current_offset = 0;
+    for (auto param = func->get_child_properties(); param != nullptr; param = param->get_next()) {
+        auto pad_until = [&](uint32_t offset) {
+            while (current_offset < offset) {
+                params.push_back(0);
+                ++current_offset;
+            }
+        };
+
+        const auto param_prop = (sdk::FProperty*)param;
+        const auto offset = param_prop->get_offset();
+
+        pad_until(offset);
+
+        switch (utility::hash(utility::narrow(param_prop->get_field_name().to_string()))) {
+        case "Component"_fnv:
+            params.insert(params.end(), (uint8_t*)&component, (uint8_t*)&component + sizeof(UObject*));
+            current_offset += sizeof(UObject*);
+            break;
+        case "RelativeTransform"_fnv:
+            if (!is_ue5) {
+                FTransform transform{};
+                params.insert(params.end(), (uint8_t*)&transform, (uint8_t*)&transform + sizeof(FTransform));
+            } else {
+                FTransformUE5 transform{};
+                params.insert(params.end(), (uint8_t*)&transform, (uint8_t*)&transform + sizeof(FTransformUE5));
+            }
+
+            break;
+        default:
+            if (param->get_next() == nullptr) {
+                // add some padding
+                pad_until(current_offset + 0x40);
+            }
+
+            break;
+        };
+    }*/
 
     this->process_event(func, params.data());
+}
+
+void AActor::finish_add_component_ex(sdk::UObject* new_comp) {
+    if (new_comp == nullptr) {
+        return;
+    }
+
+    // For older UE.
+    if (new_comp->get_class()->is_a(sdk::USceneComponent::static_class())) {
+        auto sc = (sdk::USceneComponent*)new_comp;
+
+        if (get_root_component() == nullptr) {
+            set_root_component(sc);
+        } else {
+            sc->attach_to(get_root_component());
+        }
+    }
+
+    ((sdk::UActorComponent*)new_comp)->register_component_with_world(this->get_world());
 }
 
 std::vector<UActorComponent*> AActor::get_components_by_class(UClass* uclass) {
@@ -292,5 +378,39 @@ void AActor::destroy_actor() {
     } params{};
 
     this->process_event(func, &params);
+}
+
+USceneComponent* AActor::get_root_component() {
+    return get_property<USceneComponent*>(L"RootComponent");
+}
+
+void AActor::set_root_component(USceneComponent* component) {
+    get_property<USceneComponent*>(L"RootComponent") = component;
+}
+
+UObject* AActor::get_level() {
+    static const auto func = AActor::static_class()->find_function(L"GetLevel");
+
+    if (func == nullptr) {
+        return nullptr;
+    }
+
+    struct {
+        UObject* return_value{nullptr};
+    } params{};
+    
+    this->process_event(func, &params);
+
+    return params.return_value;
+}
+
+UWorld* AActor::get_world() {
+    auto level = get_level();
+
+    if (level == nullptr) {
+        return nullptr;
+    }
+
+    return level->get_property<UWorld*>(L"OwningWorld");
 }
 }
