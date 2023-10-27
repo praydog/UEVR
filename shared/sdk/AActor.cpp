@@ -299,7 +299,8 @@ void AActor::finish_add_component_ex(sdk::UObject* new_comp) {
     }
 
     // For older UE.
-    if (new_comp->get_class()->is_a(sdk::USceneComponent::static_class())) {
+    const auto is_sc = new_comp->get_class()->is_a(sdk::USceneComponent::static_class());
+    if (is_sc) {
         auto sc = (sdk::USceneComponent*)new_comp;
 
         if (get_root_component() == nullptr) {
@@ -307,6 +308,8 @@ void AActor::finish_add_component_ex(sdk::UObject* new_comp) {
         } else {
             sc->attach_to(get_root_component());
         }
+
+        sc->set_local_transform({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, false, false);
     }
 
     ((sdk::UActorComponent*)new_comp)->register_component_with_world(this->get_world());

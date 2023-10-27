@@ -5,6 +5,8 @@
 #include "ScriptVector.hpp"
 #include "ScriptRotator.hpp"
 #include "FProperty.hpp"
+#include "ScriptTransform.hpp"
+#include "UFunction.hpp"
 
 #include "USceneComponent.hpp"
 
@@ -183,6 +185,41 @@ void USceneComponent::add_local_rotation(const glm::vec3& rotation, bool sweep, 
     this->process_event(fn, params.data());
 }
 
+void USceneComponent::set_local_transform(const glm::vec3& location, const glm::vec4& rotation, const glm::vec3& scale, bool sweep, bool teleport) {
+    static auto fn = static_class()->find_function(L"K2_SetRelativeTransform");
+    static const auto fhitresult = sdk::find_uobject<UScriptStruct>(L"ScriptStruct /Script/Engine.HitResult");
+
+    if (fn == nullptr) {
+        return;
+    }
+
+    static const auto fvector = sdk::ScriptVector::static_struct();
+    static const auto is_ue5 = fvector->get_struct_size() == sizeof(glm::vec<3, double>);
+
+    // Need to dynamically allocate the params because of unknown FVector size
+    std::vector<uint8_t> params{};
+
+    const auto transform_struct = sdk::ScriptTransform::create_dynamic_struct(location, rotation, scale);
+    params.insert(params.end(), transform_struct.begin(), transform_struct.end());
+
+    // add a bool
+    params.insert(params.end(), (uint8_t*)&sweep, (uint8_t*)&sweep + sizeof(bool));
+
+    // Pad until the offset of SweepHitResult
+    static const auto sweep_hit_result_offset = fn->find_property(L"SweepHitResult")->get_offset();
+    if (params.size() != sweep_hit_result_offset) {
+        params.insert(params.end(), sweep_hit_result_offset - params.size(), 0);
+    }
+
+    // add a FHitResult
+    params.insert(params.end(), fhitresult->get_struct_size(), 0);
+
+    // add a bool
+    params.insert(params.end(), (uint8_t*)&teleport, (uint8_t*)&teleport + sizeof(bool));
+
+    this->process_event(fn, params.data());
+}
+
 glm::vec3 USceneComponent::get_world_location() {
     static const auto func = static_class()->find_function(L"K2_GetComponentLocation");
     const auto fvector = sdk::ScriptVector::static_struct();
@@ -238,7 +275,7 @@ bool USceneComponent::attach_to(USceneComponent* parent, const std::wstring& soc
         return false;
     }
 
-    struct {
+    /*struct {
         USceneComponent* parent{};
         FName socket_name{L"None"};
         uint8_t attach_type{};
@@ -249,11 +286,31 @@ bool USceneComponent::attach_to(USceneComponent* parent, const std::wstring& soc
     params.parent = parent;
     params.socket_name = FName{socket_name};
     params.attach_type = attach_type;
-    params.weld = weld;
+    params.weld = weld;*/
 
-    this->process_event(func, &params);
+    // Dynamically create params
+    std::vector<uint8_t> params{};
+    static const auto struct_size = func->find_property(L"bWeldSimulatedBodies")->get_offset() + (sizeof(bool) * 2);
+    params.insert(params.end(), struct_size, 0);
 
-    return params.result;
+    static const auto parent_offset = func->find_property(L"InParent")->get_offset();
+    *(USceneComponent**)(params.data() + parent_offset) = parent;
+
+    static const auto socket_name_offset = func->find_property(L"InSocketName")->get_offset();
+    *(FName*)(params.data() + socket_name_offset) = FName{socket_name};
+
+    static const auto attach_type_offset = func->find_property(L"AttachType")->get_offset();
+    *(uint8_t*)(params.data() + attach_type_offset) = attach_type;
+
+    static const auto weld_offset = func->find_property(L"bWeldSimulatedBodies")->get_offset();
+    *(bool*)(params.data() + weld_offset) = weld;
+
+    // add a bool
+    params.insert(params.end(), sizeof(bool), 0);
+
+    this->process_event(func, params.data());
+
+    return (bool)params.back();
 }
 
 void USceneComponent::set_hidden_in_game(bool hidden, bool propagate) {
