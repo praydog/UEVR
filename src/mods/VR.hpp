@@ -458,11 +458,11 @@ public:
     }
 
     bool is_roomscale_enabled() const {
-        return m_roomscale_movement->value();
+        return m_roomscale_movement->value() && !m_aim_temp_disabled;
     }
 
     bool is_roomscale_using_actor_rotation() const {
-        return m_roomscale_movement_actor_rotation->value();
+        return m_roomscale_movement_actor_rotation->value() && !m_aim_temp_disabled;
     }
 
     bool should_skip_post_init_properties() const {
