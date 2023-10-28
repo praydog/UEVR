@@ -66,6 +66,8 @@ private:
     void ui_handle_material_interface(sdk::UObject* object);
     void ui_handle_actor(sdk::UObject* object);
 
+    void spawn_overlapper();
+
     static void* add_object(void* rcx, void* rdx, void* r8, void* r9);
     static void* destructor(sdk::UObjectBase* object, void* rdx, void* r8, void* r9);
 
@@ -108,4 +110,5 @@ private:
     };
 
     std::unordered_map<sdk::USceneComponent*, std::shared_ptr<MotionControllerState>> m_motion_controller_attached_components{};
+    sdk::AActor* m_overlap_detection_actor{nullptr};
 };

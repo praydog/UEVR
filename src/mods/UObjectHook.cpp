@@ -305,6 +305,11 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                 return result;
             };
 
+            if (m_overlap_detection_actor != nullptr && this->exists(m_overlap_detection_actor)) {
+                m_overlap_detection_actor->set_actor_location(right_hand_position, false, false);
+                m_overlap_detection_actor->set_actor_rotation(right_hand_euler, false);
+            }
+
             const auto objs = with_mutex([this]() { return m_motion_controller_attached_objects; });
             
             for (auto object : objs) {
@@ -509,6 +514,67 @@ void UObjectHook::on_post_calculate_stereo_view_offset(void* stereo_device, cons
     VR::get()->set_aim_allowed(!any_adjusting);
 }
 
+void UObjectHook::spawn_overlapper() {
+    GameThreadWorker::get().enqueue([this]() {
+        if (m_overlap_detection_actor != nullptr && this->exists(m_overlap_detection_actor)) {
+            return;
+        }
+
+        auto ugs = sdk::UGameplayStatics::get();
+        auto world = sdk::UGameEngine::get()->get_world();
+
+        if (ugs == nullptr || world == nullptr) {
+            return;
+        }
+
+        auto overlapper = ugs->spawn_actor(world, sdk::AActor::static_class(), glm::vec3{0, 0, 0});
+        m_overlap_detection_actor = overlapper;
+
+        if (overlapper != nullptr) {
+            auto add_comp = [&](sdk::UClass* c, std::function<void(sdk::UActorComponent*)> fn) -> sdk::UActorComponent* {
+                if (c == nullptr) {
+                    SPDLOG_ERROR("[UObjectHook] Cannot add component of null class");
+                    return nullptr;
+                }
+
+                auto new_comp = overlapper->add_component_by_class(c);
+
+                if (new_comp != nullptr) {
+                    fn(new_comp);
+
+                    if (new_comp->is_a(sdk::USceneComponent::static_class())) {
+                        auto scene_comp = (sdk::USceneComponent*)new_comp;
+                        scene_comp->set_hidden_in_game(false);
+                    }
+
+                    overlapper->finish_add_component(new_comp);
+                } else {
+                    SPDLOG_ERROR("[UObjectHook] Failed to add component {} to overlapper", utility::narrow(c->get_full_name()));
+                }
+                
+                return new_comp;
+            };
+
+            add_comp(sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.SphereComponent"), [](sdk::UActorComponent* new_comp) {
+                struct SphereRadiusParams {
+                    float radius{};
+                    bool update_overlaps{true};
+                } params{};
+
+                params.radius = 10.0f;
+
+                const auto fn = new_comp->get_class()->find_function(L"SetSphereRadius");
+
+                if (fn != nullptr) {
+                    new_comp->process_event(fn, &params);
+                }
+            });
+        } else {
+            SPDLOG_ERROR("[UObjectHook] Failed to spawn actor for overlapper");
+        }
+    });
+}
+
 std::future<std::vector<sdk::UClass*>> sorting_task{};
 
 void UObjectHook::on_draw_ui() {
@@ -523,8 +589,88 @@ void UObjectHook::on_draw_ui() {
         std::shared_lock _{m_mutex};
 
         if (!m_motion_controller_attached_components.empty()) {
+            const auto made = ImGui::TreeNode("Attached Components");
+
+            ImGui::SameLine();
             if (ImGui::Button("Detach all")) {
                 m_motion_controller_attached_components.clear();
+            }
+
+            if (made) {
+                // make a copy because the user could press the detach button while iterating
+                auto attached = m_motion_controller_attached_components;
+
+                for (auto& it : attached) {
+                    if (!this->exists_unsafe(it.first) || it.second == nullptr) {
+                        continue;
+                    }
+
+                    auto comp = it.first;
+                    std::wstring comp_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
+
+                    if (ImGui::TreeNode(utility::narrow(comp_name).data())) {
+                        ui_handle_object(comp);
+
+                        ImGui::TreePop();
+                    }
+                }
+
+                ImGui::TreePop();
+            }
+        }
+
+        if (m_overlap_detection_actor == nullptr) {
+            if (ImGui::Button("Spawn Overlapper")) {
+                spawn_overlapper();
+            }
+        } else if (!this->exists_unsafe(m_overlap_detection_actor)) {
+            m_overlap_detection_actor = nullptr;
+        } else {
+            const auto made = ImGui::TreeNode("Overlapped Objects");
+
+            ImGui::SameLine();
+            if (ImGui::Button("Destroy Overlapper")) {
+                GameThreadWorker::get().enqueue([this]() {
+                    if (!this->exists(m_overlap_detection_actor)) {
+                        return;
+                    }
+
+                    m_overlap_detection_actor->destroy_actor();
+                    m_overlap_detection_actor = nullptr;
+                });
+            }
+
+            if (made) {
+                /*auto overlapped = m_overlap_detection_actor->get_overlapping_actors();
+
+                for (auto& it : overlapped) {
+                    if (!this->exists_unsafe(it)) {
+                        continue;
+                    }
+
+                    if (ImGui::TreeNode(utility::narrow(it->get_full_name()).data())) {
+                        ui_handle_object(it);
+                        ImGui::TreePop();
+                    }
+                }*/
+
+                auto overlapped_components = m_overlap_detection_actor->get_overlapping_components();
+
+                for (auto& it : overlapped_components) {
+                    auto comp = (sdk::USceneComponent*)it;
+                    if (!this->exists_unsafe(comp)) {
+                        continue;
+                    }
+
+                    std::wstring comp_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
+
+                    if (ImGui::TreeNode(utility::narrow(comp_name).data())) {
+                        ui_handle_object(comp);
+                        ImGui::TreePop();
+                    }
+                }
+
+                ImGui::TreePop();
             }
         }
 
@@ -859,10 +1005,12 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
                 m_motion_controller_attached_components.erase(comp);
             }
 
-            ImGui::SameLine();
-            auto& state = m_motion_controller_attached_components[comp];
+            if (m_motion_controller_attached_components.contains(comp)) {
+                ImGui::SameLine();
+                auto& state = m_motion_controller_attached_components[comp];
 
-            ImGui::Checkbox("Adjust", &state->adjusting);
+                ImGui::Checkbox("Adjust", &state->adjusting);
+            }
         } else {
             if (ImGui::Button("Attach left")) {
                 m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
@@ -1260,6 +1408,11 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
 void UObjectHook::ui_handle_struct(void* addr, sdk::UStruct* uclass) {
     if (uclass == nullptr) {
         return;
+    }
+
+    if (addr != nullptr && this->exists_unsafe((sdk::UObject*)addr) && uclass->is_a(sdk::UStruct::static_class())) {
+        uclass = (sdk::UStruct*)addr;
+        addr = nullptr;
     }
 
     // Display inheritance tree
