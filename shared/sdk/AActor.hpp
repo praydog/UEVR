@@ -5,6 +5,7 @@
 #include "Math.hpp"
 
 #include "UClass.hpp"
+#include "TArray.hpp"
 
 namespace sdk {
 class UCameraComponent;
@@ -12,6 +13,8 @@ class USceneComponent;
 class UActorComponent;
 class AActor;
 class UWorld;
+
+class UPrimitiveComponent;
 
 class AActor : public UObject {
 public:
@@ -42,6 +45,9 @@ public:
 
     UObject* get_level();
     UWorld* get_world();
+
+    TArray<AActor*> get_overlapping_actors(UClass* uclass = nullptr);
+    TArray<UPrimitiveComponent*> get_overlapping_components();
 
 protected:
 };

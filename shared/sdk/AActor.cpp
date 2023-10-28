@@ -419,4 +419,39 @@ UWorld* AActor::get_world() {
 
     return level->get_property<UWorld*>(L"OwningWorld");
 }
+
+TArray<AActor*> AActor::get_overlapping_actors(UClass* uclass) {
+    static const auto func = AActor::static_class()->find_function(L"GetOverlappingActors");
+
+    if (func == nullptr) {
+        return {};
+    }
+
+    struct {
+        TArray<AActor*> out_actors{};
+        UClass* actor_class{};
+    } params{};
+
+    params.actor_class = uclass;
+
+    this->process_event(func, &params);
+
+    return std::move(params.out_actors);
+}
+
+TArray<UPrimitiveComponent*> AActor::get_overlapping_components() {
+    static const auto func = AActor::static_class()->find_function(L"GetOverlappingComponents");
+
+    if (func == nullptr) {
+        return {};
+    }
+
+    struct {
+        TArray<UPrimitiveComponent*> out_components{};
+    } params{};
+
+    this->process_event(func, &params);
+
+    return std::move(params.out_components);
+}
 }
