@@ -18,6 +18,7 @@
 #include <sdk/APlayerController.hpp>
 #include <sdk/APawn.hpp>
 #include <sdk/ScriptVector.hpp>
+#include <sdk/FBoolProperty.hpp>
 
 #include "VR.hpp"
 
@@ -1214,12 +1215,13 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 ImGui::DragInt(utility::narrow(prop->get_field_name().to_string()).data(), &value, 1);
             }
             break;
-
-        // TODO: handle bitfields
         case "BoolProperty"_fnv:
             {
-                auto& value = *(bool*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
-                ImGui::Checkbox(utility::narrow(prop->get_field_name().to_string()).data(), &value);
+                auto boolprop = (sdk::FBoolProperty*)prop;
+                auto value = boolprop->get_value_from_object(object);
+                if (ImGui::Checkbox(utility::narrow(prop->get_field_name().to_string()).data(), &value)) {
+                    boolprop->set_value_in_object(object, value);
+                }
             }
             break;
         case "ObjectProperty"_fnv:

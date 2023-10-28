@@ -19,6 +19,7 @@
 #include "FName.hpp"
 #include "FField.hpp"
 #include "FStructProperty.hpp"
+#include "FBoolProperty.hpp"
 #include "UObjectArray.hpp"
 
 namespace sdk {
@@ -387,6 +388,7 @@ FUObjectArray* FUObjectArray::get() try {
         sdk::UScriptStruct::update_offsets();
         sdk::UProperty::update_offsets();
         sdk::FStructProperty::update_offsets();
+        sdk::FBoolProperty::update_offsets();
 
 #ifdef TESTING_GUOBJECTARRAY
         try {

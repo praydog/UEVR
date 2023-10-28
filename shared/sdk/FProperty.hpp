@@ -18,7 +18,7 @@ public:
     // Given xyz props from FVector, find the offset which matches up with all of them
     static void bruteforce_fproperty_offset(FProperty* x_prop, FProperty* y_prop, FProperty* z_prop);
 
-private:
+protected:
     static inline uint32_t s_offset_offset{0x0}; // idk
 
     friend class UStruct;
