@@ -19,6 +19,8 @@
 #include <sdk/APawn.hpp>
 #include <sdk/ScriptVector.hpp>
 #include <sdk/FBoolProperty.hpp>
+#include <sdk/FObjectProperty.hpp>
+#include <sdk/FArrayProperty.hpp>
 
 #include "VR.hpp"
 
@@ -1394,6 +1396,13 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
             break;
         case "Function"_fnv:
             break;
+        case "ArrayProperty"_fnv:
+            if (ImGui::TreeNode(utility::narrow(prop->get_field_name().to_string()).data())) {
+                ui_handle_array_property(object, (sdk::FArrayProperty*)prop);
+                ImGui::TreePop();
+            }
+
+            break;
         default:
             {
                 const auto name = utility::narrow(propc->get_name().to_string());
@@ -1403,6 +1412,54 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
             break;
         };
     }
+}
+
+void UObjectHook::ui_handle_array_property(void* addr, sdk::FArrayProperty* prop) {
+    if (addr == nullptr || prop == nullptr) {
+        return;
+    }
+
+    const auto& array_generic = *(sdk::TArray<void*>*)((uintptr_t)addr + prop->get_offset());
+
+    if (array_generic.data == nullptr || array_generic.count == 0) {
+        return;
+    }
+
+    const auto inner = prop->get_inner();
+
+    if (inner == nullptr) {
+        return;
+    }
+    
+    const auto inner_c = inner->get_class();
+
+    if (inner_c == nullptr) {
+        return;
+    }
+
+    const auto inner_c_type = utility::narrow(inner_c->get_name().to_string());
+
+    switch (utility::hash(inner_c_type)) {
+    case "ObjectProperty"_fnv:
+    {
+        const auto& array_obj = *(sdk::TArray<sdk::UObject*>*)((uintptr_t)addr + prop->get_offset());
+
+        for (auto obj : array_obj) {
+            std::wstring name = obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string();
+
+            if (ImGui::TreeNode(utility::narrow(name).data())) {
+                ui_handle_object(obj);
+                ImGui::TreePop();
+            }
+        }
+
+        break;
+    }
+
+    default:
+        ImGui::Text("Array of %s (unsupported)", inner_c_type.data());
+        break;
+    };
 }
 
 void UObjectHook::ui_handle_struct(void* addr, sdk::UStruct* uclass) {

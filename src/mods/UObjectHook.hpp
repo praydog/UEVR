@@ -19,6 +19,7 @@ class UScriptStruct;
 class USceneComponent;
 class UActorComponent;
 class AActor;
+class FArrayProperty;
 }
 
 class UObjectHook : public Mod {
@@ -60,6 +61,7 @@ private:
 
     void ui_handle_object(sdk::UObject* object);
     void ui_handle_properties(void* object, sdk::UStruct* definition);
+    void ui_handle_array_property(void* object, sdk::FArrayProperty* definition);
     void ui_handle_functions(void* object, sdk::UStruct* definition);
     void ui_handle_struct(void* addr, sdk::UStruct* definition);
 

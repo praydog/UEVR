@@ -80,6 +80,14 @@ struct TArray {
         return data + count;
     }
 
+    T* begin() const {
+        return data;
+    }
+
+    T* end() const {
+        return data + count;
+    }
+
     // operator[]
     T& operator[](int32_t index) {
         return data[index];
