@@ -2,6 +2,7 @@
 
 #include <utility/Logging.hpp>
 #include <utility/String.hpp>
+#include <utility/ScopeGuard.hpp>
 
 #include <sdk/UObjectBase.hpp>
 #include <sdk/UObjectArray.hpp>
@@ -805,6 +806,14 @@ void UObjectHook::on_draw_ui() {
             }
 
             const auto wide_filter = utility::widen(filter);
+
+            bool made_child = ImGui::BeginChild("Objects by class entries", ImVec2(0, 0), true, ImGuiWindowFlags_::ImGuiWindowFlags_HorizontalScrollbar);
+
+            utility::ScopeGuard sg{[made_child]() {
+                if (made_child) {
+                    ImGui::EndChild();
+                }
+            }};
 
             for (auto uclass : m_sorted_classes) {
                 const auto& objects_ref = m_objects_by_class[uclass];
