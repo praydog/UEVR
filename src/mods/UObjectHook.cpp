@@ -1422,18 +1422,21 @@ void UObjectHook::ui_handle_array_property(void* addr, sdk::FArrayProperty* prop
     const auto& array_generic = *(sdk::TArray<void*>*)((uintptr_t)addr + prop->get_offset());
 
     if (array_generic.data == nullptr || array_generic.count == 0) {
+        ImGui::Text("Empty array");
         return;
     }
 
     const auto inner = prop->get_inner();
 
     if (inner == nullptr) {
+        ImGui::Text("Failed to get inner property");
         return;
     }
     
     const auto inner_c = inner->get_class();
 
     if (inner_c == nullptr) {
+        ImGui::Text("Failed to get inner property class");
         return;
     }
 
@@ -1539,6 +1542,7 @@ void* UObjectHook::destructor(sdk::UObjectBase* object, void* rdx, void* r8, voi
             SPDLOG_INFO("Removing object {:x} {:s}", (uintptr_t)object, utility::narrow(it->second->full_name));
 #endif
             hook->m_objects.erase(object);
+            hook->m_motion_controller_attached_components.erase((sdk::USceneComponent*)object);
 
             for (auto super = (sdk::UStruct*)it->second->uclass; super != nullptr; super = super->get_super_struct()) {
                 hook->m_objects_by_class[(sdk::UClass*)super].erase(object);
