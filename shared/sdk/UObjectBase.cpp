@@ -328,6 +328,7 @@ void UObjectBase::update_offsets_post_uobjectarray() {
 
     for (auto ref : vtable_references) {
         if (!utility::find_mnemonic_in_path(ref + 4, 100, "CALL", false)) {
+            SPDLOG_INFO("Skipping reference at 0x{:X} because it doesn't call anything");
             continue;
         }
 
@@ -362,7 +363,7 @@ void UObjectBase::update_offsets_post_uobjectarray() {
                 return utility::ExhaustionResult::STEP_OVER;
             }
 
-            if (std::string_view{ctx.instrux.Mnemonic}.starts_with("MOV")) {
+            if (std::string_view{ctx.instrux.Mnemonic}.starts_with("MOV") || std::string_view{ctx.instrux.Mnemonic}.starts_with("OR")) {
                 for (auto i = 0; i < ctx.instrux.OperandsCount; ++i) {
                     const auto& op = ctx.instrux.Operands[i];
 
@@ -379,6 +380,8 @@ void UObjectBase::update_offsets_post_uobjectarray() {
         if (correct_ref) {
             break;
         }
+
+        SPDLOG_INFO("Skipping reference at 0x{:X} because it doesn't reference 0xFFFFFFFF", ref);
     }
 
     if (!correct_ref) {

@@ -1080,7 +1080,7 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
         ui_handle_material_interface(object);
     }
 
-    static auto widget_component_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/UMG.WidgetComponent");
+    static const auto widget_component_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/UMG.WidgetComponent");
 
     if (uclass->is_a(widget_component_t)) {
         if (ImGui::Button("Set to Screen Space")) {
