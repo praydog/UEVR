@@ -48,6 +48,11 @@ void FObjectProperty::update_offsets() {
         continue;
     }
 
+    if (s_property_class_offset == 0) {
+        SPDLOG_ERROR("[FObjectProperty::update_offsets] Failed to find property class offset");
+        return;
+    }
+
     SPDLOG_INFO("[FObjectProperty::update_offsets] Done");
 }
 }

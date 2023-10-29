@@ -1164,9 +1164,15 @@ void UObjectHook::ui_handle_material_interface(sdk::UObject* object) {
         //auto components = actor->get_all_components();
 
         for (auto comp_obj : components) {
-            auto comp = (sdk::UObject*)comp_obj;
+            auto comp = (sdk::UActorComponent*)comp_obj;
             if (comp->is_a(mesh_component_t)) {
                 if (comp == comp->get_class()->get_class_default_object()) {
+                    continue;
+                }
+
+                auto owner = comp->get_owner();
+
+                if (owner == nullptr || owner->get_class()->get_class_default_object() == owner) {
                     continue;
                 }
 

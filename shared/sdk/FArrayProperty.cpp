@@ -62,6 +62,11 @@ void FArrayProperty::update_offsets() {
         continue;
     }
 
+    if (s_inner_offset == 0) {
+        SPDLOG_ERROR("[FArrayProperty::update_offsets] Failed to find property inner offset");
+        return;
+    }
+
     SPDLOG_INFO("[FArrayProperty::update_offsets] Done");
 }
 }
