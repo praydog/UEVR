@@ -69,6 +69,7 @@ private:
     void ui_handle_actor(sdk::UObject* object);
 
     void spawn_overlapper();
+    void destroy_overlapper();
 
     static void* add_object(void* rcx, void* rdx, void* r8, void* r9);
     static void* destructor(sdk::UObjectBase* object, void* rdx, void* r8, void* r9);
@@ -113,4 +114,12 @@ private:
 
     std::unordered_map<sdk::USceneComponent*, std::shared_ptr<MotionControllerState>> m_motion_controller_attached_components{};
     sdk::AActor* m_overlap_detection_actor{nullptr};
+
+    auto get_spawned_spheres() const {
+        std::shared_lock _{m_mutex};
+        return m_spawned_spheres;
+    }
+    
+    std::unordered_set<sdk::USceneComponent*> m_spawned_spheres{};
+    std::unordered_map<sdk::USceneComponent*, sdk::USceneComponent*> m_spawned_spheres_to_components{};
 };

@@ -125,6 +125,22 @@ void UObjectHook::add_new_object(sdk::UObjectBase* object) {
     std::unique_lock _{m_mutex};
     std::unique_ptr<MetaObject> meta_object{};
 
+    /*static const auto prim_comp_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.PrimitiveComponent");
+
+    if (prim_comp_t != nullptr && object->get_class()->is_a(prim_comp_t)) {
+        static const auto bGenerateOverlapEvents = (sdk::FBoolProperty*)prim_comp_t->find_property(L"bGenerateOverlapEvents");
+
+        if (bGenerateOverlapEvents != nullptr) {
+            bGenerateOverlapEvents->set_value_in_object(object, true);
+        }
+    }*/
+
+    const auto c = object->get_class();
+
+    if (c == nullptr) {
+        return;
+    }
+
     if (!m_reusable_meta_objects.empty()) {
         meta_object = std::move(m_reusable_meta_objects.back());
         m_reusable_meta_objects.pop_back();
@@ -534,13 +550,13 @@ void UObjectHook::spawn_overlapper() {
         m_overlap_detection_actor = overlapper;
 
         if (overlapper != nullptr) {
-            auto add_comp = [&](sdk::UClass* c, std::function<void(sdk::UActorComponent*)> fn) -> sdk::UActorComponent* {
+            auto add_comp = [&](sdk::AActor* target, sdk::UClass* c, std::function<void(sdk::UActorComponent*)> fn) -> sdk::UActorComponent* {
                 if (c == nullptr) {
                     SPDLOG_ERROR("[UObjectHook] Cannot add component of null class");
                     return nullptr;
                 }
 
-                auto new_comp = overlapper->add_component_by_class(c);
+                auto new_comp = target->add_component_by_class(c);
 
                 if (new_comp != nullptr) {
                     fn(new_comp);
@@ -550,15 +566,17 @@ void UObjectHook::spawn_overlapper() {
                         scene_comp->set_hidden_in_game(false);
                     }
 
-                    overlapper->finish_add_component(new_comp);
+                    target->finish_add_component(new_comp);
                 } else {
-                    SPDLOG_ERROR("[UObjectHook] Failed to add component {} to overlapper", utility::narrow(c->get_full_name()));
+                    SPDLOG_ERROR("[UObjectHook] Failed to add component {} to target", utility::narrow(c->get_full_name()));
                 }
                 
                 return new_comp;
             };
 
-            add_comp(sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.SphereComponent"), [](sdk::UActorComponent* new_comp) {
+            const auto sphere_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.SphereComponent");
+
+            add_comp(overlapper, sphere_t, [](sdk::UActorComponent* new_comp) {
                 struct SphereRadiusParams {
                     float radius{};
                     bool update_overlaps{true};
@@ -572,9 +590,93 @@ void UObjectHook::spawn_overlapper() {
                     new_comp->process_event(fn, &params);
                 }
             });
+
+            const auto skeletal_mesh_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.SkeletalMeshComponent");
+            const auto meshes = get_objects_by_class(skeletal_mesh_t);
+            
+            for (auto obj : meshes) {
+                if (!this->exists(obj)) {
+                    continue;
+                }
+
+                const auto default_obj = obj->get_class()->get_class_default_object();
+
+                if (obj == default_obj) {
+                    continue;
+                }
+
+                SPDLOG_INFO("[UObjectHook] Spawning sphere for skeletal mesh {}", utility::narrow(obj->get_full_name()));
+
+                auto mesh = (sdk::USceneComponent*)obj;
+                auto owner = mesh->get_owner();
+
+                if (owner == nullptr) {
+                    continue;
+                }
+
+                const auto owner_default = owner->get_class()->get_class_default_object();
+
+                if (owner == owner_default) {
+                    continue;
+                }
+
+                SPDLOG_INFO("[UObjectHook] Owner of skeletal mesh is {}", utility::narrow(owner->get_full_name()));
+
+                auto new_sphere = (sdk::USceneComponent*)add_comp(owner, sphere_t, [](sdk::UActorComponent* new_comp) {
+                    struct SphereRadiusParams {
+                        float radius{};
+                        bool update_overlaps{true};
+                    } params{};
+
+                    params.radius = 10.0f;
+
+                    const auto fn = new_comp->get_class()->find_function(L"SetSphereRadius");
+
+                    if (fn != nullptr) {
+                        new_comp->process_event(fn, &params);
+                    }
+                });
+
+                if (new_sphere != nullptr) {
+                    new_sphere->attach_to(mesh, L"None", 0, true);
+                    new_sphere->set_local_transform(glm::vec3{}, glm::vec4{0, 0, 0, 1}, glm::vec3{1, 1, 1});
+
+                    std::unique_lock _{m_mutex};
+                    m_spawned_spheres.insert(new_sphere);
+                    m_spawned_spheres_to_components[new_sphere] = mesh;
+                }
+            }
         } else {
             SPDLOG_ERROR("[UObjectHook] Failed to spawn actor for overlapper");
         }
+    });
+}
+
+void UObjectHook::destroy_overlapper() {
+    GameThreadWorker::get().enqueue([this]() {
+        // Destroy all spawned spheres
+        auto spheres = get_spawned_spheres();
+
+        for (auto sphere : spheres) {
+            if (!this->exists(sphere)) {
+                continue;
+            }
+
+            sphere->destroy_component();
+        }
+
+        {
+            std::unique_lock _{m_mutex};
+            m_spawned_spheres.clear();
+            m_spawned_spheres_to_components.clear();
+        }
+
+        if (!this->exists(m_overlap_detection_actor)) {
+            return;
+        }
+
+        m_overlap_detection_actor->destroy_actor();
+        m_overlap_detection_actor = nullptr;
     });
 }
 
@@ -633,29 +735,14 @@ void UObjectHook::on_draw_ui() {
 
             ImGui::SameLine();
             if (ImGui::Button("Destroy Overlapper")) {
-                GameThreadWorker::get().enqueue([this]() {
-                    if (!this->exists(m_overlap_detection_actor)) {
-                        return;
-                    }
-
-                    m_overlap_detection_actor->destroy_actor();
-                    m_overlap_detection_actor = nullptr;
-                });
+                destroy_overlapper();
             }
 
             if (made) {
-                /*auto overlapped = m_overlap_detection_actor->get_overlapping_actors();
-
-                for (auto& it : overlapped) {
-                    if (!this->exists_unsafe(it)) {
-                        continue;
-                    }
-
-                    if (ImGui::TreeNode(utility::narrow(it->get_full_name()).data())) {
-                        ui_handle_object(it);
-                        ImGui::TreePop();
-                    }
-                }*/
+                bool attach_all = false;
+                if (ImGui::Button("Attach all")) {
+                    attach_all = true;
+                }
 
                 auto overlapped_components = m_overlap_detection_actor->get_overlapping_components();
 
@@ -663,6 +750,16 @@ void UObjectHook::on_draw_ui() {
                     auto comp = (sdk::USceneComponent*)it;
                     if (!this->exists_unsafe(comp)) {
                         continue;
+                    }
+
+                    if (m_spawned_spheres.contains(comp) && m_spawned_spheres_to_components.contains(comp)) {
+                        comp = m_spawned_spheres_to_components[comp];
+                    }
+
+                    if (attach_all){ 
+                        if (!m_motion_controller_attached_components.contains(comp)) {
+                            m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
+                        }
                     }
 
                     std::wstring comp_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
@@ -1552,6 +1649,12 @@ void* UObjectHook::destructor(sdk::UObjectBase* object, void* rdx, void* r8, voi
 #endif
             hook->m_objects.erase(object);
             hook->m_motion_controller_attached_components.erase((sdk::USceneComponent*)object);
+            hook->m_spawned_spheres.erase((sdk::USceneComponent*)object);
+            hook->m_spawned_spheres_to_components.erase((sdk::USceneComponent*)object);
+
+            if (object == hook->m_overlap_detection_actor) {
+                hook->m_overlap_detection_actor = nullptr;
+            }
 
             for (auto super = (sdk::UStruct*)it->second->uclass; super != nullptr; super = super->get_super_struct()) {
                 hook->m_objects_by_class[(sdk::UClass*)super].erase(object);
