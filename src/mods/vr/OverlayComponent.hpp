@@ -34,6 +34,20 @@ public:
         return m_openxr;
     }
 
+    struct IntersectState {
+        bool intersecting{false};
+        glm::vec2 quad_intersection_point{};
+        glm::vec2 swapchain_intersection_point{};
+    };
+
+    const auto& get_intersect_state() const {
+        return m_intersect_state;
+    }
+
+    const auto& get_framework_intersect_state() const {
+        return m_intersect_state;
+    }
+
 private:
     // Cached data for imgui VR overlay so we know when we need to update it
     // instead of doing it constantly every frame
@@ -67,6 +81,9 @@ private:
     bool m_closed_ui{false};
     bool m_just_closed_ui{false};
     bool m_just_opened_ui{false};
+
+    IntersectState m_intersect_state{};
+    IntersectState m_framework_intersect_state{};
 
     enum OverlayType {
         DEFAULT = 0,

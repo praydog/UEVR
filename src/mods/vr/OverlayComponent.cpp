@@ -1,3 +1,6 @@
+#include <glm/gtx/intersect.hpp>
+#include <imgui_internal.h>
+
 #include "Framework.hpp"
 #include "../VR.hpp"
 
@@ -68,6 +71,84 @@ std::optional<std::string> OverlayComponent::on_initialize_openvr() {
 
 void OverlayComponent::on_pre_imgui_frame() {
     this->update_input_openvr();
+
+    if (VR::get()->get_runtime()->is_openvr() && m_framework_wrist_ui->value()) {
+        return;
+    }
+
+    static std::chrono::steady_clock::time_point last_time = std::chrono::steady_clock::now();
+
+    const auto now = std::chrono::steady_clock::now();
+    const auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_time).count();
+    const auto delta_f = delta / 1000.0f;
+    last_time = now;
+
+    if (m_framework_intersect_state.intersecting && VR::get()->is_using_controllers()) {
+        auto vr = VR::get();
+        auto& io = ImGui::GetIO();
+        const auto is_initial_frame = !vr->is_using_afr() || vr->get_frame_count() % 2 == vr->m_left_eye_interval;
+
+        const auto x = m_framework_intersect_state.swapchain_intersection_point.x;
+        const auto y = m_framework_intersect_state.swapchain_intersection_point.y;
+        
+        const auto window_size = g_framework->get_last_window_size();
+        const auto window_pos = g_framework->get_last_window_pos();
+
+        static bool forced_aim = false;
+
+        static glm::vec2 last_mouse_pos{x, y};
+
+        // lerp towards the intersection point
+        last_mouse_pos = glm::lerp(last_mouse_pos, glm::vec2{x, y}, delta_f * 10.0f);
+
+        if (last_mouse_pos.x >= window_pos.x && last_mouse_pos.x <= window_pos.x + window_size.x &&
+            last_mouse_pos.y >= window_pos.y && last_mouse_pos.y <= window_pos.y + window_size.y) 
+        {
+            io.MousePos = ImVec2{
+                last_mouse_pos.x,
+                last_mouse_pos.y
+            };
+
+            static bool was_pressing = false;
+
+            if (VR::get()->is_action_active_any_joystick(vr->get_action_handle(VR::s_action_a_button_right))) {
+                // Clear any gamepad A events.
+                auto ctx = io.Ctx;
+
+                if (ctx != nullptr) {
+                    for (auto i = 0; i < ctx->InputEventsQueue.size(); ++i) {
+                        auto& event = ctx->InputEventsQueue[i];
+
+                        if (event.Type == ImGuiInputEventType::ImGuiInputEventType_Key && event.Key.Key == ImGuiKey_GamepadFaceDown) {
+                            ctx->InputEventsQueue.erase(ctx->InputEventsQueue.begin() + i);
+                            --i;
+                        }
+                    }
+                }
+
+                io.AddMouseButtonEvent(0, true);
+                was_pressing = true;
+            } else if (was_pressing) {
+                io.AddMouseButtonEvent(0, false);
+                was_pressing = false;
+            }
+
+            const auto right_stick_axis = vr->get_right_stick_axis();
+            
+            // Mousewheel
+            if (right_stick_axis.y > 0.5f) {
+                io.MouseWheel += right_stick_axis.y;
+            } else if (right_stick_axis.y < -0.5f) {
+                io.MouseWheel += right_stick_axis.y;
+            }
+
+            VR::get()->set_aim_allowed(false);
+            forced_aim = true;
+        } else if (forced_aim) {
+            VR::get()->set_aim_allowed(true);
+            forced_aim = false;
+        }
+    }
 }
 
 void OverlayComponent::on_post_compositor_submit() {
@@ -621,6 +702,7 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
     auto& vr = VR::get();
 
     if (!vr->is_gui_enabled()) {
+        m_parent->m_intersect_state.intersecting = false;
         return std::nullopt;
     }
 
@@ -674,6 +756,48 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
 
     layer.pose.orientation = runtimes::OpenXR::to_openxr(glm::quat_cast(glm_matrix));
     layer.pose.position = runtimes::OpenXR::to_openxr(glm_matrix[3]);
+
+    // Check if the controller pointer intersects with the quad, and we can use this to emulate the mouse
+    if (vr->is_using_controllers()) {
+        // Right only for now for testing
+        const auto right_controller_rot = glm::quat{vr->get_rotation(vr->get_right_controller_index(), false)};
+        const auto right_controller_pos = glm::vec3{vr->get_position(vr->get_right_controller_index(), false)};
+
+        const auto start = right_controller_pos;
+        auto fwd = (right_controller_rot * glm::vec3{0.0f, 0.0f, -1.0f});
+        const auto end = right_controller_pos + (fwd * 1000.0f);
+        
+        const auto plane_pos = glm::vec3{glm_matrix[3]};
+
+        float intersection_distance = 0.0f;
+        if (glm::intersectRayPlane<glm::vec3>(start, fwd, plane_pos, glm::normalize(glm::vec3{glm_matrix[2]}), intersection_distance)) {
+            const auto intersection_point = start + (fwd * intersection_distance);
+
+            const auto local_point = glm::inverse(glm_matrix) * glm::vec4{intersection_point, 1.0f};
+
+            const auto w_half = meters_w / 2.0f;
+            const auto h_half = meters_h / 2.0f;
+
+            if (local_point.x >= -w_half && local_point.x <= w_half && local_point.y >= -h_half && local_point.y <= h_half) {
+                const auto x = (local_point.x + w_half) / meters_w;
+                const auto y = (meters_h - (local_point.y + h_half)) / meters_h;
+
+                m_parent->m_intersect_state.quad_intersection_point = {x, y};
+                m_parent->m_intersect_state.intersecting = true;
+
+                if (auto it = vr->m_openxr->swapchains.find((uint32_t)runtimes::OpenXR::SwapchainIndex::UI); it != vr->m_openxr->swapchains.end()) {
+                    const auto client_x = (int32_t)((float)it->second.width * x);
+                    const auto client_y = (int32_t)((float)it->second.height * y);
+
+                    m_parent->m_intersect_state.swapchain_intersection_point = {client_x, client_y};
+                }
+            } else {
+                m_parent->m_intersect_state.intersecting = false;
+            }
+        }
+    } else {
+        m_parent->m_intersect_state.intersecting = false;
+    }
 
     return layer;
 }
@@ -782,6 +906,7 @@ std::optional<std::reference_wrapper<XrCompositionLayerBaseHeader>> OverlayCompo
 
 std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::OpenXR::generate_framework_ui_quad() {
     if (!g_framework->is_drawing_anything()) {
+        m_parent->m_framework_intersect_state.intersecting = false;
         return std::nullopt;
     }
 
@@ -839,6 +964,48 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
 
     layer.pose.orientation = runtimes::OpenXR::to_openxr(glm::quat_cast(glm_matrix));
     layer.pose.position = runtimes::OpenXR::to_openxr(glm_matrix[3]);
+
+    // Check if the controller pointer intersects with the quad, and we can use this to emulate the mouse
+    if (vr->is_using_controllers()) {
+        // Right only for now for testing
+        const auto right_controller_rot = glm::quat{vr->get_rotation(vr->get_right_controller_index(), false)};
+        const auto right_controller_pos = glm::vec3{vr->get_position(vr->get_right_controller_index(), false)};
+
+        const auto start = right_controller_pos;
+        auto fwd = (right_controller_rot * glm::vec3{0.0f, 0.0f, -1.0f});
+        const auto end = right_controller_pos + (fwd * 1000.0f);
+        
+        const auto plane_pos = glm::vec3{glm_matrix[3]};
+
+        float intersection_distance = 0.0f;
+        if (glm::intersectRayPlane<glm::vec3>(start, fwd, plane_pos, glm::normalize(glm::vec3{glm_matrix[2]}), intersection_distance)) {
+            const auto intersection_point = start + (fwd * intersection_distance);
+
+            const auto local_point = glm::inverse(glm_matrix) * glm::vec4{intersection_point, 1.0f};
+
+            const auto w_half = meters_w / 2.0f;
+            const auto h_half = meters_h / 2.0f;
+
+            if (local_point.x >= -w_half && local_point.x <= w_half && local_point.y >= -h_half && local_point.y <= h_half) {
+                const auto x = (local_point.x + w_half) / meters_w;
+                const auto y = (meters_h - (local_point.y + h_half)) / meters_h;
+
+                m_parent->m_framework_intersect_state.quad_intersection_point = {x, y};
+                m_parent->m_framework_intersect_state.intersecting = true;
+
+                if (auto it = vr->m_openxr->swapchains.find((uint32_t)runtimes::OpenXR::SwapchainIndex::UI); it != vr->m_openxr->swapchains.end()) {
+                    const auto client_x = (int32_t)((float)it->second.width * x);
+                    const auto client_y = (int32_t)((float)it->second.height * y);
+
+                    m_parent->m_framework_intersect_state.swapchain_intersection_point = {client_x, client_y};
+                }
+            } else {
+                m_parent->m_framework_intersect_state.intersecting = false;
+            }
+        }
+    } else {
+        m_parent->m_framework_intersect_state.intersecting = false;
+    }
 
     return layer;
 }
