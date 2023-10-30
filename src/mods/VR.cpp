@@ -1987,7 +1987,6 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         m_uncap_framerate->draw("Uncap Framerate");
         m_enable_gui->draw("Enable GUI");
         m_enable_depth->draw("Enable Depth");
-        m_thumbrest_shifting->draw("Thumbrest DPad Shifting");
         m_load_blueprint_code->draw("Load Blueprint Code");
         m_ghosting_fix->draw("Ghosting Fix");
 
@@ -2011,6 +2010,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Controller")) {
             m_joystick_deadzone->draw("VR Joystick Deadzone");
+            m_thumbrest_shifting->draw("Thumbrest DPad Shifting");
             ImGui::TreePop();
         }
 
