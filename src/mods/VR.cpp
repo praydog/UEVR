@@ -1908,37 +1908,97 @@ void VR::on_draw_ui() {
         return;
     }
 
-    if (m_has_hw_scheduling) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-        ImGui::TextWrapped("WARNING: Hardware-accelerated GPU scheduling is enabled. This may cause the game to run slower.");
-        ImGui::TextWrapped("Go into your Windows Graphics settings and disable \"Hardware-accelerated GPU scheduling\"");
-        ImGui::PopStyleColor();
-        ImGui::TextWrapped("Note: This is only necessary if you are experiencing performance issues.");
+    if (ImGui::Button("Set Standing Height")) {
+        m_standing_origin.y = get_position(0).y;
     }
 
-    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
-    if (ImGui::TreeNode((std::string{"Runtime Information ("} + get_runtime()->name().data() + ")").c_str())) {
-        if (ImGui::Button("Set Standing Height")) {
-            m_standing_origin.y = get_position(0).y;
+    ImGui::SameLine();
+
+    if (ImGui::Button("Set Standing Origin")) {
+        m_standing_origin = get_position(0);
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Recenter View")) {
+        recenter_view();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Reinitialize Runtime")) {
+        get_runtime()->wants_reinitialize = true;
+    }
+
+    const auto made_child = ImGui::BeginChild("VRChild", ImVec2(0, 0), true, ImGuiWindowFlags_::ImGuiWindowFlags_NavFlattened);
+
+    utility::ScopeGuard sg([made_child]() {
+        if (made_child) {
+            ImGui::EndChild();
+        }
+    });
+
+    enum SelectedPage {
+        PAGE_RUNTIME,
+        PAGE_UNREAL,
+        PAGE_INPUT,
+        PAGE_CAMERA,
+        PAGE_CONSOLE,
+        PAGE_COMPATIBILITY,
+        PAGE_DEBUG,
+    };
+
+    static SelectedPage selected_page = PAGE_RUNTIME;
+
+    ImGui::BeginTable("VRTable", 2, ImGuiTableFlags_::ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_::ImGuiTableFlags_BordersOuterV | ImGuiTableFlags_::ImGuiTableFlags_SizingFixedFit);
+    ImGui::TableSetupColumn("LeftPane", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+    ImGui::TableSetupColumn("RightPane", ImGuiTableColumnFlags_WidthStretch);
+
+    // Draw left pane
+    {
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); // Set to the first column
+
+        ImGui::BeginGroup();
+
+        auto dcs = [&](const char* label, SelectedPage page_value) -> bool {
+            ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
+            utility::ScopeGuard sg3([]() {
+                ImGui::PopStyleVar();
+            });
+            if (ImGui::Selectable(label, selected_page == page_value)) {
+                selected_page = page_value;
+                return true;
+            }
+            return false;
+        };
+
+        dcs("Runtime", PAGE_RUNTIME);
+        dcs("Unreal", PAGE_UNREAL);
+        dcs("Input", PAGE_INPUT);
+        dcs("Camera", PAGE_CAMERA);
+        dcs("Console/CVars", PAGE_CONSOLE);
+        dcs("Compatibility", PAGE_COMPATIBILITY);
+        dcs("Debug", PAGE_DEBUG);
+
+        ImGui::EndGroup();
+    }
+
+    ImGui::TableNextColumn(); // Move to the next column (right)
+    ImGui::BeginGroup();
+    if (selected_page == PAGE_RUNTIME) {
+        if (m_has_hw_scheduling) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+            ImGui::TextWrapped("WARNING: Hardware-accelerated GPU scheduling is enabled. This may cause the game to run slower.");
+            ImGui::TextWrapped("Go into your Windows Graphics settings and disable \"Hardware-accelerated GPU scheduling\"");
+            ImGui::PopStyleColor();
+            ImGui::TextWrapped("Note: This is only necessary if you are experiencing performance issues.");
         }
 
-        ImGui::SameLine();
-
-        if (ImGui::Button("Set Standing Origin")) {
-            m_standing_origin = get_position(0);
-        }
-
-        ImGui::SameLine();
-
-        if (ImGui::Button("Recenter View")) {
-            recenter_view();
-        }
-
-        if (ImGui::Button("Reinitialize Runtime")) {
-            get_runtime()->wants_reinitialize = true;
-        }
+        ImGui::Text((std::string{"Runtime Information ("} + get_runtime()->name().data() + ")").c_str());
 
         m_desktop_fix->draw("Desktop Spectator View");
+        ImGui::SameLine();
         m_2d_screen_mode->draw("2D Screen Mode");
 
         ImGui::TextWrapped("Render Resolution (per-eye): %d x %d", get_runtime()->get_width(), get_runtime()->get_height());
@@ -1955,134 +2015,132 @@ void VR::on_draw_ui() {
         ImGui::TreePop();
     }
 
-    ImGui::Text("Unreal Options");
+    if (selected_page == PAGE_UNREAL) {
+        m_rendering_method->draw("Rendering Method");
+        m_synced_afr_method->draw("Synced Sequential Method");
 
-    m_rendering_method->draw("Rendering Method");
-    m_synced_afr_method->draw("Synced Sequential Method");
+        m_world_scale->draw("World Scale");
+        m_depth_scale->draw("Depth Scale");
 
-    float camera_offset[] = {m_camera_forward_offset->value(), m_camera_right_offset->value(), m_camera_up_offset->value()};
-    if (ImGui::SliderFloat3("Camera Offset", camera_offset, -4000.0f, 4000.0f)) {
-        m_camera_forward_offset->value() = camera_offset[0];
-        m_camera_right_offset->value() = camera_offset[1];
-        m_camera_up_offset->value() = camera_offset[2];
-    }
+        m_disable_hzbocclusion->draw("Disable HZBOcclusion");
+        m_disable_instance_culling->draw("Disable Instance Culling");
+        m_disable_hdr_compositing->draw("Disable HDR Composition");
+        m_disable_blur_widgets->draw("Disable Blur Widgets");
+        m_uncap_framerate->draw("Uncap Framerate");
+        m_enable_gui->draw("Enable GUI");
+        m_enable_depth->draw("Enable Depth");
+        m_thumbrest_shifting->draw("Thumbrest DPad Shifting");
+        m_load_blueprint_code->draw("Load Blueprint Code");
+        m_ghosting_fix->draw("Ghosting Fix");
 
-    m_world_scale->draw("World Scale");
-    m_depth_scale->draw("Depth Scale");
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Near Clip Plane")) {
+            m_custom_z_near_enabled->draw("Enable");
 
-    ImGui::BeginGroup();
-    ImGui::Columns(2);
+            if (m_custom_z_near_enabled->value()) {
+                m_custom_z_near->draw("Value");
 
-    ImGui::BeginGroup();
-    m_disable_hzbocclusion->draw("Disable HZBOcclusion");
-    m_disable_instance_culling->draw("Disable Instance Culling");
-    m_disable_hdr_compositing->draw("Disable HDR Composition");
-    m_disable_blur_widgets->draw("Disable Blur Widgets");
-    m_uncap_framerate->draw("Uncap Framerate");
-    m_enable_gui->draw("Enable GUI");
-    m_enable_depth->draw("Enable Depth");
-    m_thumbrest_shifting->draw("Thumbrest DPad Shifting");
-    m_load_blueprint_code->draw("Load Blueprint Code");
-    m_ghosting_fix->draw("Ghosting Fix");
-
-    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
-    if (ImGui::TreeNode("Splitscreen Compatibility")) {
-        m_splitscreen_compatibility_mode->draw("Enabled");
-        m_splitscreen_view_index->draw("Index");
-        ImGui::TreePop();
-    }
-
-    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
-    if (ImGui::TreeNode("Near Clip Plane")) {
-        m_custom_z_near_enabled->draw("Enable");
-
-        if (m_custom_z_near_enabled->value()) {
-            m_custom_z_near->draw("Value");
-
-            if (m_custom_z_near->value() <= 0.0f) {
-                m_custom_z_near->value() = 0.01f;
+                if (m_custom_z_near->value() <= 0.0f) {
+                    m_custom_z_near->value() = 0.01f;
+                }
             }
-        }
 
-        ImGui::TreePop();
-    }
-
-    ImGui::EndGroup();
-
-    ImGui::NextColumn();
-    ImGui::BeginGroup();
-
-    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
-    if (ImGui::TreeNode("Aim Method")) {
-        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Experimental, may crash");
-        ImGui::TextWrapped("Some games may not work with this enabled.");
-        if (m_aim_method->draw("Type")) {
-            m_previous_aim_method = (AimMethod)m_aim_method->value();
-        }
-
-        m_aim_interp->draw("Smoothing");
-        m_aim_speed->draw("Speed");
-
-        ImGui::TreePop();
-    }
-
-    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
-    if (ImGui::TreeNode("Movement Orientation")) {
-        m_movement_orientation->draw("Type");
-
-        ImGui::TreePop();
-    }
-
-    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
-    if (ImGui::TreeNode("Roomscale Movement")) {
-        m_roomscale_movement->draw("Enabled");
-        m_roomscale_movement_actor_rotation->draw("Use Actor Rotation");
-
-        ImGui::TreePop();
-    }
-
-    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
-    if (ImGui::TreeNode("Decoupled Pitch")) {
-        m_decoupled_pitch->draw("Enabled");
-        m_decoupled_pitch_ui_adjust->draw("Auto Adjust UI");
-
-        ImGui::TreePop();
-    }
-
-    for (auto i = 0; i < m_camera_datas.size(); ++i) {
-        auto& data = m_camera_datas[i];
-
-        if (ImGui::Button(std::format("Save Camera {}", i).data())) {
-            save_camera(i);
-        }
-
-        ImGui::SameLine();
-
-        if (ImGui::Button(std::format("Load Camera {}", i).data())) {
-            load_camera(i);
+            ImGui::TreePop();
         }
     }
 
-    ImGui::EndGroup();
-    ImGui::EndGroup();
+    if (selected_page == PAGE_INPUT) {
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Aim Method")) {
+            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Experimental, may crash");
+            ImGui::TextWrapped("Some games may not work with this enabled.");
+            if (m_aim_method->draw("Type")) {
+                m_previous_aim_method = (AimMethod)m_aim_method->value();
+            }
 
-    ImGui::Columns(1);
+            m_aim_interp->draw("Smoothing");
+            m_aim_speed->draw("Speed");
 
-    m_cvar_manager->on_draw_ui();
+            ImGui::TreePop();
+        }
 
-    if (m_fake_stereo_hook != nullptr) {
-        m_fake_stereo_hook->on_draw_ui();
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Movement Orientation")) {
+            m_movement_orientation->draw("Type");
+
+            ImGui::TreePop();
+        }
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Roomscale Movement")) {
+            m_roomscale_movement->draw("Enabled");
+            m_roomscale_movement_actor_rotation->draw("Use Actor Rotation");
+
+            ImGui::TreePop();
+        }
     }
 
-    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
-    if (ImGui::TreeNode("Compatibility Options")) {
-        m_compatibility_skip_pip->draw("Skip PostInitProperties");
-        m_extreme_compat_mode->draw("Extreme Compatibility Mode");
-        ImGui::TreePop();
+    if (selected_page == PAGE_CAMERA) {
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Camera")) {
+            float camera_offset[] = {m_camera_forward_offset->value(), m_camera_right_offset->value(), m_camera_up_offset->value()};
+            if (ImGui::SliderFloat3("Camera Offset", camera_offset, -4000.0f, 4000.0f)) {
+                m_camera_forward_offset->value() = camera_offset[0];
+                m_camera_right_offset->value() = camera_offset[1];
+                m_camera_up_offset->value() = camera_offset[2];
+            }
+
+            for (auto i = 0; i < m_camera_datas.size(); ++i) {
+                auto& data = m_camera_datas[i];
+
+                if (ImGui::Button(std::format("Save Camera {}", i).data())) {
+                    save_camera(i);
+                }
+
+                ImGui::SameLine();
+
+                if (ImGui::Button(std::format("Load Camera {}", i).data())) {
+                    load_camera(i);
+                }
+            }
+
+            ImGui::TreePop();
+        }
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Decoupled Pitch")) {
+            m_decoupled_pitch->draw("Enabled");
+            m_decoupled_pitch_ui_adjust->draw("Auto Adjust UI");
+
+            ImGui::TreePop();
+        }
+    }
+
+    if (selected_page == PAGE_CONSOLE) {
+        m_cvar_manager->on_draw_ui();
+    }
+
+    if (selected_page == PAGE_COMPATIBILITY) {
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Compatibility Options")) {
+            m_compatibility_skip_pip->draw("Skip PostInitProperties");
+            m_extreme_compat_mode->draw("Extreme Compatibility Mode");
+            ImGui::TreePop();
+        }
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Splitscreen Compatibility")) {
+            m_splitscreen_compatibility_mode->draw("Enabled");
+            m_splitscreen_view_index->draw("Index");
+            ImGui::TreePop();
+        }
     }
     
-    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
-    if (ImGui::TreeNode("Debug Info")) {
+    if (selected_page == PAGE_DEBUG) {
+        if (m_fake_stereo_hook != nullptr) {
+            m_fake_stereo_hook->on_draw_ui();
+        }
+
         ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
         ImGui::DragFloat4("Right Bounds", (float*)&m_right_bounds, 0.005f, -2.0f, 2.0f);
         ImGui::DragFloat4("Left Bounds", (float*)&m_left_bounds, 0.005f, -2.0f, 2.0f);
@@ -2103,9 +2161,10 @@ void VR::on_draw_ui() {
         ImGui::DragFloat4("Raw Right", (float*)&m_raw_projections[1], 0.01f, -100.0f, 100.0f);
 
         ImGui::TextWrapped("Hardware scheduling: %s", m_has_hw_scheduling ? "Enabled" : "Disabled");
-
-        ImGui::TreePop();
     }
+
+    ImGui::EndGroup();
+    ImGui::EndTable();
 }
 
 Vector4f VR::get_position(uint32_t index, bool grip) const {
