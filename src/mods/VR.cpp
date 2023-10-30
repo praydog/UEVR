@@ -2051,6 +2051,12 @@ void VR::on_draw_ui() {
 
     if (selected_page == PAGE_INPUT) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Controller")) {
+            m_joystick_deadzone->draw("VR Joystick Deadzone");
+            ImGui::TreePop();
+        }
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Aim Method")) {
             ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Experimental, may crash");
             ImGui::TextWrapped("Some games may not work with this enabled.");
