@@ -68,7 +68,7 @@ private:
     void ui_handle_material_interface(sdk::UObject* object);
     void ui_handle_actor(sdk::UObject* object);
 
-    void spawn_overlapper();
+    void spawn_overlapper(uint32_t hand = 0);
     void destroy_overlapper();
 
     static void* add_object(void* rcx, void* rdx, void* r8, void* r9);
@@ -114,6 +114,31 @@ private:
 
     std::unordered_map<sdk::USceneComponent*, std::shared_ptr<MotionControllerState>> m_motion_controller_attached_components{};
     sdk::AActor* m_overlap_detection_actor{nullptr};
+    sdk::AActor* m_overlap_detection_actor_left{nullptr};
+
+    std::shared_ptr<MotionControllerState> get_or_add_motion_controller_state(sdk::USceneComponent* component) {
+        {
+            std::shared_lock _{m_mutex};
+            if (auto it = m_motion_controller_attached_components.find(component); it != m_motion_controller_attached_components.end()) {
+                return it->second;
+            }
+        }
+
+        std::unique_lock _{m_mutex};
+        auto result = std::make_shared<MotionControllerState>();
+        return m_motion_controller_attached_components[component] = result;
+
+        return result;
+    }
+
+    std::optional<std::shared_ptr<MotionControllerState>> get_motion_controller_state(sdk::USceneComponent* component) {
+        std::shared_lock _{m_mutex};
+        if (auto it = m_motion_controller_attached_components.find(component); it != m_motion_controller_attached_components.end()) {
+            return it->second;
+        }
+
+        return {};
+    }
 
     auto get_spawned_spheres() const {
         std::shared_lock _{m_mutex};
@@ -121,5 +146,6 @@ private:
     }
     
     std::unordered_set<sdk::USceneComponent*> m_spawned_spheres{};
+    std::unordered_set<sdk::USceneComponent*> m_components_with_spheres{};
     std::unordered_map<sdk::USceneComponent*, sdk::USceneComponent*> m_spawned_spheres_to_components{};
 };

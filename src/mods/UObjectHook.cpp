@@ -199,6 +199,7 @@ void UObjectHook::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     }
 }
 
+// TODO: split this into some functions because its getting a bit massive
 void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
                                         const float world_to_meters, Vector3f* view_location, bool is_double)
 {
@@ -272,18 +273,6 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
         }
 
         if (vr->is_using_controllers()) {
-            const auto right_hand_offset_q = glm::quat{glm::yawPitchRoll(
-                glm::radians(0.f),
-                glm::radians(0.f),
-                glm::radians(0.f))
-            };
-
-            const auto left_hand_offset_q = glm::quat{glm::yawPitchRoll(
-                glm::radians(0.f),
-                glm::radians(0.f),
-                glm::radians(0.f))
-            };
-
             Vector3f right_hand_position = vr->get_grip_position(vr->get_right_controller_index());
             glm::quat right_hand_rotation = vr->get_aim_rotation(vr->get_right_controller_index());
 
@@ -303,9 +292,6 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
             left_hand_position = final_position - left_hand_position;
 
             right_hand_rotation = rotation_offset * right_hand_rotation;
-            const auto right_hand_rotation_relative = glm::normalize(right_hand_rotation * right_hand_offset_q);
-            const auto right_hand_euler_relative = glm::degrees(utility::math::euler_angles_from_steamvr(right_hand_rotation_relative));
-            
             right_hand_rotation = (glm::normalize(view_quat_inverse_flat) * right_hand_rotation);
 
             left_hand_rotation = rotation_offset * left_hand_rotation;
@@ -324,25 +310,124 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                 return result;
             };
 
+            auto comps = with_mutex([this]() { return m_motion_controller_attached_components; });
+
+            sdk::TArray<sdk::UPrimitiveComponent*> overlapped_components{};
+            sdk::TArray<sdk::UPrimitiveComponent*> overlapped_components_left{};
+
+            // Update overlapped components and overlap actor transform
             if (m_overlap_detection_actor != nullptr && this->exists(m_overlap_detection_actor)) {
                 m_overlap_detection_actor->set_actor_location(right_hand_position, false, false);
                 m_overlap_detection_actor->set_actor_rotation(right_hand_euler, false);
-            }
 
-            const auto objs = with_mutex([this]() { return m_motion_controller_attached_objects; });
-            
-            for (auto object : objs) {
-                if (!this->exists(object)) {
-                    continue;
+                if (!g_framework->is_drawing_ui()) {
+                    overlapped_components = std::move(m_overlap_detection_actor->get_overlapping_components());
                 }
-
-                auto actor = (sdk::AActor*)object;
-
-                actor->set_actor_location(right_hand_position, false, false);
-                actor->set_actor_rotation(right_hand_euler, false);
             }
 
-            auto comps = with_mutex([this]() { return m_motion_controller_attached_components; });
+            // Update overlapped components and overlap actor transform (left)
+            if (m_overlap_detection_actor_left != nullptr && this->exists(m_overlap_detection_actor_left)) {
+                m_overlap_detection_actor_left->set_actor_location(left_hand_position, false, false);
+                m_overlap_detection_actor_left->set_actor_rotation(left_hand_euler, false);
+
+                if (!g_framework->is_drawing_ui()) {
+                    overlapped_components_left = std::move(m_overlap_detection_actor_left->get_overlapping_components());
+                }
+            }
+
+            // Check intuitive attachment for overlapped components
+            if (!g_framework->is_drawing_ui() && (!overlapped_components.empty() || !overlapped_components_left.empty())) {
+                static bool prev_right_a_pressed = false;
+                static bool prev_left_a_pressed = false;
+                const auto is_a_down_raw_right = vr->is_action_active_any_joystick(vr->get_action_handle(VR::s_action_a_button_right));
+                const auto was_a_pressed_right = !prev_right_a_pressed && is_a_down_raw_right;
+
+                const auto is_a_down_raw_left = vr->is_action_active_any_joystick(vr->get_action_handle(VR::s_action_a_button_left));
+                const auto was_a_pressed_left = !prev_left_a_pressed && is_a_down_raw_left;
+
+                prev_right_a_pressed = is_a_down_raw_right;
+                prev_left_a_pressed = is_a_down_raw_left;
+
+                // Update existing attached components before moving onto overlapped ones.
+                for (auto& it : comps) {
+                    auto& state = *it.second;
+
+                    if (state.hand == 0) {
+                        if (is_a_down_raw_left) {
+                            state.adjusting = true;
+                        } else if (!is_a_down_raw_left) {
+                            state.adjusting = false;
+                        }
+                    } else if (state.hand == 1) {
+                        if (is_a_down_raw_right) {
+                            state.adjusting = true;
+                        } else if (!is_a_down_raw_right) {
+                            state.adjusting = false;
+                        }
+                    }
+                }
+                
+                auto update_overlaps = [&](int32_t hand, const sdk::TArray<sdk::UPrimitiveComponent*>& components) {
+                    const auto was_pressed = hand == 0 ? was_a_pressed_left : was_a_pressed_right;
+                    const auto is_pressed = hand == 0 ? is_a_down_raw_left : is_a_down_raw_right;
+
+                    for (auto overlap : components) {
+                        static const auto capsule_component_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.CapsuleComponent");
+                        if (overlap->get_class()->is_a(capsule_component_t)) {
+                            continue;
+                        }
+
+                        {
+                            std::shared_lock _{m_mutex};
+                            if (m_spawned_spheres_to_components.contains(overlap)) {
+                                overlap = (sdk::UPrimitiveComponent*)m_spawned_spheres_to_components[overlap];
+                            }
+                        }
+
+                        const auto owner = overlap->get_owner();
+                        bool owner_is_adjustment_vis = false;
+
+                        if (owner == m_overlap_detection_actor || owner == m_overlap_detection_actor_left) {
+                            continue;
+                        }
+
+                        // Make sure we don't try to attach to the adjustment visualizer
+                        {
+                            std::shared_lock _{m_mutex};
+                            auto it = std::find_if(m_motion_controller_attached_components.begin(), m_motion_controller_attached_components.end(),
+                                [&](auto& it) {
+                                    if (it.second->adjustment_visualizer != nullptr && this->exists_unsafe(it.second->adjustment_visualizer)) {
+                                        if (it.second->adjustment_visualizer == owner) {
+                                            owner_is_adjustment_vis = true;
+                                            return true;
+                                        }
+                                    }
+
+                                    return false;
+                                });
+                            
+                            if (owner_is_adjustment_vis) {
+                                continue;
+                            }
+                        }
+
+                        if (was_pressed) {
+                            auto state = get_or_add_motion_controller_state(overlap);
+                            state->adjusting = true;
+                            state->hand = hand;
+                        } /*else if (!is_pressed) {
+                            auto state = get_motion_controller_state(overlap);
+
+                            if (state && (*state)->hand == hand) {
+                                (*state)->adjusting = false;
+                            }
+                        }*/
+                    }
+                };
+
+                update_overlaps(0, overlapped_components_left);
+                update_overlaps(1, overlapped_components);
+            }
 
             for (auto& it : comps) {
                 auto comp = it.first;
@@ -533,12 +618,8 @@ void UObjectHook::on_post_calculate_stereo_view_offset(void* stereo_device, cons
     VR::get()->set_aim_allowed(!any_adjusting);
 }
 
-void UObjectHook::spawn_overlapper() {
-    GameThreadWorker::get().enqueue([this]() {
-        if (m_overlap_detection_actor != nullptr && this->exists(m_overlap_detection_actor)) {
-            return;
-        }
-
+void UObjectHook::spawn_overlapper(uint32_t hand) {
+    GameThreadWorker::get().enqueue([this, hand]() {
         auto ugs = sdk::UGameplayStatics::get();
         auto world = sdk::UGameEngine::get()->get_world();
 
@@ -547,7 +628,20 @@ void UObjectHook::spawn_overlapper() {
         }
 
         auto overlapper = ugs->spawn_actor(world, sdk::AActor::static_class(), glm::vec3{0, 0, 0});
-        m_overlap_detection_actor = overlapper;
+
+        if (hand == 1) {
+            if (m_overlap_detection_actor != nullptr && this->exists(m_overlap_detection_actor)) {
+                m_overlap_detection_actor->destroy_actor();
+            }
+
+            m_overlap_detection_actor = overlapper;
+        } else {
+            if (m_overlap_detection_actor_left != nullptr && this->exists(m_overlap_detection_actor_left)) {
+                m_overlap_detection_actor_left->destroy_actor();
+            }
+
+            m_overlap_detection_actor_left = overlapper;
+        }
 
         if (overlapper != nullptr) {
             auto add_comp = [&](sdk::AActor* target, sdk::UClass* c, std::function<void(sdk::UActorComponent*)> fn) -> sdk::UActorComponent* {
@@ -599,6 +693,11 @@ void UObjectHook::spawn_overlapper() {
                     continue;
                 }
 
+                // Dont add the same one twice
+                if (m_components_with_spheres.contains((sdk::USceneComponent*)obj)) {
+                    continue;
+                }
+
                 const auto default_obj = obj->get_class()->get_class_default_object();
 
                 if (obj == default_obj) {
@@ -644,6 +743,7 @@ void UObjectHook::spawn_overlapper() {
                     std::unique_lock _{m_mutex};
                     m_spawned_spheres.insert(new_sphere);
                     m_spawned_spheres_to_components[new_sphere] = mesh;
+                    m_components_with_spheres.insert(mesh);
                 }
             }
         } else {
@@ -669,14 +769,18 @@ void UObjectHook::destroy_overlapper() {
             std::unique_lock _{m_mutex};
             m_spawned_spheres.clear();
             m_spawned_spheres_to_components.clear();
+            m_components_with_spheres.clear();
         }
 
-        if (!this->exists(m_overlap_detection_actor)) {
-            return;
+        if (m_overlap_detection_actor != nullptr && this->exists(m_overlap_detection_actor)) {
+            m_overlap_detection_actor->destroy_actor();
+            m_overlap_detection_actor = nullptr;
         }
 
-        m_overlap_detection_actor->destroy_actor();
-        m_overlap_detection_actor = nullptr;
+        if (m_overlap_detection_actor_left != nullptr && this->exists(m_overlap_detection_actor_left)) {
+            m_overlap_detection_actor_left->destroy_actor();
+            m_overlap_detection_actor_left = nullptr;
+        }
     });
 }
 
@@ -694,14 +798,14 @@ void UObjectHook::on_draw_ui() {
         std::shared_lock _{m_mutex};
 
         if (!m_motion_controller_attached_components.empty()) {
+            ImGui::SetNextItemOpen(true, ImGuiCond_Once);
             const auto made = ImGui::TreeNode("Attached Components");
 
-            ImGui::SameLine();
-            if (ImGui::Button("Detach all")) {
-                m_motion_controller_attached_components.clear();
-            }
-
             if (made) {
+                if (ImGui::Button("Detach all")) {
+                    m_motion_controller_attached_components.clear();
+                }
+
                 // make a copy because the user could press the detach button while iterating
                 auto attached = m_motion_controller_attached_components;
 
@@ -726,19 +830,21 @@ void UObjectHook::on_draw_ui() {
 
         if (m_overlap_detection_actor == nullptr) {
             if (ImGui::Button("Spawn Overlapper")) {
-                spawn_overlapper();
+                spawn_overlapper(0);
+                spawn_overlapper(1);
             }
         } else if (!this->exists_unsafe(m_overlap_detection_actor)) {
             m_overlap_detection_actor = nullptr;
         } else {
+            ImGui::SetNextItemOpen(true, ImGuiCond_Once);
             const auto made = ImGui::TreeNode("Overlapped Objects");
 
-            ImGui::SameLine();
-            if (ImGui::Button("Destroy Overlapper")) {
-                destroy_overlapper();
-            }
-
             if (made) {
+                if (ImGui::Button("Destroy Overlapper")) {
+                    destroy_overlapper();
+                }
+
+                ImGui::SameLine();
                 bool attach_all = false;
                 if (ImGui::Button("Attach all")) {
                     attach_all = true;
@@ -1261,9 +1367,9 @@ void UObjectHook::ui_handle_actor(sdk::UObject* object) {
         return;
     }
 
-    if (ImGui::Button("Attach to motion controller")) {
+    /*if (ImGui::Button("Attach to motion controller")) {
         m_motion_controller_attached_objects.insert(object);
-    }
+    }*/
 
     auto actor = (sdk::AActor*)object;
 
@@ -1657,9 +1763,14 @@ void* UObjectHook::destructor(sdk::UObjectBase* object, void* rdx, void* r8, voi
             hook->m_motion_controller_attached_components.erase((sdk::USceneComponent*)object);
             hook->m_spawned_spheres.erase((sdk::USceneComponent*)object);
             hook->m_spawned_spheres_to_components.erase((sdk::USceneComponent*)object);
+            hook->m_components_with_spheres.erase((sdk::USceneComponent*)object);
 
             if (object == hook->m_overlap_detection_actor) {
                 hook->m_overlap_detection_actor = nullptr;
+            }
+
+            if (object == hook->m_overlap_detection_actor_left) {
+                hook->m_overlap_detection_actor_left = nullptr;
             }
 
             for (auto super = (sdk::UStruct*)it->second->uclass; super != nullptr; super = super->get_super_struct()) {
