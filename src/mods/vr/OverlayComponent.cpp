@@ -3,6 +3,7 @@
 
 #include "Framework.hpp"
 #include "../VR.hpp"
+#include "../utility/ImGui.hpp"
 
 #include "OverlayComponent.hpp"
 
@@ -101,9 +102,7 @@ void OverlayComponent::on_pre_imgui_frame() {
         // lerp towards the intersection point
         last_mouse_pos = glm::lerp(last_mouse_pos, glm::vec2{x, y}, delta_f * 10.0f);
 
-        if (last_mouse_pos.x >= window_pos.x && last_mouse_pos.x <= window_pos.x + window_size.x &&
-            last_mouse_pos.y >= window_pos.y && last_mouse_pos.y <= window_pos.y + window_size.y) 
-        {
+        if (imgui::is_point_intersecting_any(last_mouse_pos.x, last_mouse_pos.y)) {
             io.MousePos = ImVec2{
                 last_mouse_pos.x,
                 last_mouse_pos.y
