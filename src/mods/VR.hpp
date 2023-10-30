@@ -80,10 +80,23 @@ public:
         return clean_initialize();
     }
 
+    std::vector<std::string> get_sidebar_entries() override {
+        return {
+            "Runtime",
+            "Unreal",
+            "Input",
+            "Camera",
+            "Console/CVars",
+            "Compatibility",
+            "Debug"
+        };
+    }
+
     void on_config_load(const utility::Config& cfg, bool set_defaults) override;
     void on_config_save(utility::Config& cfg) override;
     
     void on_draw_ui() override;
+    void on_draw_sidebar_entry(std::string_view name) override;
     void on_pre_imgui_frame() override;
     void on_frame() override;
     void on_present() override;

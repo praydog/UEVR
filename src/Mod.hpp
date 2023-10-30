@@ -380,6 +380,8 @@ public:
     virtual std::optional<std::string> on_initialize() { return std::nullopt; };
     virtual std::optional<std::string> on_initialize_d3d_thread() { return std::nullopt; };
 
+    virtual std::vector<std::string> get_sidebar_entries() { return {}; };
+
     // This gets called after updating stuff like keyboard/mouse input to imgui
     // can be used to override these inputs e.g. with a custom input system
     // like VR controllers
@@ -389,6 +391,7 @@ public:
     virtual void on_post_frame() {}; // after imgui rendering is done
     virtual void on_post_present() {}; // actually after present gets called
     virtual void on_draw_ui() {};
+    virtual void on_draw_sidebar_entry(std::string_view in_entry) {};
     virtual void on_device_reset() {};
     virtual bool on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) { return true; };
     virtual void on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {};

@@ -787,383 +787,381 @@ void UObjectHook::destroy_overlapper() {
 std::future<std::vector<sdk::UClass*>> sorting_task{};
 
 void UObjectHook::on_draw_ui() {
-    if (ImGui::CollapsingHeader("UObjectHook")) {
-        activate();
+    activate();
 
-        if (!m_fully_hooked) {
-            ImGui::Text("Waiting for UObjectBase to be hooked...");
-            return;
-        }
+    if (!m_fully_hooked) {
+        ImGui::Text("Waiting for UObjectBase to be hooked...");
+        return;
+    }
 
-        std::shared_lock _{m_mutex};
+    std::shared_lock _{m_mutex};
 
-        if (!m_motion_controller_attached_components.empty()) {
-            ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-            const auto made = ImGui::TreeNode("Attached Components");
+    if (!m_motion_controller_attached_components.empty()) {
+        ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+        const auto made = ImGui::TreeNode("Attached Components");
 
-            if (made) {
-                if (ImGui::Button("Detach all")) {
-                    m_motion_controller_attached_components.clear();
-                }
-
-                // make a copy because the user could press the detach button while iterating
-                auto attached = m_motion_controller_attached_components;
-
-                for (auto& it : attached) {
-                    if (!this->exists_unsafe(it.first) || it.second == nullptr) {
-                        continue;
-                    }
-
-                    auto comp = it.first;
-                    std::wstring comp_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
-
-                    if (ImGui::TreeNode(utility::narrow(comp_name).data())) {
-                        ui_handle_object(comp);
-
-                        ImGui::TreePop();
-                    }
-                }
-
-                ImGui::TreePop();
+        if (made) {
+            if (ImGui::Button("Detach all")) {
+                m_motion_controller_attached_components.clear();
             }
-        }
 
-        if (m_overlap_detection_actor == nullptr) {
-            if (ImGui::Button("Spawn Overlapper")) {
-                spawn_overlapper(0);
-                spawn_overlapper(1);
-            }
-        } else if (!this->exists_unsafe(m_overlap_detection_actor)) {
-            m_overlap_detection_actor = nullptr;
-        } else {
-            ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-            const auto made = ImGui::TreeNode("Overlapped Objects");
+            // make a copy because the user could press the detach button while iterating
+            auto attached = m_motion_controller_attached_components;
 
-            if (made) {
-                if (ImGui::Button("Destroy Overlapper")) {
-                    destroy_overlapper();
-                }
-
-                ImGui::SameLine();
-                bool attach_all = false;
-                if (ImGui::Button("Attach all")) {
-                    attach_all = true;
-                }
-
-                auto overlapped_components = m_overlap_detection_actor->get_overlapping_components();
-
-                for (auto& it : overlapped_components) {
-                    auto comp = (sdk::USceneComponent*)it;
-                    if (!this->exists_unsafe(comp)) {
-                        continue;
-                    }
-
-                    if (m_spawned_spheres.contains(comp) && m_spawned_spheres_to_components.contains(comp)) {
-                        comp = m_spawned_spheres_to_components[comp];
-                    }
-
-                    if (attach_all){ 
-                        if (!m_motion_controller_attached_components.contains(comp)) {
-                            m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
-                        }
-                    }
-
-                    std::wstring comp_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
-
-                    if (ImGui::TreeNode(utility::narrow(comp_name).data())) {
-                        ui_handle_object(comp);
-                        ImGui::TreePop();
-                    }
-                }
-
-                ImGui::TreePop();
-            }
-        }
-
-        ImGui::Text("Objects: %zu (%zu actual)", m_objects.size(), sdk::FUObjectArray::get()->get_object_count());
-
-        if (ImGui::TreeNode("Recent Objects")) {
-            for (auto& object : m_most_recent_objects) {
-                if (!this->exists_unsafe(object)) {
+            for (auto& it : attached) {
+                if (!this->exists_unsafe(it.first) || it.second == nullptr) {
                     continue;
                 }
 
-                if (ImGui::TreeNode(utility::narrow(object->get_full_name()).data())) {
-                    ui_handle_object(object);
+                auto comp = it.first;
+                std::wstring comp_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
+
+                if (ImGui::TreeNode(utility::narrow(comp_name).data())) {
+                    ui_handle_object(comp);
+
                     ImGui::TreePop();
                 }
             }
 
             ImGui::TreePop();
         }
+    }
 
-        // Display common objects like things related to the player
-        if (ImGui::TreeNode("Common Objects")) {
-            auto world = sdk::UGameEngine::get()->get_world();
+    if (m_overlap_detection_actor == nullptr) {
+        if (ImGui::Button("Spawn Overlapper")) {
+            spawn_overlapper(0);
+            spawn_overlapper(1);
+        }
+    } else if (!this->exists_unsafe(m_overlap_detection_actor)) {
+        m_overlap_detection_actor = nullptr;
+    } else {
+        ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+        const auto made = ImGui::TreeNode("Overlapped Objects");
 
-            if (world != nullptr) {
-                if (ImGui::TreeNode("PlayerController")) {
-                    auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
+        if (made) {
+            if (ImGui::Button("Destroy Overlapper")) {
+                destroy_overlapper();
+            }
 
-                    if (player_controller != nullptr) {
-                        ui_handle_object(player_controller);
-                    } else {
-                        ImGui::Text("No player controller");
+            ImGui::SameLine();
+            bool attach_all = false;
+            if (ImGui::Button("Attach all")) {
+                attach_all = true;
+            }
+
+            auto overlapped_components = m_overlap_detection_actor->get_overlapping_components();
+
+            for (auto& it : overlapped_components) {
+                auto comp = (sdk::USceneComponent*)it;
+                if (!this->exists_unsafe(comp)) {
+                    continue;
+                }
+
+                if (m_spawned_spheres.contains(comp) && m_spawned_spheres_to_components.contains(comp)) {
+                    comp = m_spawned_spheres_to_components[comp];
+                }
+
+                if (attach_all){ 
+                    if (!m_motion_controller_attached_components.contains(comp)) {
+                        m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
                     }
-
-                    ImGui::TreePop();
                 }
 
-                if (ImGui::TreeNode("Acknowledged Pawn")) {
-                    auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
+                std::wstring comp_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
 
-                    if (player_controller != nullptr) {
-                        auto pawn = player_controller->get_acknowledged_pawn();
-
-                        if (pawn != nullptr) {
-                            ui_handle_object(pawn);
-                        } else {
-                            ImGui::Text("No pawn");
-                        }
-                    } else {
-                        ImGui::Text("No player controller");
-                    }
-
+                if (ImGui::TreeNode(utility::narrow(comp_name).data())) {
+                    ui_handle_object(comp);
                     ImGui::TreePop();
                 }
-
-                if (ImGui::TreeNode("Camera Manager")) {
-                    auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
-
-                    if (player_controller != nullptr) {
-                        auto camera_manager = player_controller->get_player_camera_manager();
-
-                        if (camera_manager != nullptr) {
-                            ui_handle_object((sdk::UObject*)camera_manager);
-                        } else {
-                            ImGui::Text("No camera manager");
-                        }
-                    } else {
-                        ImGui::Text("No player controller");
-                    }
-
-                    ImGui::TreePop();
-                }
-
-                if (ImGui::TreeNode("World")) {
-                    ui_handle_object(world);
-                    ImGui::TreePop();
-                }
-            } else {
-                ImGui::Text("No world");
             }
 
             ImGui::TreePop();
         }
+    }
 
-        if (ImGui::TreeNode("Objects by class")) {
-            static char filter[256]{};
-            ImGui::InputText("Filter", filter, sizeof(filter));
+    ImGui::Text("Objects: %zu (%zu actual)", m_objects.size(), sdk::FUObjectArray::get()->get_object_count());
 
-            const bool filter_empty = std::string_view{filter}.empty();
+    if (ImGui::TreeNode("Recent Objects")) {
+        for (auto& object : m_most_recent_objects) {
+            if (!this->exists_unsafe(object)) {
+                continue;
+            }
 
-            const auto now = std::chrono::steady_clock::now();
-            bool needs_sort = true;
+            if (ImGui::TreeNode(utility::narrow(object->get_full_name()).data())) {
+                ui_handle_object(object);
+                ImGui::TreePop();
+            }
+        }
 
-            if (sorting_task.valid()) {
-                // Check if the sorting task is finished
-                if (sorting_task.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-                    // Do something if needed when sorting is done
-                    m_sorted_classes = sorting_task.get();
-                    needs_sort = true;
+        ImGui::TreePop();
+    }
+
+    // Display common objects like things related to the player
+    if (ImGui::TreeNode("Common Objects")) {
+        auto world = sdk::UGameEngine::get()->get_world();
+
+        if (world != nullptr) {
+            if (ImGui::TreeNode("PlayerController")) {
+                auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
+
+                if (player_controller != nullptr) {
+                    ui_handle_object(player_controller);
                 } else {
-                    needs_sort = false;
+                    ImGui::Text("No player controller");
                 }
-            } else {
+
+                ImGui::TreePop();
+            }
+
+            if (ImGui::TreeNode("Acknowledged Pawn")) {
+                auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
+
+                if (player_controller != nullptr) {
+                    auto pawn = player_controller->get_acknowledged_pawn();
+
+                    if (pawn != nullptr) {
+                        ui_handle_object(pawn);
+                    } else {
+                        ImGui::Text("No pawn");
+                    }
+                } else {
+                    ImGui::Text("No player controller");
+                }
+
+                ImGui::TreePop();
+            }
+
+            if (ImGui::TreeNode("Camera Manager")) {
+                auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
+
+                if (player_controller != nullptr) {
+                    auto camera_manager = player_controller->get_player_camera_manager();
+
+                    if (camera_manager != nullptr) {
+                        ui_handle_object((sdk::UObject*)camera_manager);
+                    } else {
+                        ImGui::Text("No camera manager");
+                    }
+                } else {
+                    ImGui::Text("No player controller");
+                }
+
+                ImGui::TreePop();
+            }
+
+            if (ImGui::TreeNode("World")) {
+                ui_handle_object(world);
+                ImGui::TreePop();
+            }
+        } else {
+            ImGui::Text("No world");
+        }
+
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Objects by class")) {
+        static char filter[256]{};
+        ImGui::InputText("Filter", filter, sizeof(filter));
+
+        const bool filter_empty = std::string_view{filter}.empty();
+
+        const auto now = std::chrono::steady_clock::now();
+        bool needs_sort = true;
+
+        if (sorting_task.valid()) {
+            // Check if the sorting task is finished
+            if (sorting_task.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                // Do something if needed when sorting is done
+                m_sorted_classes = sorting_task.get();
                 needs_sort = true;
+            } else {
+                needs_sort = false;
+            }
+        } else {
+            needs_sort = true;
+        }
+
+        if (needs_sort) {
+            auto sort_classes = [this](std::vector<sdk::UClass*> classes) {
+                std::sort(classes.begin(), classes.end(), [this](sdk::UClass* a, sdk::UClass* b) {
+                    std::shared_lock _{m_mutex};
+                    if (!m_objects.contains(a) || !m_objects.contains(b)) {
+                        return false;
+                    }
+
+                    return m_meta_objects[a]->full_name < m_meta_objects[b]->full_name;
+                });
+
+                return classes;
+            };
+
+            auto unsorted_classes = std::vector<sdk::UClass*>{};
+
+            for (auto& [c, set]: m_objects_by_class) {
+                unsorted_classes.push_back(c);
             }
 
-            if (needs_sort) {
-                auto sort_classes = [this](std::vector<sdk::UClass*> classes) {
-                    std::sort(classes.begin(), classes.end(), [this](sdk::UClass* a, sdk::UClass* b) {
-                        std::shared_lock _{m_mutex};
-                        if (!m_objects.contains(a) || !m_objects.contains(b)) {
-                            return false;
-                        }
+            // Launch sorting in a separate thread
+            sorting_task = std::async(std::launch::async, sort_classes, unsorted_classes);
+            m_last_sort_time = now;
+        }
 
-                        return m_meta_objects[a]->full_name < m_meta_objects[b]->full_name;
-                    });
+        const auto wide_filter = utility::widen(filter);
 
-                    return classes;
-                };
+        bool made_child = ImGui::BeginChild("Objects by class entries", ImVec2(0, 0), true, ImGuiWindowFlags_::ImGuiWindowFlags_HorizontalScrollbar);
 
-                auto unsorted_classes = std::vector<sdk::UClass*>{};
+        utility::ScopeGuard sg{[made_child]() {
+            if (made_child) {
+                ImGui::EndChild();
+            }
+        }};
 
-                for (auto& [c, set]: m_objects_by_class) {
-                    unsorted_classes.push_back(c);
-                }
+        for (auto uclass : m_sorted_classes) {
+            const auto& objects_ref = m_objects_by_class[uclass];
 
-                // Launch sorting in a separate thread
-                sorting_task = std::async(std::launch::async, sort_classes, unsorted_classes);
-                m_last_sort_time = now;
+            if (objects_ref.empty()) {
+                continue;
             }
 
-            const auto wide_filter = utility::widen(filter);
+            if (!m_meta_objects.contains(uclass)) {
+                continue;
+            }
 
-            bool made_child = ImGui::BeginChild("Objects by class entries", ImVec2(0, 0), true, ImGuiWindowFlags_::ImGuiWindowFlags_HorizontalScrollbar);
+            const auto uclass_name = utility::narrow(m_meta_objects[uclass]->full_name);
+            bool valid = true;
 
-            utility::ScopeGuard sg{[made_child]() {
-                if (made_child) {
-                    ImGui::EndChild();
-                }
-            }};
+            if (!filter_empty) {
+                valid = false;
 
-            for (auto uclass : m_sorted_classes) {
-                const auto& objects_ref = m_objects_by_class[uclass];
-
-                if (objects_ref.empty()) {
-                    continue;
-                }
-
-                if (!m_meta_objects.contains(uclass)) {
-                    continue;
-                }
-
-                const auto uclass_name = utility::narrow(m_meta_objects[uclass]->full_name);
-                bool valid = true;
-
-                if (!filter_empty) {
-                    valid = false;
-
-                    for (auto super = (sdk::UStruct*)uclass; super; super = super->get_super_struct()) {
-                        if (auto it = m_meta_objects.find(super); it != m_meta_objects.end()) {
-                            if (it->second->full_name.find(wide_filter) != std::wstring::npos) {
-                                valid = true;
-                                break;
-                            }
+                for (auto super = (sdk::UStruct*)uclass; super; super = super->get_super_struct()) {
+                    if (auto it = m_meta_objects.find(super); it != m_meta_objects.end()) {
+                        if (it->second->full_name.find(wide_filter) != std::wstring::npos) {
+                            valid = true;
+                            break;
                         }
                     }
                 }
+            }
 
-                if (!valid) {
-                    continue;
+            if (!valid) {
+                continue;
+            }
+
+            if (ImGui::TreeNode(uclass_name.data())) {
+                std::vector<sdk::UObjectBase*> objects{};
+
+                for (auto object : objects_ref) {
+                    objects.push_back(object);
                 }
 
-                if (ImGui::TreeNode(uclass_name.data())) {
-                    std::vector<sdk::UObjectBase*> objects{};
+                std::sort(objects.begin(), objects.end(), [this](sdk::UObjectBase* a, sdk::UObjectBase* b) {
+                    return m_meta_objects[a]->full_name < m_meta_objects[b]->full_name;
+                });
 
-                    for (auto object : objects_ref) {
-                        objects.push_back(object);
-                    }
+                if (uclass->is_a(sdk::AActor::static_class())) {
+                    static char component_add_name[256]{};
 
-                    std::sort(objects.begin(), objects.end(), [this](sdk::UObjectBase* a, sdk::UObjectBase* b) {
-                        return m_meta_objects[a]->full_name < m_meta_objects[b]->full_name;
-                    });
+                    if (ImGui::InputText("Add Component Permanently", component_add_name, sizeof(component_add_name), ImGuiInputTextFlags_::ImGuiInputTextFlags_EnterReturnsTrue)) {
+                        const auto component_c = sdk::find_uobject<sdk::UClass>(utility::widen(component_add_name));
 
-                    if (uclass->is_a(sdk::AActor::static_class())) {
-                        static char component_add_name[256]{};
+                        if (component_c != nullptr) {
+                            m_on_creation_add_component_jobs[uclass] = [this, component_c](sdk::UObject* object) {
+                                if (!this->exists(object)) {
+                                    return;
+                                }
 
-                        if (ImGui::InputText("Add Component Permanently", component_add_name, sizeof(component_add_name), ImGuiInputTextFlags_::ImGuiInputTextFlags_EnterReturnsTrue)) {
-                            const auto component_c = sdk::find_uobject<sdk::UClass>(utility::widen(component_add_name));
+                                if (object == object->get_class()->get_class_default_object()) {
+                                    return;
+                                }
 
-                            if (component_c != nullptr) {
-                                m_on_creation_add_component_jobs[uclass] = [this, component_c](sdk::UObject* object) {
-                                    if (!this->exists(object)) {
-                                        return;
-                                    }
+                                auto actor = (sdk::AActor*)object;
+                                auto component = (sdk::UObject*)actor->add_component_by_class(component_c);
 
-                                    if (object == object->get_class()->get_class_default_object()) {
-                                        return;
-                                    }
+                                if (component != nullptr) {
+                                    if (component->get_class()->is_a(sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.SphereComponent"))) {
+                                        struct SphereRadiusParams {
+                                            float radius{};
+                                        };
 
-                                    auto actor = (sdk::AActor*)object;
-                                    auto component = (sdk::UObject*)actor->add_component_by_class(component_c);
+                                        auto params = SphereRadiusParams{};
+                                        params.radius = 100.f;
 
-                                    if (component != nullptr) {
-                                        if (component->get_class()->is_a(sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.SphereComponent"))) {
-                                            struct SphereRadiusParams {
-                                                float radius{};
-                                            };
-
-                                            auto params = SphereRadiusParams{};
-                                            params.radius = 100.f;
-
-                                            const auto fn = component->get_class()->find_function(L"SetSphereRadius");
-
-                                            if (fn != nullptr) {
-                                                component->process_event(fn, &params);
-                                            }
-                                        }
-
-                                        struct {
-                                            bool hidden{false};
-                                            bool propagate{true};
-                                        } set_hidden_params{};
-
-                                        const auto fn = component->get_class()->find_function(L"SetHiddenInGame");
+                                        const auto fn = component->get_class()->find_function(L"SetSphereRadius");
 
                                         if (fn != nullptr) {
-                                            component->process_event(fn, &set_hidden_params);
+                                            component->process_event(fn, &params);
                                         }
-
-                                        actor->finish_add_component(component);
-
-                                        // Set component_add_name to empty
-                                        component_add_name[0] = '\0';
-                                    } else {
-                                        component_add_name[0] = 'e';
-                                        component_add_name[1] = 'r';
-                                        component_add_name[2] = 'r';
-                                        component_add_name[3] = '\0';
                                     }
-                                };
-                            } else {
-                                strcpy_s(component_add_name, "Nonexistent component");
-                            }
-                        }
-                    }
 
-                    for (const auto& object : objects) {
-                        const auto made = ImGui::TreeNode(utility::narrow(m_meta_objects[object]->full_name).data());
-                        // make right click context
-                        if (ImGui::BeginPopupContextItem()) {
-                            auto sc = [](const std::string& text) {
-                                if (OpenClipboard(NULL)) {
-                                    EmptyClipboard();
-                                    HGLOBAL hcd = GlobalAlloc(GMEM_DDESHARE, text.size() + 1);
-                                    char* data = (char*)GlobalLock(hcd);
-                                    strcpy(data, text.c_str());
-                                    GlobalUnlock(hcd);
-                                    SetClipboardData(CF_TEXT, hcd);
-                                    CloseClipboard();
+                                    struct {
+                                        bool hidden{false};
+                                        bool propagate{true};
+                                    } set_hidden_params{};
+
+                                    const auto fn = component->get_class()->find_function(L"SetHiddenInGame");
+
+                                    if (fn != nullptr) {
+                                        component->process_event(fn, &set_hidden_params);
+                                    }
+
+                                    actor->finish_add_component(component);
+
+                                    // Set component_add_name to empty
+                                    component_add_name[0] = '\0';
+                                } else {
+                                    component_add_name[0] = 'e';
+                                    component_add_name[1] = 'r';
+                                    component_add_name[2] = 'r';
+                                    component_add_name[3] = '\0';
                                 }
                             };
-
-                            if (ImGui::Button("Copy Name")) {
-                                sc(utility::narrow(m_meta_objects[object]->full_name));
-                            }
-
-                            if (ImGui::Button("Copy Address")) {
-                                const auto hex = (std::stringstream{} << std::hex << (uintptr_t)object).str();
-                                sc(hex);
-                            }
-
-                            ImGui::EndPopup();
-                        }
-
-                        if (made) {
-                            ui_handle_object((sdk::UObject*)object);
-                            
-                            ImGui::TreePop();
+                        } else {
+                            strcpy_s(component_add_name, "Nonexistent component");
                         }
                     }
-
-                    ImGui::TreePop();
                 }
-            }
 
-            ImGui::TreePop();
+                for (const auto& object : objects) {
+                    const auto made = ImGui::TreeNode(utility::narrow(m_meta_objects[object]->full_name).data());
+                    // make right click context
+                    if (ImGui::BeginPopupContextItem()) {
+                        auto sc = [](const std::string& text) {
+                            if (OpenClipboard(NULL)) {
+                                EmptyClipboard();
+                                HGLOBAL hcd = GlobalAlloc(GMEM_DDESHARE, text.size() + 1);
+                                char* data = (char*)GlobalLock(hcd);
+                                strcpy(data, text.c_str());
+                                GlobalUnlock(hcd);
+                                SetClipboardData(CF_TEXT, hcd);
+                                CloseClipboard();
+                            }
+                        };
+
+                        if (ImGui::Button("Copy Name")) {
+                            sc(utility::narrow(m_meta_objects[object]->full_name));
+                        }
+
+                        if (ImGui::Button("Copy Address")) {
+                            const auto hex = (std::stringstream{} << std::hex << (uintptr_t)object).str();
+                            sc(hex);
+                        }
+
+                        ImGui::EndPopup();
+                    }
+
+                    if (made) {
+                        ui_handle_object((sdk::UObject*)object);
+                        
+                        ImGui::TreePop();
+                    }
+                }
+
+                ImGui::TreePop();
+            }
         }
+
+        ImGui::TreePop();
     }
 }
 

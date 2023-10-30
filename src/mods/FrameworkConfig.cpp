@@ -12,12 +12,6 @@ std::optional<std::string> FrameworkConfig::on_initialize() {
 }
 
 void FrameworkConfig::on_draw_ui() {
-    if (!ImGui::CollapsingHeader("Configuration")) {
-        return;
-    }
-
-    ImGui::TreePush("Configuration");
-
     m_menu_key->draw("Menu Key");
     m_show_cursor_key->draw("Show Cursor Key");
     m_remember_menu_state->draw("Remember Menu Open/Closed State");
@@ -27,8 +21,6 @@ void FrameworkConfig::on_draw_ui() {
     if (m_font_size->draw("Font Size")) {
         g_framework->set_font_size(m_font_size->value());
     }
-
-    ImGui::TreePop();
 }
 
 void FrameworkConfig::on_frame() {

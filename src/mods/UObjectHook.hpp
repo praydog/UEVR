@@ -42,6 +42,8 @@ public:
     void activate();
 
 protected:
+    std::string_view get_name() const override { return "UObjectHook"; };
+
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
     void on_draw_ui() override;
 

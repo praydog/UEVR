@@ -914,44 +914,40 @@ void PluginLoader::reload_plugins() {
 }
 
 void PluginLoader::on_draw_ui() {
-    ImGui::SetNextItemOpen(false, ImGuiCond_Once);
+    std::scoped_lock _{m_mux};
 
-    if (ImGui::CollapsingHeader(get_name().data())) {
-        std::scoped_lock _{m_mux};
+    if (ImGui::Button("Attempt Unload Plugins")) {
+        attempt_unload_plugins();
+    }
 
-        if (ImGui::Button("Attempt Unload Plugins")) {
-            attempt_unload_plugins();
+    if (ImGui::Button("Reload Plugins")) {
+        attempt_unload_plugins();
+        reload_plugins();
+    }
+
+    if (!m_plugins.empty()) {
+        ImGui::Text("Loaded plugins:");
+
+        for (auto&& [name, _] : m_plugins) {
+            ImGui::Text(name.c_str());
         }
+    } else {
+        ImGui::Text("No plugins loaded.");
+    }
 
-        if (ImGui::Button("Reload Plugins")) {
-            attempt_unload_plugins();
-            reload_plugins();
+    if (!m_plugin_load_errors.empty()) {
+        ImGui::Spacing();
+        ImGui::Text("Errors:");
+        for (auto&& [name, error] : m_plugin_load_errors) {
+            ImGui::Text("%s - %s", name.c_str(), error.c_str());
         }
+    }
 
-        if (!m_plugins.empty()) {
-            ImGui::Text("Loaded plugins:");
-
-            for (auto&& [name, _] : m_plugins) {
-                ImGui::Text(name.c_str());
-            }
-        } else {
-            ImGui::Text("No plugins loaded.");
-        }
-
-        if (!m_plugin_load_errors.empty()) {
-            ImGui::Spacing();
-            ImGui::Text("Errors:");
-            for (auto&& [name, error] : m_plugin_load_errors) {
-                ImGui::Text("%s - %s", name.c_str(), error.c_str());
-            }
-        }
-
-        if (!m_plugin_load_warnings.empty()) {
-            ImGui::Spacing();
-            ImGui::Text("Warnings:");
-            for (auto&& [name, warning] : m_plugin_load_warnings) {
-                ImGui::Text("%s - %s", name.c_str(), warning.c_str());
-            }
+    if (!m_plugin_load_warnings.empty()) {
+        ImGui::Spacing();
+        ImGui::Text("Warnings:");
+        for (auto&& [name, warning] : m_plugin_load_warnings) {
+            ImGui::Text("%s - %s", name.c_str(), warning.c_str());
         }
     }
 }

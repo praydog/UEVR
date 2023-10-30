@@ -1854,81 +1854,11 @@ uint32_t VR::get_hmd_height() const {
     return get_runtime()->get_height();
 }
 
-void VR::on_draw_ui() {
-    ZoneScopedN(__FUNCTION__);
+void VR::on_draw_sidebar_entry(std::string_view name) {
+    const auto hash = utility::hash(name.data());
 
-    // create VR tree entry in menu (imgui)
-    ImGui::PushID("VR");
-    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
-    if (!m_fake_stereo_hook->has_attempted_to_hook_engine() || !m_fake_stereo_hook->has_attempted_to_hook_slate()) {
-        std::string adjusted_name = get_name().data();
-        adjusted_name += " (Loading...)";
-
-        if (!ImGui::CollapsingHeader(adjusted_name.data())) {
-            ImGui::PopID();
-            return;
-        }
-    } else {
-        if (!ImGui::CollapsingHeader(get_name().data())) {
-            ImGui::PopID();
-            return;
-        }
-    }
-    ImGui::PopID();
-
-    auto display_error = [](auto& runtime, std::string dll_name) {
-        if (runtime == nullptr || !runtime->error && runtime->loaded) {
-            return;
-        }
-
-        if (runtime->error && runtime->dll_missing) {
-            ImGui::TextWrapped("%s not loaded: %s not found", runtime->name().data(), dll_name.data());
-            ImGui::TextWrapped("Please select %s from the loader if you want to use %s", runtime->name().data(), runtime->name().data());
-        } else if (runtime->error) {
-            ImGui::TextWrapped("%s not loaded: %s", runtime->name().data(), runtime->error->c_str());
-        } else {
-            ImGui::TextWrapped("%s not loaded: Unknown error", runtime->name().data());
-        }
-
-        ImGui::Separator();
-    };
-
-    if (!get_runtime()->loaded || get_runtime()->error) {
-        display_error(m_openxr, "openxr_loader.dll");
-        display_error(m_openvr, "openvr_api.dll");
-    }
-
-    if (!get_runtime()->loaded) {
-        ImGui::TextWrapped("No runtime loaded.");
-
-        if (ImGui::Button("Attempt to reinitialize")) {
-            clean_initialize();
-        }
-
-        return;
-    }
-
-    if (ImGui::Button("Set Standing Height")) {
-        m_standing_origin.y = get_position(0).y;
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Set Standing Origin")) {
-        m_standing_origin = get_position(0);
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Recenter View")) {
-        recenter_view();
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Reinitialize Runtime")) {
-        get_runtime()->wants_reinitialize = true;
-    }
+    // Draw the ui thats always drawn first.
+    on_draw_ui();
 
     const auto made_child = ImGui::BeginChild("VRChild", ImVec2(0, 0), true, ImGuiWindowFlags_::ImGuiWindowFlags_NavFlattened);
 
@@ -1948,9 +1878,9 @@ void VR::on_draw_ui() {
         PAGE_DEBUG,
     };
 
-    static SelectedPage selected_page = PAGE_RUNTIME;
+    SelectedPage selected_page = PAGE_RUNTIME;
 
-    ImGui::BeginTable("VRTable", 2, ImGuiTableFlags_::ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_::ImGuiTableFlags_BordersOuterV | ImGuiTableFlags_::ImGuiTableFlags_SizingFixedFit);
+    /*ImGui::BeginTable("VRTable", 2, ImGuiTableFlags_::ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_::ImGuiTableFlags_BordersOuterV | ImGuiTableFlags_::ImGuiTableFlags_SizingFixedFit);
     ImGui::TableSetupColumn("LeftPane", ImGuiTableColumnFlags_WidthFixed, 150.0f);
     ImGui::TableSetupColumn("RightPane", ImGuiTableColumnFlags_WidthStretch);
 
@@ -1985,7 +1915,35 @@ void VR::on_draw_ui() {
     }
 
     ImGui::TableNextColumn(); // Move to the next column (right)
-    ImGui::BeginGroup();
+    ImGui::BeginGroup();*/
+
+    switch (hash) {
+    case "Runtime"_fnv:
+        selected_page = PAGE_RUNTIME;
+        break;
+    case "Unreal"_fnv:
+        selected_page = PAGE_UNREAL;
+        break;
+    case "Input"_fnv:
+        selected_page = PAGE_INPUT;
+        break;
+    case "Camera"_fnv:
+        selected_page = PAGE_CAMERA;
+        break;
+    case "Console/CVars"_fnv:
+        selected_page = PAGE_CONSOLE;
+        break;
+    case "Compatibility"_fnv:
+        selected_page = PAGE_COMPATIBILITY;
+        break;
+    case "Debug"_fnv:
+        selected_page = PAGE_DEBUG;
+        break;
+    default:
+        ImGui::Text("Unknown page selected");
+        break;
+    }
+
     if (selected_page == PAGE_RUNTIME) {
         if (m_has_hw_scheduling) {
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
@@ -2170,7 +2128,84 @@ void VR::on_draw_ui() {
     }
 
     ImGui::EndGroup();
-    ImGui::EndTable();
+    //ImGui::EndTable();
+}
+
+void VR::on_draw_ui() {
+    ZoneScopedN(__FUNCTION__);
+
+    // create VR tree entry in menu (imgui)
+    ImGui::PushID("VR");
+    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+    if (!m_fake_stereo_hook->has_attempted_to_hook_engine() || !m_fake_stereo_hook->has_attempted_to_hook_slate()) {
+        std::string adjusted_name = get_name().data();
+        adjusted_name += " (Loading...)";
+
+        if (!ImGui::CollapsingHeader(adjusted_name.data())) {
+            ImGui::PopID();
+            return;
+        }
+    } else {
+        /*if (!ImGui::CollapsingHeader(get_name().data())) {
+            ImGui::PopID();
+            return;
+        }*/
+    }
+    ImGui::PopID();
+
+    auto display_error = [](auto& runtime, std::string dll_name) {
+        if (runtime == nullptr || !runtime->error && runtime->loaded) {
+            return;
+        }
+
+        if (runtime->error && runtime->dll_missing) {
+            ImGui::TextWrapped("%s not loaded: %s not found", runtime->name().data(), dll_name.data());
+            ImGui::TextWrapped("Please select %s from the loader if you want to use %s", runtime->name().data(), runtime->name().data());
+        } else if (runtime->error) {
+            ImGui::TextWrapped("%s not loaded: %s", runtime->name().data(), runtime->error->c_str());
+        } else {
+            ImGui::TextWrapped("%s not loaded: Unknown error", runtime->name().data());
+        }
+
+        ImGui::Separator();
+    };
+
+    if (!get_runtime()->loaded || get_runtime()->error) {
+        display_error(m_openxr, "openxr_loader.dll");
+        display_error(m_openvr, "openvr_api.dll");
+    }
+
+    if (!get_runtime()->loaded) {
+        ImGui::TextWrapped("No runtime loaded.");
+
+        if (ImGui::Button("Attempt to reinitialize")) {
+            clean_initialize();
+        }
+
+        return;
+    }
+
+    if (ImGui::Button("Set Standing Height")) {
+        m_standing_origin.y = get_position(0).y;
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Set Standing Origin")) {
+        m_standing_origin = get_position(0);
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Recenter View")) {
+        recenter_view();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Reinitialize Runtime")) {
+        get_runtime()->wants_reinitialize = true;
+    }
 }
 
 Vector4f VR::get_position(uint32_t index, bool grip) const {
