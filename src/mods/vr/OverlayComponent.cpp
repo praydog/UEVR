@@ -137,9 +137,9 @@ void OverlayComponent::on_pre_imgui_frame() {
             
             // Mousewheel
             if (right_stick_axis.y > 0.5f) {
-                io.MouseWheel += right_stick_axis.y;
+                io.MouseWheel += right_stick_axis.y * delta_f * 10.0f;
             } else if (right_stick_axis.y < -0.5f) {
-                io.MouseWheel += right_stick_axis.y;
+                io.MouseWheel += right_stick_axis.y * delta_f * 10.0f;
             }
 
             VR::get()->set_aim_allowed(false);
