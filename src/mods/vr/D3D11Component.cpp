@@ -957,12 +957,6 @@ void D3D11Component::on_reset(VR* vr) {
             m_last_afr_state = vr->is_using_afr();
         }
     }
-
-    const auto& ffsr = vr->m_fake_stereo_hook;
-
-    if (ffsr != nullptr) {
-        ffsr->set_should_recreate_textures(true);
-    }
 }
 
 // Quick function for one-time rtv clearing
