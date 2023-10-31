@@ -299,7 +299,7 @@ public:
     PipelineState last_submit_state{};
     PipelineState get_submit_state();
     
-    const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 5.0f, 1.0f) };
+    const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 3.0f, 1.0f) };
     bool push_dummy_projection{ false };
     bool ever_submitted{false};
     
