@@ -109,6 +109,7 @@ private:
     const ModSlider::Ptr m_framework_size{ ModSlider::create("UI_Framework_Size", 0.5f, 10.0f, 2.0f) };
     const ModToggle::Ptr m_framework_ui_follows_view{ ModToggle::create("UI_Framework_FollowView", false) };
     const ModToggle::Ptr m_framework_wrist_ui{ ModToggle::create("UI_Framework_WristUI", false) };
+    const ModToggle::Ptr m_framework_mouse_emulation{ ModToggle::create("UI_Framework_MouseEmulation", true) };
 
     Mod::ValueList m_options{
         *m_slate_overlay_type,
@@ -121,7 +122,8 @@ private:
         *m_framework_distance,
         *m_framework_size,
         *m_framework_ui_follows_view,
-        *m_framework_wrist_ui
+        *m_framework_wrist_ui,
+        *m_framework_mouse_emulation
     };
 
     // OpenXR

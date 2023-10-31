@@ -194,8 +194,11 @@ void OverlayComponent::on_draw_ui() {
         m_framework_distance->draw("Framework Distance");
         m_framework_size->draw("Framework Size");
         m_framework_ui_follows_view->draw("Framework Follows View");
-        ImGui::SameLine();
-        m_framework_wrist_ui->draw("Framework Wrist UI");
+        if (VR::get()->get_runtime()->is_openvr()) {
+            ImGui::SameLine();
+            m_framework_wrist_ui->draw("Framework Wrist UI");
+        }
+        m_framework_mouse_emulation->draw("Framework Mouse Emulation");
         ImGui::TreePop();
     }
 }
