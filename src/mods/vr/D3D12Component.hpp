@@ -65,6 +65,8 @@ private:
     std::unique_ptr<DirectX::DX12::SpriteBatch> m_backbuffer_batch{};
     std::unique_ptr<DirectX::DX12::SpriteBatch> m_game_batch{};
 
+    ID3D12Resource* m_last_checked_native{nullptr};
+
     // Mimicking what OpenXR does.
     struct OpenVR {
         OpenVR(D3D12Component* p) : parent{p} {}

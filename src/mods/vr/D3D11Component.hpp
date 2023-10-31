@@ -166,6 +166,8 @@ private:
     std::array<uint32_t, 2> m_backbuffer_size{};
     std::array<uint32_t, 2> m_real_backbuffer_size{};
 
+    ID3D11Texture2D* m_last_checked_native{nullptr};
+
     uint32_t m_last_rendered_frame{0};
     bool m_force_reset{true};
     bool m_submitted_left_eye{false};

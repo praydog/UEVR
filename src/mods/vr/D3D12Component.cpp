@@ -172,6 +172,41 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 m_game_ui_tex.reset();
             }
         }
+
+        // Recreate UI texture if needed
+        if (!vr->is_extreme_compatibility_mode_enabled()) {
+            const auto native = (ID3D12Resource*)ui_target->get_native_resource();
+            const auto is_same_native = native == m_last_checked_native;
+            m_last_checked_native = native;
+
+            if (native != nullptr && !is_same_native) {
+                const auto desc = native->GetDesc();
+
+                if (runtime->is_openxr()) {
+                    if (auto it = vr->m_openxr->swapchains.find((uint32_t)runtimes::OpenXR::SwapchainIndex::UI);
+                        it != vr->m_openxr->swapchains.end()) 
+                    {
+                        const auto& uisc = it->second;
+                        if (desc.Width != uisc.width ||
+                            desc.Height != uisc.height)
+                        {
+                            SPDLOG_INFO_EVERY_N_SEC(1, "[OpenXR] UI size changed, recreating [{}x{}]->[{}x{}]", desc.Width, desc.Height, uisc.width, uisc.height);
+                            ffsr->set_should_recreate_textures(true);
+                        }
+                    }
+                } else if (m_game_ui_tex.texture != nullptr) {
+                    const auto ui_desc = m_game_ui_tex.texture->GetDesc();
+
+                    if (desc.Width != ui_desc.Width || desc.Height != ui_desc.Height) {
+                        SPDLOG_INFO_EVERY_N_SEC(1, "[OpenVR] UI size changed, recreating texture [{}x{}]->[{}x{}]", desc.Width, desc.Height, ui_desc.Width, ui_desc.Height);
+                        ffsr->set_should_recreate_textures(true);
+                    }
+                }
+            } else if (native == nullptr) {
+                spdlog::error("[VR] Recreating UI texture because native resource is null");
+                ffsr->set_should_recreate_textures(true);
+            }
+        }
     }
 
     const float clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
