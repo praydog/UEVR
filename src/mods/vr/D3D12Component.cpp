@@ -923,6 +923,12 @@ void D3D12Component::on_reset(VR* vr) {
 
     m_prev_backbuffer.Reset();
     m_openvr.texture_counter = 0;
+
+    const auto& ffsr = VR::get()->m_fake_stereo_hook;
+
+    if (ffsr != nullptr) {
+        ffsr->set_should_recreate_textures(true);
+    }
 }
 
 bool D3D12Component::setup() {
