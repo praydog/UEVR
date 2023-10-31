@@ -681,8 +681,13 @@ void OverlayComponent::update_overlay_openvr() {
         const auto size = is_d3d12 ? g_framework->get_d3d12_rt_size() : g_framework->get_d3d11_rt_size();
         const auto aspect = size.x / size.y;
         const auto size_meters = g_framework->is_drawing_ui() ? m_framework_size->value() : m_slate_size->value();
-        const auto width_meters = size_meters * aspect;
-        const auto height_meters = size_meters;
+
+        const float scale_factor = g_framework->is_drawing_ui() ? (size.x / 1920.0f) : 1.0f;
+        const float adjusted_size_meters = size_meters * scale_factor;
+
+        const auto width_meters = adjusted_size_meters * aspect;
+        const auto height_meters = adjusted_size_meters;
+
         vr::VROverlay()->SetOverlayWidthInMeters(m_overlay_handle, width_meters);
 
         if (is_d3d11) {
@@ -1010,8 +1015,15 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
     }
 
     const auto size_meters = g_framework->is_drawing_ui() ? m_parent->m_framework_size->value() : m_parent->m_slate_size->value();
-    const auto meters_w = (float)ui_swapchain.width / (float)ui_swapchain.height * size_meters;
-    const auto meters_h = size_meters;
+    const float scale_factor =  g_framework->is_drawing_ui() ? ((float)ui_swapchain.width / 1920.0f) : 1.0f;
+
+    // Adjust size_meters based on scaling factor.
+    const float adjusted_size_meters = size_meters * scale_factor;
+
+    // Compute the new dimensions in meters.
+    const auto meters_w = (float)ui_swapchain.width / (float)ui_swapchain.height * adjusted_size_meters;
+    const auto meters_h = adjusted_size_meters;
+
     layer.size = {meters_w, meters_h};
 
     if (g_framework->is_drawing_ui()) {
