@@ -5,8 +5,7 @@
 
 namespace imgui {
 bool is_point_intersecting_any(float x, float y) {
-    const ImGuiIO& io = ImGui::GetIO();
-    const auto ctx = io.Ctx;
+    const auto ctx = ImGui::GetCurrentContext();
 
     if (ctx == nullptr) {
         return false;

@@ -670,7 +670,9 @@ void OverlayComponent::update_overlay_openvr() {
         const auto is_d3d12 = g_framework->get_renderer_type() == Framework::RendererType::D3D12;
         const auto size = is_d3d12 ? g_framework->get_d3d12_rt_size() : g_framework->get_d3d11_rt_size();
         const auto aspect = size.x / size.y;
-        const auto width_meters = g_framework->is_drawing_ui() ? (m_framework_size->value() * aspect) : (m_slate_size->value() * aspect);
+        const auto size_meters = g_framework->is_drawing_ui() ? m_framework_size->value() : m_slate_size->value();
+        const auto width_meters = size_meters * aspect;
+        const auto height_meters = size_meters;
         vr::VROverlay()->SetOverlayWidthInMeters(m_overlay_handle, width_meters);
 
         if (is_d3d11) {
@@ -687,6 +689,58 @@ void OverlayComponent::update_overlay_openvr() {
             
             vr::Texture_t imgui_tex{(void*)&texture_data, vr::TextureType_DirectX12, vr::ColorSpace_Auto};
             vr::VROverlay()->SetOverlayTexture(m_overlay_handle, &imgui_tex);
+        }
+
+        // Check if the controller pointer intersects with the quad, and we can use this to emulate the mouse
+        if (vr->is_using_controllers()) {
+            // Right only for now for testing
+            const auto right_controller_rot = glm::quat{vr->get_rotation(vr->get_right_controller_index(), false)};
+            const auto right_controller_pos = glm::vec3{vr->get_position(vr->get_right_controller_index(), false)};
+
+            const auto start = right_controller_pos;
+            auto fwd = (right_controller_rot * glm::vec3{0.0f, 0.0f, -1.0f});
+            const auto end = right_controller_pos + (fwd * 1000.0f);
+            
+            const auto plane_pos = glm::vec3{glm_matrix[3]};
+
+            float intersection_distance = 0.0f;
+
+            auto& intersect_state = g_framework->is_drawing_ui() ? m_framework_intersect_state : m_intersect_state;
+            auto& other_intersect_state = g_framework->is_drawing_ui() ? m_intersect_state : m_framework_intersect_state;
+            other_intersect_state.intersecting = false;
+            if (glm::intersectRayPlane<glm::vec3>(start, fwd, plane_pos, glm::normalize(glm::vec3{glm_matrix[2]}), intersection_distance)) {
+                const auto intersection_point = start + (fwd * intersection_distance);
+
+                const auto local_point = glm::inverse(glm_matrix) * glm::vec4{intersection_point, 1.0f};
+
+                const auto w_half = width_meters / 2.0f;
+                const auto h_half = height_meters / 2.0f;
+
+                if (local_point.x >= -w_half && local_point.x <= w_half && local_point.y >= -h_half && local_point.y <= h_half) {
+                    const auto x = (local_point.x + w_half) / width_meters;
+                    const auto y = (height_meters - (local_point.y + h_half)) / height_meters;
+
+                    intersect_state.quad_intersection_point = {x, y};
+                    intersect_state.intersecting = true;
+
+                    /*if (auto it = vr->m_openxr->swapchains.find((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI); it != vr->m_openxr->swapchains.end()) {
+                        const auto client_x = (int32_t)((float)it->second.width * x);
+                        const auto client_y = (int32_t)((float)it->second.height * y);
+
+                        intersect_state.swapchain_intersection_point = {client_x, client_y};
+                    }*/
+                    // Change to openvr version
+                    const auto client_x = (int32_t)(size.x * x);
+                    const auto client_y = (int32_t)(size.y * y);
+
+                    intersect_state.swapchain_intersection_point = {client_x, client_y};
+                } else {
+                    intersect_state.intersecting = false;
+                }
+            }
+        } else {
+            m_framework_intersect_state.intersecting = false;
+            m_intersect_state.intersecting = false;
         }
     } else {
         vr::VROverlay()->ClearOverlayTexture(m_overlay_handle);
@@ -992,7 +1046,7 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
                 m_parent->m_framework_intersect_state.quad_intersection_point = {x, y};
                 m_parent->m_framework_intersect_state.intersecting = true;
 
-                if (auto it = vr->m_openxr->swapchains.find((uint32_t)runtimes::OpenXR::SwapchainIndex::UI); it != vr->m_openxr->swapchains.end()) {
+                if (auto it = vr->m_openxr->swapchains.find((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI); it != vr->m_openxr->swapchains.end()) {
                     const auto client_x = (int32_t)((float)it->second.width * x);
                     const auto client_y = (int32_t)((float)it->second.height * y);
 
