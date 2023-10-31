@@ -163,6 +163,7 @@ private:
 
 private:
     void update_input_openvr();
+    void update_input_mouse_emulation();
     void update_overlay_openvr();
     bool update_wrist_overlay_openvr();
     void update_slate_openvr();

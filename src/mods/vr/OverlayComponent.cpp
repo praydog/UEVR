@@ -72,7 +72,10 @@ std::optional<std::string> OverlayComponent::on_initialize_openvr() {
 
 void OverlayComponent::on_pre_imgui_frame() {
     this->update_input_openvr();
+    this->update_input_mouse_emulation();
+}
 
+void OverlayComponent::update_input_mouse_emulation() {
     if (VR::get()->get_runtime()->is_openvr() && m_framework_wrist_ui->value()) {
         return;
     }
@@ -83,6 +86,10 @@ void OverlayComponent::on_pre_imgui_frame() {
     const auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_time).count();
     const auto delta_f = delta / 1000.0f;
     last_time = now;
+
+    if (!m_framework_mouse_emulation->value()) {
+        return;
+    }
 
     if (m_framework_intersect_state.intersecting && VR::get()->is_using_controllers()) {
         auto vr = VR::get();
