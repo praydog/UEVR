@@ -76,16 +76,19 @@ void OverlayComponent::on_pre_imgui_frame() {
 }
 
 void OverlayComponent::update_input_mouse_emulation() {
+    if (m_forced_aim) {
+        VR::get()->set_aim_allowed(true);
+        m_forced_aim = false;
+    }
+
     if (VR::get()->get_runtime()->is_openvr() && m_framework_wrist_ui->value()) {
         return;
     }
 
-    static std::chrono::steady_clock::time_point last_time = std::chrono::steady_clock::now();
-
     const auto now = std::chrono::steady_clock::now();
-    const auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_time).count();
-    const auto delta_f = delta / 1000.0f;
-    last_time = now;
+    const auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_mouse_move_time).count();
+    const auto delta_f = std::min<float>(delta / 1000.0f, 0.5f);
+    m_last_mouse_move_time = now;
 
     if (!m_framework_mouse_emulation->value()) {
         return;
@@ -102,17 +105,13 @@ void OverlayComponent::update_input_mouse_emulation() {
         const auto window_size = g_framework->get_last_window_size();
         const auto window_pos = g_framework->get_last_window_pos();
 
-        static bool forced_aim = false;
-
-        static glm::vec2 last_mouse_pos{x, y};
-
         // lerp towards the intersection point
-        last_mouse_pos = glm::lerp(last_mouse_pos, glm::vec2{x, y}, delta_f * 10.0f);
+        m_last_mouse_pos = glm::lerp(m_last_mouse_pos, glm::vec2{x, y}, delta_f * 10.0f);
 
-        if (imgui::is_point_intersecting_any(last_mouse_pos.x, last_mouse_pos.y)) {
+        if (imgui::is_point_intersecting_any(m_last_mouse_pos.x, m_last_mouse_pos.y)) {
             io.MousePos = ImVec2{
-                last_mouse_pos.x,
-                last_mouse_pos.y
+                m_last_mouse_pos.x,
+                m_last_mouse_pos.y
             };
 
             static bool was_pressing = false;
@@ -149,10 +148,10 @@ void OverlayComponent::update_input_mouse_emulation() {
             }
 
             VR::get()->set_aim_allowed(false);
-            forced_aim = true;
-        } else if (forced_aim) {
+            m_forced_aim = true;
+        } else if (m_forced_aim) {
             VR::get()->set_aim_allowed(true);
-            forced_aim = false;
+            m_forced_aim = false;
         }
     }
 }

@@ -81,6 +81,10 @@ private:
     bool m_closed_ui{false};
     bool m_just_closed_ui{false};
     bool m_just_opened_ui{false};
+    bool m_forced_aim{false};
+    
+    glm::vec2 m_last_mouse_pos{};
+    std::chrono::steady_clock::time_point m_last_mouse_move_time{};
 
     IntersectState m_intersect_state{};
     IntersectState m_framework_intersect_state{};
