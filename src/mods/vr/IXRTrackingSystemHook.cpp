@@ -1395,7 +1395,7 @@ void IXRTrackingSystemHook::pre_update_view_rotation(Rotator<float>* rot) {
 void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
     const auto now = std::chrono::high_resolution_clock::now();
     const auto delta_time = now - m_process_view_rotation_data.last_update;
-    const auto delta_float = std::chrono::duration_cast<std::chrono::duration<float>>(delta_time).count();
+    const auto delta_float = glm::min(std::chrono::duration_cast<std::chrono::duration<float>>(delta_time).count(), 0.1f);
     m_process_view_rotation_data.last_update = now;
     m_process_view_rotation_data.was_called = true;
 
