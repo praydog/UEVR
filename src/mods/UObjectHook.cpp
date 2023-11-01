@@ -197,6 +197,17 @@ void UObjectHook::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     if (m_wants_activate) {
         hook();
     }
+    
+    if (m_fully_hooked) {
+        std::shared_lock _{m_mutex};
+        const auto ui_active = g_framework->is_drawing_ui();
+
+        for (auto& state : m_motion_controller_attached_components) {
+            if (m_overlap_detection_actor == nullptr && state.second->adjusting && ui_active) {
+                state.second->adjusting = false;
+            }
+        }
+    }
 }
 
 // TODO: split this into some functions because its getting a bit massive
@@ -1235,7 +1246,12 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
             ImGui::SameLine();
             auto& state = m_motion_controller_attached_components[comp];
 
-            ImGui::Checkbox("Adjust", &state->adjusting);
+            if (ImGui::Checkbox("Adjust", &state->adjusting)) {
+                if (state->adjusting && m_overlap_detection_actor == nullptr) {
+                    VR::get()->set_aim_allowed(false);
+                    g_framework->set_draw_ui(false);
+                }
+            }
         }
     } else {
         if (ImGui::Button("Attach left")) {
