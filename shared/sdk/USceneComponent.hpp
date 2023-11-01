@@ -23,6 +23,9 @@ public:
 
     bool attach_to(USceneComponent* parent, const std::wstring& socket_name = L"None", uint8_t attach_type = 0, bool weld = true);
     void set_hidden_in_game(bool hidden, bool propagate_to_children = true);
+
+    bool is_visible();
+    void set_visibility(bool visible, bool propagate_to_children = true);
 };
 
 class UPrimitiveComponent : public USceneComponent {

@@ -330,4 +330,36 @@ void USceneComponent::set_hidden_in_game(bool hidden, bool propagate) {
 
     this->process_event(func, &params);
 }
+
+bool USceneComponent::is_visible() {
+    static const auto func = static_class()->find_function(L"IsVisible");
+
+    if (func == nullptr) {
+        return false;
+    }
+
+    bool result{};
+
+    this->process_event(func, &result);
+
+    return result;
+}
+
+void USceneComponent::set_visibility(bool visible, bool propagate) {
+    static const auto func = static_class()->find_function(L"SetVisibility");
+
+    if (func == nullptr) {
+        return;
+    }
+
+    struct {
+        bool visible{};
+        bool propagate{};
+    } params{};
+
+    params.visible = visible;
+    params.propagate = propagate;
+
+    this->process_event(func, &params);
+}
 }

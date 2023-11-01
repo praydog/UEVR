@@ -1209,33 +1209,7 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
     }
 
     if (uclass->is_a(sdk::USceneComponent::static_class())) {
-        auto comp = (sdk::USceneComponent*)object;
-        bool attached = m_motion_controller_attached_components.contains(comp);
-
-        if (attached) {
-            if (ImGui::Button("Detach")) {
-                m_motion_controller_attached_components.erase(comp);
-            }
-
-            if (m_motion_controller_attached_components.contains(comp)) {
-                ImGui::SameLine();
-                auto& state = m_motion_controller_attached_components[comp];
-
-                ImGui::Checkbox("Adjust", &state->adjusting);
-            }
-        } else {
-            if (ImGui::Button("Attach left")) {
-                m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
-                m_motion_controller_attached_components[comp]->hand = 0;
-            }
-
-            ImGui::SameLine();
-
-            if (ImGui::Button("Attach right")) {
-                m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
-                m_motion_controller_attached_components[comp]->hand = 1;
-            }
-        }
+        ui_handle_scene_component((sdk::USceneComponent*)object);
     }
 
     if (uclass->is_a(sdk::AActor::static_class())) {
@@ -1243,6 +1217,45 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
     }
 
     ui_handle_struct(object, uclass);
+}
+
+void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
+    if (comp == nullptr) {
+        return;
+    }
+
+    bool attached = m_motion_controller_attached_components.contains(comp);
+
+    if (attached) {
+        if (ImGui::Button("Detach")) {
+            m_motion_controller_attached_components.erase(comp);
+        }
+
+        if (m_motion_controller_attached_components.contains(comp)) {
+            ImGui::SameLine();
+            auto& state = m_motion_controller_attached_components[comp];
+
+            ImGui::Checkbox("Adjust", &state->adjusting);
+        }
+    } else {
+        if (ImGui::Button("Attach left")) {
+            m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
+            m_motion_controller_attached_components[comp]->hand = 0;
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Attach right")) {
+            m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
+            m_motion_controller_attached_components[comp]->hand = 1;
+        }
+    }
+
+    bool visible = comp->is_visible();
+
+    if (ImGui::Checkbox("Visible", &visible)) {
+        comp->set_visibility(visible, false);
+    }
 }
 
 void UObjectHook::ui_handle_material_interface(sdk::UObject* object) {
