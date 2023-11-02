@@ -184,6 +184,14 @@ public:
         m_has_engine_thread = true;
     }
 
+    void increment_sidebar_page() {
+        ++m_sidebar_state.selected_entry;
+    }
+
+    void decrement_sidebar_page() {
+        --m_sidebar_state.selected_entry;
+    }
+
 private:
     void consume_input();
     void update_fonts();
@@ -285,6 +293,11 @@ private:
     bool m_has_engine_thread{false};
 
     RendererType m_renderer_type{RendererType::D3D11};
+
+    struct {
+        int32_t selected_entry{0};
+        bool initialized{false};
+    } m_sidebar_state{};
 
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 

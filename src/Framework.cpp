@@ -1172,6 +1172,7 @@ void Framework::draw_ui() {
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Keyboard Menu Key: Insert");
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Gamepad L3 + R3: Toggle Menu");
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Gamepad RT: Shortcuts");
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Gamepad LB/RB: Change Sidebar Page");
 
     ImGui::EndGroup();
     ImGui::EndGroup();
@@ -1180,12 +1181,10 @@ void Framework::draw_ui() {
 
     // Mods:
     std::vector<std::string> sidebar_entries{"About"};
-    static int selected_sidebar_entry = 0;
-    static bool initialized_default_sidebar_entry = false;
 
     if (ImGui::BeginTable("UEVRTable", 2, ImGuiTableFlags_::ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_::ImGuiTableFlags_BordersOuterV | ImGuiTableFlags_::ImGuiTableFlags_SizingFixedFit)) {
-        ImGui::TableSetupColumn("UEVRLeftPane", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-        ImGui::TableSetupColumn("UEVRRightPane", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("UEVRLeftPaneColumn", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        ImGui::TableSetupColumn("UEVRRightPaneColumn", ImGuiTableColumnFlags_WidthStretch);
 
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0); // Set to the first column
@@ -1193,8 +1192,8 @@ void Framework::draw_ui() {
         ImGui::BeginChild("UEVRLeftPane", ImVec2(0, 0), true);
         auto dcs = [&](const char* label, uint32_t page_value) -> bool {
             ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
-            if (ImGui::Selectable(label, selected_sidebar_entry == page_value)) {
-                selected_sidebar_entry = page_value;
+            if (ImGui::Selectable(label, m_sidebar_state.selected_entry == page_value)) {
+                m_sidebar_state.selected_entry = page_value;
                 ImGui::PopStyleVar();
                 return true;
             }
@@ -1230,9 +1229,10 @@ void Framework::draw_ui() {
                 for (const auto& range : mod_sidebar_ranges) {
                     if (i == range.mn) {
                         // Set first entry as default ("Runtime" entry of VR mod)
-                        if (range.has_sidebar_entries && !initialized_default_sidebar_entry) {
-                            selected_sidebar_entry = i;
-                            initialized_default_sidebar_entry = true;
+                        if (range.has_sidebar_entries && !m_sidebar_state.initialized) {
+                            m_sidebar_state.selected_entry = i;
+                            m_sidebar_state.initialized = true;
+                            ImGui::SetWindowFocus("UEVRRightPane");
                         }
 
                         ImGui::Text(range.mod->get_name().data());
@@ -1242,28 +1242,53 @@ void Framework::draw_ui() {
                 dcs(sidebar_entries[i].c_str(), i);
             }
 
-            if (selected_sidebar_entry >= sidebar_entries.size()) {
-                selected_sidebar_entry = 0;
+            bool wants_focus_right = false;
+
+            if (ImGui::IsKeyPressed(ImGuiKey_GamepadL1)) {
+                decrement_sidebar_page();
+                wants_focus_right = true;
             }
+
+            if (ImGui::IsKeyPressed(ImGuiKey_GamepadR1)) {
+                increment_sidebar_page();
+                wants_focus_right = true;
+            }
+
+            if (m_sidebar_state.selected_entry < 0) {
+                m_sidebar_state.selected_entry = sidebar_entries.size() - 1;
+            }
+
+            m_sidebar_state.selected_entry = m_sidebar_state.selected_entry % sidebar_entries.size();
 
             ImGui::EndChild();
             ImGui::TableNextColumn(); // Move to the next column (right)
 
-            if (selected_sidebar_entry > 0) {
-                // Find the mod that owns this entry
-                for (const auto& range : mod_sidebar_ranges) {
-                    if (selected_sidebar_entry >= range.mn && selected_sidebar_entry < range.mx) {
-                        if (range.has_sidebar_entries) {
-                            range.mod->on_draw_sidebar_entry(sidebar_entries[selected_sidebar_entry]);
-                        } else {
-                            range.mod->on_draw_ui();
-                        }
+            if (wants_focus_right) {
+                ImGui::SetNextWindowFocus();
+            }
 
-                        break;
+            if (ImGui::BeginChild("UEVRRightPane", ImVec2(0, 0), true, ImGuiWindowFlags_::ImGuiWindowFlags_AlwaysUseWindowPadding)) {
+                ImGui::BeginGroup();
+
+                if (m_sidebar_state.selected_entry > 0) {
+                    // Find the mod that owns this entry
+                    for (const auto& range : mod_sidebar_ranges) {
+                        if (m_sidebar_state.selected_entry >= range.mn && m_sidebar_state.selected_entry < range.mx) {
+                            if (range.has_sidebar_entries) {
+                                range.mod->on_draw_sidebar_entry(sidebar_entries[m_sidebar_state.selected_entry]);
+                            } else {
+                                range.mod->on_draw_ui();
+                            }
+
+                            break;
+                        }
                     }
+                } else {
+                    draw_about();
                 }
-            } else {
-                draw_about();
+
+                ImGui::EndGroup();
+                ImGui::EndChild();
             }
 
             /*for (auto& mod : m_mods->get_mods()) {
@@ -1274,7 +1299,7 @@ void Framework::draw_ui() {
         } else if (!m_game_data_initialized) {
             ImGui::EndChild();
 
-            if (selected_sidebar_entry == 0) {
+            if (m_sidebar_state.selected_entry == 0) {
                 ImGui::TableNextColumn();
                 draw_about();
             }
@@ -1284,7 +1309,7 @@ void Framework::draw_ui() {
         } else if (!m_error.empty()) {
             ImGui::EndChild();
 
-            if (selected_sidebar_entry == 0) {
+            if (m_sidebar_state.selected_entry == 0) {
                 ImGui::TableNextColumn();
                 draw_about();
             }

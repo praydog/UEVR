@@ -1126,8 +1126,6 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
         MAP_BUTTON(ImGuiKey_GamepadDpadRight,       XINPUT_GAMEPAD_DPAD_RIGHT);
         MAP_BUTTON(ImGuiKey_GamepadDpadUp,          XINPUT_GAMEPAD_DPAD_UP);
         MAP_BUTTON(ImGuiKey_GamepadDpadDown,        XINPUT_GAMEPAD_DPAD_DOWN);
-        MAP_BUTTON(ImGuiKey_GamepadL1,              XINPUT_GAMEPAD_LEFT_SHOULDER);
-        MAP_BUTTON(ImGuiKey_GamepadR1,              XINPUT_GAMEPAD_RIGHT_SHOULDER);
         MAP_ANALOG(ImGuiKey_GamepadL2,              gamepad.bLeftTrigger, XINPUT_GAMEPAD_TRIGGER_THRESHOLD, 255);
         MAP_ANALOG(ImGuiKey_GamepadR2,              gamepad.bRightTrigger, XINPUT_GAMEPAD_TRIGGER_THRESHOLD, 255);
         MAP_BUTTON(ImGuiKey_GamepadL3,              XINPUT_GAMEPAD_LEFT_THUMB);
@@ -1138,6 +1136,8 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
             MAP_ANALOG(ImGuiKey_GamepadLStickRight,     gamepad.sThumbLX, +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, +32767);
             MAP_ANALOG(ImGuiKey_GamepadLStickUp,        gamepad.sThumbLY, +XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, +32767);
             MAP_ANALOG(ImGuiKey_GamepadLStickDown,      gamepad.sThumbLY, -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, -32768);
+            MAP_BUTTON(ImGuiKey_GamepadL1,              XINPUT_GAMEPAD_LEFT_SHOULDER);
+            MAP_BUTTON(ImGuiKey_GamepadR1,              XINPUT_GAMEPAD_RIGHT_SHOULDER);
         } else {
             // Map it to the dpad
             const auto left_stick_left = gamepad.sThumbLX < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE * 2;
@@ -1860,13 +1860,13 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
     // Draw the ui thats always drawn first.
     on_draw_ui();
 
-    const auto made_child = ImGui::BeginChild("VRChild", ImVec2(0, 0), true, ImGuiWindowFlags_::ImGuiWindowFlags_NavFlattened);
+    /*const auto made_child = ImGui::BeginChild("VRChild", ImVec2(0, 0), true, ImGuiWindowFlags_::ImGuiWindowFlags_NavFlattened);
 
     utility::ScopeGuard sg([made_child]() {
         if (made_child) {
             ImGui::EndChild();
         }
-    });
+    });*/
 
     enum SelectedPage {
         PAGE_RUNTIME,
@@ -2124,6 +2124,12 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::DragFloat4("Raw Left", (float*)&m_raw_projections[0], 0.01f, -100.0f, 100.0f);
         ImGui::DragFloat4("Raw Right", (float*)&m_raw_projections[1], 0.01f, -100.0f, 100.0f);
 
+        const auto left_stick_axis = get_left_stick_axis();
+        const auto right_stick_axis = get_right_stick_axis();
+
+        ImGui::DragFloat2("Left Stick", (float*)&left_stick_axis, 0.01f, -1.0f, 1.0f);
+        ImGui::DragFloat2("Right Stick", (float*)&right_stick_axis, 0.01f, -1.0f, 1.0f);
+
         ImGui::TextWrapped("Hardware scheduling: %s", m_has_hw_scheduling ? "Enabled" : "Disabled");
     }
 
@@ -2141,10 +2147,12 @@ void VR::on_draw_ui() {
         std::string adjusted_name = get_name().data();
         adjusted_name += " (Loading...)";
 
-        if (!ImGui::CollapsingHeader(adjusted_name.data())) {
+        /*if (!ImGui::CollapsingHeader(adjusted_name.data())) {
             ImGui::PopID();
             return;
-        }
+        }*/
+
+        ImGui::TextWrapped("Loading...");
     } else {
         /*if (!ImGui::CollapsingHeader(get_name().data())) {
             ImGui::PopID();
