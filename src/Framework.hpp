@@ -185,11 +185,25 @@ public:
     }
 
     void increment_sidebar_page() {
+        const auto now = std::chrono::steady_clock::now();
+        const auto delta = now - m_last_page_inc_time;
+        if (delta < std::chrono::milliseconds(100)) {
+            return;
+        }
         ++m_sidebar_state.selected_entry;
+
+        m_last_page_inc_time = now;
     }
 
     void decrement_sidebar_page() {
+        const auto now = std::chrono::steady_clock::now();
+        const auto delta = now - m_last_page_dec_time;
+        if (delta < std::chrono::milliseconds(100)) {
+            return;
+        }
         --m_sidebar_state.selected_entry;
+
+        m_last_page_dec_time = now;
     }
 
 private:
@@ -284,6 +298,8 @@ private:
     std::chrono::steady_clock::time_point m_last_message_time{};
     std::chrono::steady_clock::time_point m_last_sendmessage_time{};
     std::chrono::steady_clock::time_point m_last_chance_time{};
+    std::chrono::steady_clock::time_point m_last_page_dec_time{};
+    std::chrono::steady_clock::time_point m_last_page_inc_time{};
     uint32_t m_frames_since_init{0};
     bool m_has_last_chance{true};
     bool m_first_initialize{true};
