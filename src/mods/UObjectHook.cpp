@@ -1,4 +1,4 @@
-#include <future>
+#include <fstream>
 
 #include <utility/Logging.hpp>
 #include <utility/String.hpp>
@@ -18,6 +18,7 @@
 #include <sdk/UGameplayStatics.hpp>
 #include <sdk/APlayerController.hpp>
 #include <sdk/APawn.hpp>
+#include <sdk/APlayerCameraManager.hpp>
 #include <sdk/ScriptVector.hpp>
 #include <sdk/FBoolProperty.hpp>
 #include <sdk/FObjectProperty.hpp>
@@ -47,6 +48,29 @@ UObjectHook::MotionControllerState::~MotionControllerState() {
 
             SPDLOG_INFO("[UObjectHook::MotionControllerState] Destroyed adjustment visualizer for component {:x}", (uintptr_t)vis);
         });
+    }
+}
+
+nlohmann::json UObjectHook::MotionControllerStateBase::serialize() const {
+    return {
+        {"rotation_offset", utility::math::to_json(rotation_offset)},
+        {"location_offset", utility::math::to_json(location_offset)},
+        {"hand", hand}
+    };
+}
+
+void UObjectHook::MotionControllerStateBase::deserialize(const nlohmann::json& data) {
+    if (data.contains("rotation_offset")) {
+        rotation_offset = utility::math::from_json_quat(data["rotation_offset"]);
+    }
+
+    if (data.contains("location_offset")) {
+        location_offset = utility::math::from_json_vec3(data["location_offset"]);
+    }
+
+    if (data.contains("hand")) {
+        hand = data["hand"].get<uint8_t>();
+        hand = hand % 2;
     }
 }
 
@@ -117,6 +141,10 @@ void UObjectHook::hook() {
     }
 
     SPDLOG_INFO("[UObjectHook] Added {} existing objects", m_objects.size());
+
+    SPDLOG_INFO("[UObjectHook] Deserializing persistent states");
+    m_persistent_states = deserialize_all_mc_states();
+    SPDLOG_INFO("[UObjectHook] Deserialized {} persistent states", m_persistent_states.size());
 
     m_fully_hooked = true;
 }
@@ -199,14 +227,18 @@ void UObjectHook::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     }
     
     if (m_fully_hooked) {
-        std::shared_lock _{m_mutex};
-        const auto ui_active = g_framework->is_drawing_ui();
+        {
+            std::shared_lock _{m_mutex};
+            const auto ui_active = g_framework->is_drawing_ui();
 
-        for (auto& state : m_motion_controller_attached_components) {
-            if (m_overlap_detection_actor == nullptr && state.second->adjusting && ui_active) {
-                state.second->adjusting = false;
+            for (auto& state : m_motion_controller_attached_components) {
+                if (m_overlap_detection_actor == nullptr && state.second->adjusting && ui_active) {
+                    state.second->adjusting = false;
+                }
             }
         }
+
+        update_persistent_states();
     }
 }
 
@@ -795,7 +827,277 @@ void UObjectHook::destroy_overlapper() {
     });
 }
 
-std::future<std::vector<sdk::UClass*>> sorting_task{};
+nlohmann::json UObjectHook::serialize_mc_state(const std::vector<std::string>& path, const std::shared_ptr<MotionControllerState>& state) {
+    nlohmann::json result{};
+
+    result["path"] = path;
+    result["state"] = state->serialize();
+
+    return result;
+}
+
+std::shared_ptr<UObjectHook::PersistentState> UObjectHook::deserialize_mc_state(nlohmann::json& data) {
+    SPDLOG_INFO("[UObjectHook] inside deserialize_mc_state");
+
+    if (!data.contains("path") || !data.contains("state")) {
+        SPDLOG_ERROR("[UObjectHook] Malfomed JSON file (missing path or state)");
+        return nullptr;
+    }
+
+    // make sure path is an array
+    if (!data["path"].is_array()) {
+        SPDLOG_ERROR("[UObjectHook] Malfomed JSON file (path is not an array)");
+        return nullptr;
+    }
+
+    // make sure state is an object
+    if (!data["state"].is_object()) {
+        SPDLOG_ERROR("[UObjectHook] Malfomed JSON file (state is not an object)");
+        return nullptr;
+    }
+
+    SPDLOG_INFO("[UObjectHook] Deserializing state path...");
+    auto path = data["path"].get<std::vector<std::string>>();
+
+    auto persistent_state = std::make_shared<PersistentState>();
+    persistent_state->path = path;
+
+    SPDLOG_INFO("[UObjectHook] Deserializing state...");
+    persistent_state->state.deserialize(data["state"]);
+
+    return persistent_state;
+}
+
+std::shared_ptr<UObjectHook::PersistentState> UObjectHook::deserialize_mc_state(std::filesystem::path json_path) {
+    if (!std::filesystem::exists(json_path)) {
+        return nullptr;
+    }
+
+    try {
+        auto f = std::ifstream{json_path};
+
+        if (f.is_open()) {
+            // Log the file data to make sure we're getting it correctly...
+            const auto file_contents = std::string{std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()};
+
+            SPDLOG_INFO("[UObjectHook] JSON file contents:");
+            SPDLOG_INFO("{}", file_contents);
+
+            nlohmann::json data = nlohmann::json::parse(file_contents);
+
+            return deserialize_mc_state(data);
+        }
+
+        SPDLOG_ERROR("[UObjectHook] Failed to open JSON file {}", json_path.string());
+        return nullptr;
+    } catch (const std::exception& e) {
+        SPDLOG_ERROR("[UObjectHook] Failed to parse JSON file {}: {}", json_path.string(), e.what());
+    } catch (...) {
+        SPDLOG_ERROR("[UObjectHook] Failed to parse JSON file {}", json_path.string());
+    }
+
+    return nullptr;
+}
+
+std::vector<std::shared_ptr<UObjectHook::PersistentState>> UObjectHook::deserialize_all_mc_states() {
+    const auto base_dir = Framework::get_persistent_dir();
+    const auto uobjecthook_dir = base_dir / "uobjecthook";
+
+    if (!std::filesystem::exists(uobjecthook_dir)) {
+        return {};
+    }
+    
+    // Gather all .json files in this directory
+    std::vector<std::filesystem::path> json_files{};
+    for (const auto& p : std::filesystem::directory_iterator(uobjecthook_dir)) {
+        if (p.path().extension() == ".json") {
+            json_files.push_back(p.path());
+        }
+    }
+
+    std::vector<std::shared_ptr<PersistentState>> result{};
+    for (const auto& json_file : json_files) {
+        auto state = deserialize_mc_state(json_file);
+
+        if (state != nullptr) {
+            result.push_back(state);
+        }
+    }
+
+    return result;
+}
+
+void UObjectHook::update_persistent_states() {
+    if (m_persistent_states.empty()) {
+        return;
+    }
+
+    for (const auto& state : m_persistent_states) {
+        if (state == nullptr) {
+            continue;
+        }
+
+        auto obj = state->path.resolve();
+
+        if (obj == nullptr) {
+            continue;
+        }
+
+        static const auto scene_component_t = sdk::USceneComponent::static_class();
+
+        // TODO? will need some reworking to support properties from arbitrary objects
+        if (!obj->get_class()->is_a(scene_component_t)) {
+            continue;
+        }
+
+        auto mc_state = get_or_add_motion_controller_state((sdk::USceneComponent*)obj);
+
+        if (mc_state == nullptr) {
+            continue;
+        }
+
+        if (mc_state->adjusting) {
+            state->state.location_offset = mc_state->location_offset;
+            state->state.rotation_offset = mc_state->rotation_offset;
+            state->state.hand = mc_state->hand;
+        } else {
+            mc_state->location_offset = state->state.location_offset;
+            mc_state->rotation_offset = state->state.rotation_offset;
+            mc_state->hand = state->state.hand;
+        }
+    }
+}
+
+sdk::UObject* UObjectHook::StatePath::resolve_base_object() {
+    if (!this->has_valid_base()) {
+        return nullptr;
+    }
+
+    auto engine = sdk::UGameEngine::get();
+    if (engine == nullptr) {
+        return nullptr;
+    }
+
+    // TODO: Convert these into an enum or something when we initially parse the JSON file.
+    switch (utility::hash(m_path.front())) {
+    case "Acknowledged Pawn"_fnv:
+    {
+        auto world = engine->get_world();
+        if (world == nullptr) {
+            return nullptr;
+        }
+
+        auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
+
+        if (player_controller == nullptr) {
+            return nullptr;
+        }
+        
+        return player_controller->get_acknowledged_pawn();
+        break;
+    }
+
+    case "Player Controller"_fnv:
+    {
+        auto world = engine->get_world();
+        if (world == nullptr) {
+            return nullptr;
+        }
+
+        return sdk::UGameplayStatics::get()->get_player_controller(world, 0);
+        break;
+    }
+
+    case "Camera Manager"_fnv:
+    {      
+        auto world = engine->get_world();
+        if (world == nullptr) {
+            return nullptr;
+        }
+
+        auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
+
+        if (player_controller == nullptr) {
+            return nullptr;
+        }
+        
+        return player_controller->get_player_camera_manager();
+        break;
+    }
+
+    case "World"_fnv:
+    {
+        return engine->get_world();
+        break;
+    }
+
+    default:
+        break;
+    };
+
+    return nullptr;
+}
+
+sdk::UObject* UObjectHook::StatePath::resolve() {
+    const auto base = resolve_base_object();
+
+    if (base == nullptr) {
+        return nullptr;
+    }
+
+    auto previous_object = base;
+
+    for (auto it = m_path.begin() + 1; it != m_path.end(); ++it) {
+        switch (utility::hash(*it)) {
+        case "Components"_fnv:
+        {
+            // Make sure the base is an AActor
+            static const auto actor_t = sdk::AActor::static_class();
+
+            if (!previous_object->get_class()->is_a(actor_t)) {
+                return nullptr;
+            }
+
+            const auto components = ((sdk::AActor*)previous_object)->get_all_components();
+
+            if (components.empty()) {
+                return nullptr;
+            }
+
+            auto next_it = it + 1;
+
+            if (next_it == m_path.end()) {
+                return nullptr;
+            }
+
+            for (auto comp : components) {
+                const auto comp_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
+
+                if (utility::narrow(comp_name) == *next_it) {
+                    previous_object = comp;
+                    ++it;
+                    break;
+                }
+            }
+
+            break;
+        }
+        // todo... properties? oh god
+        case "Properties"_fnv:
+        {
+            // unsupported atm
+            return nullptr;
+            break;
+        }
+
+        default:
+            return nullptr;
+            break;
+        };
+    }
+
+    return previous_object;
+}
 
 void UObjectHook::on_draw_ui() {
     activate();
@@ -806,6 +1108,10 @@ void UObjectHook::on_draw_ui() {
     }
 
     std::shared_lock _{m_mutex};
+
+    if (ImGui::Button("Reload Persistent States")) {
+        m_persistent_states = deserialize_all_mc_states();
+    }
 
     if (!m_motion_controller_attached_components.empty()) {
         ImGui::SetNextItemOpen(true, ImGuiCond_Once);
@@ -913,6 +1219,7 @@ void UObjectHook::on_draw_ui() {
 
         if (world != nullptr) {
             if (ImGui::TreeNode("PlayerController")) {
+                auto scope = m_path.enter_clean("Player Controller");
                 auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
 
                 if (player_controller != nullptr) {
@@ -925,6 +1232,7 @@ void UObjectHook::on_draw_ui() {
             }
 
             if (ImGui::TreeNode("Acknowledged Pawn")) {
+                auto scope = m_path.enter_clean("Acknowledged Pawn");
                 auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
 
                 if (player_controller != nullptr) {
@@ -943,6 +1251,7 @@ void UObjectHook::on_draw_ui() {
             }
 
             if (ImGui::TreeNode("Camera Manager")) {
+                auto scope = m_path.enter_clean("Camera Manager");
                 auto player_controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
 
                 if (player_controller != nullptr) {
@@ -961,6 +1270,7 @@ void UObjectHook::on_draw_ui() {
             }
 
             if (ImGui::TreeNode("World")) {
+                auto scope = m_path.enter_clean("World");
                 ui_handle_object(world);
                 ImGui::TreePop();
             }
@@ -980,11 +1290,11 @@ void UObjectHook::on_draw_ui() {
         const auto now = std::chrono::steady_clock::now();
         bool needs_sort = true;
 
-        if (sorting_task.valid()) {
+        if (m_sorting_task.valid()) {
             // Check if the sorting task is finished
-            if (sorting_task.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            if (m_sorting_task.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
                 // Do something if needed when sorting is done
-                m_sorted_classes = sorting_task.get();
+                m_sorted_classes = m_sorting_task.get();
                 needs_sort = true;
             } else {
                 needs_sort = false;
@@ -1014,7 +1324,7 @@ void UObjectHook::on_draw_ui() {
             }
 
             // Launch sorting in a separate thread
-            sorting_task = std::async(std::launch::async, sort_classes, unsorted_classes);
+            m_sorting_task = std::async(std::launch::async, sort_classes, unsorted_classes);
             m_last_sort_time = now;
         }
 
@@ -1252,6 +1562,28 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
                     g_framework->set_draw_ui(false);
                 }
             }
+
+            if (m_path.has_valid_base()) {
+                ImGui::SameLine();
+                if (ImGui::Button("Save state")) {
+                    auto json = serialize_mc_state(m_path.path(), state);
+
+                    // Create a name based on the first and last part of the path
+                    const auto name = m_path.path().front() + "_" + m_path.path().back() + "_mc_state.json";
+                    const auto wanted_dir = Framework::get_persistent_dir() / "uobjecthook" / name;
+
+                    // Create dir if necessary
+                    std::filesystem::create_directories(wanted_dir.parent_path());
+
+                    if (std::filesystem::exists(wanted_dir.parent_path())) {
+                        std::ofstream file{wanted_dir};
+                        file << json.dump(4);
+                        file.close();
+                    }
+                }
+            } else {
+                ImGui::Text("Did not start from a valid base, cannot save state");
+            }
         }
     } else {
         if (ImGui::Button("Attach left")) {
@@ -1457,6 +1789,7 @@ void UObjectHook::ui_handle_actor(sdk::UObject* object) {
     }
 
     if (ImGui::TreeNode("Components")) {
+        auto scope = m_path.enter("Components");
         auto components = actor->get_all_components();
 
         std::sort(components.begin(), components.end(), [](sdk::UObject* a, sdk::UObject* b) {
@@ -1470,10 +1803,13 @@ void UObjectHook::ui_handle_actor(sdk::UObject* object) {
             // not using full_name because its HUGE
             std::wstring comp_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
             const auto made = ImGui::TreeNode(utility::narrow(comp_name).data());
+
             if (made) {
+                auto scope2 = m_path.enter(utility::narrow(comp_name));
                 ui_handle_object(comp_obj);
                 ImGui::TreePop();
             }
+
             ImGui::PopID();
         }
 
@@ -1559,6 +1895,8 @@ void UObjectHook::ui_handle_functions(void* object, sdk::UStruct* uclass) {
 }
 
 void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
+    auto scope = m_path.enter("Properties");
+
     if (uclass == nullptr) {
         return;
     }
