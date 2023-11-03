@@ -317,6 +317,7 @@ set(sdk_SOURCES "")
 list(APPEND sdk_SOURCES
 	"shared/sdk/AActor.cpp"
 	"shared/sdk/APawn.cpp"
+	"shared/sdk/APlayerCameraManager.cpp"
 	"shared/sdk/APlayerController.cpp"
 	"shared/sdk/CVar.cpp"
 	"shared/sdk/ConsoleManager.cpp"
@@ -357,6 +358,7 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/Utility.cpp"
 	"shared/sdk/AActor.hpp"
 	"shared/sdk/APawn.hpp"
+	"shared/sdk/APlayerCameraManager.hpp"
 	"shared/sdk/APlayerController.hpp"
 	"shared/sdk/CVar.hpp"
 	"shared/sdk/ConsoleManager.hpp"
