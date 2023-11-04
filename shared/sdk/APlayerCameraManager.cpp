@@ -1,3 +1,5 @@
+#include <sdk/UObjectArray.hpp>
+
 #include "APlayerCameraManager.hpp"
 
 namespace sdk {

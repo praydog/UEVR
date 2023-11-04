@@ -444,6 +444,7 @@ target_link_libraries(sdk PUBLIC
 	kananlib
 	Version
 	TracyClient
+	nlohmann_json
 )
 
 unset(CMKR_TARGET)

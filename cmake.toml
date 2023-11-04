@@ -138,7 +138,8 @@ type = "sdk-template"
 link-libraries = [
     "kananlib",
     "Version",
-    "TracyClient"
+    "TracyClient",
+    "nlohmann_json"
 ]
 
 [target.plugin_renderlib]
