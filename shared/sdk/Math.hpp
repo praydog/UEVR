@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <nlohmann/json.hpp>
 
 #define GLM_ENABLE_EXPERIMENTAL
 
@@ -194,5 +195,79 @@ static glm::vec3 ue_euler_from_rotation_matrix(const glm::mat4& m) {
     rotator.z = glm::degrees(glm::atan2(glm::dot(z_axis, sy_axis), glm::dot(y_axis, sy_axis)));
 
     return rotator;
+}
+
+static nlohmann::json to_json(const glm::vec3& v) {
+    return nlohmann::json{ { "x", v.x }, { "y", v.y }, { "z", v.z } };
+}
+
+static nlohmann::json to_json(const glm::vec4& v) {
+    return nlohmann::json{ { "x", v.x }, { "y", v.y }, { "z", v.z }, { "w", v.w } };
+}
+
+static nlohmann::json to_json(const glm::quat& q) {
+    return nlohmann::json{ { "x", q.x }, { "y", q.y }, { "z", q.z }, { "w", q.w } };
+}
+
+static glm::vec3 from_json_vec3(const nlohmann::json& j) {
+    glm::vec3 result{};
+
+    if (j.contains("x")) {
+        result.x = j["x"].get<float>();
+    }
+
+    if (j.contains("y")) {
+        result.y = j["y"].get<float>();
+    }
+
+    if (j.contains("z")) {
+        result.z = j["z"].get<float>();
+    }
+
+    return result;
+}
+
+static glm::vec4 from_json_vec4(const nlohmann::json& j) {
+    glm::vec4 result{};
+
+    if (j.contains("x")) {
+        result.x = j["x"].get<float>();
+    }
+
+    if (j.contains("y")) {
+        result.y = j["y"].get<float>();
+    }
+
+    if (j.contains("z")) {
+        result.z = j["z"].get<float>();
+    }
+
+    if (j.contains("w")) {
+        result.w = j["w"].get<float>();
+    }
+
+    return result;
+}
+
+static glm::quat from_json_quat(const nlohmann::json& j) {
+    glm::quat result{};
+
+    if (j.contains("x")) {
+        result.x = j["x"].get<float>();
+    }
+
+    if (j.contains("y")) {
+        result.y = j["y"].get<float>();
+    }
+
+    if (j.contains("z")) {
+        result.z = j["z"].get<float>();
+    }
+
+    if (j.contains("w")) {
+        result.w = j["w"].get<float>();
+    }
+
+    return result;
 }
 }
