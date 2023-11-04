@@ -1267,7 +1267,8 @@ void Framework::draw_ui() {
                 ImGui::SetNextWindowFocus();
             }
 
-            if (ImGui::BeginChild("UEVRRightPane", ImVec2(0, 0), true, ImGuiWindowFlags_::ImGuiWindowFlags_AlwaysUseWindowPadding)) {
+            ImGui::BeginChild("UEVRRightPane", ImVec2(0, 0), true, ImGuiWindowFlags_::ImGuiWindowFlags_AlwaysUseWindowPadding);
+            {
                 ImGui::BeginGroup();
 
                 if (m_sidebar_state.selected_entry > 0) {

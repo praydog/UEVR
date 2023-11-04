@@ -1329,13 +1329,14 @@ void UObjectHook::on_draw_ui() {
         }
 
         const auto wide_filter = utility::widen(filter);
-
-        bool made_child = ImGui::BeginChild("Objects by class entries", ImVec2(0, 0), true, ImGuiWindowFlags_::ImGuiWindowFlags_HorizontalScrollbar);
+        const bool made_child = ImGui::BeginChild("Objects by class entries", ImVec2(0, 0), true, ImGuiWindowFlags_::ImGuiWindowFlags_HorizontalScrollbar);
 
         utility::ScopeGuard sg{[made_child]() {
-            if (made_child) {
+            //if (made_child) {
+                // well apparently BeginChild doesn't care about if it returned true or not so...
+                // TODO: check this every time we update imgui?
                 ImGui::EndChild();
-            }
+            //}
         }};
 
         for (auto uclass : m_sorted_classes) {
