@@ -89,6 +89,7 @@ private:
         "Camera Manager"
     };
 
+    std::filesystem::path get_persistent_dir() const;
     nlohmann::json serialize_mc_state(const std::vector<std::string>& path, const std::shared_ptr<MotionControllerState>& state);
     std::shared_ptr<PersistentState> deserialize_mc_state(nlohmann::json& data);
     std::shared_ptr<PersistentState> deserialize_mc_state(std::filesystem::path json_path);

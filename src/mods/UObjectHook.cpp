@@ -827,6 +827,17 @@ void UObjectHook::destroy_overlapper() {
     });
 }
 
+std::filesystem::path UObjectHook::get_persistent_dir() const {
+    const auto base_dir = Framework::get_persistent_dir();
+    const auto uobjecthook_dir = base_dir / "uobjecthook";
+
+    if (!std::filesystem::exists(uobjecthook_dir)) {
+        std::filesystem::create_directories(uobjecthook_dir);
+    }
+
+    return uobjecthook_dir;
+}
+
 nlohmann::json UObjectHook::serialize_mc_state(const std::vector<std::string>& path, const std::shared_ptr<MotionControllerState>& state) {
     nlohmann::json result{};
 
@@ -900,8 +911,7 @@ std::shared_ptr<UObjectHook::PersistentState> UObjectHook::deserialize_mc_state(
 }
 
 std::vector<std::shared_ptr<UObjectHook::PersistentState>> UObjectHook::deserialize_all_mc_states() {
-    const auto base_dir = Framework::get_persistent_dir();
-    const auto uobjecthook_dir = base_dir / "uobjecthook";
+    const auto uobjecthook_dir = get_persistent_dir();
 
     if (!std::filesystem::exists(uobjecthook_dir)) {
         return {};
@@ -1112,6 +1122,24 @@ void UObjectHook::on_draw_ui() {
     if (ImGui::Button("Reload Persistent States")) {
         m_persistent_states = deserialize_all_mc_states();
     }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Destroy Persistent States")) {
+        m_persistent_states.clear();
+
+        const auto uobjecthook_dir = get_persistent_dir();
+
+        if (std::filesystem::exists(uobjecthook_dir)) {
+            for (const auto& p : std::filesystem::directory_iterator(uobjecthook_dir)) {
+                if (p.path().extension() == ".json") {
+                    std::filesystem::remove(p.path());
+                }
+            }
+        }
+    }
+
+    ImGui::Separator();
 
     if (!m_motion_controller_attached_components.empty()) {
         ImGui::SetNextItemOpen(true, ImGuiCond_Once);
