@@ -1551,11 +1551,11 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
     }
 
     if (uclass->is_a(sdk::UActorComponent::static_class())) {
-        if (ImGui::Button("Destroy Component")) {
+        /*if (ImGui::Button("Destroy Component")) {
             auto comp = (sdk::UActorComponent*)object;
 
             comp->destroy_component();
-        }
+        }*/
     }
 
     if (uclass->is_a(sdk::USceneComponent::static_class())) {
@@ -1617,12 +1617,12 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
                     save_state_logic(m_path.path());
                 }
             } else {
-                const auto component_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
+                const auto component_name = utility::narrow(comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string());
 
                 // Check if any of our bases can reach this component through their components list.
                 bool found_any = false;
                 for (const auto& allowed_base : s_allowed_bases) {
-                    const auto possible_path = std::vector<std::string>{allowed_base, "Components", utility::narrow(component_name)};
+                    const auto possible_path = std::vector<std::string>{allowed_base, "Components", component_name};
                     const auto path = StatePath{possible_path};
                     const auto resolved = path.resolve();
 
