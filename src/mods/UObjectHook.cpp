@@ -978,7 +978,7 @@ void UObjectHook::update_persistent_states() {
     }
 }
 
-sdk::UObject* UObjectHook::StatePath::resolve_base_object() {
+sdk::UObject* UObjectHook::StatePath::resolve_base_object() const {
     if (!this->has_valid_base()) {
         return nullptr;
     }
@@ -1048,7 +1048,7 @@ sdk::UObject* UObjectHook::StatePath::resolve_base_object() {
     return nullptr;
 }
 
-sdk::UObject* UObjectHook::StatePath::resolve() {
+sdk::UObject* UObjectHook::StatePath::resolve() const {
     const auto base = resolve_base_object();
 
     if (base == nullptr) {
@@ -1592,26 +1592,53 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
                 }
             }
 
+            auto save_state_logic = [&](const std::vector<std::string>& path) {
+                auto json = serialize_mc_state(path, state);
+
+                // Create a name based on the first and last part of the path
+                const auto name = path.front() + "_" + path.back() + "_mc_state.json";
+                const auto wanted_dir = Framework::get_persistent_dir() / "uobjecthook" / name;
+
+                // Create dir if necessary
+                std::filesystem::create_directories(wanted_dir.parent_path());
+
+                if (std::filesystem::exists(wanted_dir.parent_path())) {
+                    std::ofstream file{wanted_dir};
+                    file << json.dump(4);
+                    file.close();
+
+                    m_persistent_states = deserialize_all_mc_states();
+                }
+            };
+
             if (m_path.has_valid_base()) {
                 ImGui::SameLine();
                 if (ImGui::Button("Save state")) {
-                    auto json = serialize_mc_state(m_path.path(), state);
-
-                    // Create a name based on the first and last part of the path
-                    const auto name = m_path.path().front() + "_" + m_path.path().back() + "_mc_state.json";
-                    const auto wanted_dir = Framework::get_persistent_dir() / "uobjecthook" / name;
-
-                    // Create dir if necessary
-                    std::filesystem::create_directories(wanted_dir.parent_path());
-
-                    if (std::filesystem::exists(wanted_dir.parent_path())) {
-                        std::ofstream file{wanted_dir};
-                        file << json.dump(4);
-                        file.close();
-                    }
+                    save_state_logic(m_path.path());
                 }
             } else {
-                ImGui::Text("Did not start from a valid base, cannot save state");
+                const auto component_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
+
+                // Check if any of our bases can reach this component through their components list.
+                bool found_any = false;
+                for (const auto& allowed_base : s_allowed_bases) {
+                    const auto possible_path = std::vector<std::string>{allowed_base, "Components", utility::narrow(component_name)};
+                    const auto path = StatePath{possible_path};
+                    const auto resolved = path.resolve();
+
+                    if (resolved == comp) {
+                        if (ImGui::Button("Save state")) {
+                            save_state_logic(path.path());
+                        }
+                        
+                        found_any = true;
+                        break;
+                    }
+                }
+
+                if (!found_any) {
+                    ImGui::Text("Can't save, did not start from a valid base or none of the allowed bases can reach this component");
+                }
             }
         }
     } else {

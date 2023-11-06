@@ -245,8 +245,8 @@ private:
             return std::find(s_allowed_bases.begin(), s_allowed_bases.end(), m_path[0]) != s_allowed_bases.end();
         }
 
-        sdk::UObject* resolve_base_object();
-        sdk::UObject* resolve();
+        sdk::UObject* resolve_base_object() const;
+        sdk::UObject* resolve()  const;
 
     private:
         void clear() {
