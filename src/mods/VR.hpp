@@ -448,6 +448,10 @@ public:
         return m_splitscreen_view_index->value();
     }
 
+    bool is_sceneview_compatibility_enabled() const {
+        return m_sceneview_compatibility_mode->value();
+    }
+
     bool is_ghosting_fix_enabled() const {
         return m_ghosting_fix->value();
     }
@@ -725,8 +729,10 @@ private:
     const ModSlider::Ptr m_custom_z_near{ ModSlider::create(generate_name("CustomZNear"), 0.001f, 100.0f, 0.01f) };
     const ModToggle::Ptr m_custom_z_near_enabled{ ModToggle::create(generate_name("EnableCustomZNear"), false) };
 
-    const ModToggle::Ptr m_splitscreen_compatibility_mode{ ModToggle::create(generate_name("SplitscreenCompatibilityMode"), false) };
+    const ModToggle::Ptr m_splitscreen_compatibility_mode{ ModToggle::create(generate_name("Compatibility_SplitScreen"), false) };
     const ModInt32::Ptr m_splitscreen_view_index{ ModInt32::create(generate_name("SplitscreenViewIndex"), 0) };
+
+    const ModToggle::Ptr m_sceneview_compatibility_mode{ ModToggle::create(generate_name("Compatibility_SceneView"), false) };
 
     const ModToggle::Ptr m_compatibility_skip_pip{ ModToggle::create(generate_name("Compatibility_SkipPostInitProperties"), false) };
 
@@ -786,7 +792,8 @@ private:
         *m_ghosting_fix,
         *m_splitscreen_compatibility_mode,
         *m_splitscreen_view_index,
-        *m_compatibility_skip_pip
+        *m_compatibility_skip_pip,
+        *m_sceneview_compatibility_mode,
     };
     
 

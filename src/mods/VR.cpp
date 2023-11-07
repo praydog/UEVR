@@ -2088,6 +2088,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Compatibility Options")) {
             m_compatibility_skip_pip->draw("Skip PostInitProperties");
+            m_sceneview_compatibility_mode->draw("SceneView Compatibility Mode");
             m_extreme_compat_mode->draw("Extreme Compatibility Mode");
             ImGui::TreePop();
         }
