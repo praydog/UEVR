@@ -2592,7 +2592,14 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
             euler = utility::math::ue_euler_from_rotation_matrix(glm::inverse(conversion_mat_inverse * init_options_view_rotation_matrix));
         }
 
-        g_hook->calculate_stereo_view_offset_(true_index + 1, (Rotator<float>*)&euler, 100.0f, &init_options_view_origin);
+        auto euler_d = glm::vec<3, double>{euler};
+        auto euler_pointer = is_ue5 ? (Rotator<float>*)&euler_d : (Rotator<float>*)&euler;
+
+        g_hook->calculate_stereo_view_offset_(true_index + 1, euler_pointer, 100.0f, &init_options_view_origin);
+
+        if (is_ue5) {
+            euler = euler_d;
+        }
 
         const auto view_rot_mat = conversion_mat * utility::math::ue_inverse_rotation_matrix(euler);
 
@@ -2601,10 +2608,16 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
 
         if (is_ue5) {
             init_options_view_rotation_matrix_ue5 = view_rot_mat;
-            init_options_projection_matrix_ue5 = proj_mat;
+
+            if (!vr->is_using_2d_screen()) {
+                init_options_projection_matrix_ue5 = proj_mat;
+            }
         } else {
             init_options_view_rotation_matrix = view_rot_mat;
-            init_options_projection_matrix = proj_mat;
+
+            if (!vr->is_using_2d_screen()) {
+                init_options_projection_matrix = proj_mat;
+            }
         }
 
         //init_options_stereo_pass = 0;
