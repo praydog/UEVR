@@ -1597,7 +1597,7 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
 
                 // Create a name based on the first and last part of the path
                 const auto name = path.front() + "_" + path.back() + "_mc_state.json";
-                const auto wanted_dir = Framework::get_persistent_dir() / "uobjecthook" / name;
+                const auto wanted_dir = UObjectHook::get_persistent_dir() / name;
 
                 // Create dir if necessary
                 std::filesystem::create_directories(wanted_dir.parent_path());
@@ -2194,8 +2194,16 @@ void* UObjectHook::destructor(sdk::UObjectBase* object, void* rdx, void* r8, voi
                 hook->m_overlap_detection_actor_left = nullptr;
             }
 
-            for (auto super = (sdk::UStruct*)it->second->uclass; super != nullptr; super = super->get_super_struct()) {
+            for (auto super = (sdk::UStruct*)it->second->uclass; super != nullptr;) {
                 hook->m_objects_by_class[(sdk::UClass*)super].erase(object);
+
+                // Just make sure we don't do any operations on super because it might be invalid...
+                if (!hook->m_objects.contains(super)) {
+                    //SPDLOG_ERROR("Super for {:x} is not valid", (uintptr_t)object);
+                    break;
+                }
+
+                super = super->get_super_struct();
             }
 
             //hook->m_objects_by_class[it->second->uclass].erase(object);
