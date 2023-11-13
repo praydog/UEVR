@@ -1092,11 +1092,49 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
 
             break;
         }
-        // todo... properties? oh god
         case "Properties"_fnv:
         {
-            // unsupported atm
-            return nullptr;
+            auto next_it = it + 1;
+
+            if (next_it == m_path.end()) {
+                return nullptr;
+            }
+
+            const auto prop_name = *next_it;
+            const auto prop_desc = previous_object->get_class()->find_property(utility::widen(prop_name));
+
+            if (prop_desc == nullptr) {
+                return nullptr;
+            }
+
+            const auto prop_t = prop_desc->get_class();
+
+            if  (prop_t == nullptr) {
+                return nullptr;
+            }
+
+            const auto prop_t_name = prop_t->get_name().to_string();
+            switch (utility::hash(utility::narrow(prop_t_name))) {
+            case "ObjectProperty"_fnv:
+            {
+                const auto obj_ptr = prop_desc->get_data<sdk::UObject*>(previous_object);
+                const auto obj = obj_ptr != nullptr ? *obj_ptr : nullptr;
+
+                if (obj == nullptr) {
+                    return nullptr;
+                }
+
+                previous_object = obj;
+                ++it;
+                break;
+            }
+
+            // Need to handle StructProperty and ArrayProperty but whatever.
+            default:
+                SPDLOG_ERROR("[UObjectHook] Unsupported persistent property type {}", utility::narrow(prop_t_name));
+                break;
+            };
+
             break;
         }
 
@@ -2018,6 +2056,7 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 auto& value = *(sdk::UObject**)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
                 
                 if (ImGui::TreeNode(utility::narrow(prop->get_field_name().to_string()).data())) {
+                    auto scope2 = m_path.enter(utility::narrow(prop->get_field_name().to_string()));
                     ui_handle_object(value);
                     ImGui::TreePop();
                 }
