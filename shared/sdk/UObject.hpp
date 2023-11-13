@@ -2,6 +2,8 @@
 
 #include "UObjectBase.hpp"
 
+#include "nlohmann/json.hpp"
+
 namespace sdk {
 class UClass;
 
@@ -27,5 +29,8 @@ public:
     }
 
     bool is_a(UClass* cmp) const;
+
+    nlohmann::json to_json(const std::vector<std::wstring>& properties = {}) const;
+    void from_json(const nlohmann::json& j);
 };
 }
