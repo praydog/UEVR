@@ -15,6 +15,11 @@ public:
         return *(int32_t*)((uintptr_t)this + s_offset_offset);
     }
 
+    template<typename T>
+    T* get_data(sdk::UObject* object) const {
+        return (T*)((uintptr_t)object + get_offset());
+    }
+
     // Given xyz props from FVector, find the offset which matches up with all of them
     static void bruteforce_fproperty_offset(FProperty* x_prop, FProperty* y_prop, FProperty* z_prop);
 
