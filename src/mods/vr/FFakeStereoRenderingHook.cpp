@@ -3851,6 +3851,27 @@ void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, in
         index_starts_from_one = false;
     }
 
+    // The purpose of this is to prevent the game from crashing in IDirect3D12CommandList::Close
+    // Because the game will try to copy a texture region that is out of bounds.
+    if (g_hook->m_skip_next_adjust_view_rect) {
+        *x = 0;
+        *y = 0;
+        *w = std::min<uint32_t>(VR::get()->get_hmd_width(), *w);
+        *h = std::min<uint32_t>(VR::get()->get_hmd_height(), *h);
+        g_hook->m_skip_next_adjust_view_rect = false;
+        g_hook->m_skip_next_adjust_view_rect_count = 1;
+        return;
+    }
+
+    if (g_hook->m_skip_next_adjust_view_rect_count > 0) {
+        *x = 0;
+        *y = 0;
+        *w = std::min<uint32_t>(VR::get()->get_hmd_width(), *w);
+        *h = std::min<uint32_t>(VR::get()->get_hmd_height(), *h);
+        --g_hook->m_skip_next_adjust_view_rect_count;
+        return;
+    }
+
     if (VR::get()->is_stereo_emulation_enabled()) {
         *w *= 2;
     } else {

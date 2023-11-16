@@ -222,6 +222,7 @@ public:
 
     void set_should_recreate_textures(bool recreate) {
         m_wants_texture_recreation = recreate;
+        m_skip_next_adjust_view_rect = true;
     }
 
     void on_device_reset() override {
@@ -415,6 +416,8 @@ private:
     bool m_wants_texture_recreation{false};
     bool m_has_view_extension_hook{false};
     bool m_has_game_viewport_client_draw_hook{false};
+    bool m_skip_next_adjust_view_rect{false};
+    int32_t m_skip_next_adjust_view_rect_count{1};
 
     // Synchronized AFR
     float m_ignored_engine_delta{0.0f};
