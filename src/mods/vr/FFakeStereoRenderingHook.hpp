@@ -416,7 +416,7 @@ private:
     bool m_wants_texture_recreation{false};
     bool m_has_view_extension_hook{false};
     bool m_has_game_viewport_client_draw_hook{false};
-    bool m_skip_next_adjust_view_rect{false};
+    bool m_skip_next_adjust_view_rect{true};
     int32_t m_skip_next_adjust_view_rect_count{1};
 
     // Synchronized AFR
