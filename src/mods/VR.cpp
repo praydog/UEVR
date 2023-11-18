@@ -2576,16 +2576,45 @@ Vector2f VR::get_joystick_axis(vr::VRInputValueHandle_t handle) const {
         vr::VRInput()->GetAnalogActionData(m_action_joystick, &data, sizeof(data), handle);
 
         const auto deadzone = m_joystick_deadzone->value();
-        const auto out = Vector2f{ data.x, data.y };
+        auto out = Vector2f{ data.x, data.y };
 
-        return glm::length(out) > deadzone ? out : Vector2f{};
+        //return glm::length(out) > deadzone ? out : Vector2f{};
+        if (glm::abs(out.x) < deadzone) {
+            out.x = 0.0f;
+        }
+
+        if (glm::abs(out.y) < deadzone) {
+            out.y = 0.0f;
+        }
+
+        return out;
     } else if (get_runtime()->is_openxr()) {
         if (handle == m_left_joystick) {
             auto out = m_openxr->get_left_stick_axis();
-            return glm::length(out) > m_joystick_deadzone->value() ? out : Vector2f{};
+            //return glm::length(out) > m_joystick_deadzone->value() ? out : Vector2f{};
+            // okay.. instead of that actually clamp x/y to the proper deadzone
+            if (glm::abs(out.x) < m_joystick_deadzone->value()) {
+                out.x = 0.0f;
+            }
+
+            if (glm::abs(out.y) < m_joystick_deadzone->value()) {
+                out.y = 0.0f;
+            }
+
+            return out;
         } else if (handle == m_right_joystick) {
             auto out = m_openxr->get_right_stick_axis();
-            return glm::length(out) > m_joystick_deadzone->value() ? out : Vector2f{};
+            //return glm::length(out) > m_joystick_deadzone->value() ? out : Vector2f{};
+
+            if (glm::abs(out.x) < m_joystick_deadzone->value()) {
+                out.x = 0.0f;
+            }
+
+            if (glm::abs(out.y) < m_joystick_deadzone->value()) {
+                out.y = 0.0f;
+            }
+
+            return out;
         }
     }
 
