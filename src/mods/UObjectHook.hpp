@@ -62,6 +62,7 @@ private:
     struct MotionControllerState;
     struct StatePath;
     struct PersistentState;
+    struct PersistentCameraState;
 
     bool exists_unsafe(sdk::UObjectBase* object) const {
         return m_objects.contains(object);
@@ -91,9 +92,14 @@ private:
 
     std::filesystem::path get_persistent_dir() const;
     nlohmann::json serialize_mc_state(const std::vector<std::string>& path, const std::shared_ptr<MotionControllerState>& state);
+    nlohmann::json serialize_camera(const std::vector<std::string>& path, sdk::UObject* object);
+    void save_camera_state(const std::vector<std::string>& path, sdk::UObject* object);
+    std::optional<StatePath> deserialize_path(const nlohmann::json& data);
     std::shared_ptr<PersistentState> deserialize_mc_state(nlohmann::json& data);
     std::shared_ptr<PersistentState> deserialize_mc_state(std::filesystem::path json_path);
     std::vector<std::shared_ptr<PersistentState>> deserialize_all_mc_states();
+    std::shared_ptr<PersistentCameraState> deserialize_camera(const nlohmann::json& data);
+    std::shared_ptr<PersistentCameraState> deserialize_camera_state();
     void update_persistent_states();
 
     static void* add_object(void* rcx, void* rdx, void* r8, void* r9);
@@ -270,5 +276,10 @@ private:
         MotionControllerStateBase state{};
     };
 
+    struct PersistentCameraState {
+        StatePath path{};
+    };
+
+    std::shared_ptr<PersistentCameraState> m_persistent_camera_state{};
     std::vector<std::shared_ptr<PersistentState>> m_persistent_states{};
 };

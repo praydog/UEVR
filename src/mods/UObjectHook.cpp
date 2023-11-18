@@ -144,6 +144,7 @@ void UObjectHook::hook() {
 
     SPDLOG_INFO("[UObjectHook] Deserializing persistent states");
     m_persistent_states = deserialize_all_mc_states();
+    m_persistent_camera_state = deserialize_camera_state();
     SPDLOG_INFO("[UObjectHook] Deserialized {} persistent states", m_persistent_states.size());
 
     m_fully_hooked = true;
@@ -871,8 +872,65 @@ nlohmann::json UObjectHook::serialize_mc_state(const std::vector<std::string>& p
 
     result["path"] = path;
     result["state"] = state->serialize();
+    result["type"] = "motion_controller";
 
     return result;
+}
+
+nlohmann::json UObjectHook::serialize_camera(const std::vector<std::string>& path, sdk::UObject* object) {
+    nlohmann::json result{};
+
+    result["path"] = path;
+    result["type"] = "camera";
+
+    // todo: adjustments/offsets, etc...? all it needs is the camera object which is fine
+
+    return result;
+}
+
+void UObjectHook::save_camera_state(const std::vector<std::string>& path, sdk::UObject* object) {
+    auto json = serialize_camera(path, object);
+
+    const auto wanted_dir = UObjectHook::get_persistent_dir() / "camera_state.json";
+
+    // Create dir if necessary
+    try {
+        std::filesystem::create_directories(wanted_dir.parent_path());
+
+        if (std::filesystem::exists(wanted_dir.parent_path())) {
+            std::ofstream file{wanted_dir};
+            file << json.dump(4);
+            file.close();
+
+            m_persistent_camera_state = deserialize_camera_state();
+        }
+    } catch (const std::exception& e) {
+        SPDLOG_ERROR("[UObjectHook] Failed to save camera state: {}", e.what());
+    } catch (...) {
+        SPDLOG_ERROR("[UObjectHook] Failed to save camera state");
+    }
+}
+
+std::optional<UObjectHook::StatePath> UObjectHook::deserialize_path(const nlohmann::json& data) {
+    if (!data.contains("path")) {
+        SPDLOG_ERROR("[UObjectHook] Malfomed JSON file (missing path)");
+        return std::nullopt;
+    }
+
+    // make sure path is an array
+    if (!data["path"].is_array()) {
+        SPDLOG_ERROR("[UObjectHook] Malfomed JSON file (path is not an array)");
+        return std::nullopt;
+    }
+
+    const auto path = data["path"].get<std::vector<std::string>>();
+
+    if (path.empty()) {
+        SPDLOG_ERROR("[UObjectHook] Malfomed JSON file (path is empty)");
+        return std::nullopt;
+    }
+
+    return StatePath{path};
 }
 
 std::shared_ptr<UObjectHook::PersistentState> UObjectHook::deserialize_mc_state(nlohmann::json& data) {
@@ -893,6 +951,15 @@ std::shared_ptr<UObjectHook::PersistentState> UObjectHook::deserialize_mc_state(
     if (!data["state"].is_object()) {
         SPDLOG_ERROR("[UObjectHook] Malfomed JSON file (state is not an object)");
         return nullptr;
+    }
+
+    if (data.contains("type") && data["type"].is_string()) {
+        const auto type = data["type"].get<std::string>();
+
+        if (type != "motion_controller") {
+            SPDLOG_ERROR("[UObjectHook] Malfomed JSON file (type is not motion_controller)");
+            return nullptr;
+        }
     }
 
     SPDLOG_INFO("[UObjectHook] Deserializing state path...");
@@ -971,7 +1038,75 @@ std::vector<std::shared_ptr<UObjectHook::PersistentState>> UObjectHook::deserial
     return {};
 }
 
+std::shared_ptr<UObjectHook::PersistentCameraState> UObjectHook::deserialize_camera(const nlohmann::json& data) {
+    const auto path = deserialize_path(data);
+
+    if (!path.has_value()) {
+        SPDLOG_ERROR("[UObjectHook] Failed to deserialize camera path");
+        return nullptr;
+    }
+
+    if (!data.contains("type") || !data["type"].is_string()) {
+        SPDLOG_ERROR("[UObjectHook] Malfomed JSON file (missing type)");
+        return nullptr;
+    }
+
+    if (data["type"].get<std::string>() != "camera") {
+        SPDLOG_ERROR("[UObjectHook] Malfomed JSON file (type is not camera)");
+        return nullptr;
+    }
+
+    auto persistent_state = std::make_shared<PersistentCameraState>();
+    persistent_state->path = path.value();
+
+    return persistent_state;
+}
+
+std::shared_ptr<UObjectHook::PersistentCameraState> UObjectHook::deserialize_camera_state() {
+    // Look for camera_state.json
+    const auto uobjecthook_dir = get_persistent_dir();
+    const auto camera_state_path = uobjecthook_dir / "camera_state.json";
+
+    if (!std::filesystem::exists(camera_state_path)) {
+        SPDLOG_ERROR("[UObjectHook] Failed to find camera_state.json");
+        return nullptr;
+    }
+
+    try {
+        auto f = std::ifstream{camera_state_path};
+
+        if (f.is_open()) {
+            // Log the file data to make sure we're getting it correctly...
+            const auto file_contents = std::string{std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()};
+
+            SPDLOG_INFO("[UObjectHook] JSON file contents:");
+            SPDLOG_INFO("{}", file_contents);
+
+            nlohmann::json data = nlohmann::json::parse(file_contents);
+
+            return deserialize_camera(data);
+        }
+
+        SPDLOG_ERROR("[UObjectHook] Failed to open JSON file {}", camera_state_path.string());
+        return nullptr;
+    } catch (const std::exception& e) {
+        SPDLOG_ERROR("[UObjectHook] Failed to parse JSON file {}: {}", camera_state_path.string(), e.what());
+    } catch (...) {
+        SPDLOG_ERROR("[UObjectHook] Failed to parse JSON file {}", camera_state_path.string());
+    }
+
+    return nullptr;
+}
+
 void UObjectHook::update_persistent_states() {
+    if (m_persistent_camera_state != nullptr) {
+        auto obj = m_persistent_camera_state->path.resolve();
+
+        if (obj != nullptr) {
+            m_camera_attached_object = obj;
+        }
+    }
+
     if (m_persistent_states.empty()) {
         return;
     }
@@ -1193,6 +1328,7 @@ void UObjectHook::on_draw_ui() {
 
     if (ImGui::Button("Reload Persistent States")) {
         m_persistent_states = deserialize_all_mc_states();
+        m_persistent_camera_state = deserialize_camera_state();
     }
 
     ImGui::SameLine();
@@ -1667,19 +1803,30 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
             auto save_state_logic = [&](const std::vector<std::string>& path) {
                 auto json = serialize_mc_state(path, state);
 
-                // Create a name based on the first and last part of the path
-                const auto name = path.front() + "_" + path.back() + "_mc_state.json";
-                const auto wanted_dir = UObjectHook::get_persistent_dir() / name;
+                // Concat the entire path together and hash it to get a unique name
+                std::string concat_path{};
+                for (const auto& p : path) {
+                    concat_path += p;
+                }
+
+                const auto hash_str = std::to_string(utility::hash(concat_path)) + "_mc_state.json";
+                const auto wanted_dir = UObjectHook::get_persistent_dir() / hash_str;
 
                 // Create dir if necessary
-                std::filesystem::create_directories(wanted_dir.parent_path());
+                try {
+                    std::filesystem::create_directories(wanted_dir.parent_path());
 
-                if (std::filesystem::exists(wanted_dir.parent_path())) {
-                    std::ofstream file{wanted_dir};
-                    file << json.dump(4);
-                    file.close();
+                    if (std::filesystem::exists(wanted_dir.parent_path())) {
+                        std::ofstream file{wanted_dir};
+                        file << json.dump(4);
+                        file.close();
 
-                    m_persistent_states = deserialize_all_mc_states();
+                        m_persistent_states = deserialize_all_mc_states();
+                    }
+                } catch (const std::exception& e) {
+                    SPDLOG_ERROR("[UObjectHook] Failed to save motion controller state: {}", e.what());
+                } catch (...) {
+                    SPDLOG_ERROR("[UObjectHook] Failed to save motion controller state");
                 }
             };
 
@@ -1735,6 +1882,12 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
         } else {
             if (ImGui::Button("Detach")) {
                 m_camera_attached_object = nullptr;
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Save state")) {
+                save_camera_state(m_path.path(), m_camera_attached_object);
             }
         }
     }
@@ -1870,8 +2023,14 @@ void UObjectHook::ui_handle_actor(sdk::UObject* object) {
         m_motion_controller_attached_objects.insert(object);
     }*/
 
-    if (ImGui::Button("Attach Camera to")) {
-        m_camera_attached_object = object;
+    if (m_camera_attached_object != object ){
+        if (ImGui::Button("Attach Camera to")) {
+            m_camera_attached_object = object;
+        }
+    } else {
+        if (ImGui::Button("Save state")) {
+            save_camera_state(m_path.path(), m_camera_attached_object);
+        }
     }
 
     auto actor = (sdk::AActor*)object;
