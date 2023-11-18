@@ -149,6 +149,7 @@ private:
     std::unordered_map<sdk::USceneComponent*, std::shared_ptr<MotionControllerState>> m_motion_controller_attached_components{};
     sdk::AActor* m_overlap_detection_actor{nullptr};
     sdk::AActor* m_overlap_detection_actor_left{nullptr};
+    sdk::UObject* m_camera_attached_object{nullptr};
 
     std::shared_ptr<MotionControllerState> get_or_add_motion_controller_state(sdk::USceneComponent* component) {
         {

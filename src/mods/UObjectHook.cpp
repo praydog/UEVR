@@ -252,10 +252,32 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
         return;
     }
 
-    if ((view_index + 1) % 2 == 0) {
-        const auto view_d = (Vector3d*)view_location;
-        const auto rot_d = (Rotator<double>*)view_rotation;
+    auto view_d = (Vector3d*)view_location;
+    auto rot_d = (Rotator<double>*)view_rotation;
 
+    if (m_camera_attached_object != nullptr) {
+        if (m_camera_attached_object->is_a(sdk::AActor::static_class())) {
+            const auto actor = (sdk::AActor*)m_camera_attached_object;
+            const auto location = actor->get_actor_location();
+
+            if (is_double) {
+                *view_d = glm::vec<3, double>{location};
+            } else {
+                *view_location = location;
+            }
+        } else if (m_camera_attached_object->is_a(sdk::USceneComponent::static_class())) {
+            const auto comp = (sdk::USceneComponent*)m_camera_attached_object;
+            const auto location = comp->get_world_location();
+
+            if (is_double) {
+                *view_d = glm::vec<3, double>{location};
+            } else {
+                *view_location = location;
+            }
+        } // else todo?
+    }
+
+    if ((view_index + 1) % 2 == 0) {
         const auto view_mat = !is_double ? 
             glm::yawPitchRoll(
                 glm::radians(view_rotation->yaw),
@@ -831,8 +853,14 @@ std::filesystem::path UObjectHook::get_persistent_dir() const {
     const auto base_dir = Framework::get_persistent_dir();
     const auto uobjecthook_dir = base_dir / "uobjecthook";
 
-    if (!std::filesystem::exists(uobjecthook_dir)) {
-        std::filesystem::create_directories(uobjecthook_dir);
+    try {
+        if (!std::filesystem::exists(uobjecthook_dir)) {
+            std::filesystem::create_directories(uobjecthook_dir);
+        }
+    } catch (const std::exception& e) {
+        SPDLOG_ERROR("[UObjectHook] Failed to create persistent directory: {}", e.what());
+    } catch (...) {
+        SPDLOG_ERROR("[UObjectHook] Failed to create persistent directory");
     }
 
     return uobjecthook_dir;
@@ -910,7 +938,7 @@ std::shared_ptr<UObjectHook::PersistentState> UObjectHook::deserialize_mc_state(
     return nullptr;
 }
 
-std::vector<std::shared_ptr<UObjectHook::PersistentState>> UObjectHook::deserialize_all_mc_states() {
+std::vector<std::shared_ptr<UObjectHook::PersistentState>> UObjectHook::deserialize_all_mc_states() try {
     const auto uobjecthook_dir = get_persistent_dir();
 
     if (!std::filesystem::exists(uobjecthook_dir)) {
@@ -935,6 +963,12 @@ std::vector<std::shared_ptr<UObjectHook::PersistentState>> UObjectHook::deserial
     }
 
     return result;
+} catch (const std::exception& e) {
+    SPDLOG_ERROR("[UObjectHook] Failed to deserialize all motion controller states: {}", e.what());
+    return {};
+} catch (...) {
+    SPDLOG_ERROR("[UObjectHook] Failed to deserialize all motion controller states");
+    return {};
 }
 
 void UObjectHook::update_persistent_states() {
@@ -1680,16 +1714,28 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
             }
         }
     } else {
-        if (ImGui::Button("Attach left")) {
-            m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
-            m_motion_controller_attached_components[comp]->hand = 0;
-        }
+        if (m_camera_attached_object != comp) {
+            if (ImGui::Button("Attach left")) {
+                m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
+                m_motion_controller_attached_components[comp]->hand = 0;
+            }
 
-        ImGui::SameLine();
+            ImGui::SameLine();
 
-        if (ImGui::Button("Attach right")) {
-            m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
-            m_motion_controller_attached_components[comp]->hand = 1;
+            if (ImGui::Button("Attach right")) {
+                m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
+                m_motion_controller_attached_components[comp]->hand = 1;
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Attach to Camera")) {
+                m_camera_attached_object = comp;
+            }
+        } else {
+            if (ImGui::Button("Detach")) {
+                m_camera_attached_object = nullptr;
+            }
         }
     }
 
@@ -1823,6 +1869,10 @@ void UObjectHook::ui_handle_actor(sdk::UObject* object) {
     /*if (ImGui::Button("Attach to motion controller")) {
         m_motion_controller_attached_objects.insert(object);
     }*/
+
+    if (ImGui::Button("Attach to Camera")) {
+        m_camera_attached_object = object;
+    }
 
     auto actor = (sdk::AActor*)object;
 
@@ -2231,6 +2281,10 @@ void* UObjectHook::destructor(sdk::UObjectBase* object, void* rdx, void* r8, voi
 
             if (object == hook->m_overlap_detection_actor_left) {
                 hook->m_overlap_detection_actor_left = nullptr;
+            }
+
+            if (object == hook->m_camera_attached_object) {
+                hook->m_camera_attached_object = nullptr;
             }
 
             for (auto super = (sdk::UStruct*)it->second->uclass; super != nullptr;) {
