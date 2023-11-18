@@ -1729,7 +1729,7 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
 
             ImGui::SameLine();
 
-            if (ImGui::Button("Attach to Camera")) {
+            if (ImGui::Button("Attach Camera to")) {
                 m_camera_attached_object = comp;
             }
         } else {
@@ -1870,7 +1870,7 @@ void UObjectHook::ui_handle_actor(sdk::UObject* object) {
         m_motion_controller_attached_objects.insert(object);
     }*/
 
-    if (ImGui::Button("Attach to Camera")) {
+    if (ImGui::Button("Attach Camera to")) {
         m_camera_attached_object = object;
     }
 
