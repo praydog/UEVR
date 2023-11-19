@@ -145,6 +145,7 @@ void UObjectHook::hook() {
     SPDLOG_INFO("[UObjectHook] Deserializing persistent states");
     m_persistent_states = deserialize_all_mc_states();
     m_persistent_camera_state = deserialize_camera_state();
+    m_persistent_properties = deserialize_all_persistent_properties();
     SPDLOG_INFO("[UObjectHook] Deserialized {} persistent states", m_persistent_states.size());
 
     m_fully_hooked = true;
@@ -1099,6 +1100,7 @@ std::shared_ptr<UObjectHook::PersistentCameraState> UObjectHook::deserialize_cam
 }
 
 void UObjectHook::update_persistent_states() {
+    // Camera state
     if (m_persistent_camera_state != nullptr) {
         auto obj = m_persistent_camera_state->path.resolve();
 
@@ -1107,42 +1109,102 @@ void UObjectHook::update_persistent_states() {
         }
     }
 
-    if (m_persistent_states.empty()) {
-        return;
+    // Motion controller states
+    if (!m_persistent_states.empty()) {
+        for (const auto& state : m_persistent_states) {
+            if (state == nullptr) {
+                continue;
+            }
+
+            auto obj = state->path.resolve();
+
+            if (obj == nullptr) {
+                continue;
+            }
+
+            static const auto scene_component_t = sdk::USceneComponent::static_class();
+
+            // TODO? will need some reworking to support properties from arbitrary objects
+            if (!obj->get_class()->is_a(scene_component_t)) {
+                continue;
+            }
+
+            auto mc_state = get_or_add_motion_controller_state((sdk::USceneComponent*)obj);
+
+            if (mc_state == nullptr) {
+                continue;
+            }
+
+            if (mc_state->adjusting) {
+                state->state.location_offset = mc_state->location_offset;
+                state->state.rotation_offset = mc_state->rotation_offset;
+                state->state.hand = mc_state->hand;
+            } else {
+                mc_state->location_offset = state->state.location_offset;
+                mc_state->rotation_offset = state->state.rotation_offset;
+                mc_state->hand = state->state.hand;
+            }
+        }
     }
 
-    for (const auto& state : m_persistent_states) {
-        if (state == nullptr) {
-            continue;
-        }
+    // Persistent properties
+    if (!m_persistent_properties.empty()) {
+        for (const auto& prop_base : m_persistent_properties) {
+            if (prop_base == nullptr) {
+                continue;
+            }
 
-        auto obj = state->path.resolve();
+            auto obj = prop_base->path.resolve();
 
-        if (obj == nullptr) {
-            continue;
-        }
+            if (obj == nullptr) {
+                continue;
+            }
 
-        static const auto scene_component_t = sdk::USceneComponent::static_class();
+            for (const auto& prop_state : prop_base->properties) {
+                const auto prop_desc = obj->get_class()->find_property(prop_state->name);
+            
+                if (prop_desc == nullptr) {
+                    continue;
+                }
 
-        // TODO? will need some reworking to support properties from arbitrary objects
-        if (!obj->get_class()->is_a(scene_component_t)) {
-            continue;
-        }
+                const auto prop_t = prop_desc->get_class();
 
-        auto mc_state = get_or_add_motion_controller_state((sdk::USceneComponent*)obj);
+                if (prop_t == nullptr) {
+                    continue;
+                }
 
-        if (mc_state == nullptr) {
-            continue;
-        }
+                const auto prop_t_name = prop_t->get_name().to_string();
 
-        if (mc_state->adjusting) {
-            state->state.location_offset = mc_state->location_offset;
-            state->state.rotation_offset = mc_state->rotation_offset;
-            state->state.hand = mc_state->hand;
-        } else {
-            mc_state->location_offset = state->state.location_offset;
-            mc_state->rotation_offset = state->state.rotation_offset;
-            mc_state->hand = state->state.hand;
+                switch (utility::hash(utility::narrow(prop_t_name))) {
+                case "FloatProperty"_fnv:
+                    {
+                        auto& value = *(float*)((uintptr_t)obj + ((sdk::FProperty*)prop_desc)->get_offset());
+                        value = prop_state->data.f;
+                    }
+                    break;
+                case "DoubleProperty"_fnv:
+                    {
+                        auto& value = *(double*)((uintptr_t)obj + ((sdk::FProperty*)prop_desc)->get_offset());
+                        value = prop_state->data.d;
+                    }
+                    break;
+                case "IntProperty"_fnv:
+                    {
+                        auto& value = *(int32_t*)((uintptr_t)obj + ((sdk::FProperty*)prop_desc)->get_offset());
+                        value = prop_state->data.i;
+                    }
+                    break;
+                case "BoolProperty"_fnv:
+                    {
+                        auto boolprop = (sdk::FBoolProperty*)prop_desc;
+                        boolprop->set_value_in_object(obj, prop_state->data.b);
+                    }
+                    break;
+                default:
+                    // OH NO!!!!! anyways
+                    break;
+                };
+            }
         }
     }
 }
@@ -1329,6 +1391,7 @@ void UObjectHook::on_draw_ui() {
     if (ImGui::Button("Reload Persistent States")) {
         m_persistent_states = deserialize_all_mc_states();
         m_persistent_camera_state = deserialize_camera_state();
+        m_persistent_properties = deserialize_all_persistent_properties();
     }
 
     ImGui::SameLine();
@@ -2198,6 +2261,8 @@ void UObjectHook::ui_handle_functions(void* object, sdk::UStruct* uclass) {
 }
 
 void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
+    auto previous_path = m_path;
+
     auto scope = m_path.enter("Properties");
 
     if (uclass == nullptr) {
@@ -2232,23 +2297,137 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
             continue;
         }
 
-        switch (utility::hash(propc_type)) {
+        const auto hash_type = utility::hash(propc_type);
+
+        // Right-click lambda for supported properties, usually for saving.
+        auto display_context = [&](auto value) {
+            if (!ImGui::BeginPopupContextItem()) {
+                return;
+            }
+
+            if (!previous_path.has_valid_base()) {
+                ImGui::Text("Can't save, did not start from a valid base");
+                ImGui::EndPopup();
+                return;
+            }
+
+            auto save_logic = [&](bool unsave = false) {
+                const auto field_name = prop->get_field_name().to_string();
+                std::shared_ptr<PersistentProperties> props{};
+
+                // Find existing one if possible
+                for (const auto& existing_prop : m_persistent_properties) {
+                    if (existing_prop->path.resolve() == object) {
+                        props = existing_prop;
+                        break;
+                    }
+                }
+
+                // Add new one if necessary
+                if (props == nullptr) {
+                    props = std::make_shared<PersistentProperties>();
+                    props->path = StatePath{previous_path.path()};
+                    m_persistent_properties.push_back(props);
+                }
+
+                // Add property to list if needed
+                std::shared_ptr<PersistentProperties::PropertyState> state{};
+
+                for (const auto& existing_state : props->properties) {
+                    if (existing_state->name == prop->get_field_name().to_string()) {
+                        state = existing_state;
+                        break;
+                    }
+                }
+
+                // Add new one if necessary
+                if (state == nullptr) {
+                    state = std::make_shared<PersistentProperties::PropertyState>();
+                    state->name = prop->get_field_name().to_string();
+                    props->properties.push_back(state);
+                }
+
+                memcpy(&state->data, &value, sizeof(value));
+
+                if (unsave) {
+                    props->properties.erase(
+                        std::remove(props->properties.begin(), props->properties.end(), state), 
+                        props->properties.end()
+                    );
+                }
+                
+                // Concat the entire path together and hash it to get a unique name
+                std::string concat_path{};
+                for (const auto& p : previous_path.path()) {
+                    concat_path += p;
+                }
+
+                const auto hash_str = std::to_string(utility::hash(concat_path)) + "_props.json";
+                const auto wanted_path = UObjectHook::get_persistent_dir() / hash_str;
+
+                // Create dir if necessary
+                try {
+                    std::filesystem::create_directories(wanted_path.parent_path());
+
+                    if (props->properties.empty()) {
+                        // Delete the file if it exists. Happens if we unsave.
+                        if (std::filesystem::exists(wanted_path)) {
+                            std::filesystem::remove(wanted_path);
+                        }
+
+                        // Delete the property entry from m_peristent_properties.
+                        m_persistent_properties.erase(
+                            std::remove(m_persistent_properties.begin(), m_persistent_properties.end(), props), 
+                            m_persistent_properties.end()
+                        );
+
+                        return;
+                    }
+
+                    if (std::filesystem::exists(wanted_path.parent_path())) {
+                        std::ofstream file{wanted_path};
+                        const auto j = props->to_json();
+                        file << j.dump(4);
+                        file.close();
+                    }
+                } catch (const std::exception& e) {
+                    SPDLOG_ERROR("[UObjectHook] Failed to save persistent properties: {}", e.what());
+                } catch (...) {
+                    SPDLOG_ERROR("[UObjectHook] Failed to save persistent properties");
+                }
+            };
+
+            if (ImGui::Button("Save Property")) {
+                save_logic();
+            }
+
+            if (ImGui::Button("Unsave Property")) {
+                save_logic(true);
+            }
+
+            ImGui::EndPopup();
+        };
+
+        switch (hash_type) {
         case "FloatProperty"_fnv:
             {
                 auto& value = *(float*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
                 ImGui::DragFloat(utility::narrow(prop->get_field_name().to_string()).data(), &value, 0.01f);
+                display_context(value);
             }
             break;
         case "DoubleProperty"_fnv:
             {
                 auto& value = *(double*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
                 ImGui::DragFloat(utility::narrow(prop->get_field_name().to_string()).data(), (float*)&value, 0.01f);
+                display_context(value);
             }
             break;
         case "IntProperty"_fnv:
             {
                 auto& value = *(int32_t*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
                 ImGui::DragInt(utility::narrow(prop->get_field_name().to_string()).data(), &value, 1);
+                display_context(value);
             }
             break;
         case "BoolProperty"_fnv:
@@ -2258,6 +2437,7 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 if (ImGui::Checkbox(utility::narrow(prop->get_field_name().to_string()).data(), &value)) {
                     boolprop->set_value_in_object(object, value);
                 }
+                display_context(value);
             }
             break;
         case "ObjectProperty"_fnv:
@@ -2468,4 +2648,126 @@ void* UObjectHook::destructor(sdk::UObjectBase* object, void* rdx, void* r8, voi
     auto result = hook->m_destructor_hook.unsafe_call<void*>(object, rdx, r8, r9);
 
     return result;
+}
+
+nlohmann::json UObjectHook::PersistentProperties::to_json() const {
+    nlohmann::json json{};
+
+    json["path"] = path.path();
+    json["properties"] = nlohmann::json::array();
+    json["type"] = "properties";
+
+    for (const auto& prop : properties) {
+        json["properties"].push_back({
+            {"name", utility::narrow(prop->name)},
+            {"data", prop->data.u64}
+        });
+    }
+
+    return json;
+}
+
+std::shared_ptr<UObjectHook::PersistentProperties> UObjectHook::PersistentProperties::from_json(const nlohmann::json& json) try {
+    if (!json.contains("path") || !json.contains("properties") || !json.contains("type")) {
+        throw std::runtime_error("Missing path or properties");
+    }
+
+    // Make sure we're loading the right type
+    if (!json["type"].is_string() || json["type"].get<std::string>() != "properties") {
+        throw std::runtime_error("Wrong type");
+    }
+
+    auto result = std::make_shared<UObjectHook::PersistentProperties>();
+
+    result->path = StatePath{json["path"].get<std::vector<std::string>>()};
+    result->properties.clear();
+
+    for (const auto& prop : json["properties"]) {
+        if (!prop.contains("name") || !prop.contains("data")) {
+            throw std::runtime_error("Missing name or data");
+        }
+
+        if (!prop["data"].is_number_unsigned()) {
+            throw std::runtime_error("Data is not unsigned");
+        }
+
+        if (!prop["name"].is_string()) {
+            throw std::runtime_error("Name is not string");
+        }
+
+        auto state = std::make_shared<PropertyState>();
+        state->name = utility::widen(prop["name"].get<std::string>());
+        state->data.u64 = prop["data"].get<uint64_t>();
+        result->properties.push_back(state);
+    }
+
+    return result;
+} catch (const std::exception& e) {
+    SPDLOG_ERROR("[UObjectHook] Failed to deserialize persistent properties: {}", e.what());
+    return nullptr;
+} catch (...) {
+    SPDLOG_ERROR("[UObjectHook] Failed to deserialize persistent properties");
+    return nullptr;
+}
+
+std::shared_ptr<UObjectHook::PersistentProperties> UObjectHook::PersistentProperties::from_json(std::filesystem::path json_path) {
+    if (!std::filesystem::exists(json_path)) {
+        return nullptr;
+    }
+
+    try {
+        auto f = std::ifstream{json_path};
+
+        if (f.is_open()) {
+            const auto file_contents = std::string{std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()};
+
+            nlohmann::json data = nlohmann::json::parse(file_contents);
+
+            return UObjectHook::PersistentProperties::from_json(data);
+        }
+
+        SPDLOG_ERROR("[UObjectHook] Failed to open JSON file {}", json_path.string());
+        return nullptr;
+    } catch (const std::exception& e) {
+        SPDLOG_ERROR("[UObjectHook] Failed to parse JSON file {}: {}", json_path.string(), e.what());
+    } catch (...) {
+        SPDLOG_ERROR("[UObjectHook] Failed to parse JSON file {}", json_path.string());
+    }
+
+    return nullptr;
+}
+
+
+std::vector<std::shared_ptr<UObjectHook::PersistentProperties>> UObjectHook::deserialize_all_persistent_properties() const try {
+    const auto uobjecthook_dir = get_persistent_dir();
+
+    if (!std::filesystem::exists(uobjecthook_dir)) {
+        return {};
+    }
+    
+    // Gather all .json files in this directory
+    std::vector<std::filesystem::path> json_files{};
+    for (const auto& p : std::filesystem::directory_iterator(uobjecthook_dir)) {
+        if (p.path().extension() == ".json") {
+            json_files.push_back(p.path());
+        }
+    }
+
+    std::vector<std::shared_ptr<UObjectHook::PersistentProperties>> result{};
+    for (const auto& json_file : json_files) {
+        // load file
+        auto state = UObjectHook::PersistentProperties::from_json(json_file);
+
+        if (state != nullptr) {
+            result.push_back(state);
+        }
+    }
+
+    return result;
+} catch (const std::exception& e) {
+    SPDLOG_ERROR("[UObjectHook] Failed to deserialize all persistent properties: {}", e.what());
+    return {};
+} catch (...) {
+    SPDLOG_ERROR("[UObjectHook] Failed to deserialize all persistent properties");
+    return {};
 }

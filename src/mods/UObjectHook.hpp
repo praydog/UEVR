@@ -63,6 +63,7 @@ private:
     struct StatePath;
     struct PersistentState;
     struct PersistentCameraState;
+    struct PersistentProperties;
 
     bool exists_unsafe(sdk::UObjectBase* object) const {
         return m_objects.contains(object);
@@ -280,6 +281,30 @@ private:
         StatePath path{};
     };
 
+    struct PersistentProperties {
+        nlohmann::json to_json() const;
+        static std::shared_ptr<PersistentProperties> from_json(std::filesystem::path json_path);
+        static std::shared_ptr<PersistentProperties> from_json(const nlohmann::json& j);
+        
+        StatePath path{};
+
+        struct PropertyState {
+            std::wstring name{};
+            union {
+                uint64_t u64;
+                double d;
+                float f;
+                int32_t i;
+                bool b;
+            } data;
+        };
+
+        std::vector<std::shared_ptr<PropertyState>> properties{};
+    };
+
     std::shared_ptr<PersistentCameraState> m_persistent_camera_state{};
     std::vector<std::shared_ptr<PersistentState>> m_persistent_states{};
+    std::vector<std::shared_ptr<PersistentProperties>> m_persistent_properties{};
+
+    std::vector<std::shared_ptr<PersistentProperties>> deserialize_all_persistent_properties() const;
 };
