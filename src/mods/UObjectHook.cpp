@@ -51,7 +51,7 @@ UObjectHook::MotionControllerState::~MotionControllerState() {
     }
 }
 
-nlohmann::json UObjectHook::MotionControllerStateBase::serialize() const {
+nlohmann::json UObjectHook::MotionControllerStateBase::to_json() const {
     return {
         {"rotation_offset", utility::math::to_json(rotation_offset)},
         {"location_offset", utility::math::to_json(location_offset)},
@@ -59,7 +59,7 @@ nlohmann::json UObjectHook::MotionControllerStateBase::serialize() const {
     };
 }
 
-void UObjectHook::MotionControllerStateBase::deserialize(const nlohmann::json& data) {
+void UObjectHook::MotionControllerStateBase::from_json(const nlohmann::json& data) {
     if (data.contains("rotation_offset")) {
         rotation_offset = utility::math::from_json_quat(data["rotation_offset"]);
     }
@@ -257,24 +257,30 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
     auto view_d = (Vector3d*)view_location;
     auto rot_d = (Rotator<double>*)view_rotation;
 
-    if (m_camera_attached_object != nullptr) {
-        if (m_camera_attached_object->is_a(sdk::AActor::static_class())) {
-            const auto actor = (sdk::AActor*)m_camera_attached_object;
+    if (is_double) {
+        m_last_camera_location = glm::vec3{*view_d};
+    } else {
+        m_last_camera_location = *view_location;
+    }
+
+    if (m_camera_attach.object != nullptr) {
+        if (m_camera_attach.object->is_a(sdk::AActor::static_class())) {
+            const auto actor = (sdk::AActor*)m_camera_attach.object;
             const auto location = actor->get_actor_location();
 
             if (is_double) {
-                *view_d = glm::vec<3, double>{location};
+                *view_d = glm::vec<3, double>{location + m_camera_attach.offset};
             } else {
-                *view_location = location;
+                *view_location = location + m_camera_attach.offset;
             }
-        } else if (m_camera_attached_object->is_a(sdk::USceneComponent::static_class())) {
-            const auto comp = (sdk::USceneComponent*)m_camera_attached_object;
+        } else if (m_camera_attach.object->is_a(sdk::USceneComponent::static_class())) {
+            const auto comp = (sdk::USceneComponent*)m_camera_attach.object;
             const auto location = comp->get_world_location();
 
             if (is_double) {
-                *view_d = glm::vec<3, double>{location};
+                *view_d = glm::vec<3, double>{location + m_camera_attach.offset};
             } else {
-                *view_location = location;
+                *view_location = location + m_camera_attach.offset;
             }
         } // else todo?
     }
@@ -872,16 +878,17 @@ nlohmann::json UObjectHook::serialize_mc_state(const std::vector<std::string>& p
     nlohmann::json result{};
 
     result["path"] = path;
-    result["state"] = state->serialize();
+    result["state"] = state->to_json();
     result["type"] = "motion_controller";
 
     return result;
 }
 
-nlohmann::json UObjectHook::serialize_camera(const std::vector<std::string>& path, sdk::UObject* object) {
+nlohmann::json UObjectHook::serialize_camera(const std::vector<std::string>& path) {
     nlohmann::json result{};
 
     result["path"] = path;
+    result["offset"] = utility::math::to_json(m_camera_attach.offset);
     result["type"] = "camera";
 
     // todo: adjustments/offsets, etc...? all it needs is the camera object which is fine
@@ -889,8 +896,8 @@ nlohmann::json UObjectHook::serialize_camera(const std::vector<std::string>& pat
     return result;
 }
 
-void UObjectHook::save_camera_state(const std::vector<std::string>& path, sdk::UObject* object) {
-    auto json = serialize_camera(path, object);
+void UObjectHook::save_camera_state(const std::vector<std::string>& path) {
+    auto json = serialize_camera(path);
 
     const auto wanted_dir = UObjectHook::get_persistent_dir() / "camera_state.json";
 
@@ -970,7 +977,7 @@ std::shared_ptr<UObjectHook::PersistentState> UObjectHook::deserialize_mc_state(
     persistent_state->path = path;
 
     SPDLOG_INFO("[UObjectHook] Deserializing state...");
-    persistent_state->state.deserialize(data["state"]);
+    persistent_state->state.from_json(data["state"]);
 
     return persistent_state;
 }
@@ -1060,6 +1067,10 @@ std::shared_ptr<UObjectHook::PersistentCameraState> UObjectHook::deserialize_cam
     auto persistent_state = std::make_shared<PersistentCameraState>();
     persistent_state->path = path.value();
 
+    if (data.contains("offset") && data["offset"].is_object()) {
+        persistent_state->offset = utility::math::from_json_vec3(data["offset"]);
+    }
+
     return persistent_state;
 }
 
@@ -1105,7 +1116,8 @@ void UObjectHook::update_persistent_states() {
         auto obj = m_persistent_camera_state->path.resolve();
 
         if (obj != nullptr) {
-            m_camera_attached_object = obj;
+            m_camera_attach.object = obj;
+            m_camera_attach.offset = m_persistent_camera_state->offset;
         }
     }
 
@@ -1924,7 +1936,7 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
             }
         }
     } else {
-        if (m_camera_attached_object != comp) {
+        if (m_camera_attach.object != comp) {
             if (ImGui::Button("Attach left")) {
                 m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
                 m_motion_controller_attached_components[comp]->hand = 0;
@@ -1937,20 +1949,33 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
                 m_motion_controller_attached_components[comp]->hand = 1;
             }
 
+            if (ImGui::Button("Attach Camera to")) {
+                m_camera_attach.object = comp;
+                m_camera_attach.offset = glm::vec3{0.0f, 0.0f, 0.0f};
+            }
+
             ImGui::SameLine();
 
-            if (ImGui::Button("Attach Camera to")) {
-                m_camera_attached_object = comp;
+            if (ImGui::Button("Attach Camera to (Relative)")) {
+                m_camera_attach.object = comp;
+                m_camera_attach.offset = glm::vec3{0.0f, 0.0f, m_last_camera_location.z - comp->get_world_location().z};
             }
         } else {
             if (ImGui::Button("Detach")) {
-                m_camera_attached_object = nullptr;
+                m_camera_attach.object = nullptr;
+                m_camera_attach.offset = glm::vec3{0.0f, 0.0f, 0.0f};
             }
 
             ImGui::SameLine();
 
             if (ImGui::Button("Save state")) {
-                save_camera_state(m_path.path(), m_camera_attached_object);
+                save_camera_state(m_path.path());
+            }
+
+            if (ImGui::DragFloat3("Camera Offset", &m_camera_attach.offset.x, 0.1f)) {
+                if (m_persistent_camera_state != nullptr) {
+                    m_persistent_camera_state->offset = m_camera_attach.offset;
+                }
             }
         }
     }
@@ -2082,21 +2107,36 @@ void UObjectHook::ui_handle_actor(sdk::UObject* object) {
         return;
     }
 
-    /*if (ImGui::Button("Attach to motion controller")) {
-        m_motion_controller_attached_objects.insert(object);
-    }*/
+    auto actor = (sdk::AActor*)object;
 
-    if (m_camera_attached_object != object ){
+    if (m_camera_attach.object != object ){
         if (ImGui::Button("Attach Camera to")) {
-            m_camera_attached_object = object;
+            m_camera_attach.object = object;
+            m_camera_attach.offset = glm::vec3{0.0f, 0.0f, 0.0f};
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Attach Camera to (Relative)")) {
+            m_camera_attach.object = object;
+            m_camera_attach.offset = glm::vec3{0.0f, 0.0f, m_last_camera_location.z - actor->get_actor_location().z};
         }
     } else {
+        if (ImGui::Button("Detach")) {
+            m_camera_attach.object = nullptr;
+            m_camera_attach.offset = glm::vec3{0.0f, 0.0f, 0.0f};
+        }
+
         if (ImGui::Button("Save state")) {
-            save_camera_state(m_path.path(), m_camera_attached_object);
+            save_camera_state(m_path.path());
+        }
+
+        if (ImGui::DragFloat3("Camera Offset", &m_camera_attach.offset.x, 0.1f)) {
+            if (m_persistent_camera_state != nullptr) {
+                m_persistent_camera_state->offset = m_camera_attach.offset;
+            }
         }
     }
-
-    auto actor = (sdk::AActor*)object;
 
     static char component_add_name[256]{};
 
@@ -2622,8 +2662,8 @@ void* UObjectHook::destructor(sdk::UObjectBase* object, void* rdx, void* r8, voi
                 hook->m_overlap_detection_actor_left = nullptr;
             }
 
-            if (object == hook->m_camera_attached_object) {
-                hook->m_camera_attached_object = nullptr;
+            if (object == hook->m_camera_attach.object) {
+                hook->m_camera_attach.object = nullptr;
             }
 
             for (auto super = (sdk::UStruct*)it->second->uclass; super != nullptr;) {

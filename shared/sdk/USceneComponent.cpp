@@ -12,7 +12,8 @@
 
 namespace sdk {
 UClass* USceneComponent::static_class() {
-    return sdk::find_uobject<UClass>(L"Class /Script/Engine.SceneComponent");
+    static auto result = sdk::find_uobject<UClass>(L"Class /Script/Engine.SceneComponent");
+    return result;
 }
 
 void USceneComponent::set_world_rotation(const glm::vec3& rotation, bool sweep, bool teleport) {
@@ -361,5 +362,36 @@ void USceneComponent::set_visibility(bool visible, bool propagate) {
     params.propagate = propagate;
 
     this->process_event(func, &params);
+}
+
+void USceneComponent::detach_from_parent(bool maintain_world_position, bool call_modify) {
+    static const auto func1 = static_class()->find_function(L"K2_DetachFromParent");
+    static const auto func2 = static_class()->find_function(L"DetachFromParent");
+
+    const auto func = func1 != nullptr ? func1 : func2;
+
+    if (func == nullptr) {
+        return;
+    }
+
+    struct {
+        bool maintain_world_position{};
+        bool call_modify{};
+    } params{};
+
+    params.maintain_world_position = maintain_world_position;
+    params.call_modify = call_modify;
+
+    this->process_event(func, &params);
+}
+
+USceneComponent* USceneComponent::get_attach_parent() {
+    const auto data = (USceneComponent**)this->get_property_data(L"AttachParent");
+
+    if (data == nullptr) {
+        return nullptr;
+    }
+
+    return *data;
 }
 }

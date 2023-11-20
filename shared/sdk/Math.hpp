@@ -212,15 +212,15 @@ static nlohmann::json to_json(const glm::quat& q) {
 static glm::vec3 from_json_vec3(const nlohmann::json& j) {
     glm::vec3 result{};
 
-    if (j.contains("x")) {
+    if (j.contains("x") && j["x"].is_number()) {
         result.x = j["x"].get<float>();
     }
 
-    if (j.contains("y")) {
+    if (j.contains("y") && j["y"].is_number()) {
         result.y = j["y"].get<float>();
     }
 
-    if (j.contains("z")) {
+    if (j.contains("z") && j["z"].is_number()) {
         result.z = j["z"].get<float>();
     }
 
@@ -230,19 +230,19 @@ static glm::vec3 from_json_vec3(const nlohmann::json& j) {
 static glm::vec4 from_json_vec4(const nlohmann::json& j) {
     glm::vec4 result{};
 
-    if (j.contains("x")) {
+    if (j.contains("x") && j["x"].is_number()) {
         result.x = j["x"].get<float>();
     }
 
-    if (j.contains("y")) {
+    if (j.contains("y") && j["y"].is_number()) {
         result.y = j["y"].get<float>();
     }
 
-    if (j.contains("z")) {
+    if (j.contains("z") && j["z"].is_number()) {
         result.z = j["z"].get<float>();
     }
 
-    if (j.contains("w")) {
+    if (j.contains("w") && j["w"].is_number()) {
         result.w = j["w"].get<float>();
     }
 
@@ -252,19 +252,19 @@ static glm::vec4 from_json_vec4(const nlohmann::json& j) {
 static glm::quat from_json_quat(const nlohmann::json& j) {
     glm::quat result{};
 
-    if (j.contains("x")) {
+    if (j.contains("x") && j["x"].is_number()) {
         result.x = j["x"].get<float>();
     }
 
-    if (j.contains("y")) {
+    if (j.contains("y") && j["y"].is_number()) {
         result.y = j["y"].get<float>();
     }
 
-    if (j.contains("z")) {
+    if (j.contains("z") && j["z"].is_number()) {
         result.z = j["z"].get<float>();
     }
 
-    if (j.contains("w")) {
+    if (j.contains("w") && j["w"].is_number()) {
         result.w = j["w"].get<float>();
     }
 

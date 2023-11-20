@@ -17,7 +17,8 @@
 
 namespace sdk {
 UClass* AActor::static_class() {
-    return sdk::find_uobject<UClass>(L"Class /Script/Engine.Actor");
+    static auto result = sdk::find_uobject<UClass>(L"Class /Script/Engine.Actor");
+    return result;
 }
 
 bool AActor::set_actor_location(const glm::vec3& location, bool sweep, bool teleport) {

@@ -93,8 +93,8 @@ private:
 
     std::filesystem::path get_persistent_dir() const;
     nlohmann::json serialize_mc_state(const std::vector<std::string>& path, const std::shared_ptr<MotionControllerState>& state);
-    nlohmann::json serialize_camera(const std::vector<std::string>& path, sdk::UObject* object);
-    void save_camera_state(const std::vector<std::string>& path, sdk::UObject* object);
+    nlohmann::json serialize_camera(const std::vector<std::string>& path);
+    void save_camera_state(const std::vector<std::string>& path);
     std::optional<StatePath> deserialize_path(const nlohmann::json& data);
     std::shared_ptr<PersistentState> deserialize_mc_state(nlohmann::json& data);
     std::shared_ptr<PersistentState> deserialize_mc_state(std::filesystem::path json_path);
@@ -136,8 +136,8 @@ private:
     std::unordered_set<sdk::UObject*> m_motion_controller_attached_objects{};
 
     struct MotionControllerStateBase {
-        nlohmann::json serialize() const;
-        void deserialize(const nlohmann::json& data);
+        nlohmann::json to_json() const;
+        void from_json(const nlohmann::json& data);
 
         // State that can be parsed from disk
         glm::quat rotation_offset{glm::identity<glm::quat>()};
@@ -156,7 +156,11 @@ private:
     std::unordered_map<sdk::USceneComponent*, std::shared_ptr<MotionControllerState>> m_motion_controller_attached_components{};
     sdk::AActor* m_overlap_detection_actor{nullptr};
     sdk::AActor* m_overlap_detection_actor_left{nullptr};
-    sdk::UObject* m_camera_attached_object{nullptr};
+
+    struct CameraState {
+        sdk::UObject* object{nullptr};
+        glm::vec3 offset{};
+    } m_camera_attach{};
 
     std::shared_ptr<MotionControllerState> get_or_add_motion_controller_state(sdk::USceneComponent* component) {
         {
@@ -279,6 +283,7 @@ private:
 
     struct PersistentCameraState {
         StatePath path{};
+        glm::vec3 offset{};
     };
 
     struct PersistentProperties {
@@ -301,6 +306,8 @@ private:
 
         std::vector<std::shared_ptr<PropertyState>> properties{};
     };
+
+    glm::vec3 m_last_camera_location{};
 
     std::shared_ptr<PersistentCameraState> m_persistent_camera_state{};
     std::vector<std::shared_ptr<PersistentState>> m_persistent_states{};

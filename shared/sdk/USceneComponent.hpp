@@ -26,6 +26,10 @@ public:
 
     bool is_visible();
     void set_visibility(bool visible, bool propagate_to_children = true);
+
+    void detach_from_parent(bool maintain_world_position = true, bool call_modify = true);
+
+    USceneComponent* get_attach_parent();
 };
 
 class UPrimitiveComponent : public USceneComponent {
