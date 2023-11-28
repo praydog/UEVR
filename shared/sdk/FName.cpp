@@ -264,7 +264,16 @@ std::optional<FName::ToStringFn> inlined_find_to_string() try {
         }
 
         if (result) {
-            SPDLOG_INFO("FName::get_to_string (inlined alternative): result={:x}", (uintptr_t)*result);
+            const auto stdio_dll = GetModuleHandleW(L"api-ms-win-crt-stdio-l1-1-0.dll");
+            const auto vswprintf_func = stdio_dll != nullptr ? GetProcAddress(stdio_dll, "__stdio_common_vswprintf") : nullptr;
+
+            // Double checking that the function we just found isn't sprintf.
+            if (vswprintf_func != nullptr && utility::find_pointer_in_path((uintptr_t)*result, vswprintf_func, false)) {
+                SPDLOG_ERROR("FName::get_to_string (inlined): Wrong function found, vswprintf");
+                result = std::nullopt;
+            } else {
+                SPDLOG_INFO("FName::get_to_string (inlined alternative): result={:x}", (uintptr_t)*result);
+            }
         } else {
             SPDLOG_ERROR("FName::get_to_string (inlined alternative): Failed to find ToString function");
         }

@@ -19,6 +19,10 @@ struct FName {
     using ToStringFn = TArray<wchar_t>* (*)(const FName*, TArray<wchar_t>*);
     static std::optional<ToStringFn> get_to_string();
 
+    FName() 
+    {
+        
+    }
     FName(std::wstring_view name, EFindName find_type = EFindName::Add);
     std::wstring to_string() const;
 
