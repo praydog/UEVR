@@ -55,7 +55,8 @@ nlohmann::json UObjectHook::MotionControllerStateBase::to_json() const {
     return {
         {"rotation_offset", utility::math::to_json(rotation_offset)},
         {"location_offset", utility::math::to_json(location_offset)},
-        {"hand", hand}
+        {"hand", hand},
+        {"permanent", permanent}
     };
 }
 
@@ -71,6 +72,10 @@ void UObjectHook::MotionControllerStateBase::from_json(const nlohmann::json& dat
     if (data.contains("hand")) {
         hand = data["hand"].get<uint8_t>();
         hand = hand % 2;
+    }
+
+    if (data.contains("permanent") && data["permanent"].is_boolean()) {
+        permanent = data["permanent"].get<bool>();
     }
 }
 
@@ -659,14 +664,16 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
                     comp->set_world_rotation(adjusted_euler, false, false);
                 }
 
-                GameThreadWorker::get().enqueue([this, comp, orig_position, orig_rotation]() {
-                    if (!this->exists(comp)) {
-                        return;
-                    }
+                if (!state.permanent) {
+                    GameThreadWorker::get().enqueue([this, comp, orig_position, orig_rotation]() {
+                        if (!this->exists(comp)) {
+                            return;
+                        }
 
-                    comp->set_world_location(orig_position, false, false);
-                    comp->set_world_rotation(orig_rotation, false, false);
-                });
+                        comp->set_world_location(orig_position, false, false);
+                        comp->set_world_rotation(orig_rotation, false, false);
+                    });
+                }
             }
         }
     }
@@ -1873,6 +1880,10 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
                     VR::get()->set_aim_allowed(false);
                     g_framework->set_draw_ui(false);
                 }
+            }
+
+            if (ImGui::Checkbox("Permanent Change", &state->permanent)) {
+
             }
 
             auto save_state_logic = [&](const std::vector<std::string>& path) {
