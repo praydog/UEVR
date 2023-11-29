@@ -287,7 +287,6 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
     
     // Decoupled Pitch
     if (vr->is_decoupled_pitch_enabled()) {
-        vr->set_pre_flattened_rotation(vqi_norm);
         vqi_norm = utility::math::flatten(vqi_norm);
     }
 
