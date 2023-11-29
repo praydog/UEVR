@@ -189,6 +189,8 @@ void UObjectBase::update_offsets_post_uobjectarray() {
     ZoneScopedN("sdk::UObjectBase::update_offsets_post_uobjectarray");
     s_updated_post_uobjectarray = true;
 
+    sdk::FUObjectArray::get();
+
     SPDLOG_INFO("[UObjectBase] Searching for destructor...");
 
     const auto uobject_class = sdk::UObject::static_class();
