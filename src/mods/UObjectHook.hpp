@@ -314,5 +314,17 @@ private:
     std::vector<std::shared_ptr<PersistentState>> m_persistent_states{};
     std::vector<std::shared_ptr<PersistentProperties>> m_persistent_properties{};
 
+    void reload_persistent_states() {
+        m_persistent_states = deserialize_all_mc_states();
+        m_persistent_camera_state = deserialize_camera_state();
+        m_persistent_properties = deserialize_all_persistent_properties();
+    }
+
+    void reset_persistent_states() {
+        m_persistent_states.clear();
+        m_persistent_properties.clear();
+        m_persistent_camera_state.reset();
+    }
+
     std::vector<std::shared_ptr<PersistentProperties>> deserialize_all_persistent_properties() const;
 };

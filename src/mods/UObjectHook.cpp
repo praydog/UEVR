@@ -148,9 +148,7 @@ void UObjectHook::hook() {
     SPDLOG_INFO("[UObjectHook] Added {} existing objects", m_objects.size());
 
     SPDLOG_INFO("[UObjectHook] Deserializing persistent states");
-    m_persistent_states = deserialize_all_mc_states();
-    m_persistent_camera_state = deserialize_camera_state();
-    m_persistent_properties = deserialize_all_persistent_properties();
+    reload_persistent_states();
     SPDLOG_INFO("[UObjectHook] Deserialized {} persistent states", m_persistent_states.size());
 
     m_fully_hooked = true;
@@ -1412,15 +1410,13 @@ void UObjectHook::on_draw_ui() {
     std::shared_lock _{m_mutex};
 
     if (ImGui::Button("Reload Persistent States")) {
-        m_persistent_states = deserialize_all_mc_states();
-        m_persistent_camera_state = deserialize_camera_state();
-        m_persistent_properties = deserialize_all_persistent_properties();
+        reload_persistent_states();
     }
 
     ImGui::SameLine();
 
     if (ImGui::Button("Destroy Persistent States")) {
-        m_persistent_states.clear();
+        reset_persistent_states();
 
         const auto uobjecthook_dir = get_persistent_dir();
 
@@ -1436,7 +1432,6 @@ void UObjectHook::on_draw_ui() {
     ImGui::Separator();
 
     if (!m_motion_controller_attached_components.empty()) {
-        ImGui::SetNextItemOpen(true, ImGuiCond_Once);
         const auto made = ImGui::TreeNode("Attached Components");
 
         if (made) {
@@ -1464,6 +1459,20 @@ void UObjectHook::on_draw_ui() {
 
             ImGui::TreePop();
         }
+    }
+
+    const auto made2 = m_camera_attach.object != nullptr && ImGui::TreeNode("Attached Camera Object");
+
+    if (made2) {
+        if (ImGui::Button("Detach Camera")) {
+            m_camera_attach.object = nullptr;
+            m_camera_attach.offset = glm::vec3{0.0f, 0.0f, 0.0f};
+            m_persistent_camera_state.reset();
+        }
+
+        ui_handle_object(m_camera_attach.object);
+
+        ImGui::TreePop();
     }
 
     if (m_overlap_detection_actor == nullptr) {
@@ -1979,6 +1988,7 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
             if (ImGui::Button("Detach")) {
                 m_camera_attach.object = nullptr;
                 m_camera_attach.offset = glm::vec3{0.0f, 0.0f, 0.0f};
+                m_persistent_camera_state.reset();
             }
 
             ImGui::SameLine();
@@ -2140,6 +2150,7 @@ void UObjectHook::ui_handle_actor(sdk::UObject* object) {
         if (ImGui::Button("Detach")) {
             m_camera_attach.object = nullptr;
             m_camera_attach.offset = glm::vec3{0.0f, 0.0f, 0.0f};
+            m_persistent_camera_state.reset();
         }
 
         if (ImGui::Button("Save state")) {
