@@ -259,8 +259,37 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
         return;
     }
 
+    const auto quat_converter = glm::quat{Matrix4x4f {
+        0, 0, -1, 0,
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 0, 1
+    }};
+
     auto view_d = (Vector3d*)view_location;
     auto rot_d = (Rotator<double>*)view_rotation;
+
+    const auto view_mat_inverse = !is_double ? 
+        glm::yawPitchRoll(
+            glm::radians(-view_rotation->yaw),
+            glm::radians(view_rotation->pitch),
+            glm::radians(-view_rotation->roll)) : 
+        glm::yawPitchRoll(
+            glm::radians(-(float)rot_d->yaw),
+            glm::radians((float)rot_d->pitch),
+            glm::radians(-(float)rot_d->roll));
+
+    const auto view_quat_inverse = glm::quat {
+        view_mat_inverse
+    };
+
+    auto vqi_norm = glm::normalize(view_quat_inverse);
+    
+    // Decoupled Pitch
+    if (vr->is_decoupled_pitch_enabled()) {
+        vr->set_pre_flattened_rotation(vqi_norm);
+        vqi_norm = utility::math::flatten(vqi_norm);
+    }
 
     if (is_double) {
         m_last_camera_location = glm::vec3{*view_d};
@@ -272,69 +301,45 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
         if (m_camera_attach.object->is_a(sdk::AActor::static_class())) {
             const auto actor = (sdk::AActor*)m_camera_attach.object;
             const auto location = actor->get_actor_location();
+            const auto rotation = actor->get_actor_rotation();
+
+            // Conv rotation to glm quat
+            const auto rotation_glm_mat = glm::yawPitchRoll(
+                glm::radians(-rotation.y),
+                glm::radians(rotation.x),
+                glm::radians(-rotation.z));
+            const auto rotation_glm_quat = glm::quat{rotation_glm_mat};
+
+            const auto adjusted_loc = location - (quat_converter * (rotation_glm_quat * utility::math::ue4_to_glm(m_camera_attach.offset)));
 
             if (is_double) {
-                *view_d = glm::vec<3, double>{location + m_camera_attach.offset};
+                *view_d = glm::vec<3, double>{adjusted_loc};
             } else {
-                *view_location = location + m_camera_attach.offset;
+                *view_location = adjusted_loc;
             }
         } else if (m_camera_attach.object->is_a(sdk::USceneComponent::static_class())) {
             const auto comp = (sdk::USceneComponent*)m_camera_attach.object;
             const auto location = comp->get_world_location();
+            const auto rotation = comp->get_world_rotation();
+
+            // Conv rotation to glm quat
+            const auto rotation_glm_mat = glm::yawPitchRoll(
+                glm::radians(-rotation.y),
+                glm::radians(rotation.x),
+                glm::radians(-rotation.z));
+            const auto rotation_glm_quat = glm::quat{rotation_glm_mat};
+
+            const auto adjusted_loc = location - (quat_converter * (rotation_glm_quat * utility::math::ue4_to_glm(m_camera_attach.offset)));
 
             if (is_double) {
-                *view_d = glm::vec<3, double>{location + m_camera_attach.offset};
+                *view_d = glm::vec<3, double>{adjusted_loc};
             } else {
-                *view_location = location + m_camera_attach.offset;
+                *view_location = adjusted_loc;
             }
         } // else todo?
     }
 
     if ((view_index + 1) % 2 == 0) {
-        const auto view_mat = !is_double ? 
-            glm::yawPitchRoll(
-                glm::radians(view_rotation->yaw),
-                glm::radians(view_rotation->pitch),
-                glm::radians(view_rotation->roll)) : 
-            glm::yawPitchRoll(
-                glm::radians((float)rot_d->yaw),
-                glm::radians((float)rot_d->pitch),
-                glm::radians((float)rot_d->roll));
-
-        const auto view_mat_inverse = !is_double ? 
-            glm::yawPitchRoll(
-                glm::radians(-view_rotation->yaw),
-                glm::radians(view_rotation->pitch),
-                glm::radians(-view_rotation->roll)) : 
-            glm::yawPitchRoll(
-                glm::radians(-(float)rot_d->yaw),
-                glm::radians((float)rot_d->pitch),
-                glm::radians(-(float)rot_d->roll));
-
-        const auto view_quat_inverse = glm::quat {
-            view_mat_inverse
-        };
-
-        const auto view_quat = glm::quat {
-            view_mat
-        };
-
-        const auto quat_converter = glm::quat{Matrix4x4f {
-            0, 0, -1, 0,
-            1, 0, 0, 0,
-            0, 1, 0, 0,
-            0, 0, 0, 1
-        }};
-
-        auto vqi_norm = glm::normalize(view_quat_inverse);
-        const auto vqi_norm_unmodified = vqi_norm;
-
-        // Decoupled Pitch
-        if (vr->is_decoupled_pitch_enabled()) {
-            vr->set_pre_flattened_rotation(vqi_norm);
-            vqi_norm = utility::math::flatten(vqi_norm);
-        }
-
         const auto rotation_offset = vr->get_rotation_offset();
         const auto hmd_origin = glm::vec3{vr->get_transform(0)[3]};
         const auto pos = glm::vec3{rotation_offset * (hmd_origin - glm::vec3{vr->get_standing_origin()})};
