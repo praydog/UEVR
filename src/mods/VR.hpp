@@ -485,6 +485,10 @@ public:
     bool should_skip_post_init_properties() const {
         return m_compatibility_skip_pip->value();
     }
+    
+    bool should_skip_uobjectarray_init() const {
+        return m_compatibility_skip_uobjectarray_init->value();
+    }
 
     bool is_extreme_compatibility_mode_enabled() const {
         return m_extreme_compat_mode->value();
@@ -735,6 +739,7 @@ private:
     const ModToggle::Ptr m_sceneview_compatibility_mode{ ModToggle::create(generate_name("Compatibility_SceneView"), false) };
 
     const ModToggle::Ptr m_compatibility_skip_pip{ ModToggle::create(generate_name("Compatibility_SkipPostInitProperties"), false) };
+    const ModToggle::Ptr m_compatibility_skip_uobjectarray_init{ ModToggle::create(generate_name("Compatibility_SkipUObjectArrayInit"), false) };
 
     struct DecoupledPitchData {
         mutable std::shared_mutex mtx{};
@@ -793,6 +798,7 @@ private:
         *m_splitscreen_compatibility_mode,
         *m_splitscreen_view_index,
         *m_compatibility_skip_pip,
+        *m_compatibility_skip_uobjectarray_init,
         *m_sceneview_compatibility_mode,
     };
     
