@@ -111,6 +111,30 @@ bool AActor::set_actor_rotation(const glm::vec3& rotation, bool teleport) {
     return ret;
 };
 
+glm::vec3 AActor::get_actor_rotation() {
+    static const auto func = static_class()->find_function(L"K2_GetActorRotation");
+    const auto frotator = sdk::ScriptRotator::static_struct();
+
+    const auto is_ue5 = frotator->get_struct_size() == sizeof(glm::vec<3, double>);
+
+    std::vector<uint8_t> params{};
+
+    // add a vec3
+    if (!is_ue5) {
+        params.insert(params.end(), sizeof(glm::vec3), 0);
+    } else {
+        params.insert(params.end(), sizeof(glm::vec<3, double>), 0);
+    }
+
+    this->process_event(func, params.data());
+
+    if (!is_ue5) {
+        return *(glm::vec3*)params.data();
+    }
+
+    return *(glm::vec<3, double>*)params.data();
+}
+
 USceneComponent* AActor::get_component_by_class(UClass* uclass) {
     static const auto func = AActor::static_class()->find_function(L"GetComponentByClass");
 

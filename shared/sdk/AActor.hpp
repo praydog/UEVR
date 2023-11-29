@@ -25,6 +25,7 @@ public:
     glm::vec3 get_actor_location();
 
     bool set_actor_rotation(const glm::vec3& rotation, bool teleport);
+    glm::vec3 get_actor_rotation();
 
     USceneComponent* get_component_by_class(UClass* uclass);
     UCameraComponent* get_camera_component();
