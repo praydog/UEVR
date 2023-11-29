@@ -23,6 +23,11 @@ UClass* AActor::static_class() {
 
 bool AActor::set_actor_location(const glm::vec3& location, bool sweep, bool teleport) {
     static const auto func = static_class()->find_function(L"K2_SetActorLocation");
+
+    if (func == nullptr) {
+        return false;
+    }
+
     static const auto fhitresult = sdk::find_uobject<UScriptStruct>(L"ScriptStruct /Script/Engine.HitResult");
     const auto fvector = sdk::ScriptVector::static_struct();
 
@@ -58,6 +63,11 @@ bool AActor::set_actor_location(const glm::vec3& location, bool sweep, bool tele
 
 glm::vec3 AActor::get_actor_location() {
     static const auto func = static_class()->find_function(L"K2_GetActorLocation");
+
+    if (func == nullptr) {
+        return glm::vec3{0.0f, 0.0f, 0.0f};
+    }
+
     const auto fvector = sdk::ScriptVector::static_struct();
 
     const auto is_ue5 = fvector->get_struct_size() == sizeof(glm::vec<3, double>);
@@ -81,6 +91,11 @@ glm::vec3 AActor::get_actor_location() {
 }
 bool AActor::set_actor_rotation(const glm::vec3& rotation, bool teleport) {
     static const auto func = static_class()->find_function(L"K2_SetActorRotation");
+
+    if (func == nullptr) {
+        return false;
+    }
+
     const auto frotator = sdk::ScriptRotator::static_struct();
 
     const auto is_ue5 = frotator->get_struct_size() == sizeof(glm::vec<3, double>);
@@ -113,6 +128,11 @@ bool AActor::set_actor_rotation(const glm::vec3& rotation, bool teleport) {
 
 glm::vec3 AActor::get_actor_rotation() {
     static const auto func = static_class()->find_function(L"K2_GetActorRotation");
+
+    if (func == nullptr) {
+        return glm::vec3{0.0f, 0.0f, 0.0f};
+    }
+
     const auto frotator = sdk::ScriptRotator::static_struct();
 
     const auto is_ue5 = frotator->get_struct_size() == sizeof(glm::vec<3, double>);
