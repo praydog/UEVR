@@ -139,6 +139,8 @@ private:
         nlohmann::json to_json() const;
         void from_json(const nlohmann::json& data);
 
+        MotionControllerStateBase& operator=(const MotionControllerStateBase& other) = default;
+
         // State that can be parsed from disk
         glm::quat rotation_offset{glm::identity<glm::quat>()};
         glm::vec3 location_offset{0.0f, 0.0f, 0.0f};
@@ -146,8 +148,22 @@ private:
         bool permanent{false};
     };
 
-    struct MotionControllerState : MotionControllerStateBase {
-        virtual ~MotionControllerState();
+    // Assert if MotionControllerStateBase is not trivially copyable
+    static_assert(std::is_trivially_copyable_v<MotionControllerStateBase>);
+    static_assert(std::is_trivially_destructible_v<MotionControllerStateBase>);
+    static_assert(std::is_standard_layout_v<MotionControllerStateBase>);
+
+    struct MotionControllerState final : MotionControllerStateBase {
+        ~MotionControllerState();
+
+        MotionControllerState& operator=(const MotionControllerStateBase& other) {
+            MotionControllerStateBase::operator=(other);
+            return *this;
+        }
+
+        operator MotionControllerStateBase&() {
+            return *this;
+        }
 
         // In-memory state
         sdk::AActor* adjustment_visualizer{nullptr};
@@ -277,17 +293,26 @@ private:
         std::vector<std::string> m_path{};
     } m_path;
 
-    struct PersistentState {
+    struct JsonAssociation {
+        std::optional<std::filesystem::path> path_to_json{};
+        void erase_json_file() const {
+            if (path_to_json.has_value() && std::filesystem::exists(*path_to_json)) {
+                std::filesystem::remove(*path_to_json);
+            }
+        }
+    };
+
+    struct PersistentState : JsonAssociation {
         StatePath path{};
         MotionControllerStateBase state{};
     };
 
-    struct PersistentCameraState {
+    struct PersistentCameraState : JsonAssociation {
         StatePath path{};
         glm::vec3 offset{};
     };
 
-    struct PersistentProperties {
+    struct PersistentProperties : JsonAssociation {
         nlohmann::json to_json() const;
         static std::shared_ptr<PersistentProperties> from_json(std::filesystem::path json_path);
         static std::shared_ptr<PersistentProperties> from_json(const nlohmann::json& j);

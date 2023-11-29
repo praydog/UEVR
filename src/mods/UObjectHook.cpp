@@ -1042,6 +1042,7 @@ std::vector<std::shared_ptr<UObjectHook::PersistentState>> UObjectHook::deserial
         auto state = deserialize_mc_state(json_file);
 
         if (state != nullptr) {
+            state->path_to_json = json_file;
             result.push_back(state);
         }
     }
@@ -1105,7 +1106,13 @@ std::shared_ptr<UObjectHook::PersistentCameraState> UObjectHook::deserialize_cam
 
             nlohmann::json data = nlohmann::json::parse(file_contents);
 
-            return deserialize_camera(data);
+            auto result = deserialize_camera(data);
+
+            if (result != nullptr) {
+                result->path_to_json = camera_state_path;
+            }
+
+            return result;
         }
 
         SPDLOG_ERROR("[UObjectHook] Failed to open JSON file {}", camera_state_path.string());
@@ -1157,13 +1164,9 @@ void UObjectHook::update_persistent_states() {
             }
 
             if (mc_state->adjusting) {
-                state->state.location_offset = mc_state->location_offset;
-                state->state.rotation_offset = mc_state->rotation_offset;
-                state->state.hand = mc_state->hand;
+                state->state = *mc_state;
             } else {
-                mc_state->location_offset = state->state.location_offset;
-                mc_state->rotation_offset = state->state.rotation_offset;
-                mc_state->hand = state->state.hand;
+                *mc_state = state->state;
             }
         }
     }
@@ -1437,6 +1440,14 @@ void UObjectHook::on_draw_ui() {
         if (made) {
             if (ImGui::Button("Detach all")) {
                 m_motion_controller_attached_components.clear();
+
+                for (auto persistent_state : m_persistent_states) {
+                    if (persistent_state != nullptr) {
+                        persistent_state->erase_json_file();
+                    }
+                }
+
+                m_persistent_states.clear();
             }
 
             // make a copy because the user could press the detach button while iterating
@@ -1467,6 +1478,11 @@ void UObjectHook::on_draw_ui() {
         if (ImGui::Button("Detach Camera")) {
             m_camera_attach.object = nullptr;
             m_camera_attach.offset = glm::vec3{0.0f, 0.0f, 0.0f};
+
+            if (m_persistent_camera_state != nullptr) {
+                m_persistent_camera_state->erase_json_file();
+            }
+
             m_persistent_camera_state.reset();
         }
 
@@ -1882,6 +1898,15 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
     if (attached) {
         if (ImGui::Button("Detach")) {
             m_motion_controller_attached_components.erase(comp);
+
+            auto existing = std::find_if(m_persistent_states.begin(), m_persistent_states.end(), [&](const auto& state2) {
+                return state2 != nullptr && state2->path.resolve() == comp;
+            });
+
+            if (existing != m_persistent_states.end()) {
+                (*existing)->erase_json_file();
+                m_persistent_states.erase(existing);
+            }
         }
 
         if (m_motion_controller_attached_components.contains(comp)) {
@@ -1895,9 +1920,22 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
                 }
             }
 
-            if (ImGui::Checkbox("Permanent Change", &state->permanent)) {
+            ImGui::SameLine();
 
+            if (ImGui::Checkbox("Permanent Change", &state->permanent)) {
+                // Locate the existing persistent state if it exists
+                auto existing = std::find_if(m_persistent_states.begin(), m_persistent_states.end(), [&](const auto& state2) {
+                    return state2 != nullptr && state2->path.resolve() == comp;
+                });
+
+                if (existing != m_persistent_states.end()) {
+                    (*existing)->state.permanent = state->permanent;
+                }
             }
+
+            auto existing = std::find_if(m_persistent_states.begin(), m_persistent_states.end(), [&](const auto& state2) {
+                return state2 != nullptr && state2->path.resolve() == comp;
+            });
 
             auto save_state_logic = [&](const std::vector<std::string>& path) {
                 auto json = serialize_mc_state(path, state);
@@ -1909,14 +1947,19 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
                 }
 
                 const auto hash_str = std::to_string(utility::hash(concat_path)) + "_mc_state.json";
-                const auto wanted_dir = UObjectHook::get_persistent_dir() / hash_str;
+                auto wanted_path = UObjectHook::get_persistent_dir() / hash_str;
+
+                // Use the one this was originally loaded from instead.
+                if (existing != m_persistent_states.end() && (*existing)->path_to_json.has_value()) {
+                    wanted_path = (*existing)->path_to_json.value();
+                }
 
                 // Create dir if necessary
                 try {
-                    std::filesystem::create_directories(wanted_dir.parent_path());
+                    std::filesystem::create_directories(wanted_path.parent_path());
 
-                    if (std::filesystem::exists(wanted_dir.parent_path())) {
-                        std::ofstream file{wanted_dir};
+                    if (std::filesystem::exists(wanted_path.parent_path())) {
+                        std::ofstream file{wanted_path};
                         file << json.dump(4);
                         file.close();
 
@@ -1929,8 +1972,14 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
                 }
             };
 
-            if (m_path.has_valid_base()) {
-                ImGui::SameLine();
+            // Save state stuff
+            // First one is for checking whether we already have an existing persistent state
+            // with its own path.
+            if (existing != m_persistent_states.end()) {
+                if (ImGui::Button("Save state")) {
+                    save_state_logic((*existing)->path.path());
+                }
+            } else if (m_path.has_valid_base()) {
                 if (ImGui::Button("Save state")) {
                     save_state_logic(m_path.path());
                 }
@@ -2055,6 +2104,11 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
             if (ImGui::Button("Detach")) {
                 m_camera_attach.object = nullptr;
                 m_camera_attach.offset = glm::vec3{0.0f, 0.0f, 0.0f};
+
+                if (m_persistent_camera_state != nullptr) {
+                    m_persistent_camera_state->erase_json_file();
+                }
+
                 m_persistent_camera_state.reset();
             }
 
@@ -2217,6 +2271,11 @@ void UObjectHook::ui_handle_actor(sdk::UObject* object) {
         if (ImGui::Button("Detach")) {
             m_camera_attach.object = nullptr;
             m_camera_attach.offset = glm::vec3{0.0f, 0.0f, 0.0f};
+
+            if (m_persistent_camera_state != nullptr) {
+                m_persistent_camera_state->erase_json_file();
+            }
+
             m_persistent_camera_state.reset();
         }
 
@@ -2519,6 +2578,7 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
 
                     if (std::filesystem::exists(wanted_path.parent_path())) {
                         std::ofstream file{wanted_path};
+                        props->path_to_json = wanted_path;
                         const auto j = props->to_json();
                         file << j.dump(4);
                         file.close();
@@ -2892,6 +2952,7 @@ std::vector<std::shared_ptr<UObjectHook::PersistentProperties>> UObjectHook::des
         auto state = UObjectHook::PersistentProperties::from_json(json_file);
 
         if (state != nullptr) {
+            state->path_to_json = json_file;
             result.push_back(state);
         }
     }
