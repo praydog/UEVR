@@ -497,6 +497,18 @@ public:
         return (DPadMethod)m_dpad_shifting_method->value();
     }
 
+    bool is_snapturn_enabled() const {
+        return m_snapturn->value();
+    }
+
+    float get_snapturn_js_deadzone() const {
+        return m_snapturn_joystick_deadzone->value();
+    }
+
+    int get_snapturn_angle() const {
+        return m_snapturn_angle->value();
+    }
+
     bool should_skip_post_init_properties() const {
         return m_compatibility_skip_pip->value();
     }
@@ -731,6 +743,14 @@ private:
     const ModToggle::Ptr m_roomscale_movement{ ModToggle::create(generate_name("RoomscaleMovement"), false) };
     const ModToggle::Ptr m_roomscale_movement_actor_rotation{ ModToggle::create(generate_name("RoomscaleMovementActorRotation"), false) };
 
+    // Snap turn settings and globals
+    const ModToggle::Ptr m_snapturn{ ModToggle::create(generate_name("SnapTurn"), false) };
+    const ModSlider::Ptr m_snapturn_joystick_deadzone{ ModSlider::create(generate_name("SnapturnJoystickDeadzone"), 0.01f, 0.9f, 0.1f) };
+    const ModInt32::Ptr m_snapturn_angle{ ModInt32::create(generate_name("SnapturnTurnAngle"), 45) };
+    static inline bool m_snapturn_on_frame{false};
+    static inline bool m_snapturn_left{false};
+    static inline bool m_was_snapturn_run_on_input{false};
+
     // Aim method and movement orientation are not the same thing, but they can both have the same options
     const ModCombo::Ptr m_aim_method{ ModCombo::create(generate_name("AimMethod"), s_aim_method_names, AimMethod::GAME) };
     const ModCombo::Ptr m_movement_orientation{ ModCombo::create(generate_name("MovementOrientation"), s_aim_method_names, AimMethod::GAME) };
@@ -803,6 +823,9 @@ private:
         *m_2d_screen_mode,
         *m_roomscale_movement,
         *m_roomscale_movement_actor_rotation,
+        *m_snapturn,
+        *m_snapturn_joystick_deadzone,
+        *m_snapturn_angle,
         *m_aim_method,
         *m_movement_orientation,
         *m_aim_speed,
