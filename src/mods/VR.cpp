@@ -830,30 +830,60 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
     state->Gamepad.sThumbRX = (int16_t)(right_joystick_axis.x * 32767.0f);
     state->Gamepad.sThumbRY = (int16_t)(right_joystick_axis.y * 32767.0f);
 
-    // Touching the thumbrest allows us to use the thumbstick as a dpad
-    if (m_thumbrest_shifting->value()) {
-        const auto a_b_touch_inactive = !is_action_active_any_joystick(m_action_a_button_touch_right) && !is_action_active_any_joystick(m_action_b_button_touch_right);
-        const auto thumbrest_active = a_b_touch_inactive && is_action_active_any_joystick(m_action_thumbrest_touch_right);
+    // Touching the thumbrest allows us to use the thumbstick as a dpad.  Additional options are for controllers without capacitives/games that rely solely on DPad
+    if (m_dpad_shifting->value()) {
+        bool button_touch_inactive{true};
+        bool thumbrest_check{false};
 
-        if (thumbrest_active) {
-            if (state->Gamepad.sThumbLY >= 16383) {
+        DPadMethod dpad_method = get_dpad_method();
+        if (dpad_method == DPadMethod::RIGHT_TOUCH) {
+            thumbrest_check = is_action_active_any_joystick(m_action_thumbrest_touch_right);
+            button_touch_inactive = !is_action_active_any_joystick(m_action_a_button_touch_right) && !is_action_active_any_joystick(m_action_b_button_touch_right);
+        }
+        if (dpad_method == DPadMethod::LEFT_TOUCH) {
+            thumbrest_check = is_action_active_any_joystick(m_action_thumbrest_touch_left);
+            button_touch_inactive = !is_action_active_any_joystick(m_action_a_button_touch_left) && !is_action_active_any_joystick(m_action_b_button_touch_left);
+        }
+
+        const auto dpad_active = (button_touch_inactive && thumbrest_check) || dpad_method == DPadMethod::LEFT_JOYSTICK || dpad_method == DPadMethod::RIGHT_JOYSTICK;
+
+        if (dpad_active) {
+            SHORT ThumbY{0};
+            SHORT ThumbX{0};
+            // If someone is accidentally touching both thumbrests while also moving a joystick, this will default to left joystick.
+            if (dpad_method == DPadMethod::RIGHT_TOUCH || dpad_method == DPadMethod::LEFT_JOYSTICK) {
+                ThumbY = state->Gamepad.sThumbLY;
+                ThumbX = state->Gamepad.sThumbLX;
+            }
+            else if (dpad_method == DPadMethod::LEFT_TOUCH || dpad_method == DPadMethod::RIGHT_JOYSTICK) {
+                ThumbY = state->Gamepad.sThumbRY;
+                ThumbX = state->Gamepad.sThumbRX;
+            }
+            
+            if (ThumbY >= 16383) {
                 state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_UP;
             }
 
-            if (state->Gamepad.sThumbLY <= -16383) {
+            if (ThumbY <= -16383) {
                 state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
             }
 
-            if (state->Gamepad.sThumbLX >= 16383) {
+            if (ThumbX >= 16383) {
                 state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
             }
 
-            if (state->Gamepad.sThumbLX <= -16383) {
+            if (ThumbX <= -16383) {
                 state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
             }
 
-            state->Gamepad.sThumbLY = 0;
-            state->Gamepad.sThumbLX = 0;
+            if (dpad_method == DPadMethod::RIGHT_TOUCH || dpad_method == DPadMethod::LEFT_JOYSTICK) {
+                state->Gamepad.sThumbLY = 0;
+                state->Gamepad.sThumbLX = 0;
+            }
+            else if (dpad_method == DPadMethod::LEFT_TOUCH || dpad_method == DPadMethod::RIGHT_JOYSTICK) {
+                state->Gamepad.sThumbRY = 0;
+                state->Gamepad.sThumbRX = 0;
+            }
         }
     }
     
@@ -2010,7 +2040,9 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Controller")) {
             m_joystick_deadzone->draw("VR Joystick Deadzone");
-            m_thumbrest_shifting->draw("Thumbrest DPad Shifting");
+            m_dpad_shifting->draw("DPad Shifting");
+            m_dpad_shifting_method->draw("DPad Shifting Method");
+
             ImGui::TreePop();
         }
 

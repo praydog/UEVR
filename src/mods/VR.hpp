@@ -45,6 +45,13 @@ public:
         TWO_HANDED_LEFT,
     };
 
+    enum DPadMethod : int32_t {
+        RIGHT_TOUCH,
+        LEFT_TOUCH,
+        LEFT_JOYSTICK,
+        RIGHT_JOYSTICK,
+    };
+
     static const inline std::string s_action_pose = "/actions/default/in/Pose";
     static const inline std::string s_action_grip_pose = "/actions/default/in/GripPose";
     static const inline std::string s_action_trigger = "/actions/default/in/Trigger";
@@ -482,6 +489,14 @@ public:
         return m_roomscale_movement_actor_rotation->value() && !m_aim_temp_disabled;
     }
 
+    bool is_dpad_shifting_enabled() const {
+        return m_dpad_shifting->value();
+    }
+
+    DPadMethod get_dpad_method() const {
+        return (DPadMethod)m_dpad_shifting_method->value();
+    }
+
     bool should_skip_post_init_properties() const {
         return m_compatibility_skip_pip->value();
     }
@@ -691,6 +706,13 @@ private:
         "Two Handed (Left)",
     };
 
+    static const inline std::vector<std::string> s_dpad_method_names {
+        "Right Thumbrest + Left Joystick",
+        "Left Thumbrest + Right Joystick",
+        "Left Joystick (Disables Standard Joystick Input)",
+        "Right Joystick (Disables Standard Joystick Input)"
+    };
+
     const ModCombo::Ptr m_rendering_method{ ModCombo::create(generate_name("RenderingMethod"), s_rendering_method_names) };
     const ModCombo::Ptr m_synced_afr_method{ ModCombo::create(generate_name("SyncedSequentialMethod"), s_synced_afr_method_names, 1) };
     const ModToggle::Ptr m_extreme_compat_mode{ ModToggle::create(generate_name("ExtremeCompatibilityMode"), false) };
@@ -715,7 +737,8 @@ private:
     AimMethod m_previous_aim_method{ AimMethod::GAME };
     const ModToggle::Ptr m_aim_interp{ ModToggle::create(generate_name("AimInterp"), true) };
     const ModSlider::Ptr m_aim_speed{ ModSlider::create(generate_name("AimSpeed"), 0.01f, 25.0f, 15.0f) };
-    const ModToggle::Ptr m_thumbrest_shifting{ ModToggle::create(generate_name("ThumbrestShifting"), true) };
+    const ModToggle::Ptr m_dpad_shifting{ ModToggle::create(generate_name("DPadShifting"), true) };
+    const ModCombo::Ptr m_dpad_shifting_method{ ModCombo::create(generate_name("DPadShiftingMethod"), s_dpad_method_names, DPadMethod::RIGHT_TOUCH) };
 
     //const ModToggle::Ptr m_headlocked_aim{ ModToggle::create(generate_name("HeadLockedAim"), false) };
     //const ModToggle::Ptr m_headlocked_aim_controller_based{ ModToggle::create(generate_name("HeadLockedAimControllerBased"), false) };
@@ -784,7 +807,8 @@ private:
         *m_movement_orientation,
         *m_aim_speed,
         *m_aim_interp,
-        *m_thumbrest_shifting,
+        *m_dpad_shifting,
+        *m_dpad_shifting_method,
         *m_motion_controls_inactivity_timer,
         *m_joystick_deadzone,
         *m_camera_forward_offset,
