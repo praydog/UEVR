@@ -38,6 +38,17 @@ FMalloc* FMalloc::get() {
             }
         }
 
+        // ok at this point we're just using whatever function we can find...
+        // because GMalloc is basically referenced everywhere we can use most functions
+        // even if that function is just the CVar registration function for MaxObjectsNotConsideredByGC
+        if (!object_base_init_fn) {
+            object_base_init_fn = utility::find_function_from_string_ref(core_uobject, L"gc.MaxObjectsNotConsideredByGC");
+
+            if (!object_base_init_fn) {
+                object_base_init_fn = utility::find_function_from_string_ref(core_uobject, L"MaxObjectsNotConsideredByGC");
+            }
+        }
+
         if (!object_base_init_fn) {
             SPDLOG_ERROR("[FMalloc::get] Failed to find object base init function");
             return nullptr;
