@@ -745,8 +745,8 @@ private:
 
     // Snap turn settings and globals
     const ModToggle::Ptr m_snapturn{ ModToggle::create(generate_name("SnapTurn"), false) };
-    const ModSlider::Ptr m_snapturn_joystick_deadzone{ ModSlider::create(generate_name("SnapturnJoystickDeadzone"), 0.01f, 0.9f, 0.1f) };
-    const ModInt32::Ptr m_snapturn_angle{ ModInt32::create(generate_name("SnapturnTurnAngle"), 45) };
+    const ModSlider::Ptr m_snapturn_joystick_deadzone{ ModSlider::create(generate_name("SnapturnJoystickDeadzone"), 0.01f, 0.99f, 0.2f) };
+    const ModInt32::Ptr m_snapturn_angle{ ModSliderInt32::create(generate_name("SnapturnTurnAngle"), 1, 359, 45) };
     static inline bool m_snapturn_on_frame{false};
     static inline bool m_snapturn_left{false};
     static inline bool m_was_snapturn_run_on_input{false};
