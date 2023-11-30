@@ -33,14 +33,15 @@ class ModValue : public IModValue {
 public:
     using Ptr = std::unique_ptr<ModValue<T>>;
 
-    static auto create(std::string_view config_name, T default_value = T{}) {
-        return std::make_unique<ModValue<T>>(config_name, default_value);
+    static auto create(std::string_view config_name, T default_value = T{}, bool advanced_option = false) {
+        return std::make_unique<ModValue<T>>(config_name, default_value, advanced_option);
     }
 
-    ModValue(std::string_view config_name, T default_value) 
+    ModValue(std::string_view config_name, T default_value, bool advanced_option = false) 
         : m_config_name{ config_name },
         m_value{ default_value }, 
-        m_default_value{ default_value }
+        m_default_value{ default_value },
+        m_advanced_option{ advanced_option }
     {
     }
 
@@ -79,35 +80,53 @@ public:
         return m_config_name;
     }
 
+    const auto& is_advanced_option() const {
+        return m_advanced_option;
+    }
+
+    auto DrawOption() -> bool {
+        auto framework = g_framework.get();
+        if (!framework->is_advanced_view_enabled() && this->m_advanced_option) {
+            return false;
+        }
+        return true;
+    }
+
 protected:
     T m_value{};
-    T m_default_value{};
-    std::string m_config_name{ "Default_ModValue" };
+    const T m_default_value{};
+    const std::string m_config_name{ "Default_ModValue" };
+    const bool m_advanced_option{false};
 };
 
 class ModToggle : public ModValue<bool> {
 public:
     using Ptr = std::unique_ptr<ModToggle>;
 
-    ModToggle(std::string_view config_name, bool default_value) 
-        : ModValue<bool>{ config_name, default_value } 
+    ModToggle(std::string_view config_name, bool default_value, bool advanced_option = false) 
+        : ModValue<bool>{ config_name, default_value, advanced_option } 
     { 
     }
 
-    static auto create(std::string_view config_name, bool default_value = false) {
-        return std::make_unique<ModToggle>(config_name, default_value);
+    static auto create(std::string_view config_name, bool default_value = false, bool advanced_option = false) {
+        return std::make_unique<ModToggle>(config_name, default_value, advanced_option);
     }
-
+    
     bool draw(std::string_view name) override {
-        ImGui::PushID(this);
-        auto ret = ImGui::Checkbox(name.data(), &m_value);
-        ImGui::PopID();
+        if (DrawOption()) {
+            ImGui::PushID(this);
+            auto ret = ImGui::Checkbox(name.data(), &m_value);
+            ImGui::PopID();
 
-        return ret;
+            return ret;
+        }
+        return false;
     }
 
     void draw_value(std::string_view name) override {
-        ImGui::Text("%s: %i", name.data(), m_value);
+        if (DrawOption()) {
+            ImGui::Text("%s: %i", name.data(), m_value);
+        }
     }
 
     bool toggle() {
@@ -119,11 +138,11 @@ class ModFloat : public ModValue<float> {
 public:
     using Ptr = std::unique_ptr<ModFloat>;
 
-    ModFloat(std::string_view config_name, float default_value) 
-        : ModValue<float>{ config_name, default_value } { }
+    ModFloat(std::string_view config_name, float default_value, bool advanced_option = false) 
+        : ModValue<float>{ config_name, default_value, advanced_option } { }
 
-    static auto create(std::string_view config_name, float default_value = 0.0f) {
-        return std::make_unique<ModFloat>(config_name, default_value);
+    static auto create(std::string_view config_name, float default_value = 0.0f, bool advanced_option = false) {
+        return std::make_unique<ModFloat>(config_name, default_value, advanced_option);
     }
 
     bool draw(std::string_view name) override {
@@ -143,12 +162,12 @@ class ModSlider : public ModFloat {
 public:
     using Ptr = std::unique_ptr<ModSlider>;
 
-    static auto create(std::string_view config_name, float mn = 0.0f, float mx = 1.0f, float default_value = 0.0f) {
-        return std::make_unique<ModSlider>(config_name, mn, mx, default_value);
+    static auto create(std::string_view config_name, float mn = 0.0f, float mx = 1.0f, float default_value = 0.0f, bool advanced_option = false) {
+        return std::make_unique<ModSlider>(config_name, mn, mx, default_value, advanced_option);
     }
 
-    ModSlider(std::string_view config_name, float mn = 0.0f, float mx = 1.0f, float default_value = 0.0f)
-        : ModFloat{ config_name, default_value },
+    ModSlider(std::string_view config_name, float mn = 0.0f, float mx = 1.0f, float default_value = 0.0f, bool advanced_option = false)
+        : ModFloat{ config_name, default_value, advanced_option },
         m_range{ mn, mx }
     {
     }
@@ -177,12 +196,12 @@ class ModInt32 : public ModValue<int32_t> {
 public:
     using Ptr = std::unique_ptr<ModInt32>;
 
-    static auto create(std::string_view config_name, int32_t default_value = 0) {
-        return std::make_unique<ModInt32>(config_name, default_value);
+    static auto create(std::string_view config_name, int32_t default_value = 0, bool advanced_option = false) {
+        return std::make_unique<ModInt32>(config_name, default_value, advanced_option);
     }
 
-    ModInt32(std::string_view config_name, int32_t default_value = 0)
-        : ModValue{ config_name, default_value }
+    ModInt32(std::string_view config_name, int32_t default_value = 0, bool advanced_option = false)
+        : ModValue{ config_name, default_value, advanced_option }
     {
     }
 
@@ -203,12 +222,12 @@ class ModSliderInt32 : public ModInt32 {
 public:
     using Ptr = std::unique_ptr<ModSliderInt32>;
 
-    static auto create(std::string_view config_name, int32_t mn = -100, int32_t mx = 100, int32_t default_value = 0) {
-        return std::make_unique<ModSliderInt32>(config_name, mn, mx, default_value);
+    static auto create(std::string_view config_name, int32_t mn = -100, int32_t mx = 100, int32_t default_value = 0, bool advanced_option = false) {
+        return std::make_unique<ModSliderInt32>(config_name, mn, mx, default_value, advanced_option);
     }
 
-    ModSliderInt32(std::string_view config_name, int32_t mn = -100, int32_t mx = 100, int32_t default_value = 0)
-        : ModInt32{ config_name, default_value },
+    ModSliderInt32(std::string_view config_name, int32_t mn = -100, int32_t mx = 100, int32_t default_value = 0, bool advanced_option = false)
+        : ModInt32{ config_name, default_value, advanced_option },
         m_int_range{ mn, mx }
     {
     }
@@ -240,12 +259,12 @@ class ModCombo : public ModValue<int32_t> {
 public:
     using Ptr = std::unique_ptr<ModCombo>;
 
-    static auto create(std::string_view config_name, std::vector<std::string> options, int32_t default_value = 0) {
-        return std::make_unique<ModCombo>(config_name, options, default_value);
+    static auto create(std::string_view config_name, std::vector<std::string> options, int32_t default_value = 0, bool advanced_option = false) {
+        return std::make_unique<ModCombo>(config_name, options, default_value, advanced_option);
     }
 
-    ModCombo(std::string_view config_name, const std::vector<std::string>& options, int32_t default_value = 0)
-        : ModValue{ config_name, default_value },
+    ModCombo(std::string_view config_name, const std::vector<std::string>& options, int32_t default_value = 0, bool advanced_option = false)
+        : ModValue{ config_name, default_value, advanced_option },
         m_options_stdstr{ options }
     {
         for (auto& o : m_options_stdstr) {
@@ -299,12 +318,12 @@ class ModKey: public ModInt32 {
 public:
     using Ptr = std::unique_ptr<ModKey>;
 
-    static auto create(std::string_view config_name, int32_t default_value = UNBOUND_KEY) {
+    static auto create(std::string_view config_name, int32_t default_value = UNBOUND_KEY, bool advanced_option = false) {
         return std::make_unique<ModKey>(config_name, default_value);
     }
 
-    ModKey(std::string_view config_name, int32_t default_value = UNBOUND_KEY)
-        : ModInt32{ config_name, static_cast<uint32_t>(default_value) }
+    ModKey(std::string_view config_name, int32_t default_value = UNBOUND_KEY, bool advanced_option = false)
+        : ModInt32{ config_name, default_value, advanced_option }
     {
     }
 

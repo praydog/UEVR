@@ -1158,6 +1158,11 @@ void Framework::draw_ui() {
     ImGui::Text("(?)");
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Allows mouse and keyboard inputs to register to the game while the UI is focused.");
+    ImGui::Checkbox("Show Advanced Options", &m_advanced_view_enabled);
+    ImGui::SameLine();
+    ImGui::Text("(?)");
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Show additional options for greater control over various settings.");
 
     if (m_mods_fully_initialized) {
         if (ImGui::Button("Reset to Default Settings")) {
