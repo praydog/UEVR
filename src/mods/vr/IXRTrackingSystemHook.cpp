@@ -370,8 +370,8 @@ IXRTrackingSystemHook::IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_ho
     }
 
     // GetSystemName
-    m_xrtracking_vtable[0] = (uintptr_t)+[](void* this_ptr, ue::FName* out) -> ue::FName* {
-        static ue::FName fake_name{};
+    m_xrtracking_vtable[0] = (uintptr_t)+[](void* this_ptr, sdk::FName* out) -> sdk::FName* {
+        static sdk::FName fake_name{};
         return &fake_name;
     };
 

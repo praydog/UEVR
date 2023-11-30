@@ -5,14 +5,15 @@
 
 #include "Enums.hpp"
 #include "FGuid.hpp"
-#include "FName.hpp"
+
+#include <sdk/FName.hpp>
 
 namespace ue4_27 {
 #pragma pack(push, 1)
 struct FXRHMDData {
     bool bValid; // 0x0
     char pad_1[0x3];
-    ue::FName DeviceName; // 0x4
+    sdk::FName DeviceName; // 0x4
     char pad__[0x4];
     ue::FGuid ApplicationInstanceID; // 0xc + 4
     ue::ETrackingStatus TrackingStatus; // 0x1c + 4
