@@ -406,6 +406,7 @@ list(APPEND sdk_SOURCES
 	"shared/sdk/threading/RHIThreadWorker.hpp"
 	"shared/sdk/threading/RenderThreadWorker.hpp"
 	"shared/sdk/threading/ThreadWorker.hpp"
+	"shared/sdk/vtables/IXRTrackingSystemVTables.hpp"
 )
 
 list(APPEND sdk_SOURCES
@@ -836,7 +837,6 @@ list(APPEND ue4poc_SOURCES
 	"src/mods/vr/structures/FName.hpp"
 	"src/mods/vr/structures/FXRHMDData.hpp"
 	"src/mods/vr/structures/FXRMotionControllerData.hpp"
-	"src/mods/vr/vtables/IXRTrackingSystemVTables.hpp"
 	"src/ue4poc-imgui/font_robotomedium.hpp"
 	"src/ue4poc-imgui/ue4poc_imconfig.hpp"
 	"src/utility/ImGui.hpp"

@@ -15,7 +15,7 @@
 
 #include "../VR.hpp"
 
-#include "vtables/IXRTrackingSystemVTables.hpp"
+#include <sdk/vtables/IXRTrackingSystemVTables.hpp>
 #include "structures/FXRMotionControllerData.hpp"
 #include "structures/FXRHMDData.hpp"
 #include "IXRTrackingSystemHook.hpp"
