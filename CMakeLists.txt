@@ -834,7 +834,6 @@ list(APPEND ue4poc_SOURCES
 	"src/mods/vr/shaders/vs.hpp"
 	"src/mods/vr/structures/Enums.hpp"
 	"src/mods/vr/structures/FGuid.hpp"
-	"src/mods/vr/structures/FName.hpp"
 	"src/mods/vr/structures/FXRHMDData.hpp"
 	"src/mods/vr/structures/FXRMotionControllerData.hpp"
 	"src/ue4poc-imgui/font_robotomedium.hpp"
