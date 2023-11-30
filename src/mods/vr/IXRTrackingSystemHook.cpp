@@ -115,6 +115,16 @@ detail::IXRCameraVT& get_camera_vtable() {
         version.dwFileVersionMS = 0;
     }
 
+    // TODO: actually dump 5.2-5.3
+    if (version.dwFileVersionMS == 0x50003 || str_version.starts_with("5.3")) {
+        return ue5_1::IXRCameraVT::get();
+    }
+
+    // >= 5.2
+    if (version.dwFileVersionMS == 0x50002 || str_version.starts_with("5.2")) {
+        return ue5_1::IXRCameraVT::get();
+    }
+
     // >= 5.1
     if (version.dwFileVersionMS == 0x50001 || str_version.starts_with("5.1")) {
         return ue5_1::IXRCameraVT::get();
@@ -185,6 +195,16 @@ detail::IHeadMountedDisplayVT& get_hmd_vtable() {
 
     if (str_version != "0.00") {
         version.dwFileVersionMS = 0;
+    }
+
+    // TODO: actually dump 5.2-5.3
+    if (version.dwFileVersionMS == 0x50003 || str_version.starts_with("5.3")) {
+        return ue5_1::IHeadMountedDisplayVT::get();
+    }
+
+    // >= 5.2
+    if (version.dwFileVersionMS == 0x50002 || str_version.starts_with("5.2")) {
+        return ue5_1::IHeadMountedDisplayVT::get();
     }
 
     // >= 5.1
