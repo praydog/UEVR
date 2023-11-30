@@ -47,6 +47,7 @@ public:
 
 protected:
     std::string_view get_name() const override { return "UObjectHook"; };
+    bool is_advanced_mod() const override { return true; }
 
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
     void on_draw_ui() override;

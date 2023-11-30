@@ -22,6 +22,7 @@ public:
     void early_init();
 
     std::string_view get_name() const override { return "PluginLoader"; }
+    bool is_advanced_mod() const override { return true; }
     std::optional<std::string> on_initialize_d3d_thread() override;
     void on_draw_ui() override;
 

@@ -84,12 +84,8 @@ public:
         return m_advanced_option;
     }
 
-    auto DrawOption() -> bool {
-        auto framework = g_framework.get();
-        if (!framework->is_advanced_view_enabled() && this->m_advanced_option) {
-            return false;
-        }
-        return true;
+    auto should_draw_option() -> bool {
+        return g_framework->is_advanced_view_enabled() || !this->m_advanced_option;
     }
 
 protected:
@@ -113,7 +109,7 @@ public:
     }
     
     bool draw(std::string_view name) override {
-        if (DrawOption()) {
+        if (should_draw_option()) {
             ImGui::PushID(this);
             auto ret = ImGui::Checkbox(name.data(), &m_value);
             ImGui::PopID();
@@ -124,7 +120,7 @@ public:
     }
 
     void draw_value(std::string_view name) override {
-        if (DrawOption()) {
+        if (should_draw_option()) {
             ImGui::Text("%s: %i", name.data(), m_value);
         }
     }
@@ -146,15 +142,21 @@ public:
     }
 
     bool draw(std::string_view name) override {
-        ImGui::PushID(this);
-        auto ret = ImGui::InputFloat(name.data(), &m_value);
-        ImGui::PopID();
+        if (should_draw_option()) {
+            ImGui::PushID(this);
+            auto ret = ImGui::InputFloat(name.data(), &m_value);
+            ImGui::PopID();
 
-        return ret;
+            return ret;
+        }
+        return false;
     }
 
     void draw_value(std::string_view name) override {
-        ImGui::Text("%s: %f", name.data(), m_value);
+        if (should_draw_option()) {
+            ImGui::Text("%s: %f", name.data(), m_value);
+        }
+        
     }
 };
 
@@ -173,15 +175,20 @@ public:
     }
 
     bool draw(std::string_view name) override {
-        ImGui::PushID(this);
-        auto ret = ImGui::SliderFloat(name.data(), &m_value, m_range.x, m_range.y);
-        ImGui::PopID();
+        if (should_draw_option()) {
+            ImGui::PushID(this);
+            auto ret = ImGui::SliderFloat(name.data(), &m_value, m_range.x, m_range.y);
+            ImGui::PopID();
 
-        return ret;
+            return ret;
+        }
+        return false;
     }
 
     void draw_value(std::string_view name) override {
-        ImGui::Text("%s: %f [%f, %f]", name.data(), m_value, m_range.x, m_range.y);
+        if (should_draw_option()) {
+            ImGui::Text("%s: %f [%f, %f]", name.data(), m_value, m_range.x, m_range.y);
+        }
     }
 
     auto& range() {
@@ -206,15 +213,20 @@ public:
     }
 
     bool draw(std::string_view name) override {
-        ImGui::PushID(this);
-        auto ret = ImGui::InputInt(name.data(), &m_value);
-        ImGui::PopID();
+        if (should_draw_option()) {
+            ImGui::PushID(this);
+            auto ret = ImGui::InputInt(name.data(), &m_value);
+            ImGui::PopID();
 
-        return ret;
+            return ret;
+        }
+        return false;
     }
 
     void draw_value(std::string_view name) override {
-        ImGui::Text("%s: %i", name.data(), m_value);
+        if (should_draw_option()) {
+            ImGui::Text("%s: %i", name.data(), m_value);
+        }
     }
 };
 
@@ -233,11 +245,14 @@ public:
     }
 
     bool draw(std::string_view name) override {
-        ImGui::PushID(this);
-        auto ret = ImGui::SliderInt(name.data(), &m_value, m_int_range.min, m_int_range.max);
-        ImGui::PopID();
+        if (should_draw_option()) {
+            ImGui::PushID(this);
+            auto ret = ImGui::SliderInt(name.data(), &m_value, m_int_range.min, m_int_range.max);
+            ImGui::PopID();
 
-        return ret;
+            return ret;
+        }
+        return false;
     }
 
     void draw_value(std::string_view name) override {
@@ -273,20 +288,25 @@ public:
     }
 
     bool draw(std::string_view name) override {
-        // clamp m_value to valid range
-        m_value = std::clamp<int32_t>(m_value, 0, static_cast<int32_t>(m_options.size()) - 1);
+        if (should_draw_option()) {
+            // clamp m_value to valid range
+            m_value = std::clamp<int32_t>(m_value, 0, static_cast<int32_t>(m_options.size()) - 1);
 
-        ImGui::PushID(this);
-        auto ret = ImGui::Combo(name.data(), &m_value, m_options.data(), static_cast<int32_t>(m_options.size()));
-        ImGui::PopID();
+            ImGui::PushID(this);
+            auto ret = ImGui::Combo(name.data(), &m_value, m_options.data(), static_cast<int32_t>(m_options.size()));
+            ImGui::PopID();
 
-        return ret;
+            return ret;
+        }
+        return false;
     }
 
     void draw_value(std::string_view name) override {
-        m_value = std::clamp<int32_t>(m_value, 0, static_cast<int32_t>(m_options.size()) - 1);
+        if (should_draw_option()) {
+            m_value = std::clamp<int32_t>(m_value, 0, static_cast<int32_t>(m_options.size()) - 1);
 
-        ImGui::Text("%s: %s", name.data(), m_options[m_value]);
+            ImGui::Text("%s: %s", name.data(), m_options[m_value]);
+        }
     }
 
     void config_load(const utility::Config& cfg, bool set_defaults) override {
@@ -328,53 +348,56 @@ public:
     }
 
     bool draw(std::string_view name) override {
-        if (name.empty()) {
-            return false;
-        }
-
-        ImGui::PushID(this);
-        ImGui::Button(name.data());
-
-        if (ImGui::IsItemHovered() && ImGui::GetIO().MouseDown[0]) {
-            m_waiting_for_new_key = true;
-        }
-
-        if (m_waiting_for_new_key) {
-            const auto &keys = g_framework->get_keyboard_state();
-            for (int32_t k{ 0 }; k < keys.size(); ++k) {
-                if (k == VK_LBUTTON || k == VK_RBUTTON) {
-                    continue;
-                }
-
-                if (keys[k]) {
-                    m_value = is_erase_key(k) ? UNBOUND_KEY : k;
-                    m_waiting_for_new_key = false;
-                    break;
-                }
+        if (should_draw_option()) {
+            if (name.empty()) {
+                return false;
             }
 
-            ImGui::SameLine();
-            ImGui::Text("Press any key...");
-        }
-        else {
-            ImGui::SameLine();
+            ImGui::PushID(this);
+            ImGui::Button(name.data());
 
-            if (m_value >= 0 && m_value <= 255) {
-                if (keycodes.contains(m_value)) {
-                    ImGui::Text("%s", keycodes[m_value].c_str());
+            if (ImGui::IsItemHovered() && ImGui::GetIO().MouseDown[0]) {
+                m_waiting_for_new_key = true;
+            }
+
+            if (m_waiting_for_new_key) {
+                const auto &keys = g_framework->get_keyboard_state();
+                for (int32_t k{ 0 }; k < keys.size(); ++k) {
+                    if (k == VK_LBUTTON || k == VK_RBUTTON) {
+                        continue;
+                    }
+
+                    if (keys[k]) {
+                        m_value = is_erase_key(k) ? UNBOUND_KEY : k;
+                        m_waiting_for_new_key = false;
+                        break;
+                    }
                 }
-                else {
-                    ImGui::Text("%i (Unknown)", m_value);
-                }
+
+                ImGui::SameLine();
+                ImGui::Text("Press any key...");
             }
             else {
-                ImGui::Text("Not bound");
+                ImGui::SameLine();
+
+                if (m_value >= 0 && m_value <= 255) {
+                    if (keycodes.contains(m_value)) {
+                        ImGui::Text("%s", keycodes[m_value].c_str());
+                    }
+                    else {
+                        ImGui::Text("%i (Unknown)", m_value);
+                    }
+                }
+                else {
+                    ImGui::Text("Not bound");
+                }
             }
+
+            ImGui::PopID();
+
+            return true;
         }
-
-        ImGui::PopID();
-
-        return true;
+        return false;
     }
 
     bool is_key_down() const {
@@ -429,6 +452,7 @@ public:
 
     virtual ~Mod() {};
     virtual std::string_view get_name() const { return "UnknownMod"; };
+    virtual bool is_advanced_mod() const { return false; };
 
     // can be used for ModValues, like Mod_ValueName
     virtual std::string generate_name(std::string_view name) { return std::string{ get_name() } + "_" + name.data(); }
@@ -436,7 +460,7 @@ public:
     virtual std::optional<std::string> on_initialize() { return std::nullopt; };
     virtual std::optional<std::string> on_initialize_d3d_thread() { return std::nullopt; };
 
-    virtual std::vector<std::string> get_sidebar_entries() { return {}; };
+    virtual std::vector<SidebarEntryInfo> get_sidebar_entries() { return {}; };
 
     // This gets called after updating stuff like keyboard/mouse input to imgui
     // can be used to override these inputs e.g. with a custom input system

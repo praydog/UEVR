@@ -1185,7 +1185,7 @@ void Framework::draw_ui() {
     ImGui::Columns(1);
 
     // Mods:
-    std::vector<std::string> sidebar_entries{"About"};
+    sidebar_entries.insert(sidebar_entries.begin(), {"About", false});
 
     if (ImGui::BeginTable("UEVRTable", 2, ImGuiTableFlags_::ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_::ImGuiTableFlags_BordersOuterV | ImGuiTableFlags_::ImGuiTableFlags_SizingFixedFit)) {
         ImGui::TableSetupColumn("UEVRLeftPaneColumn", ImGuiTableColumnFlags_WidthFixed, 150.0f);
@@ -1226,25 +1226,27 @@ void Framework::draw_ui() {
                     sidebar_entries.insert(sidebar_entries.end(), entries.begin(), entries.end());
                 } else {
                     mod_sidebar_ranges.push_back(Info{sidebar_entries.size(), sidebar_entries.size() + 1, mod, false});
-                    sidebar_entries.push_back(mod->get_name().data());
+                    sidebar_entries.push_back({mod->get_name().data(), mod->is_advanced_mod()} );
                 }
             }
 
             for (size_t i = 1; i < sidebar_entries.size(); ++i) {
-                for (const auto& range : mod_sidebar_ranges) {
-                    if (i == range.mn) {
-                        // Set first entry as default ("Runtime" entry of VR mod)
-                        if (range.has_sidebar_entries && !m_sidebar_state.initialized) {
-                            m_sidebar_state.selected_entry = i;
-                            m_sidebar_state.initialized = true;
-                            ImGui::SetWindowFocus("UEVRRightPane");
+                if (m_advanced_view_enabled || !sidebar_entries[i].m_advanced_entry) {
+                    for (const auto& range : mod_sidebar_ranges) {
+                        if (i == range.mn) {
+                            // Set first entry as default ("Runtime" entry of VR mod)
+                            if (range.has_sidebar_entries && !m_sidebar_state.initialized) {
+                                m_sidebar_state.selected_entry = i;
+                                m_sidebar_state.initialized = true;
+                                ImGui::SetWindowFocus("UEVRRightPane");
+                            }
+
+                            ImGui::Text(range.mod->get_name().data());
                         }
-
-                        ImGui::Text(range.mod->get_name().data());
                     }
-                }
 
-                dcs(sidebar_entries[i].c_str(), i);
+                    dcs(sidebar_entries[i].m_label.c_str(), i);
+                }
             }
 
             bool wants_focus_right = false;
@@ -1281,7 +1283,7 @@ void Framework::draw_ui() {
                     for (const auto& range : mod_sidebar_ranges) {
                         if (m_sidebar_state.selected_entry >= range.mn && m_sidebar_state.selected_entry < range.mx) {
                             if (range.has_sidebar_entries) {
-                                range.mod->on_draw_sidebar_entry(sidebar_entries[m_sidebar_state.selected_entry]);
+                                range.mod->on_draw_sidebar_entry(sidebar_entries[m_sidebar_state.selected_entry].m_label);
                             } else {
                                 range.mod->on_draw_ui();
                             }
@@ -1346,6 +1348,8 @@ void Framework::draw_ui() {
     if (m_last_draw_ui && !m_draw_ui) {
         m_windows_message_hook->window_toggle_cursor(m_cursor_state);
     }
+
+    sidebar_entries.clear();
 }
 
 void Framework::draw_about() {
