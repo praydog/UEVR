@@ -2555,7 +2555,11 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 }
 
                 const auto hash_str = std::to_string(utility::hash(concat_path)) + "_props.json";
-                const auto wanted_path = UObjectHook::get_persistent_dir() / hash_str;
+                auto wanted_path = UObjectHook::get_persistent_dir() / hash_str;
+
+                if (props->path_to_json.has_value()) {
+                    wanted_path = props->path_to_json.value();
+                }
 
                 // Create dir if necessary
                 try {
