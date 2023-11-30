@@ -92,6 +92,29 @@ FUObjectArray* FUObjectArray::get() try {
             }
         }
 
+        FUObjectArray* export_result = nullptr;
+
+        // See if it's an export and just return it (we might be in the editor)
+        if (!object_base_init_fn.has_value()) {
+            if (GetProcAddress(core_uobject, "?GUObjectArray@@3VFUObjectArray@@A") != nullptr) {
+                export_result = (FUObjectArray*)GetProcAddress(core_uobject, "?GUObjectArray@@3VFUObjectArray@@A");
+                SPDLOG_INFO("[FUObjectArray::get] Found GUObjectArray export at 0x{:x}", (uintptr_t)export_result);
+            } else if (GetProcAddress(core_uobject, "GUObjectArray") != nullptr) {
+                export_result = (FUObjectArray*)GetProcAddress(core_uobject, "GUObjectArray");
+                SPDLOG_INFO("[FUObjectArray::get] Found GUObjectArray export at 0x{:x}", (uintptr_t)export_result);
+            }
+        }
+
+        // At this point we are just choosing a random function that at least references the GUObjectArray
+        // because if we had to find an export, we're probably in the editor
+        if (export_result != nullptr) {
+            const auto ref = utility::scan_displacement_reference(core_uobject, (uintptr_t)export_result);
+
+            if (ref) {
+                object_base_init_fn = utility::find_function_start(*ref);
+            }
+        }
+
         if (!object_base_init_fn) {
             SPDLOG_ERROR("[FUObjectArray::get] Failed to find object base init function");
             return nullptr;
