@@ -16,12 +16,12 @@ public:
     }
 
     template<typename T>
-    T* get_data(sdk::UObject* object) const {
+    T* get_data(void* object) const {
         return (T*)((uintptr_t)object + get_offset());
     }
 
     template<typename T>
-    T* get_data(const sdk::UObject* object) const {
+    T* get_data(const void* object) const {
         return (T*)((uintptr_t)object + get_offset());
     }
 

@@ -461,8 +461,13 @@ void UClass::update_offsets() {
     SPDLOG_INFO("[UClass] Bruteforcing offsets...");
 
     const auto object_class = sdk::UObject::static_class();
+    SPDLOG_INFO("[UClass] UObject: 0x{:x}", (uintptr_t)object_class);
+
     const auto field_class = sdk::UField::static_class();
+    SPDLOG_INFO("[UClass] UField: 0x{:x}", (uintptr_t)field_class);
+
     const auto struct_class = sdk::UStruct::static_class();
+    SPDLOG_INFO("[UClass] UStruct: 0x{:x}", (uintptr_t)struct_class);
 
     if (object_class == nullptr || field_class == nullptr || struct_class == nullptr) {
         SPDLOG_ERROR("[UClass] Failed to find UObject/UStruct/UField!");

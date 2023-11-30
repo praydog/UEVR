@@ -12,6 +12,10 @@
 #include "utility/Logging.hpp"
 
 #include <sdk/Utility.hpp>
+#include <sdk/UObjectArray.hpp>
+#include <sdk/UClass.hpp>
+#include <sdk/FProperty.hpp>
+#include <sdk/ScriptVector.hpp>
 
 #include "../VR.hpp"
 
@@ -787,10 +791,7 @@ void IXRTrackingSystemHook::get_motion_controller_data(sdk::IXRTrackingSystem*, 
     SPDLOG_INFO_ONCE("get_motion_controller_data {:x}", (uintptr_t)_ReturnAddress());
 
     const auto e_hand = (ue::EControllerHand)hand;
-    const auto data = (ue4_27::FXRMotionControllerData*)motion_controller_data;
-
     const auto vr = VR::get();
-
     const auto world_scale = vr->get_world_to_meters();
 
     auto rotation_offset = vr->get_rotation_offset();
@@ -801,55 +802,71 @@ void IXRTrackingSystemHook::get_motion_controller_data(sdk::IXRTrackingSystem*, 
         rotation_offset = glm::normalize(pre_flat_pitch * vr->get_rotation_offset());
     }
 
-    switch (e_hand) {
-    case ue::EControllerHand::Left: {
+    static const auto mc_data_struct = sdk::FUObjectArray::get() != nullptr ? (sdk::UScriptStruct*)sdk::find_uobject(L"ScriptStruct /Script/HeadMountedDisplay.XRMotionControllerData") : nullptr;
+
+    const auto aim_transform = e_hand == ue::EControllerHand::Left ? vr->get_aim_transform(vr->get_left_controller_index()) : vr->get_aim_transform(vr->get_right_controller_index());
+    const auto grip_transform = e_hand == ue::EControllerHand::Left ? vr->get_grip_transform(vr->get_left_controller_index()) : vr->get_grip_transform(vr->get_right_controller_index());
+
+    const auto aim_position = rotation_offset * glm::vec3{aim_transform[3] - vr->get_standing_origin()};
+    const auto aim_rotation = glm::normalize(rotation_offset * glm::quat{aim_transform});
+    const auto grip_position = rotation_offset * glm::vec3{grip_transform[3] - vr->get_standing_origin()};
+    const auto grip_rotation = glm::normalize(rotation_offset * glm::quat{grip_transform});
+
+    const auto final_aim_position = utility::math::glm_to_ue4(aim_position * world_scale);
+    const auto final_aim_rotation = utility::math::glm_to_ue4(aim_rotation);
+    const auto final_grip_position = utility::math::glm_to_ue4(grip_position * world_scale);
+    const auto final_grip_rotation = utility::math::glm_to_ue4(grip_rotation);
+
+    if (mc_data_struct == nullptr) {
+        const auto data = (ue4_27::FXRMotionControllerData*)motion_controller_data;
         data->bValid = true;
-        const auto left_aim_transform = vr->get_aim_transform(vr->get_left_controller_index());
-        const auto left_grip_transform = vr->get_grip_transform(vr->get_left_controller_index());
-
-        const auto aim_position = rotation_offset * glm::vec3{left_aim_transform[3] - vr->get_standing_origin()};
-        const auto aim_rotation = glm::normalize(rotation_offset * glm::quat{left_aim_transform});
-        const auto grip_position = rotation_offset * glm::vec3{left_grip_transform[3] - vr->get_standing_origin()};
-        const auto grip_rotation = glm::normalize(rotation_offset * glm::quat{left_grip_transform});
-
-        const auto final_aim_position = utility::math::glm_to_ue4(aim_position * world_scale);
-        const auto final_aim_rotation = utility::math::glm_to_ue4(aim_rotation);
-        const auto final_grip_position = utility::math::glm_to_ue4(grip_position * world_scale);
-        const auto final_grip_rotation = utility::math::glm_to_ue4(grip_rotation);
-
         data->GripRotation = { final_grip_rotation.x, final_grip_rotation.y, final_grip_rotation.z, final_grip_rotation.w };
         data->GripPosition = final_grip_position;
-
         data->AimRotation = { final_aim_rotation.x, final_aim_rotation.y, final_aim_rotation.z, final_aim_rotation.w };
         data->AimPosition = final_aim_position;
-        
-        break;
-    }
-    case ue::EControllerHand::Right: {
-        data->bValid = true;
-        const auto right_aim_transform = vr->get_aim_transform(vr->get_right_controller_index());
-        const auto right_grip_transform = vr->get_grip_transform(vr->get_right_controller_index());
+    } else {
+        const auto bValid_prop = mc_data_struct->find_property(L"bValid");
+        const auto GripRotation_prop = mc_data_struct->find_property(L"GripRotation");
+        const auto GripPosition_prop = mc_data_struct->find_property(L"GripPosition");
+        const auto AimRotation_prop = mc_data_struct->find_property(L"AimRotation");
+        const auto AimPosition_prop = mc_data_struct->find_property(L"AimPosition");
+        const auto is_ue5 = g_hook->m_stereo_hook->has_double_precision();
 
-        const auto aim_position = rotation_offset * glm::vec3{right_aim_transform[3] - vr->get_standing_origin()};
-        const auto aim_rotation = glm::normalize(rotation_offset * glm::quat{right_aim_transform});
-        const auto grip_position = rotation_offset * glm::vec3{right_grip_transform[3] - vr->get_standing_origin()};
-        const auto grip_rotation = glm::normalize(rotation_offset * glm::quat{right_grip_transform});
+        if (bValid_prop != nullptr) {
+            *bValid_prop->get_data<bool>(motion_controller_data) = true;
+        }
 
-        const auto final_aim_position = utility::math::glm_to_ue4(aim_position * world_scale);
-        const auto final_aim_rotation = utility::math::glm_to_ue4(aim_rotation);
-        const auto final_grip_position = utility::math::glm_to_ue4(grip_position * world_scale);
-        const auto final_grip_rotation = utility::math::glm_to_ue4(grip_rotation);
+        if (GripRotation_prop != nullptr) {
+            if (is_ue5) {
+                *GripRotation_prop->get_data<glm::vec<4, double>>(motion_controller_data) = { final_grip_rotation.x, final_grip_rotation.y, final_grip_rotation.z, final_grip_rotation.w };
+            } else {
+                *GripRotation_prop->get_data<glm::vec<4, float>>(motion_controller_data) = { final_grip_rotation.x, final_grip_rotation.y, final_grip_rotation.z, final_grip_rotation.w };
+            }
+        }
 
-        data->GripRotation = { final_grip_rotation.x, final_grip_rotation.y, final_grip_rotation.z, final_grip_rotation.w };
-        data->GripPosition = final_grip_position;
+        if (GripPosition_prop != nullptr) {
+            if (is_ue5) {
+                *GripPosition_prop->get_data<glm::vec<3, double>>(motion_controller_data) = final_grip_position;
+            } else {
+                *GripPosition_prop->get_data<glm::vec<3, float>>(motion_controller_data) = final_grip_position;
+            }
+        }
 
-        data->AimRotation = { final_aim_rotation.x, final_aim_rotation.y, final_aim_rotation.z, final_aim_rotation.w };
-        data->AimPosition = final_aim_position;
+        if (AimRotation_prop != nullptr) {
+            if (is_ue5) {
+                *AimRotation_prop->get_data<glm::vec<4, double>>(motion_controller_data) = { final_aim_rotation.x, final_aim_rotation.y, final_aim_rotation.z, final_aim_rotation.w };
+            } else {
+                *AimRotation_prop->get_data<glm::vec<4, float>>(motion_controller_data) = { final_aim_rotation.x, final_aim_rotation.y, final_aim_rotation.z, final_aim_rotation.w };
+            }
+        }
 
-        break;
-    }
-    default:
-        break;
+        if (AimPosition_prop != nullptr) {
+            if (is_ue5) {
+                *AimPosition_prop->get_data<glm::vec<3, double>>(motion_controller_data) = final_aim_position;
+            } else {
+                *AimPosition_prop->get_data<glm::vec<3, float>>(motion_controller_data) = final_aim_position;
+            }
+        }
     }
 }
 
@@ -857,7 +874,6 @@ void IXRTrackingSystemHook::get_hmd_data(sdk::IXRTrackingSystem*, void* world, v
     SPDLOG_INFO_ONCE("get_hmd_data {:x}", (uintptr_t)_ReturnAddress());
 
     const auto& vr = VR::get();
-    const auto data = (ue4_27::FXRHMDData*)hmd_data;
     const auto world_scale = vr->get_world_to_meters();
 
     auto rotation_offset = vr->get_rotation_offset();
@@ -868,14 +884,40 @@ void IXRTrackingSystemHook::get_hmd_data(sdk::IXRTrackingSystem*, void* world, v
         rotation_offset = glm::normalize(pre_flat_pitch * vr->get_rotation_offset());
     }
 
+    static const auto hmd_data_struct = sdk::FUObjectArray::get() != nullptr ? (sdk::UScriptStruct*)sdk::find_uobject(L"ScriptStruct /Script/HeadMountedDisplay.XRHMDData") : nullptr;
+
     const auto position = rotation_offset * glm::vec3{vr->get_position(vr->get_hmd_index()) - vr->get_standing_origin()};
     const auto rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(vr->get_hmd_index())});
 
-    // TODO: UE5
-    data->Position = utility::math::glm_to_ue4(position * world_scale);
+    if (hmd_data_struct == nullptr) {
+        const auto data = (ue4_27::FXRHMDData*)hmd_data;
+        data->Position = utility::math::glm_to_ue4(position * world_scale);
 
-    const auto q = utility::math::glm_to_ue4(rotation);
-    data->Rotation = { q.x, q.y, q.z, q.w };
+        const auto q = utility::math::glm_to_ue4(rotation);
+        data->Rotation = { q.x, q.y, q.z, q.w };
+    } else {
+        const auto Position_prop = hmd_data_struct->find_property(L"Position");
+        const auto Rotation_prop = hmd_data_struct->find_property(L"Rotation");
+        const auto is_ue5 = g_hook->m_stereo_hook->has_double_precision();
+
+        if (Position_prop != nullptr) {
+            if (is_ue5) {
+                *Position_prop->get_data<glm::vec<3, double>>(hmd_data) = utility::math::glm_to_ue4(position * world_scale);
+            } else {
+                *Position_prop->get_data<glm::vec<3, float>>(hmd_data) = utility::math::glm_to_ue4(position * world_scale);
+            }
+        }
+
+        if (Rotation_prop != nullptr) {
+            if (is_ue5) {
+                const auto q = utility::math::glm_to_ue4(rotation);
+                *Rotation_prop->get_data<glm::vec<4, double>>(hmd_data) = { q.x, q.y, q.z, q.w };
+            } else {
+                const auto q = utility::math::glm_to_ue4(rotation);
+                *Rotation_prop->get_data<glm::vec<4, float>>(hmd_data) = { q.x, q.y, q.z, q.w };
+            }
+        }
+    }
 }
 
 void IXRTrackingSystemHook::get_current_pose(sdk::IXRTrackingSystem*, int32_t device_id, Quat<float>* out_rot, glm::vec3* out_pos) {
@@ -899,11 +941,19 @@ void IXRTrackingSystemHook::get_current_pose(sdk::IXRTrackingSystem*, int32_t de
         const auto position = rotation_offset * glm::vec3{vr->get_position(vr->get_hmd_index()) - vr->get_standing_origin()};
         const auto rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(vr->get_hmd_index())});
 
-        // TODO: UE5
-        *out_pos = utility::math::glm_to_ue4(position * world_scale);
+        const auto is_ue5 = g_hook->m_stereo_hook->has_double_precision();
 
-        const auto q = utility::math::glm_to_ue4(rotation);
-        *out_rot = { q.x, q.y, q.z, q.w };
+        if (!is_ue5) {
+            *out_pos = utility::math::glm_to_ue4(position * world_scale);
+
+            const auto q = utility::math::glm_to_ue4(rotation);
+            *out_rot = { q.x, q.y, q.z, q.w };
+        } else {
+            *(glm::vec<3, double>*)out_pos = utility::math::glm_to_ue4(position * world_scale);
+
+            const auto q = utility::math::glm_to_ue4(rotation);
+            *(glm::vec<4, double>*)out_rot = { q.x, q.y, q.z, q.w };
+        }
 
         break;
     }
