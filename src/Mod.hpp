@@ -177,12 +177,12 @@ class ModInt32 : public ModValue<int32_t> {
 public:
     using Ptr = std::unique_ptr<ModInt32>;
 
-    static auto create(std::string_view config_name, uint32_t default_value = 0) {
+    static auto create(std::string_view config_name, int32_t default_value = 0) {
         return std::make_unique<ModInt32>(config_name, default_value);
     }
 
-    ModInt32(std::string_view config_name, uint32_t default_value = 0)
-        : ModValue{ config_name, static_cast<int>(default_value) }
+    ModInt32(std::string_view config_name, int32_t default_value = 0)
+        : ModValue{ config_name, default_value }
     {
     }
 
@@ -197,6 +197,43 @@ public:
     void draw_value(std::string_view name) override {
         ImGui::Text("%s: %i", name.data(), m_value);
     }
+};
+
+class ModSliderInt32 : public ModInt32 {
+public:
+    using Ptr = std::unique_ptr<ModSliderInt32>;
+
+    static auto create(std::string_view config_name, int32_t mn = -100, int32_t mx = 100, int32_t default_value = 0) {
+        return std::make_unique<ModSliderInt32>(config_name, mn, mx, default_value);
+    }
+
+    ModSliderInt32(std::string_view config_name, int32_t mn = -100, int32_t mx = 100, int32_t default_value = 0)
+        : ModInt32{ config_name, default_value },
+        m_int_range{ mn, mx }
+    {
+    }
+
+    bool draw(std::string_view name) override {
+        ImGui::PushID(this);
+        auto ret = ImGui::SliderInt(name.data(), &m_value, m_int_range.min, m_int_range.max);
+        ImGui::PopID();
+
+        return ret;
+    }
+
+    void draw_value(std::string_view name) override {
+        ImGui::Text("%s: %i [%i, %i]", name.data(), m_value, m_int_range.min, m_int_range.max);
+    }
+
+    auto& range() {
+        return m_int_range;
+    }
+
+protected:
+    struct SliderIntRange {
+        int min;
+        int max;
+    }m_int_range;
 };
 
 class ModCombo : public ModValue<int32_t> {
