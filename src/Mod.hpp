@@ -314,7 +314,7 @@ public:
 
         if (m_value >= (int32_t)m_options.size()) {
             if (!m_options.empty()) {
-                m_value = m_options.size() - 1;
+                m_value = (int32_t)m_options.size() - 1;
             } else {
                 m_value = 0;
             }
