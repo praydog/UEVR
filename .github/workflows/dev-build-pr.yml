@@ -27,12 +27,6 @@ jobs:
           path: ${{github.workspace}}/build/bin/${{matrix.target}}/*
           if-no-files-found: error
 
-      - name: Compress release
-        run: |
-          echo ${{github.sha}} > ${{github.workspace}}/uevr_revision.txt
-          7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/uevr_revision.txt
-          7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/build/bin/${{matrix.target}}/dinput8.dll
-
       - name: Set outputs
         id: vars
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
