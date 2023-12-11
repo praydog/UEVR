@@ -57,6 +57,12 @@ private:
     Data* m_data{};
 };
 
+
+struct SidebarEntryInfo {
+    std::string m_label{};
+    bool m_advanced_entry{false};
+};
+
 // Global facilitator
 class Framework {
 private:
@@ -190,7 +196,13 @@ public:
         if (delta < std::chrono::milliseconds(100)) {
             return;
         }
-        ++m_sidebar_state.selected_entry;
+        int32_t selected_entry_local = m_sidebar_state.selected_entry + 1;
+        if (!m_advanced_view_enabled) {
+            while (sidebar_entries[selected_entry_local].m_advanced_entry) {
+                ++selected_entry_local;
+            }
+        }
+        m_sidebar_state.selected_entry = selected_entry_local;
 
         m_last_page_inc_time = now;
     }
@@ -201,7 +213,13 @@ public:
         if (delta < std::chrono::milliseconds(100)) {
             return;
         }
-        --m_sidebar_state.selected_entry;
+        int32_t selected_entry_local = m_sidebar_state.selected_entry - 1;
+        if (!m_advanced_view_enabled) {
+            while (sidebar_entries[selected_entry_local].m_advanced_entry) {
+                --selected_entry_local;
+            }
+        }
+        m_sidebar_state.selected_entry = selected_entry_local;
 
         m_last_page_dec_time = now;
     }
@@ -211,6 +229,12 @@ private:
     void update_fonts();
     void invalidate_device_objects();
 
+public:
+    bool is_advanced_view_enabled() {
+        return m_advanced_view_enabled;
+    }
+
+private:
     void draw_ui();
     void draw_about();
 
@@ -241,6 +265,7 @@ private:
     // UI
     bool m_has_frame{false};
     bool m_wants_device_object_cleanup{false};
+    bool m_advanced_view_enabled{false};
     bool m_draw_ui{true};
     bool m_last_draw_ui{m_draw_ui};
     bool m_is_ui_focused{false};
@@ -248,6 +273,7 @@ private:
     bool m_cursor_state_changed{true};
     bool m_ui_option_transparent{true};
     bool m_ui_passthrough{false};
+    std::vector<SidebarEntryInfo> sidebar_entries{};
     
     ImVec2 m_last_window_pos{};
     ImVec2 m_last_window_size{};

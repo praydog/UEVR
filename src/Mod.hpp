@@ -33,14 +33,15 @@ class ModValue : public IModValue {
 public:
     using Ptr = std::unique_ptr<ModValue<T>>;
 
-    static auto create(std::string_view config_name, T default_value = T{}) {
-        return std::make_unique<ModValue<T>>(config_name, default_value);
+    static auto create(std::string_view config_name, T default_value = T{}, bool advanced_option = false) {
+        return std::make_unique<ModValue<T>>(config_name, default_value, advanced_option);
     }
 
-    ModValue(std::string_view config_name, T default_value) 
+    ModValue(std::string_view config_name, T default_value, bool advanced_option = false) 
         : m_config_name{ config_name },
         m_value{ default_value }, 
-        m_default_value{ default_value }
+        m_default_value{ default_value },
+        m_advanced_option{ advanced_option }
     {
     }
 
@@ -79,35 +80,49 @@ public:
         return m_config_name;
     }
 
+    const auto& is_advanced_option() const {
+        return m_advanced_option;
+    }
+
+    auto should_draw_option() -> bool {
+        return g_framework->is_advanced_view_enabled() || !this->m_advanced_option;
+    }
+
 protected:
     T m_value{};
-    T m_default_value{};
-    std::string m_config_name{ "Default_ModValue" };
+    const T m_default_value{};
+    const std::string m_config_name{ "Default_ModValue" };
+    const bool m_advanced_option{false};
 };
 
 class ModToggle : public ModValue<bool> {
 public:
     using Ptr = std::unique_ptr<ModToggle>;
 
-    ModToggle(std::string_view config_name, bool default_value) 
-        : ModValue<bool>{ config_name, default_value } 
+    ModToggle(std::string_view config_name, bool default_value, bool advanced_option = false) 
+        : ModValue<bool>{ config_name, default_value, advanced_option } 
     { 
     }
 
-    static auto create(std::string_view config_name, bool default_value = false) {
-        return std::make_unique<ModToggle>(config_name, default_value);
+    static auto create(std::string_view config_name, bool default_value = false, bool advanced_option = false) {
+        return std::make_unique<ModToggle>(config_name, default_value, advanced_option);
     }
-
+    
     bool draw(std::string_view name) override {
-        ImGui::PushID(this);
-        auto ret = ImGui::Checkbox(name.data(), &m_value);
-        ImGui::PopID();
+        if (should_draw_option()) {
+            ImGui::PushID(this);
+            auto ret = ImGui::Checkbox(name.data(), &m_value);
+            ImGui::PopID();
 
-        return ret;
+            return ret;
+        }
+        return false;
     }
 
     void draw_value(std::string_view name) override {
-        ImGui::Text("%s: %i", name.data(), m_value);
+        if (should_draw_option()) {
+            ImGui::Text("%s: %i", name.data(), m_value);
+        }
     }
 
     bool toggle() {
@@ -119,23 +134,29 @@ class ModFloat : public ModValue<float> {
 public:
     using Ptr = std::unique_ptr<ModFloat>;
 
-    ModFloat(std::string_view config_name, float default_value) 
-        : ModValue<float>{ config_name, default_value } { }
+    ModFloat(std::string_view config_name, float default_value, bool advanced_option = false) 
+        : ModValue<float>{ config_name, default_value, advanced_option } { }
 
-    static auto create(std::string_view config_name, float default_value = 0.0f) {
-        return std::make_unique<ModFloat>(config_name, default_value);
+    static auto create(std::string_view config_name, float default_value = 0.0f, bool advanced_option = false) {
+        return std::make_unique<ModFloat>(config_name, default_value, advanced_option);
     }
 
     bool draw(std::string_view name) override {
-        ImGui::PushID(this);
-        auto ret = ImGui::InputFloat(name.data(), &m_value);
-        ImGui::PopID();
+        if (should_draw_option()) {
+            ImGui::PushID(this);
+            auto ret = ImGui::InputFloat(name.data(), &m_value);
+            ImGui::PopID();
 
-        return ret;
+            return ret;
+        }
+        return false;
     }
 
     void draw_value(std::string_view name) override {
-        ImGui::Text("%s: %f", name.data(), m_value);
+        if (should_draw_option()) {
+            ImGui::Text("%s: %f", name.data(), m_value);
+        }
+        
     }
 };
 
@@ -143,26 +164,31 @@ class ModSlider : public ModFloat {
 public:
     using Ptr = std::unique_ptr<ModSlider>;
 
-    static auto create(std::string_view config_name, float mn = 0.0f, float mx = 1.0f, float default_value = 0.0f) {
-        return std::make_unique<ModSlider>(config_name, mn, mx, default_value);
+    static auto create(std::string_view config_name, float mn = 0.0f, float mx = 1.0f, float default_value = 0.0f, bool advanced_option = false) {
+        return std::make_unique<ModSlider>(config_name, mn, mx, default_value, advanced_option);
     }
 
-    ModSlider(std::string_view config_name, float mn = 0.0f, float mx = 1.0f, float default_value = 0.0f)
-        : ModFloat{ config_name, default_value },
+    ModSlider(std::string_view config_name, float mn = 0.0f, float mx = 1.0f, float default_value = 0.0f, bool advanced_option = false)
+        : ModFloat{ config_name, default_value, advanced_option },
         m_range{ mn, mx }
     {
     }
 
     bool draw(std::string_view name) override {
-        ImGui::PushID(this);
-        auto ret = ImGui::SliderFloat(name.data(), &m_value, m_range.x, m_range.y);
-        ImGui::PopID();
+        if (should_draw_option()) {
+            ImGui::PushID(this);
+            auto ret = ImGui::SliderFloat(name.data(), &m_value, m_range.x, m_range.y);
+            ImGui::PopID();
 
-        return ret;
+            return ret;
+        }
+        return false;
     }
 
     void draw_value(std::string_view name) override {
-        ImGui::Text("%s: %f [%f, %f]", name.data(), m_value, m_range.x, m_range.y);
+        if (should_draw_option()) {
+            ImGui::Text("%s: %f [%f, %f]", name.data(), m_value, m_range.x, m_range.y);
+        }
     }
 
     auto& range() {
@@ -177,25 +203,30 @@ class ModInt32 : public ModValue<int32_t> {
 public:
     using Ptr = std::unique_ptr<ModInt32>;
 
-    static auto create(std::string_view config_name, int32_t default_value = 0) {
-        return std::make_unique<ModInt32>(config_name, default_value);
+    static auto create(std::string_view config_name, int32_t default_value = 0, bool advanced_option = false) {
+        return std::make_unique<ModInt32>(config_name, default_value, advanced_option);
     }
 
-    ModInt32(std::string_view config_name, int32_t default_value = 0)
-        : ModValue{ config_name, default_value }
+    ModInt32(std::string_view config_name, int32_t default_value = 0, bool advanced_option = false)
+        : ModValue{ config_name, default_value, advanced_option }
     {
     }
 
     bool draw(std::string_view name) override {
-        ImGui::PushID(this);
-        auto ret = ImGui::InputInt(name.data(), &m_value);
-        ImGui::PopID();
+        if (should_draw_option()) {
+            ImGui::PushID(this);
+            auto ret = ImGui::InputInt(name.data(), &m_value);
+            ImGui::PopID();
 
-        return ret;
+            return ret;
+        }
+        return false;
     }
 
     void draw_value(std::string_view name) override {
-        ImGui::Text("%s: %i", name.data(), m_value);
+        if (should_draw_option()) {
+            ImGui::Text("%s: %i", name.data(), m_value);
+        }
     }
 };
 
@@ -203,22 +234,25 @@ class ModSliderInt32 : public ModInt32 {
 public:
     using Ptr = std::unique_ptr<ModSliderInt32>;
 
-    static auto create(std::string_view config_name, int32_t mn = -100, int32_t mx = 100, int32_t default_value = 0) {
-        return std::make_unique<ModSliderInt32>(config_name, mn, mx, default_value);
+    static auto create(std::string_view config_name, int32_t mn = -100, int32_t mx = 100, int32_t default_value = 0, bool advanced_option = false) {
+        return std::make_unique<ModSliderInt32>(config_name, mn, mx, default_value, advanced_option);
     }
 
-    ModSliderInt32(std::string_view config_name, int32_t mn = -100, int32_t mx = 100, int32_t default_value = 0)
-        : ModInt32{ config_name, default_value },
+    ModSliderInt32(std::string_view config_name, int32_t mn = -100, int32_t mx = 100, int32_t default_value = 0, bool advanced_option = false)
+        : ModInt32{ config_name, default_value, advanced_option },
         m_int_range{ mn, mx }
     {
     }
 
     bool draw(std::string_view name) override {
-        ImGui::PushID(this);
-        auto ret = ImGui::SliderInt(name.data(), &m_value, m_int_range.min, m_int_range.max);
-        ImGui::PopID();
+        if (should_draw_option()) {
+            ImGui::PushID(this);
+            auto ret = ImGui::SliderInt(name.data(), &m_value, m_int_range.min, m_int_range.max);
+            ImGui::PopID();
 
-        return ret;
+            return ret;
+        }
+        return false;
     }
 
     void draw_value(std::string_view name) override {
@@ -240,12 +274,12 @@ class ModCombo : public ModValue<int32_t> {
 public:
     using Ptr = std::unique_ptr<ModCombo>;
 
-    static auto create(std::string_view config_name, std::vector<std::string> options, int32_t default_value = 0) {
-        return std::make_unique<ModCombo>(config_name, options, default_value);
+    static auto create(std::string_view config_name, std::vector<std::string> options, int32_t default_value = 0, bool advanced_option = false) {
+        return std::make_unique<ModCombo>(config_name, options, default_value, advanced_option);
     }
 
-    ModCombo(std::string_view config_name, const std::vector<std::string>& options, int32_t default_value = 0)
-        : ModValue{ config_name, default_value },
+    ModCombo(std::string_view config_name, const std::vector<std::string>& options, int32_t default_value = 0, bool advanced_option = false)
+        : ModValue{ config_name, default_value, advanced_option },
         m_options_stdstr{ options }
     {
         for (auto& o : m_options_stdstr) {
@@ -254,20 +288,25 @@ public:
     }
 
     bool draw(std::string_view name) override {
-        // clamp m_value to valid range
-        m_value = std::clamp<int32_t>(m_value, 0, static_cast<int32_t>(m_options.size()) - 1);
+        if (should_draw_option()) {
+            // clamp m_value to valid range
+            m_value = std::clamp<int32_t>(m_value, 0, static_cast<int32_t>(m_options.size()) - 1);
 
-        ImGui::PushID(this);
-        auto ret = ImGui::Combo(name.data(), &m_value, m_options.data(), static_cast<int32_t>(m_options.size()));
-        ImGui::PopID();
+            ImGui::PushID(this);
+            auto ret = ImGui::Combo(name.data(), &m_value, m_options.data(), static_cast<int32_t>(m_options.size()));
+            ImGui::PopID();
 
-        return ret;
+            return ret;
+        }
+        return false;
     }
 
     void draw_value(std::string_view name) override {
-        m_value = std::clamp<int32_t>(m_value, 0, static_cast<int32_t>(m_options.size()) - 1);
+        if (should_draw_option()) {
+            m_value = std::clamp<int32_t>(m_value, 0, static_cast<int32_t>(m_options.size()) - 1);
 
-        ImGui::Text("%s: %s", name.data(), m_options[m_value]);
+            ImGui::Text("%s: %s", name.data(), m_options[m_value]);
+        }
     }
 
     void config_load(const utility::Config& cfg, bool set_defaults) override {
@@ -275,7 +314,7 @@ public:
 
         if (m_value >= (int32_t)m_options.size()) {
             if (!m_options.empty()) {
-                m_value = m_options.size() - 1;
+                m_value = (int32_t)m_options.size() - 1;
             } else {
                 m_value = 0;
             }
@@ -299,63 +338,66 @@ class ModKey: public ModInt32 {
 public:
     using Ptr = std::unique_ptr<ModKey>;
 
-    static auto create(std::string_view config_name, int32_t default_value = UNBOUND_KEY) {
+    static auto create(std::string_view config_name, int32_t default_value = UNBOUND_KEY, bool advanced_option = false) {
         return std::make_unique<ModKey>(config_name, default_value);
     }
 
-    ModKey(std::string_view config_name, int32_t default_value = UNBOUND_KEY)
-        : ModInt32{ config_name, static_cast<uint32_t>(default_value) }
+    ModKey(std::string_view config_name, int32_t default_value = UNBOUND_KEY, bool advanced_option = false)
+        : ModInt32{ config_name, default_value, advanced_option }
     {
     }
 
     bool draw(std::string_view name) override {
-        if (name.empty()) {
-            return false;
-        }
-
-        ImGui::PushID(this);
-        ImGui::Button(name.data());
-
-        if (ImGui::IsItemHovered() && ImGui::GetIO().MouseDown[0]) {
-            m_waiting_for_new_key = true;
-        }
-
-        if (m_waiting_for_new_key) {
-            const auto &keys = g_framework->get_keyboard_state();
-            for (int32_t k{ 0 }; k < keys.size(); ++k) {
-                if (k == VK_LBUTTON || k == VK_RBUTTON) {
-                    continue;
-                }
-
-                if (keys[k]) {
-                    m_value = is_erase_key(k) ? UNBOUND_KEY : k;
-                    m_waiting_for_new_key = false;
-                    break;
-                }
+        if (should_draw_option()) {
+            if (name.empty()) {
+                return false;
             }
 
-            ImGui::SameLine();
-            ImGui::Text("Press any key...");
-        }
-        else {
-            ImGui::SameLine();
+            ImGui::PushID(this);
+            ImGui::Button(name.data());
 
-            if (m_value >= 0 && m_value <= 255) {
-                if (keycodes.contains(m_value)) {
-                    ImGui::Text("%s", keycodes[m_value].c_str());
+            if (ImGui::IsItemHovered() && ImGui::GetIO().MouseDown[0]) {
+                m_waiting_for_new_key = true;
+            }
+
+            if (m_waiting_for_new_key) {
+                const auto &keys = g_framework->get_keyboard_state();
+                for (int32_t k{ 0 }; k < keys.size(); ++k) {
+                    if (k == VK_LBUTTON || k == VK_RBUTTON) {
+                        continue;
+                    }
+
+                    if (keys[k]) {
+                        m_value = is_erase_key(k) ? UNBOUND_KEY : k;
+                        m_waiting_for_new_key = false;
+                        break;
+                    }
                 }
-                else {
-                    ImGui::Text("%i (Unknown)", m_value);
-                }
+
+                ImGui::SameLine();
+                ImGui::Text("Press any key...");
             }
             else {
-                ImGui::Text("Not bound");
+                ImGui::SameLine();
+
+                if (m_value >= 0 && m_value <= 255) {
+                    if (keycodes.contains(m_value)) {
+                        ImGui::Text("%s", keycodes[m_value].c_str());
+                    }
+                    else {
+                        ImGui::Text("%i (Unknown)", m_value);
+                    }
+                }
+                else {
+                    ImGui::Text("Not bound");
+                }
             }
+
+            ImGui::PopID();
+
+            return true;
         }
-
-        ImGui::PopID();
-
-        return true;
+        return false;
     }
 
     bool is_key_down() const {
@@ -410,6 +452,7 @@ public:
 
     virtual ~Mod() {};
     virtual std::string_view get_name() const { return "UnknownMod"; };
+    virtual bool is_advanced_mod() const { return false; };
 
     // can be used for ModValues, like Mod_ValueName
     virtual std::string generate_name(std::string_view name) { return std::string{ get_name() } + "_" + name.data(); }
@@ -417,7 +460,7 @@ public:
     virtual std::optional<std::string> on_initialize() { return std::nullopt; };
     virtual std::optional<std::string> on_initialize_d3d_thread() { return std::nullopt; };
 
-    virtual std::vector<std::string> get_sidebar_entries() { return {}; };
+    virtual std::vector<SidebarEntryInfo> get_sidebar_entries() { return {}; };
 
     // This gets called after updating stuff like keyboard/mouse input to imgui
     // can be used to override these inputs e.g. with a custom input system
