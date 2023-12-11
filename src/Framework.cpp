@@ -1185,7 +1185,9 @@ void Framework::draw_ui() {
     ImGui::Columns(1);
 
     // Mods:
-    sidebar_entries.insert(sidebar_entries.begin(), {"About", false});
+    auto& sidebar_entries = m_sidebar_state.entries;
+    sidebar_entries.clear();
+    sidebar_entries.emplace_back("About", false);
 
     if (ImGui::BeginTable("UEVRTable", 2, ImGuiTableFlags_::ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_::ImGuiTableFlags_BordersOuterV | ImGuiTableFlags_::ImGuiTableFlags_SizingFixedFit)) {
         ImGui::TableSetupColumn("UEVRLeftPaneColumn", ImGuiTableColumnFlags_WidthFixed, 150.0f);
@@ -1219,14 +1221,29 @@ void Framework::draw_ui() {
             std::vector<Info> mod_sidebar_ranges{};
 
             for (auto& mod : m_mods->get_mods()) {
+                if (mod->is_advanced_mod() && !m_advanced_view_enabled) {
+                    continue;
+                }
+
                 auto entries = mod->get_sidebar_entries();
 
                 if (!entries.empty()) {
-                    mod_sidebar_ranges.push_back(Info{sidebar_entries.size(), sidebar_entries.size() + entries.size(), mod, true});
-                    sidebar_entries.insert(sidebar_entries.end(), entries.begin(), entries.end());
+                    size_t displayed_entries = 0;
+                    for (auto& entry : entries) {
+                        if (entry.m_advanced_entry && !m_advanced_view_enabled) {
+                            continue;
+                        }
+
+                        sidebar_entries.emplace_back(entry.m_label.c_str(), entry.m_advanced_entry);
+                        ++displayed_entries;
+                    }
+
+                    if (displayed_entries > 0) {
+                        mod_sidebar_ranges.push_back(Info{sidebar_entries.size() - displayed_entries, sidebar_entries.size(), mod, true});
+                    }
                 } else {
                     mod_sidebar_ranges.push_back(Info{sidebar_entries.size(), sidebar_entries.size() + 1, mod, false});
-                    sidebar_entries.push_back({mod->get_name().data(), mod->is_advanced_mod()} );
+                    sidebar_entries.emplace_back(mod->get_name().data(), mod->is_advanced_mod());
                 }
             }
 
@@ -1348,8 +1365,6 @@ void Framework::draw_ui() {
     if (m_last_draw_ui && !m_draw_ui) {
         m_windows_message_hook->window_toggle_cursor(m_cursor_state);
     }
-
-    sidebar_entries.clear();
 }
 
 void Framework::draw_about() {

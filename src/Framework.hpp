@@ -57,8 +57,9 @@ private:
     Data* m_data{};
 };
 
-
 struct SidebarEntryInfo {
+    SidebarEntryInfo(std::string_view label, bool advanced) : m_label(label), m_advanced_entry(advanced) {}
+
     std::string m_label{};
     bool m_advanced_entry{false};
 };
@@ -196,14 +197,8 @@ public:
         if (delta < std::chrono::milliseconds(100)) {
             return;
         }
-        int32_t selected_entry_local = m_sidebar_state.selected_entry + 1;
-        if (!m_advanced_view_enabled) {
-            while (sidebar_entries[selected_entry_local].m_advanced_entry) {
-                ++selected_entry_local;
-            }
-        }
-        m_sidebar_state.selected_entry = selected_entry_local;
 
+        ++m_sidebar_state.selected_entry;
         m_last_page_inc_time = now;
     }
 
@@ -213,26 +208,19 @@ public:
         if (delta < std::chrono::milliseconds(100)) {
             return;
         }
-        int32_t selected_entry_local = m_sidebar_state.selected_entry - 1;
-        if (!m_advanced_view_enabled) {
-            while (sidebar_entries[selected_entry_local].m_advanced_entry) {
-                --selected_entry_local;
-            }
-        }
-        m_sidebar_state.selected_entry = selected_entry_local;
 
+        --m_sidebar_state.selected_entry;
         m_last_page_dec_time = now;
+    }
+
+    bool is_advanced_view_enabled() const {
+        return m_advanced_view_enabled;
     }
 
 private:
     void consume_input();
     void update_fonts();
     void invalidate_device_objects();
-
-public:
-    bool is_advanced_view_enabled() {
-        return m_advanced_view_enabled;
-    }
 
 private:
     void draw_ui();
@@ -273,7 +261,6 @@ private:
     bool m_cursor_state_changed{true};
     bool m_ui_option_transparent{true};
     bool m_ui_passthrough{false};
-    std::vector<SidebarEntryInfo> sidebar_entries{};
     
     ImVec2 m_last_window_pos{};
     ImVec2 m_last_window_size{};
@@ -339,6 +326,8 @@ private:
     struct {
         int32_t selected_entry{0};
         bool initialized{false};
+
+        std::vector<SidebarEntryInfo> entries{};
     } m_sidebar_state{};
 
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
