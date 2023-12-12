@@ -37,6 +37,18 @@ public:
         return m_always_show_cursor->value();
     }
 
+    bool is_advanced_mode() const {
+        return m_advanced_mode->value();
+    }
+
+    void toggle_advanced_mode() {
+        m_advanced_mode->toggle();
+    }
+
+    auto& get_advanced_mode() {
+        return m_advanced_mode;
+    }
+
     int32_t get_font_size() {
         return m_font_size->value();
     }
@@ -47,6 +59,7 @@ private:
     ModToggle::Ptr m_remember_menu_state{ ModToggle::create(generate_name("RememberMenuState"), false) };
     ModToggle::Ptr m_enable_l3_r3_toggle{ ModToggle::create(generate_name("EnableL3R3Toggle"), true) };
     ModToggle::Ptr m_always_show_cursor{ ModToggle::create(generate_name("AlwaysShowCursor"), false) };
+    ModToggle::Ptr m_advanced_mode{ ModToggle::create(generate_name("AdvancedMode"), false) };
     ModKey::Ptr m_show_cursor_key{ ModKey::create(generate_name("ShowCursorKey")) };
     ModInt32::Ptr m_font_size{ModInt32::create(generate_name("FontSize"), 16)};
 
@@ -56,6 +69,7 @@ private:
         *m_menu_open,
         *m_remember_menu_state,
         *m_enable_l3_r3_toggle,
+        *m_advanced_mode,
         *m_always_show_cursor,
         *m_font_size,
     };

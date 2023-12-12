@@ -1151,18 +1151,23 @@ void Framework::draw_ui() {
     ImGui::Checkbox("Transparency", &m_ui_option_transparent);
     ImGui::SameLine();
     ImGui::Text("(?)");
-    if (ImGui::IsItemHovered())
+    if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Makes the UI transparent when not focused.");
+    }
     ImGui::Checkbox("Input Passthrough", &m_ui_passthrough);
     ImGui::SameLine();
     ImGui::Text("(?)");
-    if (ImGui::IsItemHovered())
+    if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Allows mouse and keyboard inputs to register to the game while the UI is focused.");
-    ImGui::Checkbox("Show Advanced Options", &m_advanced_view_enabled);
+    }
+
+    FrameworkConfig::get()->get_advanced_mode()->draw("Show Advanced Options");
+
     ImGui::SameLine();
     ImGui::Text("(?)");
-    if (ImGui::IsItemHovered())
+    if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Show additional options for greater control over various settings.");
+    }
 
     if (m_mods_fully_initialized) {
         if (ImGui::Button("Reset to Default Settings")) {
@@ -1220,8 +1225,10 @@ void Framework::draw_ui() {
 
             std::vector<Info> mod_sidebar_ranges{};
 
+            const auto is_advanced_mode = is_advanced_view_enabled();
+
             for (auto& mod : m_mods->get_mods()) {
-                if (mod->is_advanced_mod() && !m_advanced_view_enabled) {
+                if (mod->is_advanced_mod() && !is_advanced_mode) {
                     continue;
                 }
 
@@ -1230,7 +1237,7 @@ void Framework::draw_ui() {
                 if (!entries.empty()) {
                     size_t displayed_entries = 0;
                     for (auto& entry : entries) {
-                        if (entry.m_advanced_entry && !m_advanced_view_enabled) {
+                        if (entry.m_advanced_entry && !is_advanced_mode) {
                             continue;
                         }
 
@@ -1248,7 +1255,7 @@ void Framework::draw_ui() {
             }
 
             for (size_t i = 1; i < sidebar_entries.size(); ++i) {
-                if (m_advanced_view_enabled || !sidebar_entries[i].m_advanced_entry) {
+                if (is_advanced_mode || !sidebar_entries[i].m_advanced_entry) {
                     for (const auto& range : mod_sidebar_ranges) {
                         if (i == range.mn) {
                             // Set first entry as default ("Runtime" entry of VR mod)
@@ -1994,4 +2001,8 @@ void Framework::deinit_d3d12() {
 
     ImGui::GetIO().BackendRendererUserData = nullptr;
     m_d3d12 = {};
+}
+
+bool Framework::is_advanced_view_enabled() const {
+    return FrameworkConfig::get()->is_advanced_mode();
 }
