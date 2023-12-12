@@ -10,6 +10,7 @@
 #include <sdk/CVar.hpp>
 #include <sdk/threading/GameThreadWorker.hpp>
 #include <sdk/ConsoleManager.hpp>
+#include <sdk/UGameplayStatics.hpp>
 
 #include "Framework.hpp"
 
@@ -46,6 +47,29 @@ CVarManager::~CVarManager() {
     }*/
 }
 
+void CVarManager::spawn_console() {
+    if (m_native_console_spawned) {
+        return;
+    }
+
+    // Find Engine object and add the Console
+    const auto engine = sdk::UGameEngine::get();
+
+    if (engine != nullptr) {
+        const auto console_class = engine->get_property<sdk::UClass*>(L"ConsoleClass");
+        auto game_viewport = engine->get_property<sdk::UObject*>(L"GameViewport");
+
+        if (console_class != nullptr && game_viewport != nullptr) {
+            const auto console = sdk::UGameplayStatics::get()->spawn_object(console_class, game_viewport);
+
+            if (console != nullptr) {
+                game_viewport->get_property<sdk::UObject*>(L"ViewportConsole") = console;
+                m_native_console_spawned = true;
+            }
+        }
+    }
+}
+
 void CVarManager::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     ZoneScopedN(__FUNCTION__);
 
@@ -73,6 +97,12 @@ void CVarManager::on_draw_ui() {
         ImGui::TextWrapped("Frozen CVars: %i", frozen_cvars);
 
         ImGui::Checkbox("Display Console", &m_wants_display_console);
+        
+        if (!m_native_console_spawned) {
+            if (ImGui::Button("Spawn Native Console")) {
+                spawn_console();
+            }
+        }
 
         if (ImGui::Button("Dump All CVars")) {
             GameThreadWorker::get().enqueue([this]() {

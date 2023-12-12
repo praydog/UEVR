@@ -21,6 +21,7 @@ public:
     void on_config_load(const utility::Config& cfg, bool set_defaults) override;
 
     void dump_commands();
+    void spawn_console();
 
 public:
     class CVar : public std::enable_shared_from_this<CVar> {
@@ -173,6 +174,7 @@ private:
     } m_console;
     
     bool m_wants_display_console{false};
+    bool m_native_console_spawned{false};
 
     static inline std::vector<std::shared_ptr<CVarStandard>> s_default_standard_cvars {
         // Bools
