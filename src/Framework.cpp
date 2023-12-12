@@ -1151,13 +1151,23 @@ void Framework::draw_ui() {
     ImGui::Checkbox("Transparency", &m_ui_option_transparent);
     ImGui::SameLine();
     ImGui::Text("(?)");
-    if (ImGui::IsItemHovered())
+    if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Makes the UI transparent when not focused.");
+    }
     ImGui::Checkbox("Input Passthrough", &m_ui_passthrough);
     ImGui::SameLine();
     ImGui::Text("(?)");
-    if (ImGui::IsItemHovered())
+    if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Allows mouse and keyboard inputs to register to the game while the UI is focused.");
+    }
+
+    FrameworkConfig::get()->get_advanced_mode()->draw("Show Advanced Options");
+
+    ImGui::SameLine();
+    ImGui::Text("(?)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Show additional options for greater control over various settings.");
+    }
 
     if (m_mods_fully_initialized) {
         if (ImGui::Button("Reset to Default Settings")) {
@@ -1180,7 +1190,9 @@ void Framework::draw_ui() {
     ImGui::Columns(1);
 
     // Mods:
-    std::vector<std::string> sidebar_entries{"About"};
+    auto& sidebar_entries = m_sidebar_state.entries;
+    sidebar_entries.clear();
+    sidebar_entries.emplace_back("About", false);
 
     if (ImGui::BeginTable("UEVRTable", 2, ImGuiTableFlags_::ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_::ImGuiTableFlags_BordersOuterV | ImGuiTableFlags_::ImGuiTableFlags_SizingFixedFit)) {
         ImGui::TableSetupColumn("UEVRLeftPaneColumn", ImGuiTableColumnFlags_WidthFixed, 150.0f);
@@ -1213,33 +1225,52 @@ void Framework::draw_ui() {
 
             std::vector<Info> mod_sidebar_ranges{};
 
+            const auto is_advanced_mode = is_advanced_view_enabled();
+
             for (auto& mod : m_mods->get_mods()) {
+                if (mod->is_advanced_mod() && !is_advanced_mode) {
+                    continue;
+                }
+
                 auto entries = mod->get_sidebar_entries();
 
                 if (!entries.empty()) {
-                    mod_sidebar_ranges.push_back(Info{sidebar_entries.size(), sidebar_entries.size() + entries.size(), mod, true});
-                    sidebar_entries.insert(sidebar_entries.end(), entries.begin(), entries.end());
+                    size_t displayed_entries = 0;
+                    for (auto& entry : entries) {
+                        if (entry.m_advanced_entry && !is_advanced_mode) {
+                            continue;
+                        }
+
+                        sidebar_entries.emplace_back(entry.m_label.c_str(), entry.m_advanced_entry);
+                        ++displayed_entries;
+                    }
+
+                    if (displayed_entries > 0) {
+                        mod_sidebar_ranges.push_back(Info{sidebar_entries.size() - displayed_entries, sidebar_entries.size(), mod, true});
+                    }
                 } else {
                     mod_sidebar_ranges.push_back(Info{sidebar_entries.size(), sidebar_entries.size() + 1, mod, false});
-                    sidebar_entries.push_back(mod->get_name().data());
+                    sidebar_entries.emplace_back(mod->get_name().data(), mod->is_advanced_mod());
                 }
             }
 
             for (size_t i = 1; i < sidebar_entries.size(); ++i) {
-                for (const auto& range : mod_sidebar_ranges) {
-                    if (i == range.mn) {
-                        // Set first entry as default ("Runtime" entry of VR mod)
-                        if (range.has_sidebar_entries && !m_sidebar_state.initialized) {
-                            m_sidebar_state.selected_entry = i;
-                            m_sidebar_state.initialized = true;
-                            ImGui::SetWindowFocus("UEVRRightPane");
+                if (is_advanced_mode || !sidebar_entries[i].m_advanced_entry) {
+                    for (const auto& range : mod_sidebar_ranges) {
+                        if (i == range.mn) {
+                            // Set first entry as default ("Runtime" entry of VR mod)
+                            if (range.has_sidebar_entries && !m_sidebar_state.initialized) {
+                                m_sidebar_state.selected_entry = i;
+                                m_sidebar_state.initialized = true;
+                                ImGui::SetWindowFocus("UEVRRightPane");
+                            }
+
+                            ImGui::Text(range.mod->get_name().data());
                         }
-
-                        ImGui::Text(range.mod->get_name().data());
                     }
-                }
 
-                dcs(sidebar_entries[i].c_str(), i);
+                    dcs(sidebar_entries[i].m_label.c_str(), i);
+                }
             }
 
             bool wants_focus_right = false;
@@ -1276,7 +1307,7 @@ void Framework::draw_ui() {
                     for (const auto& range : mod_sidebar_ranges) {
                         if (m_sidebar_state.selected_entry >= range.mn && m_sidebar_state.selected_entry < range.mx) {
                             if (range.has_sidebar_entries) {
-                                range.mod->on_draw_sidebar_entry(sidebar_entries[m_sidebar_state.selected_entry]);
+                                range.mod->on_draw_sidebar_entry(sidebar_entries[m_sidebar_state.selected_entry].m_label);
                             } else {
                                 range.mod->on_draw_ui();
                             }
@@ -1970,4 +2001,8 @@ void Framework::deinit_d3d12() {
 
     ImGui::GetIO().BackendRendererUserData = nullptr;
     m_d3d12 = {};
+}
+
+bool Framework::is_advanced_view_enabled() const {
+    return FrameworkConfig::get()->is_advanced_mode();
 }

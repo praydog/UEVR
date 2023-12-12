@@ -57,6 +57,13 @@ private:
     Data* m_data{};
 };
 
+struct SidebarEntryInfo {
+    SidebarEntryInfo(std::string_view label, bool advanced) : m_label(label), m_advanced_entry(advanced) {}
+
+    std::string m_label{};
+    bool m_advanced_entry{false};
+};
+
 // Global facilitator
 class Framework {
 private:
@@ -190,8 +197,8 @@ public:
         if (delta < std::chrono::milliseconds(100)) {
             return;
         }
-        ++m_sidebar_state.selected_entry;
 
+        ++m_sidebar_state.selected_entry;
         m_last_page_inc_time = now;
     }
 
@@ -201,16 +208,19 @@ public:
         if (delta < std::chrono::milliseconds(100)) {
             return;
         }
-        --m_sidebar_state.selected_entry;
 
+        --m_sidebar_state.selected_entry;
         m_last_page_dec_time = now;
     }
+
+    bool is_advanced_view_enabled() const;
 
 private:
     void consume_input();
     void update_fonts();
     void invalidate_device_objects();
 
+private:
     void draw_ui();
     void draw_about();
 
@@ -313,6 +323,8 @@ private:
     struct {
         int32_t selected_entry{0};
         bool initialized{false};
+
+        std::vector<SidebarEntryInfo> entries{};
     } m_sidebar_state{};
 
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
