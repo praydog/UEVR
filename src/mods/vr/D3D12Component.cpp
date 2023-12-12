@@ -1463,7 +1463,7 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
 void D3D12Component::OpenXR::destroy_swapchains() {
     std::scoped_lock _{this->mtx};
 
-	if (this->contexts.empty()) {
+    if (this->contexts.empty()) {
         return;
     }
     
