@@ -4134,6 +4134,23 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
                 }
             }
         }
+
+        // Process snapturn    
+        if (vr->m_snapturn_on_frame) {
+            const auto world = sdk::UEngine::get()->get_world();
+            if (const auto controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0); controller != nullptr) {
+                auto controller_rot = controller->get_control_rotation();
+                auto turn_degrees = vr->get_snapturn_angle();
+                
+                if (vr->m_snapturn_left) {
+                    turn_degrees = -turn_degrees;
+                    vr->m_snapturn_left = false;
+                }
+                controller_rot.y += turn_degrees;
+                controller->set_control_rotation(controller_rot);
+            }
+            vr->m_snapturn_on_frame = false;
+        }
     }
 
     if (!is_full_pass) {

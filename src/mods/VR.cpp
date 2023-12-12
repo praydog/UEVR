@@ -886,6 +886,54 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
             }
         }
     }
+
+    // Determine if snapturn should be run on frame
+    if (m_snapturn->value()) {
+        DPadMethod dpad_method = get_dpad_method();
+        const auto snapturn_deadzone = get_snapturn_js_deadzone();
+        float stick_axis{};
+            
+        if (!m_was_snapturn_run_on_input) {
+            if (dpad_method == RIGHT_JOYSTICK) {
+                stick_axis = get_left_stick_axis().x;
+                if (abs(stick_axis) >= snapturn_deadzone) {
+                    if (stick_axis < 0) {
+                        m_snapturn_left = true;
+                    }
+                    m_snapturn_on_frame = true;
+                    m_was_snapturn_run_on_input = true;
+                }
+            }
+            else {
+                stick_axis = get_right_stick_axis().x;
+                if (abs(stick_axis) >= snapturn_deadzone && !(dpad_method == DPadMethod::LEFT_TOUCH && is_action_active_any_joystick(m_action_thumbrest_touch_left))) {
+                    if (stick_axis < 0) {
+                        m_snapturn_left = true;
+                    }
+                    m_snapturn_on_frame = true;
+                    m_was_snapturn_run_on_input = true;
+                }
+            }
+        }
+        else {
+            if (dpad_method == RIGHT_JOYSTICK) {
+                if (abs(get_left_stick_axis().x) < snapturn_deadzone) {
+                    m_was_snapturn_run_on_input = false;
+                } else {
+                    state->Gamepad.sThumbLY = 0;
+                    state->Gamepad.sThumbLX = 0;
+                }
+            }
+            else {
+                if (abs(get_right_stick_axis().x) < snapturn_deadzone) {
+                    m_was_snapturn_run_on_input = false;
+                } else {
+                    state->Gamepad.sThumbRY = 0;
+                    state->Gamepad.sThumbRX = 0;
+                }
+            }
+        }
+    }
     
     // Do it again after all the VR buttons have been spoofed
     update_imgui_state_from_xinput_state(*state, true);
@@ -2057,6 +2105,17 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
             m_aim_interp->draw("Smoothing");
             m_aim_speed->draw("Speed");
 
+            ImGui::TreePop();
+        }
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Snap Turn")) {
+            m_snapturn->draw("Enabled");
+            ImGui::TextWrapped("Set Snap Turn Rotation Angle in Degrees.");
+            m_snapturn_angle->draw("Angle");
+            ImGui::TextWrapped("Set Snap Turn Joystick Deadzone.");
+            m_snapturn_joystick_deadzone->draw("Deadzone");
+        
             ImGui::TreePop();
         }
 
