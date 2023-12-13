@@ -900,7 +900,7 @@ set_target_properties(ue4poc PROPERTIES
 	OUTPUT_NAME
 		UnrealVRBackend
 	LINK_FLAGS
-		"/DELAYLOAD:openvr_api.dll /DELAYLOAD:openxr_loader.dll"
+		"/DELAYLOAD:openvr_api.dll"
 	RUNTIME_OUTPUT_DIRECTORY_RELEASE
 		"${CMAKE_BINARY_DIR}/bin/${CMKR_TARGET}"
 	RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO
