@@ -430,18 +430,19 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
     std::unique_lock __{ this->eyes_mtx };
     std::unique_lock ___{ this->pose_mtx };
 
-    for (auto i = 0; i < 2; ++i) {
-        const auto& pose = this->views[i].pose;
-        const auto& fov = this->views[i].fov;
+    for (auto i = 0; i < 4; ++i) {
+        const auto& pose = this->views[i % 2].pose;
+        const auto& fov = this->views[i % 2].fov;
 
         // Update projection matrix
         //XrMatrix4x4f_CreateProjection((XrMatrix4x4f*)&this->projections[i], GRAPHICS_D3D, tan(fov.angleLeft), tan(fov.angleRight), tan(fov.angleUp), tan(fov.angleDown), nearz, farz);
 
         auto get_mat = [&](int eye) {
-            const auto top = tan(fov.angleUp);
-            const auto bottom = tan(fov.angleDown);
-            const auto left = tan(fov.angleLeft);
-            const auto right = tan(fov.angleRight);
+            const auto divisor = eye >= 2 ? 2.0f : 1.0f;
+            const auto top = tan(fov.angleUp / divisor);
+            const auto bottom = tan(fov.angleDown / divisor);
+            const auto left = tan(fov.angleLeft / divisor);
+            const auto right = tan(fov.angleRight / divisor);
 
             float sum_rl = (right + left);
             float sum_tb = (top + bottom);

@@ -2549,6 +2549,10 @@ Matrix4x4f VR::get_projection_matrix(VRRuntime::Eye eye, bool flip) {
 
     std::shared_lock _{get_runtime()->eyes_mtx};
 
+    if ((uint32_t)eye >= 2) {
+        return get_runtime()->projections[(uint32_t)eye];
+    }
+
     if ((eye == VRRuntime::Eye::LEFT && !flip) || (eye == VRRuntime::Eye::RIGHT && flip)) {
         return get_runtime()->projections[(uint32_t)VRRuntime::Eye::LEFT];
     }

@@ -177,7 +177,7 @@ struct VRRuntime {
 
     std::optional<std::string> error{};
 
-    std::array<Matrix4x4f, 2> projections{};
+    std::array<Matrix4x4f, 4> projections{};
     std::array<Matrix4x4f, 2> eyes{};
     std::array<Matrix4x4f, 2> aim_matrices{};
     std::array<Matrix4x4f, 2> grip_matrices{};

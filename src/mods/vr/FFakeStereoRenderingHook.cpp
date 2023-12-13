@@ -3845,12 +3845,14 @@ void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, in
         return;
     }
 
+    static bool ever_started_from_zero = false;
     static bool index_starts_from_one = true;
 
-    if (index == 2) {
+    if (index == 2 && !ever_started_from_zero) {
         index_starts_from_one = true;
     } else if (index == 0) {
         index_starts_from_one = false;
+        ever_started_from_zero = true;
     }
 
     // The purpose of this is to prevent the game from crashing in IDirect3D12CommandList::Close
@@ -3881,11 +3883,16 @@ void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, in
         *h = VR::get()->get_hmd_height();
     }
 
+    const auto true_index = index_starts_from_one ? ((index + 1) % 4) : (index % 4);
 
-    *w = *w / 2;
-
-    const auto true_index = index_starts_from_one ? ((index + 1) % 2) : (index % 2);
-    *x += *w * true_index;
+    if (true_index < 2) {
+        *w = *w / 8;
+        *x += *w * true_index;
+    } else {
+        *x += ((*w / 8) * 2);
+        *w = (*w - *x) / 2;
+        *x += *w * true_index;
+    }
 }
 
 __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
@@ -3932,7 +3939,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
     const auto is_full_pass = view_index == 0 && !index_was_ever_two && !index_was_ever_negative;
 
-    auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
+    auto true_index = index_starts_from_one ? ((view_index + 1) % 4) : (view_index % 4);
     const auto has_double_precision = g_hook->m_has_double_precision;
     const auto rot_d = (Rotator<double>*)view_rotation;
 
@@ -4234,6 +4241,8 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
         }
     }
 
+    auto true_index = index_starts_from_one ? ((view_index + 1) % 4) : (view_index % 4);
+
     if (VR::get()->is_using_2d_screen()) {
         float fov = 90.0f; // todo, get from FMinimalViewInfo
 
@@ -4266,8 +4275,6 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
     // SPDLOG_INFO("NearZ: {}", old_znear);
 
     if (out != nullptr) {
-        auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
-    
         if (vr->is_using_afr()) {
             true_index = g_frame_count % 2;
         }
@@ -4449,7 +4456,7 @@ uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoR
     auto& vr = VR::get();
 
     if (g_hook->m_sceneview_data.inside_post_init_properties) {
-        return 2;
+        return 4;
     }
 
     if (!is_stereo_enabled || (vr->is_using_afr() && !vr->is_splitscreen_compatibility_enabled())) {
@@ -4460,13 +4467,13 @@ uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoR
             !!g_hook->m_sceneview_data.constructor_hook && g_hook->m_has_view_extensions_installed)
         {
             // Only works correctly if view extensions are installed, so we can reset the view count to 1 without crashing
-            return 2;
+            return 4;
         }
 
         return 1;
     }
 
-    return 2;
+    return 4;
 }
 
 // Only really necessary for 5.0.3 because for some reason negative view index gets passed into it
