@@ -73,6 +73,10 @@ private:
     void hook();
     void add_new_object(sdk::UObjectBase* object);
 
+    void tick_attachments(
+        Rotator<float>* view_rotation, const float world_to_meters, Vector3f* view_location, bool is_double
+    );
+
     void ui_handle_object(sdk::UObject* object);
     void ui_handle_properties(void* object, sdk::UStruct* definition);
     void ui_handle_array_property(void* object, sdk::FArrayProperty* definition);
