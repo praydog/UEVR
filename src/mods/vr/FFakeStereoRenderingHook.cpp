@@ -519,14 +519,14 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     }
 
     const auto stereo_projection_matrix_index = *stereo_view_offset_index + 1;
-    const auto is_4_18_or_lower = stereo_view_offset_index <= 6;
+    const auto is_4_18_or_lower = *stereo_view_offset_index <= 6;
 
     const auto& stereo_view_offset_func = ((uintptr_t*)vtable)[*stereo_view_offset_index];
 
     auto render_texture_render_thread_func = utility::find_virtual_function_from_string_ref(game, L"RenderTexture_RenderThread");
 
     // Seems more robust than simply just checking the vtable index.
-    m_uses_old_rendertarget_manager = stereo_view_offset_index <= 11 && !render_texture_render_thread_func;
+    m_uses_old_rendertarget_manager = *stereo_view_offset_index <= 11 && !render_texture_render_thread_func;
 
     if (!render_texture_render_thread_func) {
         // Fallback scan to checking for the first non-default virtual function (<= 4.18)
