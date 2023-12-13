@@ -226,7 +226,25 @@ void UObjectHook::add_new_object(sdk::UObjectBase* object) {
 #endif
 }
 
+void UObjectHook::on_config_load(const utility::Config& cfg, bool set_defaults) {
+    ZoneScopedN(__FUNCTION__);
+
+    for (IModValue& option : m_options) {
+        option.config_load(cfg, set_defaults);
+    }
+}
+
+void UObjectHook::on_config_save(utility::Config& cfg) {
+    ZoneScopedN(__FUNCTION__);
+
+    for (IModValue& option : m_options) {
+        option.config_save(cfg);
+    }
+}
+
 void UObjectHook::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
+    m_last_delta_time = delta;
+
     if (m_wants_activate) {
         hook();
     }
@@ -383,15 +401,45 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
     if (!vr->is_using_controllers()) {
         return;
     }
-    
-    Vector3f right_hand_position = vr->get_grip_position(vr->get_right_controller_index());
+
+    glm::vec3 right_hand_position = vr->get_grip_position(vr->get_right_controller_index());
     glm::quat right_hand_rotation = vr->get_aim_rotation(vr->get_right_controller_index());
+
+    const float lerp_speed = m_attach_lerp_speed->value() * m_last_delta_time;
+
+    if (m_attach_lerp_enabled->value()) {
+        auto spherical_distance_right = glm::dot(right_hand_rotation, m_last_right_aim_rotation);
+
+        if (spherical_distance_right < 0.0f) {
+            spherical_distance_right = -spherical_distance_right;
+        }
+
+        const auto lenr = glm::max(1.0f, glm::length(right_hand_position - m_last_right_grip_location));
+        m_last_right_grip_location = glm::lerp(m_last_right_grip_location, right_hand_position, lerp_speed * lenr);
+        m_last_right_aim_rotation = glm::slerp(m_last_right_aim_rotation, right_hand_rotation, lerp_speed * spherical_distance_right);
+        right_hand_position = m_last_right_grip_location;
+        right_hand_rotation = m_last_right_aim_rotation;
+    }
 
     const auto original_right_hand_rotation = right_hand_rotation;
     const auto original_right_hand_position = right_hand_position - hmd_origin;
 
-    Vector3f left_hand_position = vr->get_grip_position(vr->get_left_controller_index());
+    glm::vec3 left_hand_position = vr->get_grip_position(vr->get_left_controller_index());
     glm::quat left_hand_rotation = vr->get_aim_rotation(vr->get_left_controller_index());
+
+    if (m_attach_lerp_enabled->value()) {
+        auto spherical_distance_left = glm::dot(left_hand_rotation, m_last_left_aim_rotation);
+
+        if (spherical_distance_left < 0.0f) {
+            spherical_distance_left = -spherical_distance_left;
+        }
+
+        const auto lenl = glm::max(1.0f, glm::length(left_hand_position - m_last_left_grip_location));
+        m_last_left_grip_location = glm::lerp(m_last_left_grip_location, left_hand_position, lerp_speed * lenl);
+        m_last_left_aim_rotation = glm::slerp(m_last_left_aim_rotation, left_hand_rotation, lerp_speed * spherical_distance_left);
+        left_hand_position = m_last_left_grip_location;
+        left_hand_rotation = m_last_left_aim_rotation;
+    }
 
     right_hand_position = glm::vec3{rotation_offset * (right_hand_position - hmd_origin)};
     left_hand_position = glm::vec3{rotation_offset * (left_hand_position - hmd_origin)};
@@ -563,7 +611,6 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
 
         const auto adjusted_rotation = hand_rotation * glm::inverse(state.rotation_offset);
         const auto adjusted_euler = glm::degrees(utility::math::euler_angles_from_steamvr(adjusted_rotation));
-
         const auto adjusted_location = hand_position + (quat_converter * (adjusted_rotation * state.location_offset));
 
         if (state.adjusting) {
@@ -1441,9 +1488,25 @@ void UObjectHook::on_draw_ui() {
             }
         }
     }
+}
 
+void UObjectHook::on_draw_sidebar_entry(std::string_view in_entry) {
+    on_draw_ui();
     ImGui::Separator();
 
+    if (in_entry == "Main") {
+        draw_main();
+    } else if (in_entry == "Config") {
+        draw_config();
+    }
+}
+
+void UObjectHook::draw_config() {
+    m_attach_lerp_enabled->draw("Enable Attach Lerp");
+    m_attach_lerp_speed->draw("Attach Lerp Speed");
+}
+
+void UObjectHook::draw_main() {
     if (!m_motion_controller_attached_components.empty()) {
         const auto made = ImGui::TreeNode("Attached Components");
 

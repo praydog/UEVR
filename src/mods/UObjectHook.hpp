@@ -49,8 +49,22 @@ protected:
     std::string_view get_name() const override { return "UObjectHook"; };
     bool is_advanced_mod() const override { return true; }
 
+    std::vector<SidebarEntryInfo> get_sidebar_entries() override { 
+        return {
+            { "Main", true },
+            { "Config", false }
+        };
+    }
+
+    void on_config_load(const utility::Config& cfg, bool set_defaults) override;
+    void on_config_save(utility::Config& cfg) override;
+
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
+    void on_draw_sidebar_entry(std::string_view in_entry) override;
     void on_draw_ui() override;
+
+    void draw_config();
+    void draw_main();
 
     void on_pre_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
                                              const float world_to_meters, Vector3f* view_location, bool is_double) override;
@@ -114,6 +128,12 @@ private:
     bool m_hooked{false};
     bool m_fully_hooked{false};
     bool m_wants_activate{false};
+    float m_last_delta_time{1000.0f / 60.0f};
+
+    glm::vec3 m_last_left_grip_location{};
+    glm::vec3 m_last_right_grip_location{};
+    glm::quat m_last_left_aim_rotation{glm::identity<glm::quat>()};
+    glm::quat m_last_right_aim_rotation{glm::identity<glm::quat>()};
 
     mutable std::shared_mutex m_mutex{};
 
@@ -357,4 +377,13 @@ private:
     }
 
     std::vector<std::shared_ptr<PersistentProperties>> deserialize_all_persistent_properties() const;
+
+private:
+    ModToggle::Ptr m_attach_lerp_enabled{ModToggle::create(generate_name("AttachLerpEnabled"), true)};
+    ModSlider::Ptr m_attach_lerp_speed{ModSlider::create(generate_name("AttachLerpSpeed"), 0.01f, 30.0f, 15.0f)};
+
+    ValueList m_options{
+        *m_attach_lerp_enabled,
+        *m_attach_lerp_speed
+    };
 };
