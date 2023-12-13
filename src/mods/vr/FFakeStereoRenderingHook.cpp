@@ -3887,11 +3887,12 @@ void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, in
 
     if (true_index < 2) {
         *w = *w / 8;
+        *h = *h / 8;
         *x += *w * true_index;
     } else {
         *x += ((*w / 8) * 2);
         *w = (*w - *x) / 2;
-        *x += *w * true_index;
+        *x += *w * (true_index % 2);
     }
 }
 
