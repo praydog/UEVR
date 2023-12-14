@@ -923,7 +923,7 @@ void UObjectHook::destroy_overlapper() {
     });
 }
 
-std::filesystem::path UObjectHook::get_persistent_dir() const {
+std::filesystem::path UObjectHook::get_persistent_dir() {
     const auto base_dir = Framework::get_persistent_dir();
     const auto uobjecthook_dir = base_dir / "uobjecthook";
 
@@ -1230,6 +1230,7 @@ void UObjectHook::update_persistent_states() {
 
     // Persistent properties
     if (!m_persistent_properties.empty()) {
+        const auto scene_comp_t = sdk::USceneComponent::static_class();
         for (const auto& prop_base : m_persistent_properties) {
             if (prop_base == nullptr) {
                 continue;
@@ -1239,6 +1240,10 @@ void UObjectHook::update_persistent_states() {
 
             if (obj == nullptr) {
                 continue;
+            }
+
+            if (prop_base->hide && obj->is_a(scene_comp_t)) {
+                ((sdk::USceneComponent*)obj)->set_visibility(false, false);
             }
 
             for (const auto& prop_state : prop_base->properties) {
@@ -2133,12 +2138,60 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
 
     if (ImGui::Checkbox("Visible", &visible)) {
         comp->set_visibility(visible, false);
+
+        if (visible) {
+            // Check if we have a persistent property for this component
+            std::shared_ptr<PersistentProperties> props{};
+
+            for (const auto& existing_prop : m_persistent_properties) {
+                if (existing_prop->path.resolve() == comp) {
+                    props = existing_prop;
+                    break;
+                }
+            }
+
+            if (props != nullptr && props->hide) {
+                props->hide = false;
+                props->save_to_file();
+            }
+        }
     }
 
     ImGui::SameLine();
 
     if (ImGui::Button("Save Visibility State")) {
+        std::shared_ptr<PersistentProperties> props{};
 
+        // Find existing one if possible
+        for (const auto& existing_prop : m_persistent_properties) {
+            if (existing_prop->path.resolve() == comp) {
+                props = existing_prop;
+                break;
+            }
+        }
+
+        // Add new one if necessary
+        if (props == nullptr) {
+            if (m_path.has_valid_base()) {
+                props = std::make_shared<PersistentProperties>();
+                props->path = m_path;
+            } else if (auto path = try_get_path(comp); path.has_value()) {
+                props = std::make_shared<PersistentProperties>();
+                props->path = path.value();
+            } else {
+                SPDLOG_ERROR("[UObjectHook] Can't save visibility state, did not start from a valid base or none of the allowed bases can reach this component");
+                return;
+            }
+            
+            if (props != nullptr) {
+                m_persistent_properties.push_back(props);
+            }
+        }
+
+        if (props != nullptr) {
+            props->hide = !visible;
+            props->save_to_file();
+        }
     }
 }
 
@@ -2673,13 +2726,7 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                         return;
                     }
 
-                    if (std::filesystem::exists(wanted_path.parent_path())) {
-                        std::ofstream file{wanted_path};
-                        props->path_to_json = wanted_path;
-                        const auto j = props->to_json();
-                        file << j.dump(4);
-                        file.close();
-                    }
+                    props->save_to_file(wanted_path);
                 } catch (const std::exception& e) {
                     SPDLOG_ERROR("[UObjectHook] Failed to save persistent properties: {}", e.what());
                 } catch (...) {
@@ -2940,12 +2987,46 @@ void* UObjectHook::destructor(sdk::UObjectBase* object, void* rdx, void* r8, voi
     return result;
 }
 
+void UObjectHook::PersistentProperties::save_to_file(std::optional<std::filesystem::path> path) try {
+    if (!path.has_value()) {
+        path = path_to_json;
+    }
+
+    if (!path.has_value()) {
+        std::string concat_path{};
+        for (const auto& p : this->path.path()) {
+            concat_path += p;
+        }
+
+        const auto hash_str = std::to_string(utility::hash(concat_path)) + "_props.json";
+        path = UObjectHook::get_persistent_dir() / hash_str;
+    }
+
+    std::filesystem::create_directories(path->parent_path());
+
+    if (!std::filesystem::exists(path->parent_path())) {
+        SPDLOG_ERROR("[UObjectHook] Failed to create directory {}", path->parent_path().string());
+        return;
+    }
+
+    this->path_to_json = *path;
+
+    nlohmann::json j = to_json();
+    std::ofstream file(*path);
+    file << j.dump(4);
+} catch (const std::exception& e) {
+    SPDLOG_ERROR("[UObjectHook] Failed to save persistent properties: {}", e.what());
+} catch (...) {
+    SPDLOG_ERROR("[UObjectHook] Failed to save persistent properties");
+}
+
 nlohmann::json UObjectHook::PersistentProperties::to_json() const {
     nlohmann::json json{};
 
     json["path"] = path.path();
     json["properties"] = nlohmann::json::array();
     json["type"] = "properties";
+    json["hide"] = hide;
 
     for (const auto& prop : properties) {
         json["properties"].push_back({
@@ -2989,6 +3070,12 @@ std::shared_ptr<UObjectHook::PersistentProperties> UObjectHook::PersistentProper
         state->name = utility::widen(prop["name"].get<std::string>());
         state->data.u64 = prop["data"].get<uint64_t>();
         result->properties.push_back(state);
+    }
+
+    if (json.contains("hide") && json["hide"].is_boolean()) {
+        result->hide = json["hide"].get<bool>();
+    } else {
+        result->hide = false;
     }
 
     return result;

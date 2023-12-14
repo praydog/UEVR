@@ -112,7 +112,7 @@ private:
         "Camera Manager"
     };
 
-    std::filesystem::path get_persistent_dir() const;
+    static std::filesystem::path get_persistent_dir();
     nlohmann::json serialize_mc_state(const std::vector<std::string>& path, const std::shared_ptr<MotionControllerState>& state);
     nlohmann::json serialize_camera(const std::vector<std::string>& path);
     void save_camera_state(const std::vector<std::string>& path);
@@ -340,6 +340,7 @@ private:
     };
 
     struct PersistentProperties : JsonAssociation {
+        void save_to_file(std::optional<std::filesystem::path> path = std::nullopt);
         nlohmann::json to_json() const;
         static std::shared_ptr<PersistentProperties> from_json(std::filesystem::path json_path);
         static std::shared_ptr<PersistentProperties> from_json(const nlohmann::json& j);
@@ -358,6 +359,7 @@ private:
         };
 
         std::vector<std::shared_ptr<PropertyState>> properties{};
+        bool hide{false};
     };
 
     glm::vec3 m_last_camera_location{};
