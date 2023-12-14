@@ -415,7 +415,7 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
         }
 
         const auto lenr = glm::max(1.0f, glm::length(right_hand_position - m_last_right_grip_location));
-        m_last_right_grip_location = glm::lerp(m_last_right_grip_location, right_hand_position, lerp_speed * lenr);
+        m_last_right_grip_location = glm::lerp(m_last_right_grip_location, right_hand_position, glm::min(1.0f, lerp_speed * lenr));
         m_last_right_aim_rotation = glm::slerp(m_last_right_aim_rotation, right_hand_rotation, lerp_speed * spherical_distance_right);
         right_hand_position = m_last_right_grip_location;
         right_hand_rotation = m_last_right_aim_rotation;
@@ -435,7 +435,7 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
         }
 
         const auto lenl = glm::max(1.0f, glm::length(left_hand_position - m_last_left_grip_location));
-        m_last_left_grip_location = glm::lerp(m_last_left_grip_location, left_hand_position, lerp_speed * lenl);
+        m_last_left_grip_location = glm::lerp(m_last_left_grip_location, left_hand_position, glm::min(1.0f, lerp_speed * lenl));
         m_last_left_aim_rotation = glm::slerp(m_last_left_aim_rotation, left_hand_rotation, lerp_speed * spherical_distance_left);
         left_hand_position = m_last_left_grip_location;
         left_hand_rotation = m_last_left_aim_rotation;
