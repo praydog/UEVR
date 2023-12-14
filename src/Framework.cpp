@@ -1179,10 +1179,10 @@ void Framework::draw_ui() {
     ImGui::NextColumn();
 
     ImGui::BeginGroup();
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Keyboard Menu Key: Insert");
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Gamepad L3 + R3: Toggle Menu");
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Gamepad RT: Shortcuts");
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Gamepad LB/RB: Change Sidebar Page");
+    ImGui::Text("Keyboard Menu Key: Insert");
+    ImGui::Text("Gamepad L3 + R3: Toggle Menu");
+    ImGui::Text("Gamepad RT: Shortcuts");
+    ImGui::Text("Gamepad LB/RB: Change Sidebar Page");
 
     ImGui::EndGroup();
     ImGui::EndGroup();
