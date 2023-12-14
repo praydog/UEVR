@@ -104,6 +104,8 @@ private:
     void spawn_overlapper(uint32_t hand = 0);
     void destroy_overlapper();
 
+    std::optional<StatePath> try_get_path(sdk::UObject* target) const;
+
     static inline const std::vector<std::string> s_allowed_bases {
         "Acknowledged Pawn",
         "Player Controller",

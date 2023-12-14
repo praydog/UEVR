@@ -2057,93 +2057,11 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
                     save_state_logic(m_path.path());
                 }
             } else {
-                const auto component_name = utility::narrow(comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string());
-
-                // Check if any of our bases can reach this component through their components list.
-                bool found_any = false;
-                for (const auto& allowed_base : s_allowed_bases) {
-                    const auto possible_path = std::vector<std::string>{allowed_base, "Components", component_name};
-                    const auto path = StatePath{possible_path};
-                    const auto resolved = path.resolve();
-
-                    if (resolved == comp) {
-                        if (ImGui::Button("Save state")) {
-                            save_state_logic(path.path());
-                        }
-                        
-                        found_any = true;
-                        break;
+                if (auto path = try_get_path(comp); path.has_value()) {
+                    if (ImGui::Button("Save state")) {
+                        save_state_logic(path->path());
                     }
-                }
-
-                // Try to look through the objects' properties instead now.
-                if (!found_any) {
-                    for (const auto& allowed_base : s_allowed_bases) {
-                        const auto base_obj = StatePath{{allowed_base}}.resolve_base_object();
-
-                        if (base_obj == nullptr) {
-                            continue;
-                        }
-
-                        for (auto field = base_obj->get_class()->get_child_properties(); field != nullptr; field = field->get_next()) {
-                            if (field->get_class()->get_name().to_string() != L"ObjectProperty") {
-                                continue;
-                            }
-
-                            const auto prop = (sdk::FObjectProperty*)field;
-                            const auto obj_ptr = prop->get_data<sdk::UObject*>(base_obj);
-
-                            if (obj_ptr == nullptr || *obj_ptr == nullptr) {
-                                continue;
-                            }
-
-                            const auto obj = *obj_ptr;
-
-                            if (obj == comp) {
-                                const auto possible_path = std::vector<std::string>{allowed_base, "Properties", utility::narrow(field->get_field_name().to_string())};
-                                const auto path = StatePath{possible_path};
-                                const auto resolved = path.resolve();
-
-                                if (resolved == comp) {
-                                    if (ImGui::Button("Save state")) {
-                                        save_state_logic(path.path());
-                                    }
-                                    
-                                    found_any = true;
-                                    break;
-                                }
-
-                                break;
-                            }
-
-                            // Traverse that object's components now and see if we can find it there.
-                            if (obj->get_class()->is_a(sdk::AActor::static_class())) {
-                                const auto actor = (sdk::AActor*)*obj_ptr;
-
-                                for (auto actor_comp : actor->get_all_components()) {
-                                    if (actor_comp != comp) {
-                                        continue;
-                                    }
-
-                                    const auto possible_path = std::vector<std::string>{allowed_base, "Properties", utility::narrow(field->get_field_name().to_string()), "Components", component_name};
-                                    const auto path = StatePath{possible_path};
-                                    const auto resolved = path.resolve();
-
-                                    if (resolved == comp) {
-                                        if (ImGui::Button("Save state")) {
-                                            save_state_logic(path.path());
-                                        }
-                                        
-                                        found_any = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (!found_any) {
+                } else {
                     ImGui::Text("Can't save, did not start from a valid base or none of the allowed bases can reach this component");
                 }
             }
@@ -2187,8 +2105,20 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
 
             ImGui::SameLine();
 
-            if (ImGui::Button("Save state")) {
-                save_camera_state(m_path.path());
+            if (m_persistent_camera_state != nullptr && m_persistent_camera_state->path.resolve() == comp) {
+                if (ImGui::Button("Save state")) {
+                    save_camera_state(m_persistent_camera_state->path.path());
+                }
+            } else if (m_path.has_valid_base()) {
+                if (ImGui::Button("Save state")) {
+                    save_camera_state(m_path.path());
+                }
+            } else if (auto path = try_get_path(comp); path.has_value()) {
+                if (ImGui::Button("Save state")) {
+                    save_camera_state(path->path());
+                }
+            } else {
+                ImGui::Text("Can't save, did not start from a valid base or none of the allowed bases can reach this component");
             }
 
             if (ImGui::DragFloat3("Camera Offset", &m_camera_attach.offset.x, 0.1f)) {
@@ -2204,6 +2134,84 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
     if (ImGui::Checkbox("Visible", &visible)) {
         comp->set_visibility(visible, false);
     }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Save Visibility State")) {
+
+    }
+}
+
+std::optional<UObjectHook::StatePath> UObjectHook::try_get_path(sdk::UObject* target) const {
+    const auto component_name = utility::narrow(target->get_class()->get_fname().to_string() + L" " + target->get_fname().to_string());
+
+    // Check if any of our bases can reach this component through their components list.
+    for (const auto& allowed_base : s_allowed_bases) {
+        const auto possible_path = std::vector<std::string>{allowed_base, "Components", component_name};
+        const auto path = StatePath{possible_path};
+        const auto resolved = path.resolve();
+
+        if (resolved == target) {
+            return path;
+        }
+    }
+
+    // Try to look through the objects' properties instead now.
+    for (const auto& allowed_base : s_allowed_bases) {
+        const auto base_obj = StatePath{{allowed_base}}.resolve_base_object();
+
+        if (base_obj == nullptr) {
+            continue;
+        }
+
+        for (auto field = base_obj->get_class()->get_child_properties(); field != nullptr; field = field->get_next()) {
+            if (field->get_class()->get_name().to_string() != L"ObjectProperty") {
+                continue;
+            }
+
+            const auto prop = (sdk::FObjectProperty*)field;
+            const auto obj_ptr = prop->get_data<sdk::UObject*>(base_obj);
+
+            if (obj_ptr == nullptr || *obj_ptr == nullptr) {
+                continue;
+            }
+
+            const auto obj = *obj_ptr;
+
+            if (obj == target) {
+                const auto possible_path = std::vector<std::string>{allowed_base, "Properties", utility::narrow(field->get_field_name().to_string())};
+                const auto path = StatePath{possible_path};
+                const auto resolved = path.resolve();
+
+                if (resolved == target) {
+                    return path;
+                }
+
+                break;
+            }
+
+            // Traverse that object's components now and see if we can find it there.
+            if (obj->get_class()->is_a(sdk::AActor::static_class())) {
+                const auto actor = (sdk::AActor*)*obj_ptr;
+
+                for (auto actor_comp : actor->get_all_components()) {
+                    if (actor_comp != target) {
+                        continue;
+                    }
+
+                    const auto possible_path = std::vector<std::string>{allowed_base, "Properties", utility::narrow(field->get_field_name().to_string()), "Components", component_name};
+                    const auto path = StatePath{possible_path};
+                    const auto resolved = path.resolve();
+
+                    if (resolved == target) {
+                        return path;
+                    }
+                }
+            }
+        }
+    }
+
+    return std::nullopt;
 }
 
 void UObjectHook::ui_handle_material_interface(sdk::UObject* object) {
@@ -2352,8 +2360,20 @@ void UObjectHook::ui_handle_actor(sdk::UObject* object) {
             m_persistent_camera_state.reset();
         }
 
-        if (ImGui::Button("Save state")) {
-            save_camera_state(m_path.path());
+        if (m_persistent_camera_state != nullptr && m_persistent_camera_state->path.resolve() == object) {
+            if (ImGui::Button("Save state")) {
+                save_camera_state(m_persistent_camera_state->path.path());
+            }
+        } else if (m_path.has_valid_base()) {
+            if (ImGui::Button("Save state")) {
+                save_camera_state(m_path.path());
+            }
+        } else if (auto path = try_get_path(object); path.has_value()) {
+            if (ImGui::Button("Save state")) {
+                save_camera_state(path->path());
+            }
+        } else {
+            ImGui::Text("Can't save, did not start from a valid base or none of the allowed bases can reach this object");
         }
 
         if (ImGui::DragFloat3("Camera Offset", &m_camera_attach.offset.x, 0.1f)) {
