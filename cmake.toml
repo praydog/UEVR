@@ -50,8 +50,8 @@ git = "https://github.com/cursey/kananlib"
 tag = "ba66ffaeecfd201ac66310ddf0a4a98140f1441f"
 
 [fetch-content.safetyhook]
-git = "https://github.com/cursey/safetyhook"
-tag = "d0b3e864a7246d530d22818b7707af879c0ebd1e"
+git = "https://github.com/praydog/safetyhook"
+tag = "8e37ec0cecaccdf7f373423dfef6bbbc3d59fe7a"
 cmake-before="""
 set(SAFETYHOOK_FETCH_ZYDIS ON)
 """
