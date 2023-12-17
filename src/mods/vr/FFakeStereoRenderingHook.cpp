@@ -4134,6 +4134,9 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
                 }
             }
         }
+
+        // Process snapturn    
+        vr->process_snapturn();
     }
 
     if (!is_full_pass) {

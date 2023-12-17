@@ -13,6 +13,8 @@
 #include <sdk/Globals.hpp>
 #include <sdk/CVar.hpp>
 #include <sdk/threading/GameThreadWorker.hpp>
+#include <sdk/UGameplayStatics.hpp>
+#include <sdk/APlayerController.hpp>
 
 #include <tracy/Tracy.hpp>
 
@@ -883,6 +885,54 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
             else if (dpad_method == DPadMethod::LEFT_TOUCH || dpad_method == DPadMethod::RIGHT_JOYSTICK) {
                 state->Gamepad.sThumbRY = 0;
                 state->Gamepad.sThumbRX = 0;
+            }
+        }
+    }
+
+    // Determine if snapturn should be run on frame
+    if (m_snapturn->value()) {
+        DPadMethod dpad_method = get_dpad_method();
+        const auto snapturn_deadzone = get_snapturn_js_deadzone();
+        float stick_axis{};
+            
+        if (!m_was_snapturn_run_on_input) {
+            if (dpad_method == RIGHT_JOYSTICK) {
+                stick_axis = get_left_stick_axis().x;
+                if (glm::abs(stick_axis) >= snapturn_deadzone) {
+                    if (stick_axis < 0) {
+                        m_snapturn_left = true;
+                    }
+                    m_snapturn_on_frame = true;
+                    m_was_snapturn_run_on_input = true;
+                }
+            }
+            else {
+                stick_axis = get_right_stick_axis().x;
+                if (glm::abs(stick_axis) >= snapturn_deadzone && !(dpad_method == DPadMethod::LEFT_TOUCH && is_action_active_any_joystick(m_action_thumbrest_touch_left))) {
+                    if (stick_axis < 0) {
+                        m_snapturn_left = true;
+                    }
+                    m_snapturn_on_frame = true;
+                    m_was_snapturn_run_on_input = true;
+                }
+            }
+        }
+        else {
+            if (dpad_method == RIGHT_JOYSTICK) {
+                if (glm::abs(get_left_stick_axis().x) < snapturn_deadzone) {
+                    m_was_snapturn_run_on_input = false;
+                } else {
+                    state->Gamepad.sThumbLY = 0;
+                    state->Gamepad.sThumbLX = 0;
+                }
+            }
+            else {
+                if (glm::abs(get_right_stick_axis().x) < snapturn_deadzone) {
+                    m_was_snapturn_run_on_input = false;
+                } else {
+                    state->Gamepad.sThumbRY = 0;
+                    state->Gamepad.sThumbRX = 0;
+                }
             }
         }
     }
@@ -2061,6 +2111,17 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         }
 
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Snap Turn")) {
+            m_snapturn->draw("Enabled");
+            ImGui::TextWrapped("Set Snap Turn Rotation Angle in Degrees.");
+            m_snapturn_angle->draw("Angle");
+            ImGui::TextWrapped("Set Snap Turn Joystick Deadzone.");
+            m_snapturn_joystick_deadzone->draw("Deadzone");
+        
+            ImGui::TreePop();
+        }
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Movement Orientation")) {
             m_movement_orientation->draw("Type");
 
@@ -2722,4 +2783,37 @@ void VR::recenter_view() {
     const auto new_rotation_offset = glm::normalize(glm::inverse(utility::math::flatten(glm::quat{get_rotation(0)})));
 
     set_rotation_offset(new_rotation_offset);
+}
+
+void VR::process_snapturn() {
+    if (!m_snapturn_on_frame) {
+        return;
+    }
+
+    const auto engine = sdk::UEngine::get();
+
+    if (engine == nullptr) {
+        return;
+    }
+
+    const auto world = engine->get_world();
+
+    if (world == nullptr) {
+        return;
+    }
+
+    if (const auto controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0); controller != nullptr) {
+        auto controller_rot = controller->get_control_rotation();
+        auto turn_degrees = get_snapturn_angle();
+        
+        if (m_snapturn_left) {
+            turn_degrees = -turn_degrees;
+            m_snapturn_left = false;
+        }
+
+        controller_rot.y += turn_degrees;
+        controller->set_control_rotation(controller_rot);
+    }
+        
+    m_snapturn_on_frame = false;
 }
