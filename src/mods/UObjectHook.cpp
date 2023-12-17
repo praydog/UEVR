@@ -232,6 +232,10 @@ void UObjectHook::on_config_load(const utility::Config& cfg, bool set_defaults) 
     for (IModValue& option : m_options) {
         option.config_load(cfg, set_defaults);
     }
+
+    if (!set_defaults && m_enabled_at_startup->value()) {
+        m_wants_activate = true;
+    }
 }
 
 void UObjectHook::on_config_save(utility::Config& cfg) {
@@ -1507,6 +1511,7 @@ void UObjectHook::on_draw_sidebar_entry(std::string_view in_entry) {
 }
 
 void UObjectHook::draw_config() {
+    m_enabled_at_startup->draw("Enabled at Startup");
     m_attach_lerp_enabled->draw("Enable Attach Lerp");
     m_attach_lerp_speed->draw("Attach Lerp Speed");
 }

@@ -383,10 +383,12 @@ private:
     std::vector<std::shared_ptr<PersistentProperties>> deserialize_all_persistent_properties() const;
 
 private:
+    ModToggle::Ptr m_enabled_at_startup{ModToggle::create(generate_name("EnabledAtStartup"), false)};
     ModToggle::Ptr m_attach_lerp_enabled{ModToggle::create(generate_name("AttachLerpEnabled"), true)};
     ModSlider::Ptr m_attach_lerp_speed{ModSlider::create(generate_name("AttachLerpSpeed"), 0.01f, 30.0f, 15.0f)};
 
     ValueList m_options{
+        *m_enabled_at_startup,
         *m_attach_lerp_enabled,
         *m_attach_lerp_speed
     };
