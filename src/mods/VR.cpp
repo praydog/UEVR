@@ -898,7 +898,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         if (!m_was_snapturn_run_on_input) {
             if (dpad_method == RIGHT_JOYSTICK) {
                 stick_axis = get_left_stick_axis().x;
-                if (abs(stick_axis) >= snapturn_deadzone) {
+                if (glm::abs(stick_axis) >= snapturn_deadzone) {
                     if (stick_axis < 0) {
                         m_snapturn_left = true;
                     }
@@ -908,7 +908,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
             }
             else {
                 stick_axis = get_right_stick_axis().x;
-                if (abs(stick_axis) >= snapturn_deadzone && !(dpad_method == DPadMethod::LEFT_TOUCH && is_action_active_any_joystick(m_action_thumbrest_touch_left))) {
+                if (glm::abs(stick_axis) >= snapturn_deadzone && !(dpad_method == DPadMethod::LEFT_TOUCH && is_action_active_any_joystick(m_action_thumbrest_touch_left))) {
                     if (stick_axis < 0) {
                         m_snapturn_left = true;
                     }
@@ -919,7 +919,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         }
         else {
             if (dpad_method == RIGHT_JOYSTICK) {
-                if (abs(get_left_stick_axis().x) < snapturn_deadzone) {
+                if (glm::abs(get_left_stick_axis().x) < snapturn_deadzone) {
                     m_was_snapturn_run_on_input = false;
                 } else {
                     state->Gamepad.sThumbLY = 0;
@@ -927,7 +927,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
                 }
             }
             else {
-                if (abs(get_right_stick_axis().x) < snapturn_deadzone) {
+                if (glm::abs(get_right_stick_axis().x) < snapturn_deadzone) {
                     m_was_snapturn_run_on_input = false;
                 } else {
                     state->Gamepad.sThumbRY = 0;
