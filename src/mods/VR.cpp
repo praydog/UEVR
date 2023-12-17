@@ -2790,7 +2790,18 @@ void VR::process_snapturn() {
         return;
     }
 
-    const auto world = sdk::UEngine::get()->get_world();
+    const auto engine = sdk::UEngine::get();
+
+    if (engine == nullptr) {
+        return;
+    }
+
+    const auto world = engine->get_world();
+
+    if (world == nullptr) {
+        return;
+    }
+
     if (const auto controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0); controller != nullptr) {
         auto controller_rot = controller->get_control_rotation();
         auto turn_degrees = get_snapturn_angle();
