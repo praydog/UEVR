@@ -13,6 +13,8 @@
 #include <sdk/Globals.hpp>
 #include <sdk/CVar.hpp>
 #include <sdk/threading/GameThreadWorker.hpp>
+#include <sdk/UGameplayStatics.hpp>
+#include <sdk/APlayerController.hpp>
 
 #include <tracy/Tracy.hpp>
 
@@ -2781,4 +2783,26 @@ void VR::recenter_view() {
     const auto new_rotation_offset = glm::normalize(glm::inverse(utility::math::flatten(glm::quat{get_rotation(0)})));
 
     set_rotation_offset(new_rotation_offset);
+}
+
+void VR::process_snapturn() {
+    if (!m_snapturn_on_frame) {
+        return;
+    }
+
+    const auto world = sdk::UEngine::get()->get_world();
+    if (const auto controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0); controller != nullptr) {
+        auto controller_rot = controller->get_control_rotation();
+        auto turn_degrees = get_snapturn_angle();
+        
+        if (m_snapturn_left) {
+            turn_degrees = -turn_degrees;
+            m_snapturn_left = false;
+        }
+
+        controller_rot.y += turn_degrees;
+        controller->set_control_rotation(controller_rot);
+    }
+        
+    m_snapturn_on_frame = false;
 }

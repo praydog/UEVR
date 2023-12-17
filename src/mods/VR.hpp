@@ -744,12 +744,14 @@ private:
     const ModToggle::Ptr m_roomscale_movement_actor_rotation{ ModToggle::create(generate_name("RoomscaleMovementActorRotation"), false) };
 
     // Snap turn settings and globals
+    void process_snapturn();
+    
     const ModToggle::Ptr m_snapturn{ ModToggle::create(generate_name("SnapTurn"), false) };
     const ModSlider::Ptr m_snapturn_joystick_deadzone{ ModSlider::create(generate_name("SnapturnJoystickDeadzone"), 0.01f, 0.99f, 0.2f) };
     const ModInt32::Ptr m_snapturn_angle{ ModSliderInt32::create(generate_name("SnapturnTurnAngle"), 1, 359, 45) };
-    static inline bool m_snapturn_on_frame{false};
-    static inline bool m_snapturn_left{false};
-    static inline bool m_was_snapturn_run_on_input{false};
+    bool m_snapturn_on_frame{false};
+    bool m_snapturn_left{false};
+    bool m_was_snapturn_run_on_input{false};
 
     // Aim method and movement orientation are not the same thing, but they can both have the same options
     const ModCombo::Ptr m_aim_method{ ModCombo::create(generate_name("AimMethod"), s_aim_method_names, AimMethod::GAME) };
