@@ -1306,6 +1306,10 @@ void Framework::draw_ui() {
                     // Find the mod that owns this entry
                     for (const auto& range : mod_sidebar_ranges) {
                         if (m_sidebar_state.selected_entry >= range.mn && m_sidebar_state.selected_entry < range.mx) {
+                            if (wants_focus_right) {
+                                ImGui::SetKeyboardFocusHere();
+                            }
+
                             if (range.has_sidebar_entries) {
                                 range.mod->on_draw_sidebar_entry(sidebar_entries[m_sidebar_state.selected_entry].m_label);
                             } else {
