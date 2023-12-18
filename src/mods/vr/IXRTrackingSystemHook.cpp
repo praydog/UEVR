@@ -1471,8 +1471,7 @@ void IXRTrackingSystemHook::update_view_rotation(sdk::UObject* reference_obj, Ro
     // Double check that the player controller passed through here is the local player controller
     static bool had_detection_error = false;
     if (!had_detection_error && vr->is_aim_multiplayer_support_enabled()) try {
-        const auto engine = sdk::UEngine::get();
-        if (engine != nullptr && reference_obj != nullptr && sdk::FUObjectArray::get() != nullptr) {
+        if (reference_obj != nullptr && sdk::FUObjectArray::get() != nullptr) {
             const auto reference_obj_c = reference_obj->get_class();
 
             static const auto player_controller_class = sdk::APlayerController::static_class();
