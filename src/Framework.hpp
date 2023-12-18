@@ -215,6 +215,15 @@ public:
 
     bool is_advanced_view_enabled() const;
 
+    enum ImGuiThemes : int8_t {
+        DEFAULT_DARK,
+        ALTERNATIVE_DARK,
+        DEFAULT_LIGHT,
+        HIGH_CONTRAST,
+    };
+    
+    ImGuiThemes get_imgui_theme_value() const;
+
 private:
     void consume_input();
     void update_fonts();
@@ -262,6 +271,8 @@ private:
     ImVec2 m_last_window_pos{};
     ImVec2 m_last_window_size{};
     Vector2f m_last_rt_size{1920, 1080};
+
+    ImGuiThemes m_current_theme;
 
     struct AdditionalFont {
         std::filesystem::path filepath{};
