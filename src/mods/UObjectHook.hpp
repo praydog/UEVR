@@ -230,6 +230,11 @@ private:
         return {};
     }
 
+    void remove_motion_controller_state(sdk::USceneComponent* component) {
+        std::unique_lock _{m_mutex};
+        m_motion_controller_attached_components.erase(component);
+    }
+
     auto get_spawned_spheres() const {
         std::shared_lock _{m_mutex};
         return m_spawned_spheres;
@@ -332,6 +337,7 @@ private:
     struct PersistentState : JsonAssociation {
         StatePath path{};
         MotionControllerStateBase state{};
+        sdk::USceneComponent* last_object{nullptr};
     };
 
     struct PersistentCameraState : JsonAssociation {

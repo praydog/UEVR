@@ -1218,6 +1218,13 @@ void UObjectHook::update_persistent_states() {
                 continue;
             }
 
+            // Destroy the existing mc state if it exists
+            // This can cause issues if the previous object still exists
+            // so we need to detach the old one
+            if (state->last_object != nullptr && state->last_object != obj) {
+                remove_motion_controller_state(state->last_object);
+            }
+
             auto mc_state = get_or_add_motion_controller_state((sdk::USceneComponent*)obj);
 
             if (mc_state == nullptr) {
@@ -1229,6 +1236,8 @@ void UObjectHook::update_persistent_states() {
             } else {
                 *mc_state = state->state;
             }
+
+            state->last_object = (sdk::USceneComponent*)obj;
         }
     }
 
