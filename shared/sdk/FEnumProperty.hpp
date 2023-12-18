@@ -6,7 +6,7 @@
 
 namespace sdk {
 struct FNumericProperty;
-struct FEnum;
+struct UEnum;
 
 class FEnumProperty : public FProperty {
 public:
@@ -16,8 +16,8 @@ public:
         return *(FNumericProperty**)((uintptr_t)this + s_underlying_prop_offset);
     }
     
-    FEnum* get_enum() const {
-        return *(FEnum**)((uintptr_t)this + s_enum_offset);
+    UEnum* get_enum() const {
+        return *(UEnum**)((uintptr_t)this + s_enum_offset);
     }
 
 private:
