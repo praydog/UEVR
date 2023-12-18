@@ -22,6 +22,7 @@
 #include "FBoolProperty.hpp"
 #include "FObjectProperty.hpp"
 #include "FArrayProperty.hpp"
+#include "FEnumProperty.hpp"
 #include "UObjectArray.hpp"
 
 namespace sdk {
@@ -416,6 +417,7 @@ FUObjectArray* FUObjectArray::get() try {
         sdk::FBoolProperty::update_offsets();
         sdk::FObjectProperty::update_offsets();
         sdk::FArrayProperty::update_offsets();
+        sdk::FEnumProperty::update_offsets();
 
 #ifdef TESTING_GUOBJECTARRAY
         try {
