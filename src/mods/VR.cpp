@@ -2104,6 +2104,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
                 m_previous_aim_method = (AimMethod)m_aim_method->value();
             }
 
+            m_aim_multiplayer_support->draw("Multiplayer Support");
             m_aim_interp->draw("Smoothing");
             m_aim_speed->draw("Speed");
 

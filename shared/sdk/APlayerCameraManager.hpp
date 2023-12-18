@@ -4,10 +4,12 @@
 
 namespace sdk {
 class UClass;
+class APlayerController;
 
 class APlayerCameraManager : public UObject {
 public:
     static UClass* static_class();
-    // TODO
+
+    APlayerController* get_owning_player_controller();
 };
 }

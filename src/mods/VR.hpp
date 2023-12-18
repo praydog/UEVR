@@ -420,6 +420,10 @@ public:
     float get_aim_speed() const {
         return m_aim_speed->value();
     }
+    
+    bool is_aim_multiplayer_support_enabled() const {
+        return m_aim_multiplayer_support->value();
+    }
 
     bool is_aim_interpolation_enabled() const {
         return m_aim_interp->value();
@@ -757,6 +761,7 @@ private:
     const ModCombo::Ptr m_aim_method{ ModCombo::create(generate_name("AimMethod"), s_aim_method_names, AimMethod::GAME) };
     const ModCombo::Ptr m_movement_orientation{ ModCombo::create(generate_name("MovementOrientation"), s_aim_method_names, AimMethod::GAME) };
     AimMethod m_previous_aim_method{ AimMethod::GAME };
+    const ModToggle::Ptr m_aim_multiplayer_support{ ModToggle::create(generate_name("AimMPSupport"), true) };
     const ModToggle::Ptr m_aim_interp{ ModToggle::create(generate_name("AimInterp"), true, true) };
     const ModSlider::Ptr m_aim_speed{ ModSlider::create(generate_name("AimSpeed"), 0.01f, 25.0f, 15.0f) };
     const ModToggle::Ptr m_dpad_shifting{ ModToggle::create(generate_name("DPadShifting"), true) };
@@ -830,6 +835,7 @@ private:
         *m_snapturn_angle,
         *m_aim_method,
         *m_movement_orientation,
+        *m_aim_multiplayer_support,
         *m_aim_speed,
         *m_aim_interp,
         *m_dpad_shifting,

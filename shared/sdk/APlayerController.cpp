@@ -53,6 +53,28 @@ glm::vec3 AController::get_control_rotation() {
     return *(glm::vec<3, double>*)params.data();
 }
 
+bool AController::is_local_player_controller() {
+    static const auto sc = static_class();
+
+    if (sc == nullptr) {
+        return true; // whatever
+    }
+
+    static const auto func = sc->find_function(L"IsLocalPlayerController");
+
+    if (func == nullptr) {
+        return true; // whatever
+    }
+
+    struct {
+        bool result{};
+    } params;
+
+    this->process_event(func, &params);
+
+    return params.result;
+}
+
 UClass* APlayerController::static_class() {
     return sdk::find_uobject<UClass>(L"Class /Script/Engine.PlayerController");
 }

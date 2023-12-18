@@ -16,6 +16,9 @@
 #include <sdk/UClass.hpp>
 #include <sdk/FProperty.hpp>
 #include <sdk/ScriptVector.hpp>
+#include <sdk/UGameplayStatics.hpp>
+#include <sdk/APlayerController.hpp>
+#include <sdk/APlayerCameraManager.hpp>
 
 #include "../VR.hpp"
 
@@ -1266,7 +1269,7 @@ IXRTrackingSystemHook::SharedPtr* IXRTrackingSystemHook::get_view_extension(sdk:
     return out;
 }
 
-void IXRTrackingSystemHook::apply_hmd_rotation(sdk::IXRCamera*, void* player_controller, Rotator<float>* rot) {
+void IXRTrackingSystemHook::apply_hmd_rotation(sdk::IXRCamera*, sdk::APlayerController* player_controller, Rotator<float>* rot) {
     SPDLOG_INFO_ONCE("apply_hmd_rotation {:x}", (uintptr_t)_ReturnAddress());
 
     if (VR::get()->is_hmd_active() && !g_hook->m_process_view_rotation_hook && !g_hook->m_attempted_hook_view_rotation) {
@@ -1294,7 +1297,7 @@ void IXRTrackingSystemHook::apply_hmd_rotation(sdk::IXRCamera*, void* player_con
             func.calls_apply_hmd_rotation = true;
         }
 
-        g_hook->update_view_rotation(rot);
+        g_hook->update_view_rotation(player_controller, rot);
     }
 
     /*if (g_hook->m_stereo_hook == nullptr) {
@@ -1429,11 +1432,11 @@ void* IXRTrackingSystemHook::process_view_rotation_analyzer(void* a1, size_t a2,
 }
 
 void IXRTrackingSystemHook::process_view_rotation(
-    void* player_controller, float delta_time, Rotator<float>* rot, Rotator<float>* delta_rot) {
+    sdk::APlayerCameraManager* pcm, float delta_time, Rotator<float>* rot, Rotator<float>* delta_rot) {
     SPDLOG_INFO_ONCE("process_view_rotation {:x}", (uintptr_t)_ReturnAddress());
 
     auto call_orig = [&]() {
-        g_hook->m_process_view_rotation_hook.call<void>(player_controller, delta_time, rot, delta_rot);
+        g_hook->m_process_view_rotation_hook.call<void>(pcm, delta_time, rot, delta_rot);
     };
 
     auto& vr = VR::get();
@@ -1447,10 +1450,10 @@ void IXRTrackingSystemHook::process_view_rotation(
 
     call_orig();
 
-    g_hook->update_view_rotation(rot);
+    g_hook->update_view_rotation(pcm, rot);
 }
 
-void IXRTrackingSystemHook::pre_update_view_rotation(Rotator<float>* rot) {
+void IXRTrackingSystemHook::pre_update_view_rotation(sdk::UObject* reference_obj, Rotator<float>* rot) {
     auto& vr = VR::get();
 
     if (m_stereo_hook->has_double_precision()) {
@@ -1462,14 +1465,42 @@ void IXRTrackingSystemHook::pre_update_view_rotation(Rotator<float>* rot) {
     }
 }
 
-void IXRTrackingSystemHook::update_view_rotation(Rotator<float>* rot) {
+void IXRTrackingSystemHook::update_view_rotation(sdk::UObject* reference_obj, Rotator<float>* rot) {
+    auto& vr = VR::get();
+
+    // Double check that the player controller passed through here is the local player controller
+    static bool had_detection_error = false;
+    if (!had_detection_error && vr->is_aim_multiplayer_support_enabled()) try {
+        const auto engine = sdk::UEngine::get();
+        if (engine != nullptr && reference_obj != nullptr && sdk::FUObjectArray::get() != nullptr) {
+            const auto reference_obj_c = reference_obj->get_class();
+
+            static const auto player_controller_class = sdk::APlayerController::static_class();
+            static const auto player_camera_manager_class = sdk::APlayerCameraManager::static_class();
+
+            sdk::APlayerController* pc = nullptr;
+
+            if (player_controller_class != nullptr && reference_obj_c != nullptr && reference_obj_c->is_a(player_controller_class)) {
+                pc = (sdk::APlayerController*)reference_obj;
+            } else if (player_camera_manager_class != nullptr && reference_obj_c != nullptr && reference_obj_c->is_a(player_camera_manager_class)) {
+                const auto pcm = (sdk::APlayerCameraManager*)reference_obj;
+                pc = pcm->get_owning_player_controller();
+            }
+
+            if (pc != nullptr && !pc->is_local_player_controller()) {
+                return;
+            }
+        }
+    } catch(...) {
+        had_detection_error = true;
+        SPDLOG_ERROR("[IXRTrackingSystemHook] Error detecting reference object, cannot support multiplayer");
+    }
+
     const auto now = std::chrono::high_resolution_clock::now();
     const auto delta_time = now - m_process_view_rotation_data.last_update;
     const auto delta_float = glm::min(std::chrono::duration_cast<std::chrono::duration<float>>(delta_time).count(), 0.1f);
     m_process_view_rotation_data.last_update = now;
     m_process_view_rotation_data.was_called = true;
-
-    auto& vr = VR::get();
 
     if (!vr->is_hmd_active() || !vr->is_any_aim_method_active()) {
         return;

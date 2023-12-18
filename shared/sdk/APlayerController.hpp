@@ -15,6 +15,8 @@ public:
     void set_control_rotation(const glm::vec3& newrotation);
     glm::vec3 get_control_rotation();
 
+    bool is_local_player_controller();
+
 protected:
 };
 

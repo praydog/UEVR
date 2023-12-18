@@ -14,6 +14,8 @@ class UEngine;
 class IXRTrackingSystem;
 class IXRCamera;
 class IHeadMountedDisplay;
+class APlayerController;
+class APlayerCameraManager;
 }
 
 class FFakeStereoRenderingHook;
@@ -71,17 +73,17 @@ private:
     static SharedPtr* get_view_extension(sdk::IHeadMountedDisplay*, SharedPtr* out);
 
     // IXRCamera
-    static void apply_hmd_rotation(sdk::IXRCamera*, void* player_controller, Rotator<float>* rot);
+    static void apply_hmd_rotation(sdk::IXRCamera*, sdk::APlayerController* player_controller, Rotator<float>* rot);
     static bool update_player_camera(sdk::IXRCamera*, Quat<float>* rel_rot, glm::vec3* rel_pos);
     // This function is the precursor to actually hooking ProcessViewRotation
     // Because there's a very real possibility that we can accidentally hook the wrong function
     // We need to verify that arg 2 and 3 are on the stack
     // And the function that calls it is also a virtual function (APlayerController::UpdateRotation)
     static void* process_view_rotation_analyzer(void*, size_t, size_t, size_t, size_t, size_t);
-    static void process_view_rotation(void* player_controller, float delta_time, Rotator<float>* rot, Rotator<float>* delta_rot);
+    static void process_view_rotation(sdk::APlayerCameraManager* pcm, float delta_time, Rotator<float>* rot, Rotator<float>* delta_rot);
 
-    void pre_update_view_rotation(Rotator<float>* rot);
-    void update_view_rotation(Rotator<float>* rot);
+    void pre_update_view_rotation(sdk::UObject* reference_obj, Rotator<float>* rot);
+    void update_view_rotation(sdk::UObject* reference_obj, Rotator<float>* rot);
 
     FFakeStereoRenderingHook* m_stereo_hook{nullptr};
 
