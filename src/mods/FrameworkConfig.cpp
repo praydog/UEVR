@@ -11,15 +11,30 @@ std::optional<std::string> FrameworkConfig::on_initialize() {
     return Mod::on_initialize();
 }
 
-void FrameworkConfig::on_draw_ui() {
+void FrameworkConfig::draw_main() {
     m_menu_key->draw("Menu Key");
     m_show_cursor_key->draw("Show Cursor Key");
     m_remember_menu_state->draw("Remember Menu Open/Closed State");
     m_enable_l3_r3_toggle->draw("Enable L3 + R3 Toggle");
     m_always_show_cursor->draw("Always Show Cursor");
+}
+
+void FrameworkConfig::draw_themes() {
+    get_imgui_theme()->draw("Select GUI Theme");
 
     if (m_font_size->draw("Font Size")) {
         g_framework->set_font_size(m_font_size->value());
+    }
+}
+
+void FrameworkConfig::on_draw_sidebar_entry(std::string_view in_entry) {
+    on_draw_ui();
+    ImGui::Separator();
+
+    if (in_entry == "Main") {
+        draw_main();
+    } else if (in_entry == "GUI/Themes") {
+        draw_themes();
     }
 }
 
