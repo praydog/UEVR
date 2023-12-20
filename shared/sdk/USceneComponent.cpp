@@ -40,8 +40,12 @@ void USceneComponent::set_world_rotation(const glm::vec3& rotation, bool sweep, 
 
     // add a bool
     params.insert(params.end(), (uint8_t*)&teleport, (uint8_t*)&sweep + sizeof(bool));
-    // align
-    params.insert(params.end(), 3, 0);
+    
+    // align up to 8 based on size
+    if (params.size() % sizeof(void*) != 0) {
+        params.insert(params.end(), sizeof(void*) - (params.size() % sizeof(void*)), 0);
+    }
+
     // add a FHitResult
     params.insert(params.end(), fhitresult->get_struct_size(), 0);
     // add a bool
@@ -74,8 +78,12 @@ void USceneComponent::add_world_rotation(const glm::vec3& rotation, bool sweep, 
 
     // add a bool
     params.insert(params.end(), (uint8_t*)&teleport, (uint8_t*)&sweep + sizeof(bool));
-    // align
-    params.insert(params.end(), 3, 0);
+
+    // align up to 8 based on size
+    if (params.size() % sizeof(void*) != 0) {
+        params.insert(params.end(), sizeof(void*) - (params.size() % sizeof(void*)), 0);
+    }
+
     // add a FHitResult
     params.insert(params.end(), fhitresult->get_struct_size(), 0);
     // add a bool
@@ -109,7 +117,11 @@ void USceneComponent::set_world_location(const glm::vec3& location, bool sweep, 
     // add a bool
     params.insert(params.end(), (uint8_t*)&teleport, (uint8_t*)&sweep + sizeof(bool));
     // align
-    params.insert(params.end(), 3, 0);
+    //params.insert(params.end(), 3, 0);
+    // align up to 8 based on size
+    if (params.size() % sizeof(void*) != 0) {
+        params.insert(params.end(), sizeof(void*) - (params.size() % sizeof(void*)), 0);
+    }
     // add a FHitResult
     params.insert(params.end(), fhitresult->get_struct_size(), 0);
     // add a bool
@@ -142,8 +154,12 @@ void USceneComponent::add_world_offset(const glm::vec3& location, bool sweep, bo
 
     // add a bool
     params.insert(params.end(), (uint8_t*)&teleport, (uint8_t*)&sweep + sizeof(bool));
-    // align
-    params.insert(params.end(), 3, 0);
+
+    // align up to 8 based on size
+    if (params.size() % sizeof(void*) != 0) {
+        params.insert(params.end(), sizeof(void*) - (params.size() % sizeof(void*)), 0);
+    }
+
     // add a FHitResult
     params.insert(params.end(), fhitresult->get_struct_size(), 0);
     // add a bool
@@ -176,8 +192,12 @@ void USceneComponent::add_local_rotation(const glm::vec3& rotation, bool sweep, 
 
     // add a bool
     params.insert(params.end(), (uint8_t*)&teleport, (uint8_t*)&sweep + sizeof(bool));
-    // align
-    params.insert(params.end(), 3, 0);
+
+    // align up to 8 based on size
+    if (params.size() % sizeof(void*) != 0) {
+        params.insert(params.end(), sizeof(void*) - (params.size() % sizeof(void*)), 0);
+    }
+
     // add a FHitResult
     params.insert(params.end(), fhitresult->get_struct_size(), 0);
     // add a bool
@@ -265,7 +285,7 @@ glm::vec3 USceneComponent::get_world_rotation() {
     if (!is_ue5) {
         return *(glm::vec3*)params.data();
     }
-        
+
     return *(glm::vec<3, double>*)params.data();
 }
 

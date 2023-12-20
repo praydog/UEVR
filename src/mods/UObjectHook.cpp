@@ -397,7 +397,7 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
     glm::vec3 final_position{};
 
     if (is_double) {
-        final_position = glm::vec3{*view_location} - offset1;
+        final_position = glm::vec3{*view_d} - offset1;
     } else {
         final_position = *view_location - offset1;
     }
