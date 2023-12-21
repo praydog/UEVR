@@ -1,4 +1,5 @@
 #include <unordered_set>
+#include <unordered_map>
 
 #include <spdlog/spdlog.h>
 #include <utility/Scan.hpp>
@@ -182,7 +183,7 @@ FUObjectHashTables* FUObjectHashTables::get() {
         analyze_fn(start_2, register_states);
 
         if (found && register_states.contains(NDR_RCX)) {
-            const auto result = (UObjectHashTables*)register_states[NDR_RCX];
+            const auto result = (FUObjectHashTables*)register_states[NDR_RCX];
             SPDLOG_INFO("[FUObjectHashTables::get] Found UObjectHashTables: 0x{:X} ({:x} rel)", (uintptr_t)result, (uintptr_t)result - (uintptr_t)core_uobject);
             return result;
         }
