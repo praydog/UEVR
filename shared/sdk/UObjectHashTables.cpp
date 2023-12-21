@@ -75,7 +75,7 @@ FUObjectHashTables* FUObjectHashTables::get() {
             return fn;
         };
 
-        auto analyze_instr = [&](utility::ExhaustionContext& ctx, std::unordered_map<ND_UINT32, uint64_t>& register_states) -> std::optional<utility::ExhaustionResult> {
+        auto analyze_instr = [&](uintptr_t containing_fn, utility::ExhaustionContext& ctx, std::unordered_map<ND_UINT32, uint64_t>& register_states) -> std::optional<utility::ExhaustionResult> {
             if (found) {
                 return utility::ExhaustionResult::BREAK;
             }
@@ -89,7 +89,7 @@ FUObjectHashTables* FUObjectHashTables::get() {
                         if (auto disp = utility::resolve_displacement(ctx.addr); disp.has_value() && ctx.instrux.IsRipRelative) {
                             register_states[ctx.instrux.Operands[0].Info.Register.Reg] = *disp;
                             //SPDLOG_INFO("[UObjectHashTables::get] Found GPR load: 0x{:X} ({:x} rel)", ctx.addr, ctx.addr - (uintptr_t)core_uobject);
-                            return utility::ExhaustionResult::CONTINUE;
+                            return std::nullopt;
                         }
 
                         register_states.erase(ctx.instrux.Operands[0].Info.Register.Reg);
@@ -114,18 +114,27 @@ FUObjectHashTables* FUObjectHashTables::get() {
                 auto fn = resolve_arbitrary_call(ctx.addr, ctx.instrux);
 
                 if (!fn) {
-                    return utility::ExhaustionResult::STEP_OVER;
+                    return std::nullopt;
                 }
 
                 if (*fn == (uintptr_t)&InitializeCriticalSection || *fn == (uintptr_t)rtl_initialize_critical_section) {
+                    SPDLOG_INFO("Evaluating InitializeCriticalSection call at 0x{:X} ({:x} rel)", ctx.addr, ctx.addr - (uintptr_t)core_uobject);
+
                     if (register_states.contains(NDR_RCX)) {
                         const auto rcx = register_states[NDR_RCX];
 
                         if (!IsBadReadPtr((void*)rcx, sizeof(void*)) && utility::get_module_within(rcx) == core_uobject) {
+                            // not the right one
+                            if (utility::find_pointer_in_path(containing_fn, &GlobalMemoryStatusEx)) {
+                                return utility::ExhaustionResult::BREAK;
+                            }
+
                             found = true;
                             return utility::ExhaustionResult::BREAK;
                         }
                     }
+
+                    register_states.clear();
 
                     return utility::ExhaustionResult::STEP_OVER;
                 }
@@ -149,22 +158,19 @@ FUObjectHashTables* FUObjectHashTables::get() {
 
                 const auto mnem = std::string_view{ctx.instrux.Mnemonic};
 
-                if (auto exhaustion_result = analyze_instr(ctx, register_states); exhaustion_result.has_value()) {
+                if (auto exhaustion_result = analyze_instr(start, ctx, register_states); exhaustion_result.has_value()) {
                     return *exhaustion_result;
                 }
 
                 if (mnem.starts_with("CALL")) {
                     auto fn = resolve_arbitrary_call(ctx.addr, ctx.instrux);
 
-                    if (fn) {
-                        const auto valid_fn = !seen_ips.contains(*fn) && !utility::find_pointer_in_path(*fn, &GlobalMemoryStatusEx);
+                    if (fn && !seen_ips.contains(*fn) && !utility::find_pointer_in_path(*fn, &GetCurrentThreadId, false)) {
+                        //SPDLOG_INFO("Evaluating call to 0x{:X} ({:x} rel)", *fn, *fn - (uintptr_t)core_uobject);
+                        self(*fn, register_states);
 
-                        if (valid_fn) {
-                            self(*fn, register_states);
-
-                            if (found) {
-                                return utility::ExhaustionResult::BREAK;
-                            }
+                        if (found) {
+                            return utility::ExhaustionResult::BREAK;
                         }
                     }
 
