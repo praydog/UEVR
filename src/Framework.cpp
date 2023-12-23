@@ -1266,9 +1266,11 @@ void Framework::draw_ui() {
                         if (i == range.mn) {
                             // Set first entry as default ("Runtime" entry of VR mod)
                             if (range.has_sidebar_entries && !m_sidebar_state.initialized) {
-                                m_sidebar_state.selected_entry = i;
-                                m_sidebar_state.initialized = true;
-                                ImGui::SetWindowFocus("UEVRRightPane");
+                                if (range.mod->get_name() == "VR") {
+                                    m_sidebar_state.selected_entry = i;
+                                    m_sidebar_state.initialized = true;
+                                    ImGui::SetWindowFocus("UEVRRightPane");
+                                }
                             }
 
                             ImGui::Text(range.mod->get_name().data());
