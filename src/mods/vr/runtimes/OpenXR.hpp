@@ -300,11 +300,13 @@ public:
     PipelineState get_submit_state();
     
     const ModSlider::Ptr resolution_scale{ ModSlider::create("OpenXR_ResolutionScale", 0.1f, 3.0f, 1.0f) };
+    const ModToggle::Ptr ignore_vd_checks{ ModToggle::create("OpenXR_IgnoreVirtualDesktopChecks", false) };
     bool push_dummy_projection{ false };
     bool ever_submitted{false};
     
     Mod::ValueList options{
         *resolution_scale,
+        *ignore_vd_checks,
     };
 
     enum class SwapchainIndex {

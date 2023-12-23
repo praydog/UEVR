@@ -29,6 +29,10 @@ void OpenXR::on_draw_ui() {
 
         ImGui::Checkbox("Virtual Desktop Fix", &this->push_dummy_projection);
 
+        ImGui::SameLine();
+
+        this->ignore_vd_checks->draw("Ignore Virtual Desktop Checks");
+
         if (ImGui::TreeNode("Bindings")) {
             display_bindings_editor();
             ImGui::TreePop();
@@ -1633,7 +1637,10 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
     // Dummy projection layers for Virtual Desktop. If we don't do this, timewarp does not work correctly on VD.
     // the reasoning from ggodin (VD dev) is that VD composites all layers using the top layer's pose (apparently)
     // I am actually not sure why this fixes the issue, but it does. and even makes the SteamVR overlay work completely fine.
-    const auto should_push_dummy = this->push_dummy_projection == true && !pipelined_stage_views.empty() && this->ever_submitted == true;
+    const auto should_push_dummy = !this->ignore_vd_checks->value() &&
+                                   this->push_dummy_projection == true && 
+                                   !pipelined_stage_views.empty() && 
+                                   this->ever_submitted == true;
 
     XrCompositionLayerProjection dummy_projection_layer{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
     std::array<XrCompositionLayerProjectionView, 2> dummy_projection_layer_views{};
