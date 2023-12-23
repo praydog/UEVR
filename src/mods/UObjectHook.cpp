@@ -1458,6 +1458,69 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
                 ++it;
                 break;
             }
+            case "ArrayProperty"_fnv:
+            {
+                const auto inner = ((sdk::FArrayProperty*)prop_desc)->get_inner();
+
+                if (inner == nullptr) {
+                    return nullptr;
+                }
+                
+                const auto inner_c = inner->get_class();
+
+                if (inner_c == nullptr) {
+                    return nullptr;
+                }
+
+                const auto inner_c_type = utility::narrow(inner_c->get_name().to_string());
+
+                // only support ObjectProperty for now
+                if (inner_c_type != "ObjectProperty") {
+                    return nullptr;
+                }
+
+                const auto array_ptr = prop_desc->get_data<sdk::TArray<sdk::UObject*>>(previous_object);
+
+                if (array_ptr == nullptr) {
+                    return nullptr;
+                }
+
+                const auto& arr = *array_ptr;
+
+                if (arr.empty() || arr.data == nullptr) {
+                    return nullptr;
+                }
+
+                auto prop_it = next_it + 1;
+
+                if (prop_it == m_path.end()) {
+                    return nullptr;
+                }
+
+                bool found = false;
+
+                // Now look for the object in the array
+                for (auto obj : arr) {
+                    if (obj == nullptr) {
+                        continue;
+                    }
+
+                    const auto obj_name = obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string();
+
+                    if (utility::narrow(obj_name) == *prop_it) {
+                        found = true;
+                        previous_object = obj;
+                        ++it;
+                        ++it;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    return nullptr;
+                }
+                break;
+            }
 
             // Need to handle StructProperty and ArrayProperty but whatever.
             default:
@@ -2816,6 +2879,7 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
             break;
         case "ArrayProperty"_fnv:
             if (ImGui::TreeNode(utility::narrow(prop->get_field_name().to_string()).data())) {
+                auto scope2 = m_path.enter(utility::narrow(prop->get_field_name().to_string()));
                 ui_handle_array_property(object, (sdk::FArrayProperty*)prop);
                 ImGui::TreePop();
             }
@@ -2867,8 +2931,10 @@ void UObjectHook::ui_handle_array_property(void* addr, sdk::FArrayProperty* prop
 
         for (auto obj : array_obj) {
             std::wstring name = obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string();
+            const auto narrow_name = utility::narrow(name);
 
-            if (ImGui::TreeNode(utility::narrow(name).data())) {
+            if (ImGui::TreeNode(narrow_name.data())) {
+                auto scope = m_path.enter(narrow_name);
                 ui_handle_object(obj);
                 ImGui::TreePop();
             }
