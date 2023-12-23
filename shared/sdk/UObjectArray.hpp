@@ -26,6 +26,18 @@ struct FUObjectArray {
         return s_is_chunked;
     }
 
+    static bool is_inlined() {
+        return s_is_inlined_array;
+    }
+
+    static size_t get_objects_offset() {
+        return OBJECTS_OFFSET;
+    }
+
+    static size_t get_item_distance() {
+        return s_item_distance;
+    }
+
     int32_t get_object_count() {
         if (s_is_inlined_array) {
             constexpr auto offs = OBJECTS_OFFSET + (MAX_INLINED_CHUNKS * sizeof(void*));
@@ -80,7 +92,7 @@ struct FUObjectArray {
         return *(void**)((uintptr_t)this + OBJECTS_OFFSET);
     }
 
-private:
+public:
     // for <= 4.10
     constexpr static inline auto MAX_INLINED_CHUNKS =  ((8 * 1024 * 1024) + 16384 - 1) / 16384;
     constexpr static inline auto OBJECTS_PER_CHUNK_INLINED = 16384;
@@ -88,6 +100,7 @@ private:
     // for some newer versions
     constexpr static inline auto OBJECTS_PER_CHUNK = 64 * 1024;
 
+private:
     // has remained true for a long time
     constexpr static inline auto OBJECTS_OFFSET = 0x10;
 

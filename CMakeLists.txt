@@ -83,6 +83,15 @@ FetchContent_Declare(safetyhook
 )
 FetchContent_MakeAvailable(safetyhook)
 
+message(STATUS "Fetching sdkgenny (f58077f8da8a271490c17558e93b75843b3afd19)...")
+FetchContent_Declare(sdkgenny
+	GIT_REPOSITORY
+		"https://github.com/cursey/sdkgenny"
+	GIT_TAG
+		f58077f8da8a271490c17558e93b75843b3afd19
+)
+FetchContent_MakeAvailable(sdkgenny)
+
 message(STATUS "Fetching openxr (458984d7f59d1ae6dc1b597d94b02e4f7132eaba)...")
 FetchContent_Declare(openxr
 	GIT_REPOSITORY
@@ -790,6 +799,7 @@ list(APPEND ue4poc_SOURCES
 	"src/mods/PluginLoader.cpp"
 	"src/mods/UObjectHook.cpp"
 	"src/mods/VR.cpp"
+	"src/mods/uobjecthook/SDKDumper.cpp"
 	"src/mods/vr/Bindings.cpp"
 	"src/mods/vr/CVarManager.cpp"
 	"src/mods/vr/D3D11Component.cpp"
@@ -822,6 +832,7 @@ list(APPEND ue4poc_SOURCES
 	"src/mods/PluginLoader.hpp"
 	"src/mods/UObjectHook.hpp"
 	"src/mods/VR.hpp"
+	"src/mods/uobjecthook/SDKDumper.hpp"
 	"src/mods/vr/CVarManager.hpp"
 	"src/mods/vr/D3D11Component.hpp"
 	"src/mods/vr/D3D12Component.hpp"
@@ -895,6 +906,7 @@ target_link_libraries(ue4poc PUBLIC
 	TracyClient
 	DirectXTK
 	DirectXTK12
+	sdkgenny
 )
 
 target_link_libraries(ue4poc PUBLIC

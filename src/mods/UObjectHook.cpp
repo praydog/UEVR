@@ -24,6 +24,7 @@
 #include <sdk/FObjectProperty.hpp>
 #include <sdk/FArrayProperty.hpp>
 
+#include "uobjecthook/SDKDumper.hpp"
 #include "VR.hpp"
 
 #include "UObjectHook.hpp"
@@ -1522,7 +1523,7 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
                 break;
             }
 
-            // Need to handle StructProperty and ArrayProperty but whatever.
+            // Need to handle StructProperty but whatever.
             default:
                 SPDLOG_ERROR("[UObjectHook] Unsupported persistent property type {}", utility::narrow(prop_t_name));
                 break;
@@ -1579,6 +1580,8 @@ void UObjectHook::on_draw_sidebar_entry(std::string_view in_entry) {
         draw_main();
     } else if (in_entry == "Config") {
         draw_config();
+    } else if (in_entry == "Developer") {
+        draw_developer();
     }
 }
 
@@ -1586,6 +1589,12 @@ void UObjectHook::draw_config() {
     m_enabled_at_startup->draw("Enabled at Startup");
     m_attach_lerp_enabled->draw("Enable Attach Lerp");
     m_attach_lerp_speed->draw("Attach Lerp Speed");
+}
+
+void UObjectHook::draw_developer() {
+    if (ImGui::Button("Dump SDK")) {
+        SDKDumper::dump();
+    }
 }
 
 void UObjectHook::draw_main() {

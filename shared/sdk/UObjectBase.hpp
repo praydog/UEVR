@@ -38,6 +38,30 @@ public:
         return s_outer_private_offset + sizeof(void*);
     }
 
+    static uint32_t get_process_event_index() {
+        return s_process_event_index;
+    }
+
+    static uint32_t get_object_flags_offset() {
+        return s_object_flags_offset;
+    }
+
+    static uint32_t get_internal_index_offset() {
+        return s_internal_index_offset;
+    }
+
+    static uint32_t get_class_private_offset() {
+        return s_class_private_offset;
+    }
+
+    static uint32_t get_fname_offset() {
+        return s_fname_offset;
+    }
+
+    static uint32_t get_outer_private_offset() {
+        return s_outer_private_offset;
+    }
+
     static std::optional<uintptr_t> get_vtable();
     static std::optional<uintptr_t> get_destructor();
     static std::optional<uintptr_t> get_add_object();

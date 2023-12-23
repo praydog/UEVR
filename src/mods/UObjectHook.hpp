@@ -52,7 +52,8 @@ protected:
     std::vector<SidebarEntryInfo> get_sidebar_entries() override { 
         return {
             { "Main", true },
-            { "Config", false }
+            { "Config", false },
+            { "Developer", true }
         };
     }
 
@@ -64,6 +65,7 @@ protected:
     void on_draw_ui() override;
 
     void draw_config();
+    void draw_developer();
     void draw_main();
 
     void on_pre_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
