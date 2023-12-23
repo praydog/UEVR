@@ -1208,7 +1208,7 @@ void Framework::draw_ui() {
         ImGui::TableSetColumnIndex(0); // Set to the first column
 
         ImGui::BeginChild("UEVRLeftPane", ImVec2(0, 0), true);
-        auto dcs = [&](const char* label, uint32_t page_value) -> bool {
+        auto dcs = [&](const char* label, int32_t page_value) -> bool {
             ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
             if (ImGui::Selectable(label, m_sidebar_state.selected_entry == page_value)) {
                 m_sidebar_state.selected_entry = page_value;
@@ -1277,7 +1277,9 @@ void Framework::draw_ui() {
                         }
                     }
 
+                    ImGui::PushID(i);
                     dcs(sidebar_entries[i].m_label.c_str(), i);
+                    ImGui::PopID();
                 }
             }
 
