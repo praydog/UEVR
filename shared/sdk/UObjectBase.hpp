@@ -13,6 +13,7 @@ public:
     void update_offsets();
     std::wstring get_full_name() const;
     void process_event(UFunction* function, void* params);
+    void call_function(const wchar_t* name, void* params);
 
     UClass* get_class() const {
         return *(UClass**)((uintptr_t)this + s_class_private_offset);

@@ -249,6 +249,10 @@ UEVR_UObjectFunctions g_uobject_functions {
     [](UEVR_UObjectHandle obj, UEVR_UFunctionHandle func, void* params) {
         UOBJECT(obj)->process_event((sdk::UFunction*)func, params);
     },
+    // call_function
+    [](UEVR_UObjectHandle obj, const wchar_t* name, void* params) {
+        UOBJECT(obj)->call_function(name, params);
+    },
 };
 
 UEVR_UObjectArrayFunctions g_uobject_array_functions {

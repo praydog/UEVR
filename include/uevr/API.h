@@ -235,6 +235,7 @@ typedef struct {
     bool (*is_a)(UEVR_UObjectHandle object, UEVR_UClassHandle other);
 
     void (*process_event)(UEVR_UObjectHandle object, UEVR_UFunctionHandle function, void* params);
+    void (*call_function)(UEVR_UObjectHandle object, const wchar_t* name, void* params);
 } UEVR_UObjectFunctions;
 
 typedef struct {

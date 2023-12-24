@@ -558,4 +558,20 @@ void UObjectBase::process_event(sdk::UFunction* func, void* params) {
     
     vfunc(this, func, params);
 }
+
+void UObjectBase::call_function(const wchar_t* name, void* params) {
+    const auto klass = get_class();
+
+    if (klass == nullptr) {
+        return;
+    }
+
+    const auto func = klass->find_function(name);
+
+    if (func == nullptr) {
+        return;
+    }
+
+    process_event(func, params);
+}
 }
