@@ -837,11 +837,11 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
     const auto left_joystick_axis = get_joystick_axis(m_left_joystick);
     const auto right_joystick_axis = get_joystick_axis(m_right_joystick);
 
-    state->Gamepad.sThumbLX = (int16_t)(left_joystick_axis.x * 32767.0f);
-    state->Gamepad.sThumbLY = (int16_t)(left_joystick_axis.y * 32767.0f);
+    state->Gamepad.sThumbLX = (int16_t)std::clamp<float>(((float)state->Gamepad.sThumbLX + left_joystick_axis.x * 32767.0f), -32767.0f, 32767.0f);
+    state->Gamepad.sThumbLY = (int16_t)std::clamp<float>(((float)state->Gamepad.sThumbLY + left_joystick_axis.y * 32767.0f), -32767.0f, 32767.0f);
 
-    state->Gamepad.sThumbRX = (int16_t)(right_joystick_axis.x * 32767.0f);
-    state->Gamepad.sThumbRY = (int16_t)(right_joystick_axis.y * 32767.0f);
+    state->Gamepad.sThumbRX = (int16_t)std::clamp<float>(((float)state->Gamepad.sThumbRX + right_joystick_axis.x * 32767.0f), -32767.0f, 32767.0f);
+    state->Gamepad.sThumbRY = (int16_t)std::clamp<float>(((float)state->Gamepad.sThumbRY + right_joystick_axis.y * 32767.0f), -32767.0f, 32767.0f);
 
     // Touching the thumbrest allows us to use the thumbstick as a dpad.  Additional options are for controllers without capacitives/games that rely solely on DPad
     if (m_dpad_shifting->value()) {
