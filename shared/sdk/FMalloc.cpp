@@ -205,7 +205,7 @@ FMalloc* FMalloc::get() {
                 return utility::ExhaustionResult::CONTINUE;
             });
 
-            if (distance_from_ret > 10) {
+            if (distance_from_ret > 15) {
                 s_realloc_index = i;
                 SPDLOG_INFO("[FMalloc::get] Found Realloc at index {}", i);
                 break;
