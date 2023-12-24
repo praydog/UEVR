@@ -179,7 +179,6 @@ void SDKDumper::initialize_uobject_array() {
         return;
     }
 
-
     auto g = m_sdk->global_ns();
 
     auto uobject_array = g->class_("FUObjectArray");
@@ -285,7 +284,7 @@ void SDKDumper::initialize_uobject_array() {
     if (objs->is_inlined()) {
         get_objects_ptr->procedure(
             std::format("return (void*)((uintptr_t)this + {});",
-                sdk::FUObjectArray::get_objects_offset() + (sdk::FUObjectArray::MAX_INLINED_CHUNKS * sizeof(void*))
+                sdk::FUObjectArray::get_objects_offset()
             )
         );
     } else {
