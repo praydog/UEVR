@@ -25,7 +25,9 @@ private:
     void initialize_boilerplate_classes();
     void initialize_tarray();
     void initialize_uobject();
+    void initialize_ustruct();
     void initialize_uobject_array();
+    void initialize_fname();
     void populate_sdk();
     void write_sdk();
     

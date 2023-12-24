@@ -33,7 +33,7 @@ std::vector<sdk::UStruct*> get_all_structs() {
         return classes;
     }
 
-    const auto class_c = sdk::UStruct::static_class();
+    const auto struct_c = sdk::UStruct::static_class();
     const auto function_c = sdk::UFunction::static_class();
     const auto uenum_c = sdk::UEnum::static_class();
 
@@ -56,7 +56,7 @@ std::vector<sdk::UStruct*> get_all_structs() {
             continue;
         }
 
-        if (object_class->is_a(class_c) && !object_class->is_a(function_c) && !object_class->is_a(uenum_c)) {
+        if (object_class->is_a(struct_c) && !object_class->is_a(function_c) && !object_class->is_a(uenum_c)) {
             classes.push_back(reinterpret_cast<sdk::UStruct*>(object));
         }
     }
@@ -79,6 +79,7 @@ void SDKDumper::dump_internal() {
 void SDKDumper::initialize_sdk() {
     m_sdk = std::make_unique<sdkgenny::Sdk>();
     m_sdk->include("cstdint");
+    m_sdk->include("string");
 
     auto g = m_sdk->global_ns();
 
@@ -103,7 +104,9 @@ void SDKDumper::initialize_sdk() {
 void SDKDumper::initialize_boilerplate_classes() {
     initialize_tarray();
     initialize_uobject();
+    initialize_ustruct();
     initialize_uobject_array();
+    initialize_fname();
 }
 
 void SDKDumper::initialize_tarray() {
@@ -128,8 +131,9 @@ public:
 void SDKDumper::initialize_uobject() {
     const auto uobject = sdk::UObject::static_class();
     const auto ufunction = sdk::UFunction::static_class();
+    const auto uclass = sdk::UClass::static_class();
 
-    if (uobject == nullptr || ufunction == nullptr) {
+    if (uobject == nullptr || ufunction == nullptr || uclass == nullptr) {
         return;
     }
 
@@ -141,11 +145,50 @@ void SDKDumper::initialize_uobject() {
 
     auto g = m_sdk->global_ns();
 
+    // ::ProcessEvent
     auto process_event = s->virtual_function("ProcessEvent");
     process_event->vtable_index(sdk::UObjectBase::get_process_event_index());
     process_event->returns(g->type("void"));
     process_event->param("func")->type(get_or_generate_struct(ufunction)->ptr());
     process_event->param("params")->type(g->type("void")->ptr());
+
+    // Fields
+    auto class_private = s->variable("ClassPrivate")
+                          ->type(get_or_generate_struct(uclass)->ptr())
+                          ->offset(sdk::UObjectBase::get_class_private_offset());
+
+    auto outer_private = s->variable("OuterPrivate")
+                            ->type(s->ptr())
+                            ->offset(sdk::UObjectBase::get_outer_private_offset());
+
+    auto object_flags = s->variable("ObjectFlags")
+                           ->type(g->type("uint32_t"))
+                           ->offset(sdk::UObjectBase::get_object_flags_offset());
+
+    auto internal_index = s->variable("InternalIndex")
+                             ->type(g->type("uint32_t"))
+                             ->offset(sdk::UObjectBase::get_internal_index_offset());
+    
+    auto name_var = s->variable("Name")
+                    ->type(g->struct_("FName"))
+                    ->offset(sdk::UObjectBase::get_fname_offset());
+
+    // Functions
+    // ::get_full_name
+    auto get_full_name = s->function("get_full_name");
+    get_full_name->returns(g->type("std::wstring"));
+    get_full_name->procedure(
+R"(if (ClassPrivate == nullptr) { return L"null"; }
+auto obj_name = Name.ToString();
+for (auto outer = OuterPrivate; outer != nullptr && outer != this; outer = outer->OuterPrivate) {
+    obj_name = outer->Name.ToString() + L'.' + obj_name;
+}
+return ClassPrivate->Name.ToString() + L' ' + obj_name;)"
+    );
+}
+
+void SDKDumper::initialize_ustruct() {
+
 }
 
 void SDKDumper::initialize_uobject_array() {
@@ -298,6 +341,55 @@ void SDKDumper::initialize_uobject_array() {
     m_sdk->include("Windows.h");
 }
 
+void SDKDumper::initialize_fname() {
+    auto g = m_sdk->global_ns();
+    auto fname = g->struct_("FName");
+
+    fname->size(sizeof(sdk::FName));
+    fname->variable("Index")->type(g->type("int32_t"))->offset(offsetof(sdk::FName, a1));
+    fname->variable("Number")->type(g->type("int32_t"))->offset(offsetof(sdk::FName, a2));
+
+    // ::to_string
+    auto to_string = fname->function("ToString")->returns(g->type("std::wstring"));
+
+    const auto to_string_addr = sdk::FName::get_to_string();
+
+    if (!to_string_addr.has_value()) {
+        to_string->procedure("return L\"\";");
+    } else {
+        const auto module_within = utility::get_module_within((uintptr_t)to_string_addr.value());
+
+        if (!module_within) {
+            to_string->procedure("return L\"\";");
+            return;
+        }
+
+        const auto module_path_str = utility::get_module_path(*module_within);
+
+        if (!module_path_str.has_value()) {
+            to_string->procedure("return L\"\";");
+            return;
+        }
+
+        std::filesystem::path module_path{module_path_str.value()};
+        const auto module_name = module_path.filename();
+        const auto offset = (uintptr_t)to_string_addr.value() - (uintptr_t)module_within.value();
+
+        to_string->procedure(std::format("using ToStringFn = TArray<wchar_t>* (*)(const FName*, TArray<wchar_t>*);") + "\n" +
+                             std::format("static const auto module = GetModuleHandleA(\"{}\");", module_name.string()) + "\n" +
+                             std::format("static const auto offset = 0x{:x};", offset) + "\n" +
+                             std::format("static const auto fn = (ToStringFn)((uintptr_t)module + offset);") + "\n" +
+                             // We are using a static array because GMalloc
+                             // is not implemented in this SDK dump yet
+                             // The function SHOULD handle it correctly on subsequent calls
+                             // and delete/resize the array as needed (hopefully)
+                             std::format("static TArray<wchar_t> arr{{}};") + "\n" +
+                             std::format("fn(this, &arr);") + "\n" +
+                             std::format("return std::wstring(arr.data, arr.count);")
+        );
+    }
+}
+
 void SDKDumper::populate_sdk() {
     const auto structs = detail::get_all_structs();
 
@@ -367,7 +459,7 @@ sdkgenny::Namespace* SDKDumper::get_or_generate_namespace_chain(sdk::UStruct* us
         const auto outer = *it;
         const auto name = utility::narrow(outer->get_fname().to_string());
 
-        if (outer->is_a(sdk::UStruct::static_class())) {
+        if (outer->is_a(ustruct_c)) {
             // uh... dont know how to handle this... yet
         } else {
             if (auto existing = current->find<sdkgenny::Namespace>(name); existing != nullptr) {
