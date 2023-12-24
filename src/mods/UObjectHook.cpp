@@ -2636,10 +2636,10 @@ void UObjectHook::ui_handle_functions(void* object, sdk::UStruct* uclass) {
         if (is_real_object && ImGui::TreeNode(utility::narrow(func->get_fname().to_string()).data())) {
             auto parameters = func->get_child_properties();
 
-            if (parameters == nullptr) {
+            if (parameters == nullptr || (parameters->get_next() == nullptr && parameters->get_field_name().to_string() == L"ReturnValue")) {
                 if (ImGui::Button("Call")) {
                     struct {
-                        char poop[0x100]{};
+                        char poop[1024]{};
                     } params{};
 
                     object_real->process_event(func, &params);
