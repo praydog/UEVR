@@ -736,6 +736,17 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         return;
     }
 
+    // Clear button state for VR controllers
+    if (is_using_controllers_within(std::chrono::seconds(5))) {
+        state->Gamepad.wButtons = 0;
+        state->Gamepad.bLeftTrigger = 0;
+        state->Gamepad.bRightTrigger = 0;
+        state->Gamepad.sThumbLX = 0;
+        state->Gamepad.sThumbLY = 0;
+        state->Gamepad.sThumbRX = 0;
+        state->Gamepad.sThumbRY = 0;
+    }
+
     const auto joysticks = std::array<vr::VRInputValueHandle_t, 2> {
         m_right_joystick,
         m_left_joystick
