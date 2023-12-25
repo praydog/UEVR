@@ -28,6 +28,7 @@
 #include <sdk/Globals.hpp>
 #include <sdk/FName.hpp>
 #include <sdk/UObjectArray.hpp>
+#include <sdk/FBoolProperty.hpp>
 
 #include <sdk/UGameplayStatics.hpp>
 #include <sdk/APawn.hpp>
@@ -4112,11 +4113,11 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
                 if (pawn != nullptr && vr->is_aim_pawn_control_rotation_enabled()) {
                     auto camera_component = (sdk::UObject*)pawn->get_camera_component();
 
-                    if (camera_component != nullptr) {
-                        auto data = camera_component->get_property_data(L"bUsePawnControlRotation");
+                    if (camera_component != nullptr && camera_component->get_class() != nullptr) {
+                        static const auto boolprop = (sdk::FBoolProperty*)camera_component->get_class()->find_property(L"bUsePawnControlRotation");
 
-                        if (data != nullptr) {
-                            *(bool*)data = true;
+                        if (boolprop != nullptr) {
+                            boolprop->set_value_in_object(camera_component, true);
                         }
                     }
                 }
