@@ -79,6 +79,7 @@ void SDKDumper::dump_internal() {
 void SDKDumper::initialize_sdk() {
     m_sdk = std::make_unique<sdkgenny::Sdk>();
     m_sdk->include("cstdint");
+    m_sdk->include("string_view");
     m_sdk->include("string");
 
     auto g = m_sdk->global_ns();
@@ -619,11 +620,33 @@ sdkgenny::Variable* SDKDumper::generate_property(sdkgenny::Struct* s, sdk::FProp
 }
 
 void SDKDumper::generate_functions(sdkgenny::Struct* s, sdk::UStruct* ustruct) {
+    static const auto uclass_c = sdk::UClass::static_class();
+
     auto g = m_sdk->global_ns();
 
     // obviously first thing to do is generate the static_class!
     auto sc_func = s->static_function("static_class");
-    sc_func->returns(g->class_("UClass")->ptr());
-    sc_func->procedure("return nullptr;"); // todo
+    auto uclass_sdkgenny = get_or_generate_struct(uclass_c);
+
+    auto class_ns = get_or_generate_namespace_chain(uclass_c);
+
+    std::string ns_chain{class_ns != nullptr ? class_ns->usable_name() : ""};
+
+    if (class_ns != nullptr) {
+        for (auto ns = class_ns->owner<sdkgenny::Namespace>(); ns != nullptr; ns = ns->owner<sdkgenny::Namespace>()) {
+            if (ns->usable_name().length() > 0) {
+                ns_chain = ns->usable_name() + "::" + ns_chain;
+            }
+        }
+    }
+
+    const auto uclass_full_name = ns_chain + "::" + uclass_sdkgenny->usable_name();
+
+    sc_func->returns(uclass_sdkgenny->ptr());
+    sc_func->procedure(
+        std::format("static auto result = ({}*)FUObjectArray::get()->find_uobject(L\"{}\");", uclass_full_name, utility::narrow(ustruct->get_full_name())) + "\n" +
+        std::format("return result;")
+    );
+    sc_func->depends_on(g->class_("FUObjectArray"));
 }
 
