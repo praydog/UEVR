@@ -338,6 +338,23 @@ void SDKDumper::initialize_uobject_array() {
         );
     }
 
+    // ::find_uobject
+    auto uobject_sdkgenny = get_or_generate_struct(uobject);
+    auto find_uobject = uobject_array->function("find_uobject");
+    find_uobject->returns(uobject_sdkgenny->ptr());
+    find_uobject->param("name")->type(g->type("std::wstring_view"));
+
+    find_uobject->procedure(
+R"(for (int32_t i = 0; i < get_object_count(); ++i) {
+    const auto item = get_object(i); // FUObjectItem*
+    if (item == nullptr) { continue; }
+    const auto object = item->object; // UObject*
+    if (object == nullptr) { continue; }
+    if (object->get_full_name() == name) { return object; }
+}
+return nullptr;)"
+    );
+
     m_sdk->include("Windows.h");
 }
 
