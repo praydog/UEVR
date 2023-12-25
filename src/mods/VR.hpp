@@ -425,6 +425,10 @@ public:
         return m_aim_multiplayer_support->value();
     }
 
+    bool is_aim_pawn_control_rotation_enabled() const {
+        return m_aim_use_pawn_control_rotation->value();
+    }
+
     bool is_aim_interpolation_enabled() const {
         return m_aim_interp->value();
     }
@@ -761,6 +765,7 @@ private:
     const ModCombo::Ptr m_aim_method{ ModCombo::create(generate_name("AimMethod"), s_aim_method_names, AimMethod::GAME) };
     const ModCombo::Ptr m_movement_orientation{ ModCombo::create(generate_name("MovementOrientation"), s_aim_method_names, AimMethod::GAME) };
     AimMethod m_previous_aim_method{ AimMethod::GAME };
+    const ModToggle::Ptr m_aim_use_pawn_control_rotation{ ModToggle::create(generate_name("AimUsePawnControlRotation"), false) };
     const ModToggle::Ptr m_aim_multiplayer_support{ ModToggle::create(generate_name("AimMPSupport"), false) };
     const ModToggle::Ptr m_aim_interp{ ModToggle::create(generate_name("AimInterp"), true, true) };
     const ModSlider::Ptr m_aim_speed{ ModSlider::create(generate_name("AimSpeed"), 0.01f, 25.0f, 15.0f) };
@@ -835,6 +840,7 @@ private:
         *m_snapturn_angle,
         *m_aim_method,
         *m_movement_orientation,
+        *m_aim_use_pawn_control_rotation,
         *m_aim_multiplayer_support,
         *m_aim_speed,
         *m_aim_interp,

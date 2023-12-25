@@ -2116,6 +2116,8 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
             }
 
             m_aim_multiplayer_support->draw("Multiplayer Support");
+            ImGui::SameLine();
+            m_aim_use_pawn_control_rotation->draw("Use Pawn Control Rotation");
             m_aim_interp->draw("Smoothing");
             m_aim_speed->draw("Speed");
 

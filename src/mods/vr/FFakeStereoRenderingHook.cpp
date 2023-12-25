@@ -4103,11 +4103,25 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         // Roomscale movement
         // only do it on the right eye pass
         // if we did it on the left, there would be eye desyncs when the right eye is rendered
-        if (true_index == 1 && vr->is_roomscale_enabled()) {
+        if (true_index == 1 && (vr->is_roomscale_enabled() || vr->is_aim_pawn_control_rotation_enabled())) {
             const auto world = sdk::UEngine::get()->get_world();
 
             if (const auto controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0); controller != nullptr) {
-                if (const auto pawn = controller->get_acknowledged_pawn(); pawn != nullptr) {
+                const auto pawn = controller->get_acknowledged_pawn();
+
+                if (pawn != nullptr && vr->is_aim_pawn_control_rotation_enabled()) {
+                    auto camera_component = (sdk::UObject*)pawn->get_camera_component();
+
+                    if (camera_component != nullptr) {
+                        auto data = camera_component->get_property_data(L"bUsePawnControlRotation");
+
+                        if (data != nullptr) {
+                            *(bool*)data = true;
+                        }
+                    }
+                }
+
+                if (pawn != nullptr && vr->is_roomscale_enabled()) {
                     const auto pawn_pos = pawn->get_actor_location();
                     const auto new_pos = pawn_pos - head_offset_flat;
 
