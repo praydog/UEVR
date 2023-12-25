@@ -419,6 +419,7 @@ FUObjectArray* FUObjectArray::get() try {
         sdk::FObjectProperty::update_offsets();
         sdk::FArrayProperty::update_offsets();
         sdk::FEnumProperty::update_offsets();
+        sdk::FProperty::update_offsets();
         //sdk::UObjectHashTables::get();
 
 #ifdef TESTING_GUOBJECTARRAY

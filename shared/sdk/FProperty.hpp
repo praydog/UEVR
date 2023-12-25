@@ -25,11 +25,18 @@ public:
         return (T*)((uintptr_t)object + get_offset());
     }
 
+    uint64_t get_property_flags() const {
+        return *(uint64_t*)((uintptr_t)this + s_property_flags_offset);
+    }
+
     // Given xyz props from FVector, find the offset which matches up with all of them
     static void bruteforce_fproperty_offset(FProperty* x_prop, FProperty* y_prop, FProperty* z_prop);
+    static void update_offsets(); // for other offsets like PropertyFlags
 
 protected:
+    static inline bool s_attempted_update_offsets{false};
     static inline uint32_t s_offset_offset{0x0}; // idk
+    static inline uint32_t s_property_flags_offset{0x0}; // idk
 
     friend class UStruct;
     friend class UProperty;
