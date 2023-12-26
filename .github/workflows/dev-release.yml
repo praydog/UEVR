@@ -12,6 +12,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
+          token: ${{ secrets.UESDK_PULLER }}
           submodules: recursive
 
       - name: Configure CMake
