@@ -7,3 +7,6 @@
 [submodule "dependencies/submodules/imgui"]
 	path = dependencies/submodules/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "dependencies/submodules/UESDK"]
+	path = dependencies/submodules/UESDK
+	url = git@github.com:praydog/UESDK.git

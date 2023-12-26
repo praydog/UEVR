@@ -52,6 +52,8 @@ endif()
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+add_subdirectory(dependencies/submodules/UESDK)
+
 include(FetchContent)
 
 message(STATUS "Fetching bddisasm (v1.34.10)...")
@@ -200,28 +202,28 @@ target_include_directories(spdlog PUBLIC
 unset(CMKR_TARGET)
 unset(CMKR_SOURCES)
 
-# Target glm_static
-set(CMKR_TARGET glm_static)
-set(glm_static_SOURCES "")
+# Target glm
+set(CMKR_TARGET glm)
+set(glm_SOURCES "")
 
-list(APPEND glm_static_SOURCES
+list(APPEND glm_SOURCES
 	"dependencies/submodules/glm/glm/detail/glm.cpp"
 )
 
-list(APPEND glm_static_SOURCES
+list(APPEND glm_SOURCES
 	cmake.toml
 )
 
-set(CMKR_SOURCES ${glm_static_SOURCES})
-add_library(glm_static STATIC)
+set(CMKR_SOURCES ${glm_SOURCES})
+add_library(glm STATIC)
 
-if(glm_static_SOURCES)
-	target_sources(glm_static PRIVATE ${glm_static_SOURCES})
+if(glm_SOURCES)
+	target_sources(glm PRIVATE ${glm_SOURCES})
 endif()
 
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${glm_static_SOURCES})
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${glm_SOURCES})
 
-target_include_directories(glm_static PUBLIC
+target_include_directories(glm PUBLIC
 	"dependencies/submodules/glm"
 )
 
@@ -314,151 +316,6 @@ target_compile_definitions(imgui PUBLIC
 target_include_directories(imgui PUBLIC
 	"dependencies/submodules/imgui"
 	"src/ue4poc-imgui"
-)
-
-unset(CMKR_TARGET)
-unset(CMKR_SOURCES)
-
-# Target sdk
-set(CMKR_TARGET sdk)
-set(sdk_SOURCES "")
-
-list(APPEND sdk_SOURCES
-	"shared/sdk/AActor.cpp"
-	"shared/sdk/APawn.cpp"
-	"shared/sdk/APlayerCameraManager.cpp"
-	"shared/sdk/APlayerController.cpp"
-	"shared/sdk/CVar.cpp"
-	"shared/sdk/ConsoleManager.cpp"
-	"shared/sdk/DynamicRHI.cpp"
-	"shared/sdk/EngineModule.cpp"
-	"shared/sdk/FArrayProperty.cpp"
-	"shared/sdk/FBoolProperty.cpp"
-	"shared/sdk/FEnumProperty.cpp"
-	"shared/sdk/FField.cpp"
-	"shared/sdk/FMalloc.cpp"
-	"shared/sdk/FName.cpp"
-	"shared/sdk/FObjectProperty.cpp"
-	"shared/sdk/FProperty.cpp"
-	"shared/sdk/FRenderTargetPool.cpp"
-	"shared/sdk/FSceneView.cpp"
-	"shared/sdk/FStructProperty.cpp"
-	"shared/sdk/FViewportInfo.cpp"
-	"shared/sdk/Globals.cpp"
-	"shared/sdk/ScriptMatrix.cpp"
-	"shared/sdk/ScriptRotator.cpp"
-	"shared/sdk/ScriptTransform.cpp"
-	"shared/sdk/ScriptVector.cpp"
-	"shared/sdk/Slate.cpp"
-	"shared/sdk/StereoStuff.cpp"
-	"shared/sdk/UActorComponent.cpp"
-	"shared/sdk/UCameraComponent.cpp"
-	"shared/sdk/UClass.cpp"
-	"shared/sdk/UEngine.cpp"
-	"shared/sdk/UEnum.cpp"
-	"shared/sdk/UFunction.cpp"
-	"shared/sdk/UGameEngine.cpp"
-	"shared/sdk/UGameViewportClient.cpp"
-	"shared/sdk/UGameplayStatics.cpp"
-	"shared/sdk/UObject.cpp"
-	"shared/sdk/UObjectArray.cpp"
-	"shared/sdk/UObjectBase.cpp"
-	"shared/sdk/UObjectHashTables.cpp"
-	"shared/sdk/UProperty.cpp"
-	"shared/sdk/USceneComponent.cpp"
-	"shared/sdk/Utility.cpp"
-	"shared/sdk/AActor.hpp"
-	"shared/sdk/APawn.hpp"
-	"shared/sdk/APlayerCameraManager.hpp"
-	"shared/sdk/APlayerController.hpp"
-	"shared/sdk/CVar.hpp"
-	"shared/sdk/ConsoleManager.hpp"
-	"shared/sdk/DynamicRHI.hpp"
-	"shared/sdk/EngineModule.hpp"
-	"shared/sdk/FArrayProperty.hpp"
-	"shared/sdk/FBoolProperty.hpp"
-	"shared/sdk/FEnumProperty.hpp"
-	"shared/sdk/FField.hpp"
-	"shared/sdk/FFieldClass.hpp"
-	"shared/sdk/FMalloc.hpp"
-	"shared/sdk/FName.hpp"
-	"shared/sdk/FObjectProperty.hpp"
-	"shared/sdk/FProperty.hpp"
-	"shared/sdk/FRenderTargetPool.hpp"
-	"shared/sdk/FSceneView.hpp"
-	"shared/sdk/FStructProperty.hpp"
-	"shared/sdk/FViewportInfo.hpp"
-	"shared/sdk/Globals.hpp"
-	"shared/sdk/Math.hpp"
-	"shared/sdk/RHICommandList.hpp"
-	"shared/sdk/ScriptMatrix.hpp"
-	"shared/sdk/ScriptRotator.hpp"
-	"shared/sdk/ScriptTransform.hpp"
-	"shared/sdk/ScriptVector.hpp"
-	"shared/sdk/Slate.hpp"
-	"shared/sdk/StereoStuff.hpp"
-	"shared/sdk/TArray.hpp"
-	"shared/sdk/UActorComponent.hpp"
-	"shared/sdk/UCameraComponent.hpp"
-	"shared/sdk/UClass.hpp"
-	"shared/sdk/UEngine.hpp"
-	"shared/sdk/UEnum.hpp"
-	"shared/sdk/UFunction.hpp"
-	"shared/sdk/UGameEngine.hpp"
-	"shared/sdk/UGameViewportClient.hpp"
-	"shared/sdk/UGameplayStatics.hpp"
-	"shared/sdk/UObject.hpp"
-	"shared/sdk/UObjectArray.hpp"
-	"shared/sdk/UObjectBase.hpp"
-	"shared/sdk/UObjectHashTables.hpp"
-	"shared/sdk/UProperty.hpp"
-	"shared/sdk/USceneComponent.hpp"
-	"shared/sdk/UWorld.hpp"
-	"shared/sdk/Utility.hpp"
-	"shared/sdk/threading/GameThreadWorker.hpp"
-	"shared/sdk/threading/RHIThreadWorker.hpp"
-	"shared/sdk/threading/RenderThreadWorker.hpp"
-	"shared/sdk/threading/ThreadWorker.hpp"
-	"shared/sdk/vtables/IXRTrackingSystemVTables.hpp"
-)
-
-list(APPEND sdk_SOURCES
-	cmake.toml
-)
-
-set(CMKR_SOURCES ${sdk_SOURCES})
-add_library(sdk STATIC)
-
-if(sdk_SOURCES)
-	target_sources(sdk PRIVATE ${sdk_SOURCES})
-endif()
-
-target_compile_features(sdk PUBLIC
-	cxx_std_23
-)
-
-target_compile_options(sdk PUBLIC
-	"/EHa"
-	"/MP"
-)
-
-target_include_directories(sdk PUBLIC
-	"shared/"
-)
-
-target_link_libraries(sdk PUBLIC
-	spdlog
-	bddisasm
-	bdshemu
-	glm_static
-	asmjit
-)
-
-target_link_libraries(sdk PUBLIC
-	kananlib
-	Version
-	TracyClient
-	nlohmann_json
 )
 
 unset(CMKR_TARGET)
@@ -587,7 +444,7 @@ target_include_directories(sdk-test PUBLIC
 
 target_link_libraries(sdk-test PUBLIC
 	kananlib
-	sdk
+	uesdk
 )
 
 unset(CMKR_TARGET)
@@ -897,7 +754,7 @@ target_link_libraries(ue4poc PUBLIC
 	d3d11
 	d3d12
 	safetyhook
-	glm_static
+	glm
 	imgui
 	openvr_api
 	openxr_loader
@@ -907,11 +764,12 @@ target_link_libraries(ue4poc PUBLIC
 	DirectXTK
 	DirectXTK12
 	sdkgenny
+	asmjit
 )
 
 target_link_libraries(ue4poc PUBLIC
 	kananlib
-	sdk
+	uesdk
 )
 
 set_target_properties(ue4poc PROPERTIES

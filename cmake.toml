@@ -27,6 +27,8 @@ if ("${CMAKE_BUILD_TYPE}" MATCHES "Release")
 endif()
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+add_subdirectory(dependencies/submodules/UESDK)
 """
 
 [target.spdlog]
@@ -36,7 +38,7 @@ include-directories = ["dependencies/submodules/spdlog/include"]
 compile-definitions = ["SPDLOG_COMPILED_LIB"]
 alias="spdlog::spdlog"
 
-[target.glm_static]
+[target.glm]
 type = "static"
 sources = ["dependencies/submodules/glm/glm/**.cpp"]
 include-directories = ["dependencies/submodules/glm"]
@@ -122,30 +124,6 @@ compile-definitions = [
     "IMGUI_USER_CONFIG=\"${CMAKE_CURRENT_SOURCE_DIR}/src/ue4poc-imgui/ue4poc_imconfig.hpp\"",
 ]
 
-[template.sdk-template]
-type = "static"
-sources = ["shared/sdk/**.cpp", "shared/sdk/**.c"]
-headers = ["shared/sdk/**.hpp", "shared/sdk/**.h"]
-include-directories = ["shared/"]
-compile-options = ["/EHa", "/MP"]
-compile-features = ["cxx_std_23"]
-link-libraries = [
-    "spdlog",
-    "bddisasm",
-    "bdshemu",
-    "glm_static",
-    "asmjit"
-]
-
-[target.sdk]
-type = "sdk-template"
-link-libraries = [
-    "kananlib",
-    "Version",
-    "TracyClient",
-    "nlohmann_json"
-]
-
 [target.plugin_renderlib]
 type = "static"
 sources = ["examples/renderlib/**.cpp", "examples/renderlib/**.c"]
@@ -178,7 +156,7 @@ include-directories = ["shared/", "include/"]
 compile-features = ["cxx_std_23"]
 link-libraries = [
     "kananlib",
-    "sdk"
+    "uesdk"
 ]
 
 [target.vr-plugin-nullifier]
@@ -245,7 +223,7 @@ link-libraries = [
     "d3d11",
     "d3d12",
     "safetyhook",
-    "glm_static",
+    "glm",
     "imgui",
     "openvr_api",
     "openxr_loader",
@@ -254,7 +232,8 @@ link-libraries = [
     "TracyClient",
     "DirectXTK",
     "DirectXTK12",
-    "sdkgenny"
+    "sdkgenny",
+    "asmjit"
 ]
 
 [template.ue4template.properties]
@@ -271,7 +250,7 @@ ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET
 type="ue4template"
 link-libraries = [
     "kananlib",
-    "sdk"
+    "uesdk"
 ]
 cmake-after="""
 add_custom_command(
