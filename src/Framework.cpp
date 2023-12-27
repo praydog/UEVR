@@ -471,7 +471,7 @@ void Framework::on_frame_d3d11() {
 
     //if (!m_has_frame) {
         //if (!is_init_ok) {
-            update_fonts();
+            //update_fonts();
             invalidate_device_objects();
 
             ImGui_ImplDX11_NewFrame();
@@ -569,7 +569,7 @@ void Framework::on_frame_d3d12() {
 
     //if (!m_has_frame) {
         //if (!is_init_ok) {
-            update_fonts();
+            //update_fonts();
 
             ImGui::GetIO().BackendRendererUserData = m_d3d12.imgui_backend_datas[0];
             const auto prev_cleanup = m_wants_device_object_cleanup;
