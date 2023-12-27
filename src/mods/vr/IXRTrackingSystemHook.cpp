@@ -38,10 +38,10 @@ detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
         SPDLOG_INFO("Found version {}.{} from executable (disk version)", HIWORD(version.dwFileVersionMS), LOWORD(version.dwFileVersionMS));
     }
 
-    // TODO: actually dump 5.2-5.3
+    // TODO: actually dump 5.2
     // >= 5.3
     if (version.dwFileVersionMS == 0x50003 || str_version.starts_with("5.3")) {
-        return ue5_1::IXRTrackingSystemVT::get();
+        return ue5_3::IXRTrackingSystemVT::get();
     }
 
     // >= 5.2
@@ -122,9 +122,9 @@ detail::IXRCameraVT& get_camera_vtable() {
         version.dwFileVersionMS = 0;
     }
 
-    // TODO: actually dump 5.2-5.3
+    // TODO: actually dump 5.2
     if (version.dwFileVersionMS == 0x50003 || str_version.starts_with("5.3")) {
-        return ue5_1::IXRCameraVT::get();
+        return ue5_3::IXRCameraVT::get();
     }
 
     // >= 5.2
@@ -204,9 +204,9 @@ detail::IHeadMountedDisplayVT& get_hmd_vtable() {
         version.dwFileVersionMS = 0;
     }
 
-    // TODO: actually dump 5.2-5.3
+    // TODO: actually dump 5.2
     if (version.dwFileVersionMS == 0x50003 || str_version.starts_with("5.3")) {
-        return ue5_1::IHeadMountedDisplayVT::get();
+        return ue5_3::IHeadMountedDisplayVT::get();
     }
 
     // >= 5.2
