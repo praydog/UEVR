@@ -18,6 +18,7 @@
 #include <sdk/FProperty.hpp>
 #include <sdk/FBoolProperty.hpp>
 #include <sdk/FObjectProperty.hpp>
+#include <sdk/FStructProperty.hpp>
 
 #include "Framework.hpp"
 
@@ -626,21 +627,25 @@ void SDKDumper::generate_functions(sdkgenny::Struct* s, sdk::UStruct* ustruct) {
 
     // obviously first thing to do is generate the static_class!
     auto sc_func = s->static_function("static_class");
+
     auto uclass_sdkgenny = get_or_generate_struct(uclass_c);
 
-    auto class_ns = get_or_generate_namespace_chain(uclass_c);
+    auto generate_full_name = [&](sdk::UStruct* target) {
+        auto class_ns = get_or_generate_namespace_chain(target);
+        std::string ns_chain{class_ns != nullptr ? class_ns->usable_name() : ""};
 
-    std::string ns_chain{class_ns != nullptr ? class_ns->usable_name() : ""};
-
-    if (class_ns != nullptr) {
-        for (auto ns = class_ns->owner<sdkgenny::Namespace>(); ns != nullptr; ns = ns->owner<sdkgenny::Namespace>()) {
-            if (ns->usable_name().length() > 0) {
-                ns_chain = ns->usable_name() + "::" + ns_chain;
+        if (class_ns != nullptr) {
+            for (auto ns = class_ns->owner<sdkgenny::Namespace>(); ns != nullptr; ns = ns->owner<sdkgenny::Namespace>()) {
+                if (ns->usable_name().length() > 0) {
+                    ns_chain = ns->usable_name() + "::" + ns_chain;
+                }
             }
         }
-    }
 
-    const auto uclass_full_name = ns_chain + "::" + uclass_sdkgenny->usable_name();
+        return ns_chain + "::" + uclass_sdkgenny->usable_name();
+    };
+
+    const auto uclass_full_name = generate_full_name(uclass_c);
 
     sc_func->returns(uclass_sdkgenny->ptr());
     sc_func->procedure(
@@ -648,5 +653,121 @@ void SDKDumper::generate_functions(sdkgenny::Struct* s, sdk::UStruct* ustruct) {
         std::format("return result;")
     );
     sc_func->depends_on(g->class_("FUObjectArray"));
+
+    for (auto field = ustruct->get_children(); field != nullptr; field = field->get_next()) {
+        if (field->get_class() == nullptr) {
+            continue;
+        }
+
+        const auto field_class = field->get_class();
+        const auto field_class_name = field_class->get_fname().to_string();
+
+        if (field_class_name != L"Function") {
+            continue;
+        }
+
+        const auto func = (sdk::UFunction*)field;
+        auto func_sdkgenny = s->function(utility::narrow(func->get_fname().to_string()));
+
+        func_sdkgenny->procedure("return;"); // empty for now.
+
+        for (auto prop = func->get_child_properties(); prop != nullptr; prop = prop->get_next()) {
+            if (prop->get_class() == nullptr) {
+                continue;
+            }
+
+            const auto param_class = prop->get_class();
+            const auto param_class_name = param_class->get_name().to_string();
+
+            if (!param_class_name.contains(L"Property")) {
+                continue;
+            }
+
+            const auto param = (sdk::FProperty*)prop;
+            if (!param->is_param()) {
+                continue;
+            }
+
+            const auto is_ref = param->is_reference_param();
+            const auto is_ret = param->is_return_param();
+            const auto is_out = param->is_out_param();
+
+            auto param_sdkgenny = !is_ret ? func_sdkgenny->param(utility::narrow(param->get_field_name().to_string())) : nullptr;
+
+            std::optional<std::string> builtin_type{};
+            sdk::UStruct* param_ustruct{nullptr};
+            bool is_ptr = false;
+
+            switch (utility::hash(utility::narrow(param_class_name))) {
+            case "BoolProperty"_fnv:
+                builtin_type = "bool";
+                break;
+            case "FloatProperty"_fnv:
+                builtin_type = "float";
+                break;
+            case "DoubleProperty"_fnv:
+                builtin_type = "double";
+                break;
+            case "IntProperty"_fnv:
+                builtin_type = "int32_t";
+                break;
+            case "ObjectProperty"_fnv:
+                {
+                    const auto obj_prop = (sdk::FObjectProperty*)param;
+                    param_ustruct = obj_prop->get_property_class();
+                    is_ptr = true;
+                    break;
+                }
+            case "StructProperty"_fnv:
+                {
+                    const auto struct_prop = (sdk::FStructProperty*)param;
+                    param_ustruct = struct_prop->get_struct();
+                    //is_ptr = true;
+                    break;
+                }
+            default:
+                //uiltin_type = utility::narrow(param_class_name); // for testing for now.
+                break;
+            };
+
+            if (builtin_type) {
+                if (is_ret) {
+                    func_sdkgenny->returns(g->type(*builtin_type));
+                } else if (is_ref || is_out) {
+                    param_sdkgenny->type(g->type(*builtin_type)->ref());
+                } else {
+                    param_sdkgenny->type(g->type(*builtin_type));
+                }
+            } else if (param_ustruct != nullptr) {
+                if (is_ret) {
+                    if (is_ptr) {
+                        func_sdkgenny->returns(get_or_generate_struct(param_ustruct)->ptr());
+                    } else {
+                        func_sdkgenny->returns(get_or_generate_struct(param_ustruct));
+                    }
+                } else if (is_ref || is_out) {
+                    if (is_ptr) {
+                        param_sdkgenny->type(get_or_generate_struct(param_ustruct)->ptr()->ref());
+                    } else {
+                        param_sdkgenny->type(get_or_generate_struct(param_ustruct)->ref());
+                    }
+                } else {
+                    if (is_ptr) {
+                        param_sdkgenny->type(get_or_generate_struct(param_ustruct)->ptr());
+                    } else {
+                        param_sdkgenny->type(get_or_generate_struct(param_ustruct));
+                    }
+                }
+            } else {
+                if (is_ret) {
+                    func_sdkgenny->returns(g->type("void*"));
+                } else if (is_ref || is_out) {
+                    param_sdkgenny->type(g->type("void*")->ref());
+                } else {
+                    param_sdkgenny->type(g->type("void*"));
+                }
+            }
+        }
+    }
 }
 
