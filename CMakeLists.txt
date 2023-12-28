@@ -487,7 +487,7 @@ target_link_libraries(vr-plugin-nullifier PUBLIC
 
 set_target_properties(vr-plugin-nullifier PROPERTIES
 	OUTPUT_NAME
-		UnrealVRPluginNullifier
+		UEVRPluginNullifier
 	RUNTIME_OUTPUT_DIRECTORY_RELEASE
 		"${CMAKE_BINARY_DIR}/bin/${CMKR_TARGET}"
 	RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO
@@ -776,7 +776,7 @@ target_link_libraries(ue4poc PUBLIC
 
 set_target_properties(ue4poc PROPERTIES
 	OUTPUT_NAME
-		UnrealVRBackend
+		UEVRBackend
 	LINK_FLAGS
 		"/DELAYLOAD:openvr_api.dll"
 	RUNTIME_OUTPUT_DIRECTORY_RELEASE
