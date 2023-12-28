@@ -16,7 +16,7 @@ public:
         : m_lua{l} 
     {
         std::scoped_lock _{m_mtx};
-        const auto unreal_vr_backend = GetModuleHandleA("UnrealVRBackend.dll");
+        const auto unreal_vr_backend = GetModuleHandleA("UEVRBackend.dll");
 
         if (unreal_vr_backend == nullptr) {
             return;
