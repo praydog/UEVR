@@ -76,12 +76,12 @@ FetchContent_MakeAvailable(kananlib)
 
 set(SAFETYHOOK_FETCH_ZYDIS ON)
 
-message(STATUS "Fetching safetyhook (5a81074882a84ff870da48bc4955addef5ccc6e7)...")
+message(STATUS "Fetching safetyhook (4dce6a63268fc0a563f09a4e195b27ad847f9714)...")
 FetchContent_Declare(safetyhook
 	GIT_REPOSITORY
 		"https://github.com/praydog/safetyhook"
 	GIT_TAG
-		5a81074882a84ff870da48bc4955addef5ccc6e7
+		4dce6a63268fc0a563f09a4e195b27ad847f9714
 )
 FetchContent_MakeAvailable(safetyhook)
 

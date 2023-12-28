@@ -53,7 +53,7 @@ tag = "ba66ffaeecfd201ac66310ddf0a4a98140f1441f"
 
 [fetch-content.safetyhook]
 git = "https://github.com/praydog/safetyhook"
-tag = "5a81074882a84ff870da48bc4955addef5ccc6e7"
+tag = "4dce6a63268fc0a563f09a4e195b27ad847f9714"
 cmake-before="""
 set(SAFETYHOOK_FETCH_ZYDIS ON)
 """
