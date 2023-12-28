@@ -1,8 +1,11 @@
 #include <chrono>
 
 #include <spdlog/spdlog.h>
+#include <utility/String.hpp>
 
-#include <dinput.h>
+#include "Framework.hpp"
+#include "mods/VR.hpp"
+#include "utility/Logging.hpp"
 
 #include "DInputHook.hpp"
 
@@ -72,14 +75,12 @@ HRESULT WINAPI DInputHook::create_hooked(
     LPUNKNOWN punkOuter
 ) 
 {
-    SPDLOG_INFO("[DInputHook] DirectInput8Create called");
+    SPDLOG_INFO_EVERY_N_SEC(5, "[DInputHook] DirectInput8Create called");
 
     const auto og = g_dinput_hook->m_create_hook.original<decltype(&create_hooked)>();
     const auto result = og(hinst, dwVersion, riidltf, ppvOut, punkOuter);
 
     if (result == DI_OK) {
-        SPDLOG_INFO("[DInputHook] DirectInput8Create succeeded");
-
         if (ppvOut == nullptr) {
             SPDLOG_INFO("[DInputHook] ppvOut is null");
             return result;
@@ -89,22 +90,33 @@ HRESULT WINAPI DInputHook::create_hooked(
 
         auto iface = (LPDIRECTINPUT8W)*ppvOut;
 
-        if (!g_dinput_hook->m_vtable_hooks.contains(iface)) {
-            g_dinput_hook->m_vtable_hooks[iface] = std::make_unique<VtableHook>(iface);
-            auto& vthook = g_dinput_hook->m_vtable_hooks[iface];
+        if (iface != nullptr) {
+            // Its not necessary to make a full blown vtable hook for this because
+            // the vtable will always be the same for IDirectInput8W
+            // This way we prevent a memory leak from creating many vtable hook instances
+            static decltype(DInputHook::m_original_vtable) vt{
+                (*(uintptr_t**)iface)[0],
+                (*(uintptr_t**)iface)[1],
+                (*(uintptr_t**)iface)[2],
+                (*(uintptr_t**)iface)[3],
+                (uintptr_t)enum_devices_hooked,
+                (*(uintptr_t**)iface)[5],
+                (*(uintptr_t**)iface)[6],
+                (*(uintptr_t**)iface)[7],
+                (*(uintptr_t**)iface)[8],
+                (*(uintptr_t**)iface)[9],
+                (*(uintptr_t**)iface)[10],
+                (*(uintptr_t**)iface)[11],
+                (*(uintptr_t**)iface)[12],
+                (*(uintptr_t**)iface)[13],
+                (*(uintptr_t**)iface)[14],
+            };
 
-            if (!vthook->create(iface)) {
-                SPDLOG_INFO("[DInputHook] Failed to hook vtable");
-                return result;
+            if (g_dinput_hook->m_original_vtable[0] == 0) {
+                memcpy(g_dinput_hook->m_original_vtable.data(), *(uintptr_t**)iface, sizeof(vt));
             }
-
-            // Hook EnumDevices
-            if (vthook->hook_method(ENUM_DEVICES_VTABLE_INDEX, DInputHook::enum_devices_hooked)) {
-                SPDLOG_INFO("[DInputHook] Hooked IDirectInput8::EnumDevices");
-            } else {
-                SPDLOG_INFO("[DInputHook] Failed to hook IDirectInput8::EnumDevices");
             
-            }
+            *(uintptr_t**)iface = vt.data();
         }
     } else {
         SPDLOG_INFO("[DInputHook] DirectInput8Create failed");
@@ -121,38 +133,31 @@ HRESULT DInputHook::enum_devices_hooked(
     DWORD dwFlags
 )
 {
-    SPDLOG_INFO("[DInputHook] IDirectInput8::EnumDevices called");
+    SPDLOG_INFO_EVERY_N_SEC(5, "[DInputHook] IDirectInput8::EnumDevices called");
 
     std::scoped_lock _{g_dinput_hook->m_mutex};
 
-    if (!g_dinput_hook->m_vtable_hooks.contains(This)) {
-        SPDLOG_INFO("[DInputHook] IDirectInput8::EnumDevices not hooked");
-        return DI_OK;
-    }
+    const auto og = (decltype(&enum_devices_hooked))g_dinput_hook->m_original_vtable[ENUM_DEVICES_VTABLE_INDEX];
 
-    auto& vthook = g_dinput_hook->m_vtable_hooks[This];
-
-    if (vthook == nullptr) {
-        SPDLOG_INFO("[DInputHook] IDirectInput8::EnumDevices vtable hook is null");
-        return DI_OK;
-    }
-
-    auto og = vthook->get_method<decltype(&enum_devices_hooked)>(ENUM_DEVICES_VTABLE_INDEX);
-
-    if (og == nullptr) {
+    if (og == 0) {
         SPDLOG_INFO("[DInputHook] IDirectInput8::EnumDevices original method is null");
         return DI_OK;
     }
 
-    SPDLOG_INFO("[DInputHook] Calling original IDirectInput8::EnumDevices");
-
-    auto result = og(This, dwDevType, lpCallback, pvRef, dwFlags);
-
-    SPDLOG_INFO("[DInputHook] IDirectInput8::EnumDevices returned {}", result);
-
-    if (lpCallback != nullptr) {
-        // TODO: Spoof xinput devices
+    // We dont care about these other ones, so just call the original
+    if (dwDevType != DI8DEVCLASS_GAMECTRL) {
+        auto result = og(This, dwDevType, lpCallback, pvRef, dwFlags);
+        return result;
     }
 
-    return result;
+    // the purpose of this is to stop some games from spamming calls to EnumDevices
+    // without a real controller connected, which causes the game to drop to single digit FPS
+    auto should_call_original = g_framework->is_ready() && !VR::get()->is_using_controllers_within(std::chrono::seconds(5));
+
+    if (should_call_original) {
+        auto result = og(This, dwDevType, lpCallback, pvRef, dwFlags);
+        return result;
+    }
+
+    return DI_OK;
 }

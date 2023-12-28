@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <memory>
+#include <array>
 
 #ifndef DIRECTINPUT_VERSION
 #define DIRECTINPUT_VERSION 0x0800
@@ -11,7 +12,6 @@
 #include <dinput.h>
 
 #include <safetyhook.hpp>
-#include <utility/VtableHook.hpp>
 
 class DInputHook {
 public:
@@ -38,5 +38,5 @@ private:
     std::mutex m_mutex{};
 
     safetyhook::InlineHook m_create_hook{};
-    std::unordered_map<LPDIRECTINPUT8W, std::unique_ptr<VtableHook>> m_vtable_hooks{};
+    std::array<uintptr_t, 15> m_original_vtable{};
 };
