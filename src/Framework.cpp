@@ -457,6 +457,7 @@ void Framework::on_frame_d3d11() {
     if (m_message_hook_requested) {
         initialize_windows_message_hook();
         initialize_xinput_hook();
+        initialize_dinput_hook();
     }
 
     auto device = m_d3d11_hook->get_device();
@@ -555,6 +556,7 @@ void Framework::on_frame_d3d12() {
     if (m_message_hook_requested) {
         initialize_windows_message_hook();
         initialize_xinput_hook();
+        initialize_dinput_hook();
     }
 
     auto device = m_d3d12_hook->get_device();
@@ -1600,6 +1602,7 @@ bool Framework::initialize() {
 
     initialize_windows_message_hook();
     initialize_xinput_hook();
+    initialize_dinput_hook();
 
     // TODO
     /*if (m_first_frame) {
@@ -1675,6 +1678,15 @@ bool Framework::initialize_xinput_hook() {
     if (m_first_frame || m_xinput_hook == nullptr) {
         m_xinput_hook.reset();
         m_xinput_hook = std::make_unique<XInputHook>();
+    }
+
+    return true;
+}
+
+bool Framework::initialize_dinput_hook() {
+    if (m_first_frame || m_dinput_hook == nullptr) {
+        m_dinput_hook.reset();
+        m_dinput_hook = std::make_unique<DInputHook>();
     }
 
     return true;
