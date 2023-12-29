@@ -713,7 +713,7 @@ list(APPEND uevr_SOURCES
 	"src/mods/vr/structures/FXRHMDData.hpp"
 	"src/mods/vr/structures/FXRMotionControllerData.hpp"
 	"src/uevr-imgui/font_robotomedium.hpp"
-	"src/uevr-imgui/ue4poc_imconfig.hpp"
+	"src/uevr-imgui/uevr_imconfig.hpp"
 	"src/utility/ImGui.hpp"
 	"src/utility/Logging.hpp"
 	"src/uevr-imgui/imgui_impl_dx11.h"
