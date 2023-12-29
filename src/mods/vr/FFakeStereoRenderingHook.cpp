@@ -2750,7 +2750,7 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
 
             auto l = (sdk::FRHICommandListBase*)command_list;
 
-            if (l->root != nullptr) {
+            if (l != nullptr && l->root != nullptr && ((uintptr_t)l->root & (sizeof(void*) - 1)) == 0) {
                 if (!analyzed_root_already) try {
                     if (utility::get_module_within(*(void**)l->root).value_or(nullptr) == nullptr) {
                         SPDLOG_INFO("Old FRHICommandBase detected");
@@ -2779,9 +2779,9 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
 
     const auto has_good_root = 
         cmd_list != nullptr &&
-        ((uintptr_t)cmd_list & 1 == 0) &&
+        (((uintptr_t)cmd_list & (sizeof(void*) - 1)) == 0) &&
         cmd_list->root != nullptr &&
-        ((uintptr_t)cmd_list->root & 1 == 0);
+        (((uintptr_t)cmd_list->root & (sizeof(void*) - 1)) == 0);
 
     // Hijack the top command in the command list so we can enqueue the render poses on the RHI thread
     if (has_good_root) {
@@ -2871,12 +2871,24 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
 
         if (g_hook->get_render_target_manager()->is_ue_5_0_3() && g_hook->has_slate_hook()) {
             enqueue_poses_on_slate_thread();
-        } else if (!is_old_command_base) {
-            SceneViewExtensionAnalyzer::hook_new_rhi_command((sdk::FRHICommandBase_New*)cmd_list->root, frame_count + compensation);
-        } else {
-            SceneViewExtensionAnalyzer::hook_old_rhi_command((sdk::FRHICommandBase_Old*)cmd_list->root, frame_count + compensation);
+        } else try {
+            if (!is_old_command_base) {
+                SceneViewExtensionAnalyzer::hook_new_rhi_command((sdk::FRHICommandBase_New*)cmd_list->root, frame_count + compensation);
+            } else {
+                SceneViewExtensionAnalyzer::hook_old_rhi_command((sdk::FRHICommandBase_Old*)cmd_list->root, frame_count + compensation);
+            }
+        } catch(...) {
+            SPDLOG_INFO_ONCE("Failed to hook command list, falling back to Slate thread hook");
+
+            if (g_hook->has_slate_hook()) {
+                enqueue_poses_on_slate_thread();
+            } else {
+                vr->get_runtime()->enqueue_render_poses(frame_count + compensation);
+            }
         }
     } else {
+        SPDLOG_INFO_ONCE("Bad root or command list, falling back to Slate thread hook");
+
         // welp v2
         if (g_hook->has_slate_hook()) {
             enqueue_poses_on_slate_thread();
