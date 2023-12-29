@@ -35,7 +35,9 @@ private:
         DWORD dwFlags
     );
 
-    std::mutex m_mutex{};
+    // This is recursive because apparently EnumDevices
+    // can call DirectInput8Create again... wHAT?
+    std::recursive_mutex m_mutex{};
 
     safetyhook::InlineHook m_create_hook{};
     std::array<uintptr_t, 15> m_original_vtable{};
