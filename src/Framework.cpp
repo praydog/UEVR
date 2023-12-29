@@ -7,10 +7,10 @@
 #include <spdlog/sinks/basic_file_sink.h>
 
 #include <imgui.h>
-#include "ue4poc-imgui/font_robotomedium.hpp"
-#include "ue4poc-imgui/imgui_impl_dx11.h"
-#include "ue4poc-imgui/imgui_impl_dx12.h"
-#include "ue4poc-imgui/imgui_impl_win32.h"
+#include "uevr-imgui/font_robotomedium.hpp"
+#include "uevr-imgui/imgui_impl_dx11.h"
+#include "uevr-imgui/imgui_impl_dx12.h"
+#include "uevr-imgui/imgui_impl_win32.h"
 
 #include "utility/Module.hpp"
 #include "utility/Patch.hpp"

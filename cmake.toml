@@ -3,7 +3,7 @@
 # > cmake -B build
 # > cmake --build build --config Release
 [project]
-name = "ue4poc-proj"
+name = "uevr-proj"
 cmake-before=""" 
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
 """
@@ -119,9 +119,9 @@ OUTPUT_NAME = "openvr_api"
 [target.imgui]
 type = "static"
 sources = ["dependencies/submodules/imgui/*.cpp"]
-include-directories = ["dependencies/submodules/imgui", "src/ue4poc-imgui"]
+include-directories = ["dependencies/submodules/imgui", "src/uevr-imgui"]
 compile-definitions = [
-    "IMGUI_USER_CONFIG=\"${CMAKE_CURRENT_SOURCE_DIR}/src/ue4poc-imgui/ue4poc_imconfig.hpp\"",
+    "IMGUI_USER_CONFIG=\"${CMAKE_CURRENT_SOURCE_DIR}/src/uevr-imgui/uevr_imconfig.hpp\"",
 ]
 
 [target.plugin_renderlib]
@@ -246,7 +246,7 @@ LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET
 ARCHIVE_OUTPUT_DIRECTORY_RELEASE = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
 ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO = "${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
 
-[target.ue4poc]
+[target.uevr]
 type="ue4template"
 link-libraries = [
     "kananlib",
@@ -254,6 +254,6 @@ link-libraries = [
 ]
 cmake-after="""
 add_custom_command(
-    TARGET ue4poc POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openvr> $<TARGET_FILE_DIR:ue4poc>)
+    TARGET uevr POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openvr> $<TARGET_FILE_DIR:uevr>)
 """

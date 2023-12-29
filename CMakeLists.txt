@@ -30,7 +30,7 @@ endif()
  
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
 
-project(ue4poc-proj)
+project(uevr-proj)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
@@ -310,12 +310,12 @@ endif()
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${imgui_SOURCES})
 
 target_compile_definitions(imgui PUBLIC
-	"IMGUI_USER_CONFIG=\"${CMAKE_CURRENT_SOURCE_DIR}/src/ue4poc-imgui/ue4poc_imconfig.hpp\""
+	"IMGUI_USER_CONFIG=\"${CMAKE_CURRENT_SOURCE_DIR}/src/uevr-imgui/uevr_imconfig.hpp\""
 )
 
 target_include_directories(imgui PUBLIC
 	"dependencies/submodules/imgui"
-	"src/ue4poc-imgui"
+	"src/uevr-imgui"
 )
 
 unset(CMKR_TARGET)
@@ -636,11 +636,11 @@ set_target_properties(LuaVR PROPERTIES
 unset(CMKR_TARGET)
 unset(CMKR_SOURCES)
 
-# Target ue4poc
-set(CMKR_TARGET ue4poc)
-set(ue4poc_SOURCES "")
+# Target uevr
+set(CMKR_TARGET uevr)
+set(uevr_SOURCES "")
 
-list(APPEND ue4poc_SOURCES
+list(APPEND uevr_SOURCES
 	"src/ExceptionHandler.cpp"
 	"src/Framework.cpp"
 	"src/Main.cpp"
@@ -671,9 +671,9 @@ list(APPEND ue4poc_SOURCES
 	"src/mods/vr/d3d12/TextureContext.cpp"
 	"src/mods/vr/runtimes/OpenVR.cpp"
 	"src/mods/vr/runtimes/OpenXR.cpp"
-	"src/ue4poc-imgui/imgui_impl_dx11.cpp"
-	"src/ue4poc-imgui/imgui_impl_dx12.cpp"
-	"src/ue4poc-imgui/imgui_impl_win32.cpp"
+	"src/uevr-imgui/imgui_impl_dx11.cpp"
+	"src/uevr-imgui/imgui_impl_dx12.cpp"
+	"src/uevr-imgui/imgui_impl_win32.cpp"
 	"src/utility/ImGui.cpp"
 	"src/ExceptionHandler.hpp"
 	"src/Framework.hpp"
@@ -712,46 +712,46 @@ list(APPEND ue4poc_SOURCES
 	"src/mods/vr/structures/FGuid.hpp"
 	"src/mods/vr/structures/FXRHMDData.hpp"
 	"src/mods/vr/structures/FXRMotionControllerData.hpp"
-	"src/ue4poc-imgui/font_robotomedium.hpp"
-	"src/ue4poc-imgui/ue4poc_imconfig.hpp"
+	"src/uevr-imgui/font_robotomedium.hpp"
+	"src/uevr-imgui/ue4poc_imconfig.hpp"
 	"src/utility/ImGui.hpp"
 	"src/utility/Logging.hpp"
-	"src/ue4poc-imgui/imgui_impl_dx11.h"
-	"src/ue4poc-imgui/imgui_impl_dx12.h"
-	"src/ue4poc-imgui/imgui_impl_win32.h"
+	"src/uevr-imgui/imgui_impl_dx11.h"
+	"src/uevr-imgui/imgui_impl_dx12.h"
+	"src/uevr-imgui/imgui_impl_win32.h"
 )
 
-list(APPEND ue4poc_SOURCES
+list(APPEND uevr_SOURCES
 	cmake.toml
 )
 
-set(CMKR_SOURCES ${ue4poc_SOURCES})
-add_library(ue4poc SHARED)
+set(CMKR_SOURCES ${uevr_SOURCES})
+add_library(uevr SHARED)
 
-if(ue4poc_SOURCES)
-	target_sources(ue4poc PRIVATE ${ue4poc_SOURCES})
+if(uevr_SOURCES)
+	target_sources(uevr PRIVATE ${uevr_SOURCES})
 endif()
 
 
-target_compile_features(ue4poc PUBLIC
+target_compile_features(uevr PUBLIC
 	cxx_std_23
 )
 
-target_compile_options(ue4poc PUBLIC
+target_compile_options(uevr PUBLIC
 	"/GS-"
 	"/bigobj"
 	"/EHa"
 	"/MP"
 )
 
-target_include_directories(ue4poc PUBLIC
+target_include_directories(uevr PUBLIC
 	"shared/"
 	"src/"
 	"include/"
 	"${OPENXR_SOURCE_DIR}/src"
 )
 
-target_link_libraries(ue4poc PUBLIC
+target_link_libraries(uevr PUBLIC
 	shlwapi
 	d3d11
 	d3d12
@@ -769,12 +769,12 @@ target_link_libraries(ue4poc PUBLIC
 	asmjit
 )
 
-target_link_libraries(ue4poc PUBLIC
+target_link_libraries(uevr PUBLIC
 	kananlib
 	uesdk
 )
 
-set_target_properties(ue4poc PROPERTIES
+set_target_properties(uevr PROPERTIES
 	OUTPUT_NAME
 		UEVRBackend
 	LINK_FLAGS
@@ -794,8 +794,8 @@ set_target_properties(ue4poc PROPERTIES
 )
 
 add_custom_command(
-    TARGET ue4poc POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openvr> $<TARGET_FILE_DIR:ue4poc>)
+    TARGET uevr POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openvr> $<TARGET_FILE_DIR:uevr>)
 
 unset(CMKR_TARGET)
 unset(CMKR_SOURCES)
