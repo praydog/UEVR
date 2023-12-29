@@ -189,6 +189,7 @@ include-directories = ["dependencies/sol2/single/single/include"]
 [target.LuaVR]
 type = "shared"
 compile-features = ["cxx_std_23"]
+compile-options = ["/bigobj", "/EHa", "/MP"]
 include-directories = ["include/"]
 sources = ["lua-api/**.cpp", "lua-api/**.c"]
 headers = ["lua-api/**.hpp", "lua-api/**.h"]

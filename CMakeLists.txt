@@ -609,6 +609,12 @@ target_compile_features(LuaVR PUBLIC
 	cxx_std_23
 )
 
+target_compile_options(LuaVR PUBLIC
+	"/bigobj"
+	"/EHa"
+	"/MP"
+)
+
 target_include_directories(LuaVR PUBLIC
 	"include/"
 )
