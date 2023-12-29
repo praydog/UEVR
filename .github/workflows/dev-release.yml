@@ -7,7 +7,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        target: [ue4poc]
+        target: [uevr]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
