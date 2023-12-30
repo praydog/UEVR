@@ -1639,6 +1639,14 @@ void VR::on_frame() {
         return;
     }
 
+    if (m_keybind_recenter->is_key_down_once()) {
+        recenter_view();
+    }
+
+    if (m_keybind_set_standing_origin->is_key_down_once()) {
+        m_standing_origin = get_position(0);
+    }
+
     const auto now = std::chrono::steady_clock::now();
     const auto is_allowed_draw_window = now - m_last_xinput_update < std::chrono::seconds(2);
 
@@ -1964,6 +1972,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         PAGE_UNREAL,
         PAGE_INPUT,
         PAGE_CAMERA,
+        PAGE_KEYBINDS,
         PAGE_CONSOLE,
         PAGE_COMPATIBILITY,
         PAGE_DEBUG,
@@ -2020,6 +2029,9 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         break;
     case "Camera"_fnv:
         selected_page = PAGE_CAMERA;
+        break;
+    case "Keybinds"_fnv:
+        selected_page = PAGE_KEYBINDS;
         break;
     case "Console/CVars"_fnv:
         selected_page = PAGE_CONSOLE;
@@ -2184,6 +2196,16 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         if (ImGui::TreeNode("Decoupled Pitch")) {
             m_decoupled_pitch->draw("Enabled");
             m_decoupled_pitch_ui_adjust->draw("Auto Adjust UI");
+
+            ImGui::TreePop();
+        }
+    }
+
+    if (selected_page == PAGE_KEYBINDS) {
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Playspace Keys")) {
+            m_keybind_recenter->draw("Recenter View Key");
+            m_keybind_set_standing_origin->draw("Set Standing Origin Key");
 
             ImGui::TreePop();
         }

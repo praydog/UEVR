@@ -93,6 +93,7 @@ public:
             {"Unreal", false},
             {"Input", false},
             {"Camera", false},
+            {"Keybinds", false},
             {"Console/CVars", true},
             {"Compatibility", true},
             {"Debug", true},
@@ -796,6 +797,10 @@ private:
     const ModToggle::Ptr m_compatibility_skip_pip{ ModToggle::create(generate_name("Compatibility_SkipPostInitProperties"), false, true) };
     const ModToggle::Ptr m_compatibility_skip_uobjectarray_init{ ModToggle::create(generate_name("Compatibility_SkipUObjectArrayInit"), false, true) };
 
+    // Keybinds
+    const ModKey::Ptr m_keybind_recenter{ ModKey::create(generate_name("RecenterViewKey")) };
+    const ModKey::Ptr m_keybind_set_standing_origin{ ModKey::create(generate_name("ResetStandingOriginKey")) };
+
     struct DecoupledPitchData {
         mutable std::shared_mutex mtx{};
         glm::quat pre_flattened_rotation{};
@@ -861,6 +866,8 @@ private:
         *m_compatibility_skip_pip,
         *m_compatibility_skip_uobjectarray_init,
         *m_sceneview_compatibility_mode,
+        *m_keybind_recenter,
+        *m_keybind_set_standing_origin,
     };
     
 
