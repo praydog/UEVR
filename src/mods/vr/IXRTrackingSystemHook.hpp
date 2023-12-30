@@ -36,6 +36,9 @@ public:
 
     auto& get_process_view_rotation_data() { return m_process_view_rotation_data; }
 
+    void manual_update_control_rotation();
+    void update_view_rotation(sdk::UObject* reference_obj, Rotator<float>* rot);
+
 private:
     struct ReferenceController {
         virtual void destroy() { }
@@ -83,7 +86,6 @@ private:
     static void process_view_rotation(sdk::APlayerCameraManager* pcm, float delta_time, Rotator<float>* rot, Rotator<float>* delta_rot);
 
     void pre_update_view_rotation(sdk::UObject* reference_obj, Rotator<float>* rot);
-    void update_view_rotation(sdk::UObject* reference_obj, Rotator<float>* rot);
 
     FFakeStereoRenderingHook* m_stereo_hook{nullptr};
 

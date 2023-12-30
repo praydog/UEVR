@@ -3975,6 +3975,11 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
                 g_hook->m_last_rotation = *view_rotation;
             }
         }
+
+        // Modify Player Control Rotation
+        if (true_index == 1 && vr->is_aim_modify_player_control_rotation_enabled() && vr->is_any_aim_method_active()) {
+            g_hook->m_tracking_system_hook->manual_update_control_rotation();
+        }
     }
 
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS

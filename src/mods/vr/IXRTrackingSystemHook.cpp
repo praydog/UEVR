@@ -635,6 +635,59 @@ void IXRTrackingSystemHook::initialize() {
     SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook done");
 }
 
+void IXRTrackingSystemHook::manual_update_control_rotation() {
+    const auto world = sdk::UEngine::get()->get_world();
+
+    if (world == nullptr) {
+        return;
+    }
+
+    const auto controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0);
+
+    if (controller == nullptr) {
+        return;
+    }
+
+    const auto pawn = controller->get_acknowledged_pawn();
+
+    if (pawn == nullptr) {
+        return;
+    }
+
+    auto control_rotation = controller->get_control_rotation();
+    
+    Rotator<double> ue5_rotation {
+        (double)control_rotation.x,
+        (double)control_rotation.y,
+        (double)control_rotation.z
+    };
+
+    const auto is_ue5 = g_hook->m_stereo_hook->has_double_precision();
+
+    Rotator<float>* chosen_rotation = is_ue5 ? (Rotator<float>*)&ue5_rotation : (Rotator<float>*)&control_rotation;
+
+    update_view_rotation(controller, chosen_rotation);
+    
+    // Conv back to vec3<float>
+    glm::vec3 final_rotation{};
+
+    if (is_ue5) {
+        final_rotation = glm::vec3{
+            (float)ue5_rotation.pitch,
+            (float)ue5_rotation.yaw,
+            (float)ue5_rotation.roll
+        };
+    } else {
+        final_rotation = glm::vec3{
+            control_rotation.x,
+            control_rotation.y,
+            control_rotation.z
+        };
+    }
+
+    controller->set_control_rotation(final_rotation);
+}
+
 bool IXRTrackingSystemHook::analyze_head_tracking_allowed(uintptr_t return_address) {
     ++detail::total_times_funcs_called;
 
