@@ -801,6 +801,10 @@ private:
     const ModKey::Ptr m_keybind_recenter{ ModKey::create(generate_name("RecenterViewKey")) };
     const ModKey::Ptr m_keybind_set_standing_origin{ ModKey::create(generate_name("ResetStandingOriginKey")) };
 
+    const ModKey::Ptr m_keybind_load_camera_0{ ModKey::create(generate_name("LoadCamera0Key")) };
+    const ModKey::Ptr m_keybind_load_camera_1{ ModKey::create(generate_name("LoadCamera1Key")) };
+    const ModKey::Ptr m_keybind_load_camera_2{ ModKey::create(generate_name("LoadCamera2Key")) };
+
     struct DecoupledPitchData {
         mutable std::shared_mutex mtx{};
         glm::quat pre_flattened_rotation{};
@@ -868,6 +872,9 @@ private:
         *m_sceneview_compatibility_mode,
         *m_keybind_recenter,
         *m_keybind_set_standing_origin,
+        *m_keybind_load_camera_0,
+        *m_keybind_load_camera_1,
+        *m_keybind_load_camera_2,
     };
     
 

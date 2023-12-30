@@ -1643,6 +1643,18 @@ void VR::on_frame() {
         recenter_view();
     }
 
+    if (m_keybind_load_camera_0->is_key_down_once()) {
+        load_camera(0);
+    }
+
+    if (m_keybind_load_camera_1->is_key_down_once()) {
+        load_camera(1);
+    }
+
+    if (m_keybind_load_camera_2->is_key_down_once()) {
+        load_camera(2);
+    }
+
     if (m_keybind_set_standing_origin->is_key_down_once()) {
         m_standing_origin = get_position(0);
     }
@@ -2208,6 +2220,13 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
             m_keybind_set_standing_origin->draw("Set Standing Origin Key");
 
             ImGui::TreePop();
+        }
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Camera Keys")) {
+            m_keybind_load_camera_0->draw("Load Camera 0 Key");
+            m_keybind_load_camera_1->draw("Load Camera 1 Key");
+            m_keybind_load_camera_2->draw("Load Camera 2 Key");
         }
     }
 
