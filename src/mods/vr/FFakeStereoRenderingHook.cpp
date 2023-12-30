@@ -3930,6 +3930,8 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
             if (const auto controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0); controller != nullptr) {
                 const auto pawn = controller->get_acknowledged_pawn();
 
+                static bool was_pawn_rotation_enabled = false;
+
                 if (pawn != nullptr && vr->is_aim_pawn_control_rotation_enabled()) {
                     auto camera_component = (sdk::UObject*)pawn->get_camera_component();
 
@@ -3938,6 +3940,18 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
                         if (boolprop != nullptr) {
                             boolprop->set_value_in_object(camera_component, true);
+                            was_pawn_rotation_enabled = true;
+                        }
+                    }
+                } else if (pawn != nullptr && was_pawn_rotation_enabled) {
+                    auto camera_component = (sdk::UObject*)pawn->get_camera_component();
+
+                    if (camera_component != nullptr && camera_component->get_class() != nullptr) {
+                        static const auto boolprop = (sdk::FBoolProperty*)camera_component->get_class()->find_property(L"bUsePawnControlRotation");
+
+                        if (boolprop != nullptr) {
+                            boolprop->set_value_in_object(camera_component, false);
+                            was_pawn_rotation_enabled = false;
                         }
                     }
                 }
