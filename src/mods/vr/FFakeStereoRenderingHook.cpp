@@ -2118,7 +2118,7 @@ struct SceneViewExtensionAnalyzer {
     }
 
     template<int N>
-    static void* hooked_command_fn(sdk::FRHICommandBase_New* cmd, sdk::FRHICommandListBase* cmd_list, void* debug_context) {
+    static void* hooked_command_fn(sdk::FRHICommandBase_New* cmd, sdk::FRHICommandListBase* cmd_list, void* debug_context, void* r9, void* stack_1, void* stack_2, void* stack_3, void* stack_4, void* stack_5, void* stack_6, void* stack_7, void* stack_8) {
         std::scoped_lock _{vtable_mutex};
         //std::scoped_lock __{VR::get()->get_vr_mutex()};
 
@@ -2132,14 +2132,14 @@ struct SceneViewExtensionAnalyzer {
         const auto original_vtable = original_vtables[cmd];
         const auto original_func = original_vtable[N];
 
-        const auto func = (void* (*)(sdk::FRHICommandBase_New*, sdk::FRHICommandListBase*, void*))original_func;
+        const auto func = (decltype(hooked_command_fn<N>)*)original_func;
         const auto frame_count = cmd_frame_counts[cmd];
 
         auto& vr = VR::get();
         auto runtime = vr->get_runtime();
 
         auto call_orig = [=]() {
-            const auto result = func(cmd, cmd_list, debug_context);
+            const auto result = func(cmd, cmd_list, debug_context, r9, stack_1, stack_2, stack_3, stack_4, stack_5, stack_6, stack_7, stack_8);
 
             if (N == 0) {
                 runtime->enqueue_render_poses(frame_count);
@@ -2779,9 +2779,9 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
 
     const auto has_good_root = 
         cmd_list != nullptr &&
-        (((uintptr_t)cmd_list & (sizeof(void*) - 1)) == 0) &&
+        ((uintptr_t)cmd_list & 1 == 0) &&
         cmd_list->root != nullptr &&
-        (((uintptr_t)cmd_list->root & (sizeof(void*) - 1)) == 0);
+        ((uintptr_t)cmd_list->root & 1 == 0);
 
     // Hijack the top command in the command list so we can enqueue the render poses on the RHI thread
     if (has_good_root) {
