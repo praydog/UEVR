@@ -493,10 +493,6 @@ public:
         return m_roomscale_movement->value() && !m_aim_temp_disabled;
     }
 
-    bool is_roomscale_using_actor_rotation() const {
-        return m_roomscale_movement_actor_rotation->value() && !m_aim_temp_disabled;
-    }
-
     bool is_dpad_shifting_enabled() const {
         return m_dpad_shifting->value();
     }
@@ -749,7 +745,6 @@ private:
     const ModToggle::Ptr m_load_blueprint_code{ ModToggle::create(generate_name("LoadBlueprintCode"), false, true) };
     const ModToggle::Ptr m_2d_screen_mode{ ModToggle::create(generate_name("2DScreenMode"), false) };
     const ModToggle::Ptr m_roomscale_movement{ ModToggle::create(generate_name("RoomscaleMovement"), false) };
-    const ModToggle::Ptr m_roomscale_movement_actor_rotation{ ModToggle::create(generate_name("RoomscaleMovementActorRotation"), false) };
 
     // Snap turn settings and globals
     void process_snapturn();
@@ -834,7 +829,6 @@ private:
         *m_load_blueprint_code,
         *m_2d_screen_mode,
         *m_roomscale_movement,
-        *m_roomscale_movement_actor_rotation,
         *m_snapturn,
         *m_snapturn_joystick_deadzone,
         *m_snapturn_angle,

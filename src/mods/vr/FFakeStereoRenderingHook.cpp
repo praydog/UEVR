@@ -3955,17 +3955,6 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
                     current_standing_origin.x = hmd_pos.x;
                     current_standing_origin.z = hmd_pos.z;
                     vr->set_standing_origin(current_standing_origin);
-                    
-                    // testing
-                    if (vr->is_roomscale_using_actor_rotation()) {
-                        if (!has_double_precision) {
-                            pawn->set_actor_rotation(*(glm::vec3*)view_rotation, false);
-                        } else {
-                            pawn->set_actor_rotation(glm::vec3{rot_d->pitch, rot_d->yaw, rot_d->roll}, false);
-                        }
-
-                        vr->recenter_view();
-                    }
                 }
             }
         }
