@@ -3992,7 +3992,9 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
         // Modify Player Control Rotation
         if (true_index == 1 && vr->is_aim_modify_player_control_rotation_enabled() && vr->is_any_aim_method_active()) {
-            g_hook->m_tracking_system_hook->manual_update_control_rotation();
+            if (g_hook->m_tracking_system_hook != nullptr) {
+                g_hook->m_tracking_system_hook->manual_update_control_rotation();
+            }
         }
     }
 
