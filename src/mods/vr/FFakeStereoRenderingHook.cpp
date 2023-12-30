@@ -2777,6 +2777,9 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
         });
     };
 
+    // okay well I think this evaluates to false all the time
+    // but apparently it has been working for a LONG TIME so I'm not going to touch this until after release
+    // (the else statement still handles everything... fine?)
     const auto has_good_root = 
         cmd_list != nullptr &&
         ((uintptr_t)cmd_list & 1 == 0) &&
@@ -2785,6 +2788,8 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
 
     // Hijack the top command in the command list so we can enqueue the render poses on the RHI thread
     if (has_good_root) {
+        SPDLOG_INFO_ONCE("Command list root is good");
+
         if (!analyzed_root_already) try {
             auto root = cmd_list->root;
 
