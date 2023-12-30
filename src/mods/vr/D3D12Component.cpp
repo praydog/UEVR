@@ -143,20 +143,22 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     if (m_game_tex.texture.Get() != nullptr && backbuffer == real_backbuffer) {
         const auto idx = swapchain->GetCurrentBackBufferIndex() % m_game_tex_commands.size();
         auto& command_ctx = m_game_tex_commands[idx];
-        command_ctx.wait(INFINITE);
-        float clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-        command_ctx.clear_rtv(m_game_tex, (float*)&clear_color, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        command_ctx.copy(real_backbuffer.Get(), m_backbuffer_copy.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        //m_game_tex_commands[idx].copy(backbuffer.Get(), m_game_tex.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, ENGINE_SRC_COLOR);
-        d3d12::render_srv_to_rtv(
-            m_game_batch.get(),
-            command_ctx.cmd_list.Get(),
-            m_backbuffer_copy,
-            m_game_tex,
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        );
-        command_ctx.execute();
+        if (command_ctx.cmd_list != nullptr) {
+            command_ctx.wait(INFINITE);
+            float clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+            command_ctx.clear_rtv(m_game_tex, (float*)&clear_color, D3D12_RESOURCE_STATE_RENDER_TARGET);
+            command_ctx.copy(real_backbuffer.Get(), m_backbuffer_copy.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+            //m_game_tex_commands[idx].copy(backbuffer.Get(), m_game_tex.texture.Get(), D3D12_RESOURCE_STATE_PRESENT, ENGINE_SRC_COLOR);
+            d3d12::render_srv_to_rtv(
+                m_game_batch.get(),
+                command_ctx.cmd_list.Get(),
+                m_backbuffer_copy,
+                m_game_tex,
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                D3D12_RESOURCE_STATE_RENDER_TARGET
+            );
+            command_ctx.execute();
+        }
 
         backbuffer = m_game_tex.texture;
     }
