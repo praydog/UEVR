@@ -1404,7 +1404,7 @@ void Framework::draw_about() {
             std::string text;
         };
 
-        static std::array<License, 9> licenses{
+        static std::array<License, 10> licenses{
             License{ "glm", license::glm },
             License{ "imgui", license::imgui },
             License{ "safetyhook", license::safetyhook },
@@ -1414,6 +1414,7 @@ void Framework::draw_about() {
             License{ "directxtk", license::directxtk },
             License{ "directxtk12", license::directxtk },
             License{ "openvr", license::openvr },
+            License{ "openxr", license::openxr }
         };
 
         for (const auto& license : licenses) {
