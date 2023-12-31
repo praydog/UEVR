@@ -18,7 +18,8 @@ Universal Unreal Engine VR Mod (4/5)
 - Supports OpenVR and OpenXR runtimes
 - 3 rendering modes: Native Stereo, Synchronized Sequential, and Alternating/AFR
 - Automatic handling of most in-game UI so it is projected into 3D space
-- 3DOF motion controls out of the box in many games, essentially emulating a semi-native VR experience
+- Optional 3DOF motion controls out of the box in many games, essentially emulating a semi-native VR experience
+- Optional roomscale movement in many games, moving the player character itself in 3D space along with the headset
 - In-game menu with shortcuts for adjusting settings
 - Access to various CVars for fixing broken shaders/effects/performance issues
 - Optional depth buffer integration for improved latency on some headsets
@@ -37,10 +38,12 @@ Universal Unreal Engine VR Mod (4/5)
 
 ## To-dos before injection
 
-1. Disable HDR (it will still work without it, but the game may look darker than usual if it is)
+1. Disable HDR (it will still work without it, but the game will be darker than usual if it is)
 2. Start as administrator if the game is not visible in the list
 3. Pass `-nohmd` to the game's command line and/or delete VR plugins from the game directory if the game contains any existing VR plugins
-4. Disable any overlays that may conflict and cause crashes
+4. Disable any overlays that may conflict and cause crashes (Rivatuner, ASUS software, Razer software, Overwolf, etc...)
+5. Disable graphical options in-game that may cause crashes or severe issues like DLSS Frame Generation
+6. Consider disabling `Hardware Accelerated GPU Scheduling` in your Windows `Graphics settings`
 
 ## In-Game Menu
 
