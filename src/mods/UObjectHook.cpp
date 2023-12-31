@@ -1334,6 +1334,10 @@ void UObjectHook::update_motion_controller_components(const glm::vec3& left_hand
             continue;
         }
 
+        if (mc == mc_c->get_class_default_object()) {
+            continue;
+        }
+
         if (mc->get_player_index() > 0) {
             continue;
         }
