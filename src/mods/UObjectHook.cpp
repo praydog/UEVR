@@ -23,6 +23,7 @@
 #include <sdk/FBoolProperty.hpp>
 #include <sdk/FObjectProperty.hpp>
 #include <sdk/FArrayProperty.hpp>
+#include <sdk/UMotionControllerComponent.hpp>
 
 #include "uobjecthook/SDKDumper.hpp"
 #include "VR.hpp"
@@ -473,6 +474,8 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
 
         return result;
     };
+
+    update_motion_controller_components(left_hand_position, left_hand_euler, right_hand_position, right_hand_euler);
 
     auto comps = with_mutex([this]() { return m_motion_controller_attached_components; });
 
@@ -1304,6 +1307,57 @@ void UObjectHook::update_persistent_states() {
                     // OH NO!!!!! anyways
                     break;
                 };
+            }
+        }
+    }
+}
+
+void UObjectHook::update_motion_controller_components(const glm::vec3& left_hand_location, const glm::vec3& left_hand_euler,
+                                                      const glm::vec3& right_hand_location, const glm::vec3& right_hand_euler) 
+{
+    const auto mc_c = sdk::UMotionControllerComponent::static_class();
+
+    if (mc_c == nullptr) {
+        SPDLOG_ERROR_ONCE("[UObjectHook] Failed to find MotionControllerComponent class, cannot update motion controller components");
+        return;
+    }
+
+    const auto motion_controllers = this->get_objects_by_class(mc_c);
+
+    if (motion_controllers.empty()) {
+        return;
+    }
+
+    for (auto obj : motion_controllers) {
+        auto mc = (sdk::UMotionControllerComponent*)obj;
+        if (!this->exists(mc)) {
+            continue;
+        }
+
+        if (mc->get_player_index() > 0) {
+            continue;
+        }
+
+        if (mc->has_motion_source()) {
+            const auto& motion_source = mc->get_motion_source();
+            const auto motion_source_str = motion_source.to_string();
+
+            if (motion_source_str == L"Left") {
+                mc->set_world_location(left_hand_location, false, false);
+                mc->set_world_rotation(left_hand_euler, false);
+            } else if (motion_source_str == L"Right") {
+                mc->set_world_location(right_hand_location, false, false);
+                mc->set_world_rotation(right_hand_euler, false);
+            } /*else {
+                SPDLOG_INFO("[UObjectHook] Unknown motion source {}", utility::narrow(motion_source_str));
+            }*/
+        } else {
+            if (mc->get_hand() == sdk::EControllerHand::Left) {
+                mc->set_world_location(left_hand_location, false, false);
+                mc->set_world_rotation(left_hand_euler, false);
+            } else if (mc->get_hand() == sdk::EControllerHand::Right) {
+                mc->set_world_location(right_hand_location, false, false);
+                mc->set_world_rotation(right_hand_euler, false);
             }
         }
     }

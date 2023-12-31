@@ -125,6 +125,8 @@ private:
     std::shared_ptr<PersistentCameraState> deserialize_camera(const nlohmann::json& data);
     std::shared_ptr<PersistentCameraState> deserialize_camera_state();
     void update_persistent_states();
+    void update_motion_controller_components(const glm::vec3& left_hand_location, const glm::vec3& left_hand_euler,
+                                             const glm::vec3& right_hand_location, const glm::vec3& right_hand_euler);
 
     static void* add_object(void* rcx, void* rdx, void* r8, void* r9);
     static void* destructor(sdk::UObjectBase* object, void* rdx, void* r8, void* r9);
