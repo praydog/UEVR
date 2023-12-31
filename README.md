@@ -11,7 +11,7 @@ Universal Unreal Engine VR Mod (4/5)
 
 ## Features
 
-- Full 6DOF support out of the box
+- Full 6DOF support out of the box (HMD movement)
 - Full stereoscopic 3D out of the box
 - Native UE4/UE5 stereo rendering system
 - Frontend GUI for easy process injection
