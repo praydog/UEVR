@@ -23,8 +23,9 @@
 #include "../VR.hpp"
 
 #include <sdk/vtables/IXRTrackingSystemVTables.hpp>
-#include "structures/FXRMotionControllerData.hpp"
-#include "structures/FXRHMDData.hpp"
+#include <sdk/structures/FXRMotionControllerData.hpp>
+#include <sdk/structures/FXRHMDData.hpp>
+
 #include "IXRTrackingSystemHook.hpp"
 
 detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
