@@ -571,10 +571,10 @@ void OpenXR::destroy() {
         xrDestroySession(this->session);
     }
 
-    /*if (this->instance != nullptr) {
+    if (this->instance != nullptr && this->ever_submitted) {
         xrDestroyInstance(this->instance);
         this->instance = nullptr;
-    }*/
+    }
 
     this->session = nullptr;
     this->session_ready = false;
@@ -1284,9 +1284,11 @@ void OpenXR::display_bindings_editor() {
         // replace the slashes with underscores
         std::replace(filename.begin(), filename.end(), '/', '_');
 
-        if (std::filesystem::exists(filename)) {
+        const auto persistent_filename = (Framework::get_persistent_dir() / filename).string();
+
+        if (std::filesystem::exists(persistent_filename)) {
             // Delete the file
-            std::filesystem::remove(filename);
+            std::filesystem::remove(persistent_filename);
             this->wants_reinitialize = true;
         }
     }
@@ -1543,7 +1545,9 @@ void OpenXR::save_bindings() {
     
     // replace the slashes with underscores
     std::replace(filename.begin(), filename.end(), '/', '_');
-    std::ofstream(filename) << j.dump(4);
+    const auto persistent_filename = (Framework::get_persistent_dir() / filename).string();
+
+    std::ofstream(persistent_filename) << j.dump(4);
 
     this->wants_reinitialize = true;
 }
