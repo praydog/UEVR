@@ -805,6 +805,8 @@ private:
     const ModKey::Ptr m_keybind_load_camera_1{ ModKey::create(generate_name("LoadCamera1Key")) };
     const ModKey::Ptr m_keybind_load_camera_2{ ModKey::create(generate_name("LoadCamera2Key")) };
 
+    const ModKey::Ptr m_keybind_toggle_2d_screen{ ModKey::create(generate_name("Toggle2DScreenKey")) };
+
     struct DecoupledPitchData {
         mutable std::shared_mutex mtx{};
         glm::quat pre_flattened_rotation{};
@@ -875,6 +877,7 @@ private:
         *m_keybind_load_camera_0,
         *m_keybind_load_camera_1,
         *m_keybind_load_camera_2,
+        *m_keybind_toggle_2d_screen,
     };
     
 

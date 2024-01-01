@@ -1659,6 +1659,10 @@ void VR::on_frame() {
         m_standing_origin = get_position(0);
     }
 
+    if (m_keybind_toggle_2d_screen->is_key_down_once()) {
+        m_2d_screen_mode->toggle();
+    }
+
     const auto now = std::chrono::steady_clock::now();
     const auto is_allowed_draw_window = now - m_last_xinput_update < std::chrono::seconds(2);
 
