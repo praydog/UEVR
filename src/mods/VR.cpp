@@ -2232,6 +2232,13 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
             m_keybind_load_camera_1->draw("Load Camera 1 Key");
             m_keybind_load_camera_2->draw("Load Camera 2 Key");
         }
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Overlay Keys")) {
+            m_keybind_toggle_2d_screen->draw("Toggle 2D Screen Mode Key");
+
+            ImGui::TreePop();
+        }
     }
 
     if (selected_page == PAGE_CONSOLE) {
