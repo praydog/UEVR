@@ -1630,14 +1630,8 @@ void VR::on_pre_imgui_frame() {
     }
 }
 
-void VR::on_frame() {
+void VR::handle_keybinds() {
     ZoneScopedN(__FUNCTION__);
-
-    m_cvar_manager->on_frame();
-
-    if (!get_runtime()->ready()) {
-        return;
-    }
 
     if (m_keybind_recenter->is_key_down_once()) {
         recenter_view();
@@ -1661,6 +1655,21 @@ void VR::on_frame() {
 
     if (m_keybind_toggle_2d_screen->is_key_down_once()) {
         m_2d_screen_mode->toggle();
+    }
+
+    if (m_keybind_disable_vr->is_key_down_once()) {
+        m_disable_vr = !m_disable_vr; // definitely should not be persistent
+    }
+}
+
+void VR::on_frame() {
+    ZoneScopedN(__FUNCTION__);
+
+    m_cvar_manager->on_frame();
+    handle_keybinds();
+
+    if (!get_runtime()->ready()) {
+        return;
     }
 
     const auto now = std::chrono::steady_clock::now();
@@ -2236,8 +2245,9 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         }
 
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
-        if (ImGui::TreeNode("Overlay Keys")) {
+        if (ImGui::TreeNode("Overlay/Runtime Keys")) {
             m_keybind_toggle_2d_screen->draw("Toggle 2D Screen Mode Key");
+            m_keybind_disable_vr->draw("Disable VR Key");
 
             ImGui::TreePop();
         }
@@ -2277,6 +2287,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::Checkbox("Disable View Matrix Override", &m_disable_view_matrix_override);
         ImGui::Checkbox("Disable Backbuffer Size Override", &m_disable_backbuffer_size_override);
         ImGui::Checkbox("Disable VR Overlay", &m_disable_overlay);
+        ImGui::Checkbox("Disable VR Entirely", &m_disable_vr);
         ImGui::Checkbox("Stereo Emulation Mode", &m_stereo_emulation_mode);
         ImGui::Checkbox("Wait for Present", &m_wait_for_present);
         ImGui::Checkbox("Controllers allowed", &m_controllers_allowed);
