@@ -234,7 +234,17 @@ public:
     }
 
     bool is_hmd_active() const {
-        return !m_disable_vr && (get_runtime()->ready() || (m_stereo_emulation_mode && get_runtime()->loaded));
+        if (m_disable_vr) {
+            return false;
+        }
+
+        auto runtime = get_runtime();
+
+        if (runtime == nullptr) {
+            return false;
+        }
+
+        return runtime->ready() || (m_stereo_emulation_mode && runtime->loaded);
     }
 
     auto get_hmd() const {
