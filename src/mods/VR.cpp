@@ -2231,6 +2231,8 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
             m_keybind_load_camera_0->draw("Load Camera 0 Key");
             m_keybind_load_camera_1->draw("Load Camera 1 Key");
             m_keybind_load_camera_2->draw("Load Camera 2 Key");
+
+            ImGui::TreePop();
         }
 
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
