@@ -288,6 +288,10 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
         return;
     }
 
+    if (m_uobject_hook_disabled) {
+        return;
+    }
+
     auto view_d = (Vector3d*)view_location;
     auto rot_d = (Rotator<double>*)view_rotation;
 
@@ -351,6 +355,10 @@ void UObjectHook::on_post_calculate_stereo_view_offset(void* stereo_device, cons
         return;
     }
 
+    if (m_uobject_hook_disabled) {
+        return;
+    }
+
     std::shared_lock _{m_mutex};
     bool any_adjusting = false;
     for (auto& it : m_motion_controller_attached_components) {
@@ -364,6 +372,10 @@ void UObjectHook::on_post_calculate_stereo_view_offset(void* stereo_device, cons
 }
 
 void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float world_to_meters, Vector3f* view_location, bool is_double) {
+    if (m_uobject_hook_disabled) {
+        return;
+    }
+
     auto& vr = VR::get();
     auto view_d = (Vector3d*)view_location;
     auto rot_d = (Rotator<double>*)view_rotation;
@@ -1192,6 +1204,10 @@ std::shared_ptr<UObjectHook::PersistentCameraState> UObjectHook::deserialize_cam
 }
 
 void UObjectHook::update_persistent_states() {
+    if (m_uobject_hook_disabled) {
+        return;
+    }
+
     // Camera state
     if (m_persistent_camera_state != nullptr) {
         auto obj = m_persistent_camera_state->path.resolve();
@@ -1599,6 +1615,12 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
     return previous_object;
 }
 
+void UObjectHook::on_frame() {
+    if (m_keybind_toggle_uobject_hook->is_key_down_once()) {
+        m_uobject_hook_disabled = !m_uobject_hook_disabled;
+    }
+}
+
 void UObjectHook::on_draw_ui() {
     activate();
 
@@ -1608,6 +1630,14 @@ void UObjectHook::on_draw_ui() {
     }
 
     std::shared_lock _{m_mutex};
+
+    if (m_uobject_hook_disabled) {
+        ImGui::TextColored(ImVec4{1.0f, 0.0f, 0.0f, 1.0f}, "UObjectHook is disabled");
+        if (ImGui::Button("Re-enable")) {
+            m_uobject_hook_disabled = false;
+        }
+        return;
+    }
 
     if (ImGui::Button("Reload Persistent States")) {
         reload_persistent_states();
@@ -1647,6 +1677,13 @@ void UObjectHook::draw_config() {
     m_enabled_at_startup->draw("Enabled at Startup");
     m_attach_lerp_enabled->draw("Enable Attach Lerp");
     m_attach_lerp_speed->draw("Attach Lerp Speed");
+
+    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+    if (ImGui::TreeNode("UObjectHook Keybinds")) {
+        m_keybind_toggle_uobject_hook->draw("Disable UObjectHook Key");
+
+        ImGui::TreePop();
+    }
 }
 
 void UObjectHook::draw_developer() {
