@@ -12752,7 +12752,7 @@ namespace sol { namespace stack {
 					static const auto& callkey = to_string(meta_function::call);
 					if (lua_getmetatable(L_, index) == 0) {
 						// No metatable, no __call key possible
-						handler(L_, index, type::function, t, "value is not a function and does not have overriden metatable");
+						handler(L_, index, type::function, t, "value is not a function and does not have overridden metatable");
 						return false;
 					}
 					if (lua_isnoneornil(L_, -1)) {
