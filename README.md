@@ -1,6 +1,6 @@
 # UEVR ![build](https://github.com/praydog/UEVR/actions/workflows/dev-release.yml/badge.svg)
 
-Universal Unreal Engine VR Mod (4/5)
+The Chinese localization branch of Universal Unreal Engine VR Mod (4/5)
 
 4.8 - 5.3
 
