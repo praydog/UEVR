@@ -1204,9 +1204,14 @@ std::shared_ptr<UObjectHook::PersistentCameraState> UObjectHook::deserialize_cam
 }
 
 void UObjectHook::update_persistent_states() {
-    if (m_uobject_hook_disabled) {
+    if (m_uobject_hook_disabled && m_fixed_visibilities) {
         return;
     }
+
+    // For when we disable UObjectHook
+    utility::ScopeGuard ___{[this]() {
+        m_fixed_visibilities = true;
+    }};
 
     // Camera state
     if (m_persistent_camera_state != nullptr) {
@@ -1276,7 +1281,11 @@ void UObjectHook::update_persistent_states() {
             }
 
             if (prop_base->hide && obj->is_a(scene_comp_t)) {
-                ((sdk::USceneComponent*)obj)->set_visibility(false, false);
+                if (m_uobject_hook_disabled) {
+                    ((sdk::USceneComponent*)obj)->set_visibility(true, false);
+                } else {
+                    ((sdk::USceneComponent*)obj)->set_visibility(false, false);
+                }
             }
 
             for (const auto& prop_state : prop_base->properties) {
@@ -1618,6 +1627,7 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
 void UObjectHook::on_frame() {
     if (m_keybind_toggle_uobject_hook->is_key_down_once()) {
         m_uobject_hook_disabled = !m_uobject_hook_disabled;
+        m_fixed_visibilities = false;
     }
 }
 

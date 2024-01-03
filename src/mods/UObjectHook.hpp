@@ -400,6 +400,7 @@ private:
 
     ModKey::Ptr m_keybind_toggle_uobject_hook{ModKey::create(generate_name("ToggleUObjectHookKey"))};
     bool m_uobject_hook_disabled{false};
+    bool m_fixed_visibilities{false};
 
     ValueList m_options{
         *m_enabled_at_startup,
