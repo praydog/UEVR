@@ -13,7 +13,7 @@
 #include <sdk/Math.hpp>
 #include <sdk/UGameEngine.hpp>
 #include <sdk/FViewportInfo.hpp>
-
+#include "UILocalized.hpp"
 #include "Framework.hpp"
 
 class IModValue {
@@ -114,7 +114,7 @@ public:
         }
         
         ImGui::PushID(this);
-        auto ret = ImGui::Checkbox(name.data(), &m_value);
+        auto ret = ImGui::Checkbox(_L(name.data()), &m_value);
         ImGui::PopID();
 
         return ret;
@@ -125,7 +125,7 @@ public:
             return;
         }
 
-        ImGui::Text("%s: %i", name.data(), m_value);
+        ImGui::Text("%s: %i", _L(name.data()), m_value);
     }
 
     bool toggle() {
@@ -150,7 +150,7 @@ public:
         }
 
         ImGui::PushID(this);
-        auto ret = ImGui::InputFloat(name.data(), &m_value);
+        auto ret = ImGui::InputFloat(_L(name.data()), &m_value);
         ImGui::PopID();
 
         return ret;
@@ -161,7 +161,7 @@ public:
             return;
         }
 
-        ImGui::Text("%s: %f", name.data(), m_value);
+        ImGui::Text("%s: %f", _L(name.data()), m_value);
     }
 };
 
@@ -186,7 +186,7 @@ public:
 
 
         ImGui::PushID(this);
-        auto ret = ImGui::SliderFloat(name.data(), &m_value, m_range.x, m_range.y);
+        auto ret = ImGui::SliderFloat(_L(name.data()), &m_value, m_range.x, m_range.y);
         ImGui::PopID();
 
         return ret;
@@ -197,7 +197,7 @@ public:
             return;
         }
 
-        ImGui::Text("%s: %f [%f, %f]", name.data(), m_value, m_range.x, m_range.y);
+        ImGui::Text("%s: %f [%f, %f]", _L(name.data()), m_value, m_range.x, m_range.y);
     }
 
     auto& range() {
@@ -227,7 +227,7 @@ public:
         }
 
         ImGui::PushID(this);
-        auto ret = ImGui::InputInt(name.data(), &m_value);
+        auto ret = ImGui::InputInt(_L(name.data()), &m_value);
         ImGui::PopID();
 
         return ret;
@@ -238,7 +238,7 @@ public:
             return;
         }
 
-        ImGui::Text("%s: %i", name.data(), m_value);
+        ImGui::Text("%s: %i", _L(name.data()), m_value);
     }
 };
 
@@ -262,14 +262,14 @@ public:
         }
 
         ImGui::PushID(this);
-        auto ret = ImGui::SliderInt(name.data(), &m_value, m_int_range.min, m_int_range.max);
+        auto ret = ImGui::SliderInt(_L(name.data()), &m_value, m_int_range.min, m_int_range.max);
         ImGui::PopID();
 
         return ret;
     }
 
     void draw_value(std::string_view name) override {
-        ImGui::Text("%s: %i [%i, %i]", name.data(), m_value, m_int_range.min, m_int_range.max);
+        ImGui::Text("%s: %i [%i, %i]", _L(name.data()), m_value, m_int_range.min, m_int_range.max);
     }
 
     auto& range() {
@@ -309,7 +309,7 @@ public:
         m_value = std::clamp<int32_t>(m_value, 0, static_cast<int32_t>(m_options.size()) - 1);
 
         ImGui::PushID(this);
-        auto ret = ImGui::Combo(name.data(), &m_value, m_options.data(), static_cast<int32_t>(m_options.size()));
+        auto ret = ImGui::Combo(_L(name.data()), &m_value, m_options.data(), static_cast<int32_t>(m_options.size()));
         ImGui::PopID();
 
         return ret;
@@ -322,7 +322,7 @@ public:
 
         m_value = std::clamp<int32_t>(m_value, 0, static_cast<int32_t>(m_options.size()) - 1);
 
-        ImGui::Text("%s: %s", name.data(), m_options[m_value]);
+        ImGui::Text("%s: %s", _L(name.data()), m_options[m_value]);
     }
 
     void config_load(const utility::Config& cfg, bool set_defaults) override {
@@ -373,7 +373,7 @@ public:
         }
 
         ImGui::PushID(this);
-        ImGui::Button(name.data());
+        ImGui::Button(_L(name.data()));
 
         if (ImGui::IsItemHovered() && ImGui::GetIO().MouseDown[0]) {
             m_waiting_for_new_key = true;
@@ -394,21 +394,21 @@ public:
             }
 
             ImGui::SameLine();
-            ImGui::Text("Press any key...");
+            ImGui::Text(_L("Press any key..."));
         }
         else {
             ImGui::SameLine();
 
             if (m_value >= 0 && m_value <= 255) {
                 if (keycodes.contains(m_value)) {
-                    ImGui::Text("%s", keycodes[m_value].c_str());
+                    ImGui::Text("%s", _L(keycodes[m_value].c_str()));
                 }
                 else {
                     ImGui::Text("%i (Unknown)", m_value);
                 }
             }
             else {
-                ImGui::Text("Not bound");
+                ImGui::Text(_L("Not bound"));
             }
         }
 
