@@ -16,7 +16,7 @@ void UILocalized::add_localized_font(float m_font_size) {
 static map<std::string, const char*> loc;
 
 void UILocalized::init_loc() {
-    loc["Transparency"] = (const char*)u8"透明度";
+    loc["Transparency"] = (const char*)u8"UI透明";
     loc["vrzwk"] = _S("汉化：vrzwk汉化组(vrzwk.com)");
     loc["Makes the UI transparent when not focused."] = _S("UI界面无焦点时透明。");
     loc["Input Passthrough"] = _S("输入直通");
@@ -48,7 +48,7 @@ void UILocalized::init_loc() {
     loc["Errors:"] = _S("错误:");
     loc["Warnings:"] = _S("警告:");
     loc["Author: praydog"] = _S("作者：praydog");
-    loc["Licenses"] = _S("授权");
+    loc["Licenses"] = _S("开源许可");
     loc["Runtime"] = _S("运行时");
     loc["Unreal"] = _S("虚幻引擎");
     loc["Input"] = _S("输入");
