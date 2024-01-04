@@ -91,7 +91,7 @@ HRESULT WINAPI DInputHook::create_hooked(
         auto iface = (LPDIRECTINPUT8W)*ppvOut;
 
         // TODO: IID_IDirectInput8A or we don't care?
-        if (iface != nullptr && riidltf == IID_IDirectInput8W) {
+        if (iface != nullptr && memcmp(&riidltf, &IID_IDirectInput8W, sizeof(GUID)) == 0) {
             // Its not necessary to make a full blown vtable hook for this because
             // the vtable will always be the same for IDirectInput8W
             if (g_dinput_hook->m_enum_devices_hook == nullptr) {
