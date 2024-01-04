@@ -83,8 +83,8 @@ void CVarManager::on_draw_ui() {
     ZoneScopedN(__FUNCTION__);
 
     ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
-    if (ImGui::TreeNode("CVars")) {
-        ImGui::TextWrapped("Note: Any changes here will be frozen.");
+    if (ImGui::TreeNode(_L("CVars"))) {
+        ImGui::TextWrapped(_L("Note: Any changes here will be frozen."));
 
         uint32_t frozen_cvars = 0;
 
@@ -94,17 +94,17 @@ void CVarManager::on_draw_ui() {
             }
         }
 
-        ImGui::TextWrapped("Frozen CVars: %i", frozen_cvars);
+        ImGui::TextWrapped(_L("Frozen CVars: %i"), frozen_cvars);
 
-        ImGui::Checkbox("Display Console", &m_wants_display_console);
+        ImGui::Checkbox(_L("Display Console"), &m_wants_display_console);
         
         if (!m_native_console_spawned) {
-            if (ImGui::Button("Spawn Native Console")) {
+            if (ImGui::Button(_L("Spawn Native Console"))) {
                 spawn_console();
             }
         }
 
-        if (ImGui::Button("Dump All CVars")) {
+        if (ImGui::Button(_L("Dump All CVars"))) {
             GameThreadWorker::get().enqueue([this]() {
                 dump_commands();
             });
@@ -112,7 +112,7 @@ void CVarManager::on_draw_ui() {
 
         ImGui::SameLine();
 
-        if (ImGui::Button("Clear Frozen CVars")) {
+        if (ImGui::Button(_L("Clear Frozen CVars"))) {
             for (auto& cvar : m_all_cvars) {
                 cvar->unfreeze();
             }
@@ -235,13 +235,13 @@ void CVarManager::display_console() {
         const auto console_manager = sdk::FConsoleManager::get();
 
         if (console_manager == nullptr) {
-            ImGui::TextWrapped("Failed to get FConsoleManager.");
+            ImGui::TextWrapped(_L("Failed to get FConsoleManager."));
             ImGui::End();
             return;
         }
 
 
-        ImGui::TextWrapped("Note: This is a homebrew console. It is not the same as the in-game console.");
+        ImGui::TextWrapped(_L("Note: This is a homebrew console. It is not the same as the in-game console."));
 
         ImGui::Separator();
 
@@ -363,9 +363,9 @@ void CVarManager::display_console() {
         if (!m_console.autocomplete.empty()) {
             // Create a table of all the possible commands.
             if (ImGui::BeginTable("##UEVRAutocomplete", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable)) {
-                ImGui::TableSetupColumn("Command", ImGuiTableColumnFlags_WidthFixed, 300.0f);
-                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-                ImGui::TableSetupColumn("Description", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn(_L("Command"), ImGuiTableColumnFlags_WidthFixed, 300.0f);
+                ImGui::TableSetupColumn(_L("Value"), ImGuiTableColumnFlags_WidthFixed, 100.0f);
+                ImGui::TableSetupColumn(_L("Description"), ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableHeadersRow();
 
                 for (const auto& command : m_console.autocomplete) {
@@ -546,7 +546,7 @@ void CVarManager::CVarStandard::draw_ui() try {
     ZoneScopedN(__FUNCTION__);
 
     if (m_cvar == nullptr || *m_cvar == nullptr) {
-        ImGui::TextWrapped("Failed to find cvar: %s", utility::narrow(m_name).c_str());
+        ImGui::TextWrapped(_L("Failed to find cvar: %s"), utility::narrow(m_name).c_str());
         return;
     }
 
@@ -600,11 +600,11 @@ void CVarManager::CVarStandard::draw_ui() try {
         break;
     }
     default:
-        ImGui::TextWrapped("Unimplemented cvar type: %s", utility::narrow(m_name).c_str());
+        ImGui::TextWrapped(_L("Unimplemented cvar type: %s"), utility::narrow(m_name).c_str());
         break;
     };
 } catch(...) {
-    ImGui::TextWrapped("Failed to read cvar: %s", utility::narrow(m_name).c_str());
+    ImGui::TextWrapped(_L("Failed to read cvar: %s"), utility::narrow(m_name).c_str());
 }
 
 void CVarManager::CVarData::load(bool set_defaults) {
@@ -691,7 +691,7 @@ void CVarManager::CVarData::draw_ui() try {
     ZoneScopedN(__FUNCTION__);
 
     if (!m_cvar_data) {
-        ImGui::TextWrapped("Failed to find cvar data: %s", utility::narrow(m_name).c_str());
+        ImGui::TextWrapped(_L("Failed to find cvar data: %s"), utility::narrow(m_name).c_str());
         return;
     }
 
@@ -700,7 +700,7 @@ void CVarManager::CVarData::draw_ui() try {
     auto cvar_float = m_cvar_data->get<float>();
 
     if (cvar_int == nullptr) {
-        ImGui::TextWrapped("Failed to read cvar data: %s", utility::narrow(m_name).c_str());
+        ImGui::TextWrapped(_L("Failed to read cvar data: %s"), utility::narrow(m_name).c_str());
         return;
     }
 
@@ -735,9 +735,9 @@ void CVarManager::CVarData::draw_ui() try {
         break;
     }
     default:
-        ImGui::TextWrapped("Unimplemented cvar type: %s", narrow_name.c_str());
+        ImGui::TextWrapped(_L("Unimplemented cvar type: %s"), narrow_name.c_str());
         break;
     }
 } catch (...) {
-    ImGui::TextWrapped("Failed to read cvar data: %s", utility::narrow(m_name).c_str());
+    ImGui::TextWrapped(_L("Failed to read cvar data: %s"), utility::narrow(m_name).c_str());
 }

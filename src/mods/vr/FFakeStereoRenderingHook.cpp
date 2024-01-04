@@ -115,7 +115,7 @@ void FFakeStereoRenderingHook::on_draw_ui() {
     ZoneScopedN(__FUNCTION__);
 
     ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-    if (ImGui::TreeNode("Stereo Hook Options")) {
+    if (ImGui::TreeNode(_L("Stereo Hook Options"))) {
         m_asynchronous_scan->draw("Asynchronous Code Scanning");
         m_recreate_textures_on_reset->draw("Recreate Textures on Reset");
         m_frame_delay_compensation->draw("Frame Delay Compensation");
