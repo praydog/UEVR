@@ -1660,6 +1660,11 @@ void VR::handle_keybinds() {
     if (m_keybind_disable_vr->is_key_down_once()) {
         m_disable_vr = !m_disable_vr; // definitely should not be persistent
     }
+
+    // The Slate UI
+    if (m_keybind_toggle_gui->is_key_down_once()) {
+        m_enable_gui->toggle();
+    }
 }
 
 void VR::on_frame() {
@@ -2247,6 +2252,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Overlay/Runtime Keys")) {
             m_keybind_toggle_2d_screen->draw("Toggle 2D Screen Mode Key");
+            m_keybind_toggle_gui->draw("Toggle In-Game UI Key");
             m_keybind_disable_vr->draw("Disable VR Key");
 
             ImGui::TreePop();

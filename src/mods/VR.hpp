@@ -822,6 +822,8 @@ private:
     const ModKey::Ptr m_keybind_disable_vr{ ModKey::create(generate_name("DisableVRKey")) };
     bool m_disable_vr{false}; // definitely should not be persistent
 
+    const ModKey::Ptr m_keybind_toggle_gui{ ModKey::create(generate_name("ToggleSlateGUIKey")) };
+
     struct DecoupledPitchData {
         mutable std::shared_mutex mtx{};
         glm::quat pre_flattened_rotation{};
@@ -894,6 +896,7 @@ private:
         *m_keybind_load_camera_2,
         *m_keybind_toggle_2d_screen,
         *m_keybind_disable_vr,
+        *m_keybind_toggle_gui,
     };
     
 
