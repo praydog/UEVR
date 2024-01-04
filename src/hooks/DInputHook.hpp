@@ -13,6 +13,8 @@
 
 #include <safetyhook.hpp>
 
+#include <utility/PointerHook.hpp>
+
 class DInputHook {
 public:
     DInputHook();
@@ -40,5 +42,5 @@ private:
     std::recursive_mutex m_mutex{};
 
     safetyhook::InlineHook m_create_hook{};
-    std::array<uintptr_t, 15> m_original_vtable{};
+    std::unique_ptr<PointerHook> m_enum_devices_hook{};
 };

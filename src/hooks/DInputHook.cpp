@@ -75,7 +75,7 @@ HRESULT WINAPI DInputHook::create_hooked(
     LPUNKNOWN punkOuter
 ) 
 {
-    SPDLOG_INFO_EVERY_N_SEC(5, "[DInputHook] DirectInput8Create called");
+    SPDLOG_INFO_EVERY_N_SEC(5, "[DInputHook] DirectInput8Create called {:x} {} {:x} {:x}", (uintptr_t)hinst, dwVersion, (uintptr_t)ppvOut, (uintptr_t)punkOuter);
 
     const auto og = g_dinput_hook->m_create_hook.original<decltype(&create_hooked)>();
     const auto result = og(hinst, dwVersion, riidltf, ppvOut, punkOuter);
@@ -90,33 +90,16 @@ HRESULT WINAPI DInputHook::create_hooked(
 
         auto iface = (LPDIRECTINPUT8W)*ppvOut;
 
-        if (iface != nullptr) {
+        // TODO: IID_IDirectInput8A or we don't care?
+        if (iface != nullptr && riidltf == IID_IDirectInput8W) {
             // Its not necessary to make a full blown vtable hook for this because
             // the vtable will always be the same for IDirectInput8W
-            // This way we prevent a memory leak from creating many vtable hook instances
-            static decltype(DInputHook::m_original_vtable) vt{
-                (*(uintptr_t**)iface)[0],
-                (*(uintptr_t**)iface)[1],
-                (*(uintptr_t**)iface)[2],
-                (*(uintptr_t**)iface)[3],
-                (uintptr_t)enum_devices_hooked,
-                (*(uintptr_t**)iface)[5],
-                (*(uintptr_t**)iface)[6],
-                (*(uintptr_t**)iface)[7],
-                (*(uintptr_t**)iface)[8],
-                (*(uintptr_t**)iface)[9],
-                (*(uintptr_t**)iface)[10],
-                (*(uintptr_t**)iface)[11],
-                (*(uintptr_t**)iface)[12],
-                (*(uintptr_t**)iface)[13],
-                (*(uintptr_t**)iface)[14],
-            };
-
-            if (g_dinput_hook->m_original_vtable[0] == 0) {
-                memcpy(g_dinput_hook->m_original_vtable.data(), *(uintptr_t**)iface, sizeof(vt));
+            if (g_dinput_hook->m_enum_devices_hook == nullptr) {
+                SPDLOG_INFO("[DInputHook] Hooking IDirectInput8::EnumDevices");
+                void** enum_devices_ptr = (void**)&(*(uintptr_t**)iface)[ENUM_DEVICES_VTABLE_INDEX];
+                g_dinput_hook->m_enum_devices_hook = std::make_unique<PointerHook>(enum_devices_ptr, (void*)&enum_devices_hooked);
+                SPDLOG_INFO("[DInputHook] Hooked IDirectInput8::EnumDevices");
             }
-            
-            *(uintptr_t**)iface = vt.data();
         }
     } else {
         SPDLOG_INFO("[DInputHook] DirectInput8Create failed");
@@ -137,9 +120,9 @@ HRESULT DInputHook::enum_devices_hooked(
 
     std::scoped_lock _{g_dinput_hook->m_mutex};
 
-    const auto og = (decltype(&enum_devices_hooked))g_dinput_hook->m_original_vtable[ENUM_DEVICES_VTABLE_INDEX];
+    const auto og = g_dinput_hook->m_enum_devices_hook->get_original<decltype(&enum_devices_hooked)>();
 
-    if (og == 0) {
+    if (og == nullptr) {
         SPDLOG_INFO("[DInputHook] IDirectInput8::EnumDevices original method is null");
         return DI_OK;
     }
