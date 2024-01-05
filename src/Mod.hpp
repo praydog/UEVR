@@ -53,15 +53,27 @@ public:
             return;
         }
 
-        auto v = cfg.get<T>(m_config_name);
+        if constexpr (std::is_same_v<T, std::string>) {
+            auto v = cfg.get(m_config_name);
 
-        if (v) {
-            m_value = *v;
+            if (v) {
+                m_value = *v;
+            }
+        } else {
+            auto v = cfg.get<T>(m_config_name);
+
+            if (v) {
+                m_value = *v;
+            }
         }
     };
 
     virtual void config_save(utility::Config& cfg) override {
-        cfg.set<T>(m_config_name, m_value);
+        if constexpr (std::is_same_v<T, std::string>) {
+            cfg.set(m_config_name, m_value);
+        } else {
+            cfg.set<T>(m_config_name, m_value);
+        }
     };
 
     operator T&() {
@@ -461,6 +473,52 @@ public:
 protected:
     bool m_was_key_down{ false };
     bool m_waiting_for_new_key{ false };
+};
+
+class ModString : public ModValue<std::string> {
+public:
+    using Ptr = std::unique_ptr<ModString>;
+
+    static auto create(std::string_view config_name, std::string default_value = "", bool advanced_option = false) {
+        return std::make_unique<ModString>(config_name, default_value, advanced_option);
+    }
+
+    ModString(std::string_view config_name, std::string default_value = "", bool advanced_option = false)
+        : ModValue{ config_name, default_value, advanced_option }
+    {
+    }
+
+    // No use for actually displaying this yet, so leaving them out for now
+    bool draw(std::string_view name) override {
+        if (!should_draw_option()) {
+            return false;
+        }
+
+        // TODO
+
+        return false;
+    }
+
+    void draw_value(std::string_view name) override {
+        if (!should_draw_option()) {
+            return;
+        }
+
+        ImGui::Text("%s: %s", name.data(), m_value.c_str());
+    }
+
+    void config_load(const utility::Config& cfg, bool set_defaults) override {
+        if (set_defaults) {
+            m_value = m_default_value;
+            return;
+        }
+
+        auto v = cfg.get(m_config_name);
+
+        if (v) {
+            m_value = *v;
+        }
+    };
 };
 
 class Mod {
