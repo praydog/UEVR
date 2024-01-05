@@ -823,6 +823,8 @@ private:
     bool m_disable_vr{false}; // definitely should not be persistent
 
     const ModKey::Ptr m_keybind_toggle_gui{ ModKey::create(generate_name("ToggleSlateGUIKey")) };
+    
+    const ModString::Ptr m_requested_runtime_name{ ModString::create("Frontend_RequestedRuntime", "unset") };
 
     struct DecoupledPitchData {
         mutable std::shared_mutex mtx{};
@@ -897,6 +899,7 @@ private:
         *m_keybind_toggle_2d_screen,
         *m_keybind_disable_vr,
         *m_keybind_toggle_gui,
+        *m_requested_runtime_name,
     };
     
 

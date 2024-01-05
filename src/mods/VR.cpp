@@ -100,6 +100,17 @@ std::optional<std::string> VR::initialize_openvr() {
     m_openvr = std::make_shared<runtimes::OpenVR>();
     m_openvr->loaded = false;
 
+    const auto wants_openxr = m_requested_runtime_name->value() == "openxr_loader.dll";
+
+    SPDLOG_INFO("[VR] Requested runtime: {}", m_requested_runtime_name->value());
+
+    if (wants_openxr && GetModuleHandleW(L"openxr_loader.dll") != nullptr) {
+        // pre-injected
+        m_openvr->dll_missing = true;
+        m_openvr->error = "OpenXR already loaded";
+        return Mod::on_initialize();
+    }
+
     if (GetModuleHandleW(L"openvr_api.dll") == nullptr) {
         // pre-injected
         if (GetModuleHandleW(L"openxr_loader.dll") != nullptr) {
@@ -1464,17 +1475,17 @@ void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
         option.config_load(cfg, set_defaults);
     }
 
-    if (get_runtime()->loaded) {
+    if (get_runtime() != nullptr && get_runtime()->loaded) {
         get_runtime()->on_config_load(cfg, set_defaults);
-    }
 
-    // Run the rest of OpenXR initialization code here that depends on config values
-    if (m_first_config_load) {
-        m_first_config_load = false; // because the frontend can request config reloads
+        // Run the rest of OpenXR initialization code here that depends on config values
+        if (m_first_config_load) {
+            m_first_config_load = false; // because the frontend can request config reloads
 
-         if (get_runtime()->is_openxr() && get_runtime()->loaded) {
-            spdlog::info("[VR] Finishing up OpenXR initialization");
-            initialize_openxr_swapchains();
+            if (get_runtime()->is_openxr()) {
+                spdlog::info("[VR] Finishing up OpenXR initialization");
+                initialize_openxr_swapchains();
+            }
         }
     }
 
@@ -1483,7 +1494,10 @@ void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
     }
 
     m_overlay_component.on_config_load(cfg, set_defaults);
-    m_cvar_manager->on_config_load(cfg, set_defaults);
+
+    if (m_cvar_manager != nullptr) {
+        m_cvar_manager->on_config_load(cfg, set_defaults);   
+    }
 
     // Load camera offsets
     load_cameras();
