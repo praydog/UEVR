@@ -1316,6 +1316,7 @@ void UObjectHook::update_persistent_states() {
                         value = prop_state->data.d;
                     }
                     break;
+                case "UInt32Property"_fnv:
                 case "IntProperty"_fnv:
                     {
                         auto& value = *(int32_t*)((uintptr_t)obj + ((sdk::FProperty*)prop_desc)->get_offset());
@@ -2951,6 +2952,7 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 display_context(value);
             }
             break;
+        case "UInt32Property"_fnv:
         case "IntProperty"_fnv:
             {
                 auto& value = *(int32_t*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
