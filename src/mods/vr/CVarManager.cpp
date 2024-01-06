@@ -37,6 +37,14 @@ CVarManager::CVarManager() {
     });
 
     m_all_cvars.insert(m_all_cvars.end(), m_displayed_cvars.begin(), m_displayed_cvars.end());
+
+    // set m_hzbo (shared ptr) to the r.HZBOcclusion cvar in m_all_cvars
+    for (auto& cvar : m_all_cvars) {
+        if (cvar->get_name() == L"r.HZBOcclusion") {
+            m_hzbo = cvar;
+            break;
+        }
+    }
 }
 
 CVarManager::~CVarManager() {

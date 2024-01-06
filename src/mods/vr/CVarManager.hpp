@@ -23,6 +23,14 @@ public:
     void dump_commands();
     void spawn_console();
 
+    bool is_hzbo_frozen_and_enabled() const {
+        if (m_hzbo == nullptr) {
+            return false;
+        }
+
+        return m_hzbo->is_frozen() && m_hzbo->get_frozen_int_value() == 1;
+    }
+
 public:
     class CVar : public std::enable_shared_from_this<CVar> {
     public:
@@ -79,6 +87,14 @@ public:
 
         auto get_type() const {
             return m_type;
+        }
+
+        int get_frozen_int_value() const {
+            return m_frozen_int_value;
+        }
+
+        float get_frozen_float_value() const {
+            return m_frozen_float_value;
         }
 
     protected:
@@ -154,6 +170,8 @@ public:
 private:
     std::vector<std::shared_ptr<CVar>> m_displayed_cvars{};
     std::vector<std::shared_ptr<CVar>> m_all_cvars{}; // ones the user can manually add to cvars.txt'
+
+    std::shared_ptr<CVar> m_hzbo{};
 
     struct AutoComplete {
         sdk::IConsoleObject* object;
