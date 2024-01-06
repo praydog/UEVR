@@ -29,7 +29,9 @@ Universal Unreal Engine VR Mod (4/5)
 
 ## Getting Started
 
-1. Launch the frontend GUI
+Before launching, ensure you have installed .NET 6.0. It should tell you where to install it upon first open, but if not, you can [download it from here](https://dotnet.microsoft.com/en-us/download/dotnet/6.0)
+
+1. Launch UEVRInjector.exe
 2. Launch the target game
 3. Locate the game in the process dropdown list
 4. Select your desired runtime (OpenVR/OpenXR)
