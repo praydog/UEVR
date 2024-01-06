@@ -99,6 +99,20 @@ public:
     bool should_draw_option() const {
         return g_framework->is_advanced_view_enabled() || !this->m_advanced_option;
     }
+    
+
+    void context_menu_logic() {
+        if (ImGui::BeginPopupContextItem()) {
+            reset_to_default_value_logic();
+            ImGui::EndPopup();
+        }
+    }
+
+    void reset_to_default_value_logic() {
+        if (ImGui::Button("Reset to default")) {
+            m_value = m_default_value;
+        }
+    }
 
 protected:
     T m_value{};
@@ -127,6 +141,7 @@ public:
         
         ImGui::PushID(this);
         auto ret = ImGui::Checkbox(name.data(), &m_value);
+        context_menu_logic();
         ImGui::PopID();
 
         return ret;
@@ -163,6 +178,7 @@ public:
 
         ImGui::PushID(this);
         auto ret = ImGui::InputFloat(name.data(), &m_value);
+        context_menu_logic();
         ImGui::PopID();
 
         return ret;
@@ -199,6 +215,7 @@ public:
 
         ImGui::PushID(this);
         auto ret = ImGui::SliderFloat(name.data(), &m_value, m_range.x, m_range.y);
+        context_menu_logic();
         ImGui::PopID();
 
         return ret;
@@ -240,6 +257,7 @@ public:
 
         ImGui::PushID(this);
         auto ret = ImGui::InputInt(name.data(), &m_value);
+        context_menu_logic();
         ImGui::PopID();
 
         return ret;
@@ -275,6 +293,7 @@ public:
 
         ImGui::PushID(this);
         auto ret = ImGui::SliderInt(name.data(), &m_value, m_int_range.min, m_int_range.max);
+        context_menu_logic();
         ImGui::PopID();
 
         return ret;
@@ -322,6 +341,7 @@ public:
 
         ImGui::PushID(this);
         auto ret = ImGui::Combo(name.data(), &m_value, m_options.data(), static_cast<int32_t>(m_options.size()));
+        context_menu_logic();
         ImGui::PopID();
 
         return ret;
@@ -386,6 +406,7 @@ public:
 
         ImGui::PushID(this);
         ImGui::Button(name.data());
+        context_menu_logic();
 
         if (ImGui::IsItemHovered() && ImGui::GetIO().MouseDown[0]) {
             m_waiting_for_new_key = true;
