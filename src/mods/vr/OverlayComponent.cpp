@@ -115,7 +115,9 @@ void OverlayComponent::update_input_mouse_emulation() {
             };
 
             static bool was_pressing = false;
+            static bool was_pressing_right = false;
 
+            // Left click.
             if (VR::get()->is_action_active_any_joystick(vr->get_action_handle(VR::s_action_a_button_right))) {
                 // Clear any gamepad A events.
                 auto ctx = io.Ctx;
@@ -136,6 +138,29 @@ void OverlayComponent::update_input_mouse_emulation() {
             } else if (was_pressing) {
                 io.AddMouseButtonEvent(0, false);
                 was_pressing = false;
+            }
+
+            // Right click.
+            if (VR::get()->is_action_active_any_joystick(vr->get_action_handle(VR::s_action_b_button_right))) {
+                // Clear any gamepad B events.
+                auto ctx = io.Ctx;
+
+                if (ctx != nullptr) {
+                    for (auto i = 0; i < ctx->InputEventsQueue.size(); ++i) {
+                        auto& event = ctx->InputEventsQueue[i];
+
+                        if (event.Type == ImGuiInputEventType::ImGuiInputEventType_Key && event.Key.Key == ImGuiKey_GamepadFaceLeft) {
+                            ctx->InputEventsQueue.erase(ctx->InputEventsQueue.begin() + i);
+                            --i;
+                        }
+                    }
+                }
+
+                io.AddMouseButtonEvent(1, true);
+                was_pressing_right = true;
+            } else if (was_pressing_right) {
+                io.AddMouseButtonEvent(1, false);
+                was_pressing_right = false;
             }
 
             const auto right_stick_axis = vr->get_right_stick_axis();
