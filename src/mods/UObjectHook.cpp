@@ -1832,7 +1832,8 @@ void UObjectHook::draw_main() {
 
     // Display common objects like things related to the player
     if (ImGui::TreeNode("Common Objects")) {
-        auto world = sdk::UGameEngine::get()->get_world();
+        auto engine = sdk::UGameEngine::get();
+        auto world = engine != nullptr ? engine->get_world() : nullptr;
 
         if (world != nullptr) {
             if (ImGui::TreeNode("PlayerController")) {
