@@ -133,6 +133,8 @@ public:
     void update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_controller);
 
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
+    void on_pre_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
+                                             const float world_to_meters, Vector3f* view_location, bool is_double) override;
     void on_pre_viewport_client_draw(void* viewport_client, void* viewport, void* canvas) override;
 
     void update_hmd_state(bool from_view_extensions = false, uint32_t frame_count = 0);
@@ -830,6 +832,16 @@ private:
         mutable std::shared_mutex mtx{};
         glm::quat pre_flattened_rotation{};
     } m_decoupled_pitch_data{};
+
+    struct CameraFreeze {
+        glm::vec3 position{};
+        glm::vec3 rotation{}; // euler
+        bool position_frozen{false};
+        bool rotation_frozen{false};
+
+        bool position_wants_freeze{false};
+        bool rotation_wants_freeze{false};
+    } m_camera_freeze{};
 
     struct CameraData {
         glm::vec3 offset{};

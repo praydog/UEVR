@@ -1301,6 +1301,65 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     }
 }
 
+void VR::on_pre_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
+                                             const float world_to_meters, Vector3f* view_location, bool is_double)
+{
+    if (!is_hmd_active()) {
+        m_camera_freeze.position_wants_freeze = false;
+        m_camera_freeze.rotation_wants_freeze = false;
+        return;
+    }
+
+    Rotator<double>* view_rotation_double = (Rotator<double>*)view_rotation;
+    Vector3d* view_location_double = (Vector3d*)view_location;
+
+    if (m_camera_freeze.position_wants_freeze) {
+        if (is_double) {
+            m_camera_freeze.position = glm::vec3{ (float)view_location_double->x, (float)view_location_double->y, (float)view_location_double->z };
+        } else {
+            m_camera_freeze.position = glm::vec3{ view_location->x, view_location->y, view_location->z };
+        }
+
+        m_camera_freeze.position_wants_freeze = false;
+        m_camera_freeze.position_frozen = true;
+    }
+
+    if (m_camera_freeze.rotation_wants_freeze) {
+        if (is_double) {
+            m_camera_freeze.rotation = glm::vec3{ (float)view_rotation_double->pitch, (float)view_rotation_double->yaw, (float)view_rotation_double->roll };
+        } else {
+            m_camera_freeze.rotation = glm::vec3{ view_rotation->pitch, view_rotation->yaw, view_rotation->roll };
+        }
+
+        m_camera_freeze.rotation_wants_freeze = false;
+        m_camera_freeze.rotation_frozen = true;
+    }
+
+    if (m_camera_freeze.position_frozen) {
+        if (is_double) {
+            view_location_double->x = m_camera_freeze.position.x;
+            view_location_double->y = m_camera_freeze.position.y;
+            view_location_double->z = m_camera_freeze.position.z;
+        } else {
+            view_location->x = m_camera_freeze.position.x;
+            view_location->y = m_camera_freeze.position.y;
+            view_location->z = m_camera_freeze.position.z;
+        }
+    }
+
+    if (m_camera_freeze.rotation_frozen) {
+        if (is_double) {
+            view_rotation_double->pitch = m_camera_freeze.rotation.x;
+            view_rotation_double->yaw = m_camera_freeze.rotation.y;
+            view_rotation_double->roll = m_camera_freeze.rotation.z;
+        } else {
+            view_rotation->pitch = m_camera_freeze.rotation.x;
+            view_rotation->yaw = m_camera_freeze.rotation.y;
+            view_rotation->roll = m_camera_freeze.rotation.z;
+        }
+    }
+}
+
 void VR::on_pre_viewport_client_draw(void* viewport_client, void* viewport, void* canvas){
     ZoneScopedN(__FUNCTION__);
 
@@ -2230,6 +2289,25 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
 
                 if (ImGui::Button(std::format("Load Camera {}", i).data())) {
                     load_camera(i);
+                }
+            }
+
+            bool pos_freeze = m_camera_freeze.position_frozen || m_camera_freeze.position_wants_freeze;
+            if (ImGui::Checkbox("Freeze Position", &pos_freeze)) {
+                if (pos_freeze) {
+                    m_camera_freeze.position_wants_freeze = true;
+                } else {
+                    m_camera_freeze.position_frozen = false;
+                }
+            }
+
+            ImGui::SameLine();
+            bool rot_freeze = m_camera_freeze.rotation_frozen || m_camera_freeze.rotation_wants_freeze;
+            if (ImGui::Checkbox("Freeze Rotation", &rot_freeze)) {
+                if (rot_freeze) {
+                    m_camera_freeze.rotation_wants_freeze = true;
+                } else {
+                    m_camera_freeze.rotation_frozen = false;
                 }
             }
 
