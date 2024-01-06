@@ -11,7 +11,7 @@ Universal Unreal Engine VR Mod (4/5)
 
 ## Features
 
-- Full 6DOF support out of the box (HMD movement)
+- Full 6DOF head-tracking support out of the box (HMD movement)
 - Full stereoscopic 3D out of the box
 - Native UE4/UE5 stereo rendering system
 - Frontend GUI for easy process injection
@@ -29,7 +29,7 @@ Universal Unreal Engine VR Mod (4/5)
 
 ## Getting Started
 
-1. Launch the frontend GUI
+1. Launch UEVRInjector.exe (running as Administrator is recommended)
 2. Launch the target game
 3. Locate the game in the process dropdown list
 4. Select your desired runtime (OpenVR/OpenXR)
@@ -39,7 +39,7 @@ Universal Unreal Engine VR Mod (4/5)
 
 ## To-dos before injection
 
-1. Disable HDR (it will still work without it, but the game will be darker than usual if it is)
+1. Disable HDR (it will still work with HDR on, but the game will be darker than it should be if it is)
 2. Start as administrator if the game is not visible in the list
 3. Pass `-nohmd` to the game's command line and/or delete VR plugins from the game directory if the game contains any existing VR plugins
 4. Disable any overlays that may conflict and cause crashes (Rivatuner, ASUS software, Razer software, Overwolf, etc...)
