@@ -2385,6 +2385,16 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
             props->save_to_file();
         }
     }
+
+    if (ImGui::TreeNode("Sockets")) {
+        const auto socket_names = comp->get_all_socket_names();
+
+        for (auto& name : socket_names) {
+            ImGui::Text("%s", utility::narrow(name.to_string()).data());
+        }
+
+        ImGui::TreePop();
+    }
 }
 
 std::optional<UObjectHook::StatePath> UObjectHook::try_get_path(sdk::UObject* target) const {
