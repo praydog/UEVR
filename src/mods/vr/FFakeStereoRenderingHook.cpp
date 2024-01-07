@@ -2608,14 +2608,12 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
 
             if (auto it = cached_init_options.find(init_options_a->scene_view_state); it != cached_init_options.end()) {
                 const auto& vio_entry = it->second;
-                memcpy(init_options_b, &vio_entry, sizeof(sdk::FSceneViewInitOptionsUE4));
-                /*init_options_b->view_origin = vio_entry.view_origin;
+                //memcpy(init_options_b, &vio_entry, sizeof(sdk::FSceneViewInitOptionsUE4));
+                init_options_b->view_origin = vio_entry.view_origin;
                 init_options_b->view_rotation_matrix = vio_entry.view_rotation_matrix;
                 *(FIntRect*)&init_options_b->view_rect = *(FIntRect*)&vio_entry.view_rect;
                 *(FIntRect*)&init_options_b->constrained_view_rect = *(FIntRect*)&vio_entry.constrained_view_rect;
                 init_options_b->projection_matrix = vio_entry.projection_matrix;
-                init_options_b->player_index = vio_entry.player_index;*/
-                //init_options_b->stereo_pass = 0;
                 return;
             }
 
