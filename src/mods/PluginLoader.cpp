@@ -18,6 +18,8 @@
 #include <sdk/FField.hpp>
 #include <sdk/FProperty.hpp>
 #include <sdk/UFunction.hpp>
+#include <sdk/UGameplayStatics.hpp>
+#include <sdk/APlayerController.hpp>
 
 #include "VR.hpp"
 
@@ -120,6 +122,16 @@ UEVR_PluginFunctions g_plugin_functions {
     uevr::remove_callback
 };
 
+#define GET_ENGINE_WORLD_RETNULL() \
+    auto engine = sdk::UEngine::get(); \
+    if (engine == nullptr) { \
+        return nullptr; \
+    } \
+    auto world = engine->get_world(); \
+    if (world == nullptr) { \
+        return nullptr; \
+    }
+
 UEVR_SDKFunctions g_sdk_functions {
     []() -> UEVR_UEngineHandle {
         return (UEVR_UEngineHandle)sdk::UEngine::get();
@@ -144,9 +156,48 @@ UEVR_SDKFunctions g_sdk_functions {
             set_cvar(cvars[name], value);
         }
     },
+    // get_uobject_array
     []() -> UEVR_UObjectArrayHandle {
         return (UEVR_UObjectArrayHandle)sdk::FUObjectArray::get();
-    }
+    },
+    // get_player_controller
+    [](int index) -> UEVR_UObjectHandle {
+        GET_ENGINE_WORLD_RETNULL();
+        const auto ugameplay_statics = sdk::UGameplayStatics::get();
+        if (ugameplay_statics == nullptr) {
+            return nullptr;
+        }
+
+        return (UEVR_UObjectHandle)ugameplay_statics->get_player_controller(world, index);
+    },
+    // get_local_pawn
+    [](int index) -> UEVR_UObjectHandle {
+        GET_ENGINE_WORLD_RETNULL();
+        const auto ugameplay_statics = sdk::UGameplayStatics::get();
+        if (ugameplay_statics == nullptr) {
+            return nullptr;
+        }
+
+        const auto pc = ugameplay_statics->get_player_controller(world, index);
+        if (pc == nullptr) {
+            return nullptr;
+        }
+
+        return (UEVR_UObjectHandle)pc->get_acknowledged_pawn();
+    },
+    // spawn_object
+    [](UEVR_UClassHandle klass, UEVR_UObjectHandle outer) -> UEVR_UObjectHandle {
+        if (klass == nullptr) {
+            return nullptr;
+        }
+
+        const auto ugs = sdk::UGameplayStatics::get();
+        if (ugs == nullptr) {
+            return nullptr;
+        }
+
+        return (UEVR_UObjectHandle)ugs->spawn_object((sdk::UClass*)klass, (sdk::UObject*)outer);
+    },
 };
 
 namespace uevr {
