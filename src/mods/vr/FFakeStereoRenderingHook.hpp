@@ -353,8 +353,8 @@ private:
         uint32_t last_index{};
 
         // For keeping track of what the states were before our modifications.
-        std::unordered_map<sdk::FSceneViewStateInterface*, sdk::FSceneViewInitOptionsUE5> view_init_options_ue4{};
-        std::unordered_map<sdk::FSceneViewStateInterface*, sdk::FSceneViewInitOptionsUE4> view_init_options_ue5{};
+        std::unordered_map<sdk::FSceneViewStateInterface*, sdk::FSceneViewInitOptionsUE4> view_init_options_ue4{};
+        std::unordered_map<sdk::FSceneViewStateInterface*, sdk::FSceneViewInitOptionsUE5> view_init_options_ue5{};
     } m_sceneview_data;
 
     safetyhook::InlineHook m_localplayer_get_viewpoint_hook{};
