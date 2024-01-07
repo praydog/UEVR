@@ -310,11 +310,19 @@ public:
     }
 
     auto get_left_joystick() const {
-        return m_left_joystick;
+        if (!m_swap_controllers->value()) {
+            return m_left_joystick;
+        }
+
+        return m_right_joystick;
     }
 
     auto get_right_joystick() const {
-        return m_right_joystick;
+        if (!m_swap_controllers->value()) {
+            return m_right_joystick;
+        }
+
+        return m_left_joystick;
     }
 
     bool is_gui_enabled() const {
@@ -765,6 +773,7 @@ private:
     const ModToggle::Ptr m_load_blueprint_code{ ModToggle::create(generate_name("LoadBlueprintCode"), false, true) };
     const ModToggle::Ptr m_2d_screen_mode{ ModToggle::create(generate_name("2DScreenMode"), false) };
     const ModToggle::Ptr m_roomscale_movement{ ModToggle::create(generate_name("RoomscaleMovement"), false) };
+    const ModToggle::Ptr m_swap_controllers{ ModToggle::create(generate_name("SwapControllerInputs"), false) };
 
     // Snap turn settings and globals
     void process_snapturn();
@@ -876,6 +885,7 @@ private:
         *m_load_blueprint_code,
         *m_2d_screen_mode,
         *m_roomscale_movement,
+        *m_swap_controllers,
         *m_snapturn,
         *m_snapturn_joystick_deadzone,
         *m_snapturn_angle,
