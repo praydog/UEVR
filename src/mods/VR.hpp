@@ -280,12 +280,12 @@ public:
     }
 
     bool is_using_controllers() const {
-        return m_controller_test_mode || (m_controllers_allowed &&
+        return m_controller_test_mode || (m_controllers_allowed->value() &&
         is_hmd_active() && !m_controllers.empty() && (std::chrono::steady_clock::now() - m_last_controller_update) <= std::chrono::seconds((int32_t)m_motion_controls_inactivity_timer->value()));
     }
 
     bool is_using_controllers_within(std::chrono::seconds seconds) const {
-        return is_hmd_active() && !m_controllers.empty() && (std::chrono::steady_clock::now() - m_last_controller_update) <= seconds;
+        return m_controllers_allowed->value() && is_hmd_active() && !m_controllers.empty() && (std::chrono::steady_clock::now() - m_last_controller_update) <= seconds;
     }
 
     int get_hmd_index() const {
@@ -892,7 +892,7 @@ private:
 
     bool m_stereo_emulation_mode{false}; // not a good config option, just for debugging
     bool m_wait_for_present{true};
-    bool m_controllers_allowed{true};
+    const ModToggle::Ptr m_controllers_allowed{ ModToggle::create(generate_name("ControllersAllowed"), true) };
     bool m_controller_test_mode{false};
 
     ValueList m_options{
@@ -949,6 +949,7 @@ private:
         *m_keybind_disable_vr,
         *m_keybind_toggle_gui,
         *m_requested_runtime_name,
+        *m_controllers_allowed,
     };
     
 

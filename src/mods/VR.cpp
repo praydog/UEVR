@@ -2549,7 +2549,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::Checkbox("Disable VR Entirely", &m_disable_vr);
         ImGui::Checkbox("Stereo Emulation Mode", &m_stereo_emulation_mode);
         ImGui::Checkbox("Wait for Present", &m_wait_for_present);
-        ImGui::Checkbox("Controllers allowed", &m_controllers_allowed);
+        m_controllers_allowed->draw("Controllers allowed");
         ImGui::Checkbox("Controller test mode", &m_controller_test_mode);
 
         const double min_ = 0.0;
