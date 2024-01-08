@@ -1470,20 +1470,29 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
         return nullptr;
     }
 
-    auto previous_object = base;
+    void* previous_data = base;
+    sdk::UStruct* previous_data_desc = base->get_class();
+
+    if (previous_data_desc == nullptr) {
+        return nullptr;
+    }
 
     for (auto it = m_path.begin() + 1; it != m_path.end(); ++it) {
+        if (previous_data == nullptr || previous_data_desc == nullptr) {
+            return nullptr;
+        }
+
         switch (utility::hash(*it)) {
         case "Components"_fnv:
         {
             // Make sure the base is an AActor
             static const auto actor_t = sdk::AActor::static_class();
 
-            if (!previous_object->get_class()->is_a(actor_t)) {
+            if (!previous_data_desc->is_a(actor_t)) {
                 return nullptr;
             }
 
-            const auto components = ((sdk::AActor*)previous_object)->get_all_components();
+            const auto components = ((sdk::AActor*)previous_data)->get_all_components();
 
             if (components.empty()) {
                 return nullptr;
@@ -1499,7 +1508,8 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
                 const auto comp_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
 
                 if (utility::narrow(comp_name) == *next_it) {
-                    previous_object = comp;
+                    previous_data = comp;
+                    previous_data_desc = comp->get_class();
                     ++it;
                     break;
                 }
@@ -1516,7 +1526,7 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
             }
 
             const auto prop_name = *next_it;
-            const auto prop_desc = previous_object->get_class()->find_property(utility::widen(prop_name));
+            const auto prop_desc = previous_data_desc->find_property(utility::widen(prop_name));
 
             if (prop_desc == nullptr) {
                 return nullptr;
@@ -1532,15 +1542,31 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
             switch (utility::hash(utility::narrow(prop_t_name))) {
             case "ObjectProperty"_fnv:
             {
-                const auto obj_ptr = prop_desc->get_data<sdk::UObject*>(previous_object);
+                const auto obj_ptr = prop_desc->get_data<sdk::UObject*>(previous_data);
                 const auto obj = obj_ptr != nullptr ? *obj_ptr : nullptr;
 
                 if (obj == nullptr) {
                     return nullptr;
                 }
 
-                previous_object = obj;
+                previous_data = obj;
+                previous_data_desc = obj->get_class();
                 ++it;
+                break;
+            }
+            case "StructProperty"_fnv:
+            {
+                const auto struct_data = prop_desc->get_data<void*>(previous_data);
+
+                previous_data = struct_data;
+                previous_data_desc = ((sdk::FStructProperty*)prop_desc)->get_struct();
+
+                if (previous_data_desc == nullptr || previous_data == nullptr) {
+                    return nullptr;
+                }
+
+                ++it;
+
                 break;
             }
             case "ArrayProperty"_fnv:
@@ -1564,7 +1590,7 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
                     return nullptr;
                 }
 
-                const auto array_ptr = prop_desc->get_data<sdk::TArray<sdk::UObject*>>(previous_object);
+                const auto array_ptr = prop_desc->get_data<sdk::TArray<sdk::UObject*>>(previous_data);
 
                 if (array_ptr == nullptr) {
                     return nullptr;
@@ -1594,7 +1620,8 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
 
                     if (utility::narrow(obj_name) == *prop_it) {
                         found = true;
-                        previous_object = obj;
+                        previous_data = obj;
+                        previous_data_desc = obj->get_class();
                         ++it;
                         ++it;
                         break;
@@ -1622,7 +1649,8 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
         };
     }
 
-    return previous_object;
+    // bad assumption?
+    return (sdk::UObject*)previous_data;
 }
 
 void UObjectHook::on_frame() {
@@ -2999,6 +3027,7 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 void* addr = (void*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
 
                 if (ImGui::TreeNode(utility::narrow(prop->get_field_name().to_string()).data())) {
+                    auto scope2 = m_path.enter(utility::narrow(prop->get_field_name().to_string()));
                     ui_handle_struct(addr, ((sdk::FStructProperty*)prop)->get_struct());
                     ImGui::TreePop();
                 }
