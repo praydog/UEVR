@@ -1731,11 +1731,13 @@ void UObjectHook::draw_main() {
                 auto comp = it.first;
                 std::wstring comp_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
 
+                ImGui::PushID(comp);
                 if (ImGui::TreeNode(utility::narrow(comp_name).data())) {
                     ui_handle_object(comp);
 
                     ImGui::TreePop();
                 }
+                ImGui::PopID();
             }
 
             ImGui::TreePop();
