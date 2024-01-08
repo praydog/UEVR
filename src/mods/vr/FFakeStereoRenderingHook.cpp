@@ -2632,13 +2632,13 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
             int32_t x = 0;
             int32_t y = 0;
 
-            const auto true_index = (vr->is_using_afr() ? (frame_count + 1) % 2 : view_index) % view_family.views.count;
+            const auto true_index = vr->is_using_afr() ? (frame_count + 1) % 2 : view_index;
 
             if (!vr->is_using_afr() && true_index == 1) {
                 x += w;
             }
 
-            auto view = view_family.views.data[view_index];
+            auto view = view_family.views.data[view_index % view_family.views.count];
 
             FIntRect view_rect{x, y, x + w, y + h};
 
@@ -2681,7 +2681,7 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
             init_options_projection_matrix = proj_mat;
 
             memcpy(init_options_copy.data(), init_options, 0x500);
-            view->constructor((sdk::FSceneViewInitOptions*)init_options_copy.data());
+            view->constructor((sdk::FSceneViewInitOptions*)init_options_copy.data()); // Triggers our hook as well
         };
 
         const auto requested_index = vr->get_requested_splitscreen_index();
@@ -2694,10 +2694,10 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
             }
 
             if (!vr->is_using_afr()) {
-                do_splitscreen(0);
-
                 if (view_family.views.count > 1) {
-                    do_splitscreen(1);
+                    do_splitscreen(other_index);
+                } else {
+                    do_splitscreen(0);
                 }
             } else {
                 do_splitscreen(0);
