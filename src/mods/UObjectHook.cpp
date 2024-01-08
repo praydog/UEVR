@@ -1239,7 +1239,7 @@ void UObjectHook::update_persistent_states() {
             static const auto scene_component_t = sdk::USceneComponent::static_class();
 
             // TODO? will need some reworking to support properties from arbitrary objects
-            if (!obj->get_class()->is_a(scene_component_t)) {
+            if (!obj.definition->is_a(scene_component_t)) {
                 continue;
             }
 
@@ -1250,7 +1250,7 @@ void UObjectHook::update_persistent_states() {
                 remove_motion_controller_state(state->last_object);
             }
 
-            auto mc_state = get_or_add_motion_controller_state((sdk::USceneComponent*)obj);
+            auto mc_state = get_or_add_motion_controller_state(obj.as<sdk::USceneComponent*>());
 
             if (mc_state == nullptr) {
                 continue;
@@ -1262,7 +1262,7 @@ void UObjectHook::update_persistent_states() {
                 *mc_state = state->state;
             }
 
-            state->last_object = (sdk::USceneComponent*)obj;
+            state->last_object = obj.as<sdk::USceneComponent*>();
         }
     }
 
@@ -1280,16 +1280,16 @@ void UObjectHook::update_persistent_states() {
                 continue;
             }
 
-            if (prop_base->hide && obj->is_a(scene_comp_t)) {
+            if (prop_base->hide && obj.definition->is_a(scene_comp_t)) {
                 if (m_uobject_hook_disabled) {
-                    ((sdk::USceneComponent*)obj)->set_visibility(true, false);
+                    obj.as<sdk::USceneComponent*>()->set_visibility(true, false);
                 } else {
-                    ((sdk::USceneComponent*)obj)->set_visibility(false, false);
+                    obj.as<sdk::USceneComponent*>()->set_visibility(false, false);
                 }
             }
 
             for (const auto& prop_state : prop_base->properties) {
-                const auto prop_desc = obj->get_class()->find_property(prop_state->name);
+                const auto prop_desc = obj.definition->find_property(prop_state->name);
             
                 if (prop_desc == nullptr) {
                     continue;
@@ -1306,20 +1306,20 @@ void UObjectHook::update_persistent_states() {
                 switch (utility::hash(utility::narrow(prop_t_name))) {
                 case "FloatProperty"_fnv:
                     {
-                        auto& value = *(float*)((uintptr_t)obj + ((sdk::FProperty*)prop_desc)->get_offset());
+                        auto& value = *(float*)(obj.as<uintptr_t>() + ((sdk::FProperty*)prop_desc)->get_offset());
                         value = prop_state->data.f;
                     }
                     break;
                 case "DoubleProperty"_fnv:
                     {
-                        auto& value = *(double*)((uintptr_t)obj + ((sdk::FProperty*)prop_desc)->get_offset());
+                        auto& value = *(double*)(obj.as<uintptr_t>() + ((sdk::FProperty*)prop_desc)->get_offset());
                         value = prop_state->data.d;
                     }
                     break;
                 case "UInt32Property"_fnv:
                 case "IntProperty"_fnv:
                     {
-                        auto& value = *(int32_t*)((uintptr_t)obj + ((sdk::FProperty*)prop_desc)->get_offset());
+                        auto& value = *(int32_t*)(obj.as<uintptr_t>() + ((sdk::FProperty*)prop_desc)->get_offset());
                         value = prop_state->data.i;
                     }
                     break;
@@ -1463,7 +1463,7 @@ sdk::UObject* UObjectHook::StatePath::resolve_base_object() const {
     return nullptr;
 }
 
-sdk::UObject* UObjectHook::StatePath::resolve() const {
+UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
     const auto base = resolve_base_object();
 
     if (base == nullptr) {
@@ -1565,8 +1565,8 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
                     return nullptr;
                 }
 
+                // ++it because we are examining the properties
                 ++it;
-
                 break;
             }
             case "ArrayProperty"_fnv:
@@ -1634,7 +1634,6 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
                 break;
             }
 
-            // Need to handle StructProperty but whatever.
             default:
                 SPDLOG_ERROR("[UObjectHook] Unsupported persistent property type {}", utility::narrow(prop_t_name));
                 break;
@@ -1649,8 +1648,11 @@ sdk::UObject* UObjectHook::StatePath::resolve() const {
         };
     }
 
-    // bad assumption?
-    return (sdk::UObject*)previous_data;
+    if (previous_data == nullptr || previous_data_desc == nullptr) {
+        return nullptr;
+    }
+
+    return ResolvedObject{(sdk::UObject*)previous_data, previous_data_desc};
 }
 
 void UObjectHook::on_frame() {
@@ -3376,6 +3378,9 @@ std::vector<std::shared_ptr<UObjectHook::PersistentProperties>> UObjectHook::des
         if (state != nullptr) {
             state->path_to_json = json_file;
             result.push_back(state);
+            SPDLOG_INFO("[UObjectHook] Loaded persistent properties from {}", json_file.string());
+        } else {
+            SPDLOG_ERROR("[UObjectHook] {} does not appear to be a valid persistent properties file", json_file.string());
         }
     }
 
