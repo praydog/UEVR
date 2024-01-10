@@ -350,11 +350,19 @@ void OverlayComponent::update_slate_openvr() {
 
     //auto glm_matrix = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
     auto glm_matrix = Matrix4x4f{rotation_offset};
-    glm_matrix[3] += vr->get_standing_origin();
+    if (m_ui_follows_view->value()) {
+        const auto mat = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
+        glm_matrix = glm::extractMatrixRotation(mat);
+        glm_matrix[3] += mat[3];
+    } else {
+        glm_matrix[3] += vr->get_standing_origin();
+    }
+
     glm_matrix[3] -= glm_matrix[2] * m_slate_distance->value();
     glm_matrix[3] += m_slate_x_offset->value() * glm_matrix[0];
     glm_matrix[3] += m_slate_y_offset->value() * glm_matrix[1];
     glm_matrix[3].w = 1.0f;
+    
     const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(glm_matrix)};
     vr::VROverlay()->SetOverlayTransformAbsolute(m_slate_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
 
