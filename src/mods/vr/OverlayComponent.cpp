@@ -321,6 +321,7 @@ void OverlayComponent::update_slate_openvr() {
     }
 
     if (!vr->is_gui_enabled()) {
+        vr::VROverlay()->ClearOverlayTexture(m_slate_overlay_handle);
         return;
     }
 
