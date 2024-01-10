@@ -54,10 +54,12 @@ private:
         ReferenceController* ref_controller { nullptr };
     };
 
+    void pre_initialize();
     void initialize();
     bool analyze_head_tracking_allowed(uintptr_t return_address);
 
     // IXRTrackingSystem
+    static SharedPtr* get_stereo_rendering_device(sdk::IXRTrackingSystem*, SharedPtr* out, void* a3);
     static bool is_head_tracking_allowed(sdk::IXRTrackingSystem*);
     static bool is_head_tracking_allowed_for_world(sdk::IXRTrackingSystem*, void* world);
     static SharedPtr* get_xr_camera(sdk::IXRTrackingSystem*, SharedPtr* out, size_t device_id);
@@ -136,4 +138,7 @@ private:
         Rotator<float> m_last_view_rotation;
         Rotator<double> m_last_view_rotation_double{};
     };
+
+    std::optional<std::string> m_overridden_version{};
+    bool m_is_4_26{false};
 };

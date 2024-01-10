@@ -28,8 +28,8 @@
 
 #include "IXRTrackingSystemHook.hpp"
 
-detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
-    const auto str_version = utility::narrow(sdk::search_for_version(utility::get_executable()).value_or(L"0.00"));
+detail::IXRTrackingSystemVT& get_tracking_system_vtable(std::optional<std::string> version_override = std::nullopt) {
+    const auto str_version = version_override.has_value() ? version_override.value() : utility::narrow(sdk::search_for_version(utility::get_executable()).value_or(L"0.00"));
     auto version = sdk::get_file_version_info();
 
     if (str_version != "0.00") {
@@ -115,8 +115,8 @@ detail::IXRTrackingSystemVT& get_tracking_system_vtable() {
 }
 
 
-detail::IXRCameraVT& get_camera_vtable() {
-    const auto str_version = utility::narrow(sdk::search_for_version(utility::get_executable()).value_or(L"0.00"));
+detail::IXRCameraVT& get_camera_vtable(std::optional<std::string> version_override = std::nullopt) {
+    const auto str_version = version_override.has_value() ? version_override.value() : utility::narrow(sdk::search_for_version(utility::get_executable()).value_or(L"0.00"));
     auto version = sdk::get_file_version_info();
 
     if (str_version != "0.00") {
@@ -197,8 +197,8 @@ detail::IXRCameraVT& get_camera_vtable() {
     return detail::IXRCameraVT::get();
 }
 
-detail::IHeadMountedDisplayVT& get_hmd_vtable() {
-    const auto str_version = utility::narrow(sdk::search_for_version(utility::get_executable()).value_or(L"0.00"));
+detail::IHeadMountedDisplayVT& get_hmd_vtable(std::optional<std::string> version_override = std::nullopt) {
+    const auto str_version = version_override.has_value() ? version_override.value() : utility::narrow(sdk::search_for_version(utility::get_executable()).value_or(L"0.00"));
     auto version = sdk::get_file_version_info();
 
     if (str_version != "0.00") {
@@ -343,6 +343,12 @@ IXRTrackingSystemHook::IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_ho
 
     g_hook = this;
 
+    pre_initialize();
+}
+
+void IXRTrackingSystemHook::pre_initialize() {
+    SPDLOG_INFO("IXRTrackingSystemHook::pre_initialize");
+
     for (auto i = 0; i < m_xrtracking_vtable.size(); ++i) {
         m_xrtracking_vtable[i] = (uintptr_t)+[](void*) {
             return nullptr;
@@ -385,6 +391,10 @@ IXRTrackingSystemHook::IXRTrackingSystemHook(FFakeStereoRenderingHook* stereo_ho
     try {
         const auto first_half = std::stoi(str_version.substr(0, str_version.find('.')));
         const auto second_half = std::stoi(str_version.substr(str_version.find('.') + 1, str_version.size() - 1));
+
+        if (first_half == 4 && second_half == 26) {
+            m_is_4_26 = true;
+        }
 
         if (first_half == 4 && second_half <= 25) {
             SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook: version <= 4.25");
@@ -452,9 +462,9 @@ void IXRTrackingSystemHook::initialize() {
         return;
     }
 
-    const auto& camera_vt = get_camera_vtable();
-    const auto& trackvt = get_tracking_system_vtable();
-    const auto& hmdvt = get_hmd_vtable();
+    const auto& camera_vt = get_camera_vtable(m_overridden_version);
+    const auto& trackvt = get_tracking_system_vtable(m_overridden_version);
+    const auto& hmdvt = get_hmd_vtable(m_overridden_version);
 
     if (trackvt.implemented()) {
         if (trackvt.GetXRCamera_index().has_value()) {
@@ -523,6 +533,22 @@ void IXRTrackingSystemHook::initialize() {
             m_xrtracking_vtable[trackvt.GetBaseRotation_index().value()] = (uintptr_t)&get_base_rotation;
         } else {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_base_rotation_index not implemented");
+        }
+
+        if (m_is_4_26) {
+            if (trackvt.GetStereoRenderingDevice_index().has_value()) {
+                m_xrtracking_vtable[trackvt.GetStereoRenderingDevice_index().value()] = (uintptr_t)&get_stereo_rendering_device;
+            } else {
+                SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_stereo_rendering_device_index not implemented");
+            }
+        } else {
+            if (trackvt.GetStereoRenderingDevice_index().has_value()) {
+                m_xrtracking_vtable[trackvt.GetStereoRenderingDevice_index().value()] = (uintptr_t)+[](void* a1, void* a2, void* a3) -> void* {
+                    SPDLOG_INFO_ONCE("GetStereoRenderingDevice called");
+
+                    return nullptr;
+                };
+            }
         }
 
         if (hmdvt.implemented() && trackvt.GetHMDDevice_index().has_value()) {
@@ -634,6 +660,120 @@ void IXRTrackingSystemHook::initialize() {
     }
 
     SPDLOG_INFO("IXRTrackingSystemHook::IXRTrackingSystemHook done");
+}
+
+IXRTrackingSystemHook::SharedPtr* IXRTrackingSystemHook::get_stereo_rendering_device(sdk::IXRTrackingSystem* This, IXRTrackingSystemHook::SharedPtr* out, void* a3) {
+    // So we are not actually using this for anything right now, we are just using it to switch our vtables to 4.27 if needed.
+    // Not actually aware of any instance where we would legitimately need to return a valid stereo device.
+    if (!g_hook->m_is_4_26) {
+        return nullptr;
+    }
+
+    SPDLOG_INFO_ONCE("IXRTrackingSystemHook::get_stereo_rendering_device");
+
+    static std::mutex mtx{};
+    static std::unordered_set<uintptr_t> invalid_return_addresses{};
+
+    const auto return_address = (uintptr_t)_ReturnAddress();
+
+    if (invalid_return_addresses.contains(return_address)) {
+        return nullptr;
+    }
+
+    try {
+        invalid_return_addresses.insert(return_address);
+
+        // Setup the emulator. Set RAX to magic value. If RAX changes at any point, abort.
+        const auto module_within = utility::get_module_within(return_address);
+
+        if (!module_within) {
+            SPDLOG_ERROR("IXRTrackingSystemHook::get_stereo_rendering_device: failed to get module within");
+
+            return nullptr;
+        }
+
+        static auto check_ix = [](const INSTRUX& ix) {
+            for (auto i = 0; i < ix.OperandsCount; ++i) {
+                const auto& op = ix.Operands[i];
+
+                if (op.Type != ND_OPERAND_TYPE::ND_OP_MEM) {
+                    continue;
+                }
+
+                if (op.Info.Memory.HasBase && op.Info.Memory.Base == NDR_RAX) {
+                    SPDLOG_INFO("Found dereference of RAX");
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        const auto retdecode = utility::decode_one((uint8_t*)return_address);
+
+        if (!retdecode) {
+            SPDLOG_ERROR("IXRTrackingSystemHook::get_stereo_rendering_device: failed to decode instruction at 0x{:x}", return_address);
+            return nullptr;
+        }
+
+        bool should_switch_to_4_27 = check_ix(*retdecode);
+
+        if (!should_switch_to_4_27) {
+            utility::ShemuContext base_context{*module_within};
+
+            base_context.ctx->Registers.RegRip = return_address;
+            base_context.ctx->Registers.RegRax = 0xdeadbeef;
+            base_context.ctx->MemThreshold = 10;
+
+            utility::emulate(*module_within, return_address, 10, base_context, [&should_switch_to_4_27](const utility::ShemuContextExtended& ctx) -> utility::ExhaustionResult {
+                if (should_switch_to_4_27) {
+                    return utility::ExhaustionResult::BREAK;
+                }
+
+                if (check_ix(ctx.ctx->ctx->Instruction) || check_ix(ctx.next.ix)) {
+                    should_switch_to_4_27 = true;
+                    return utility::ExhaustionResult::BREAK;
+                }
+
+                if (ctx.next.ix.BranchInfo.IsBranch) {
+                    return utility::ExhaustionResult::BREAK;
+                }
+
+                if (ctx.ctx->ctx->Registers.RegRax != 0xdeadbeef) {
+                    return utility::ExhaustionResult::BREAK;
+                }
+
+                if (ctx.next.writes_to_memory) {
+                    return utility::ExhaustionResult::STEP_OVER;
+                }
+
+                return utility::ExhaustionResult::CONTINUE;
+            });
+        }
+
+        if (should_switch_to_4_27) {
+            SPDLOG_INFO("IXRTrackingSystemHook::get_stereo_rendering_device: detected necessary switch to 4.27");
+
+            // pre_initialize clears out all of our already set vtables to their default values
+            g_hook->pre_initialize();
+            g_hook->m_is_4_26 = false;
+            g_hook->m_overridden_version = "4.27";
+            // now set up the vtables again
+            g_hook->initialize();
+
+            // This is the real function that was supposed to be called.
+            if (out != nullptr) {
+                *out = g_hook->m_xr_camera_shared;
+            }
+            
+            return out;
+        }
+    } catch(...) {
+        SPDLOG_ERROR("IXRTrackingSystemHook::get_stereo_rendering_device: exception");
+        invalid_return_addresses.insert(return_address);
+    }
+
+    return nullptr;
 }
 
 void IXRTrackingSystemHook::manual_update_control_rotation() {
