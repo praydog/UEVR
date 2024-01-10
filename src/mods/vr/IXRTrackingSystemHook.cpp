@@ -674,7 +674,9 @@ IXRTrackingSystemHook::SharedPtr* IXRTrackingSystemHook::get_stereo_rendering_de
     static std::mutex mtx{};
     static std::unordered_set<uintptr_t> invalid_return_addresses{};
 
-    const auto return_address = (uintptr_t)_ReturnAddress();
+    const auto return_address = (uintptr_t)_ReturnAddress(); 
+    
+    std::scoped_lock _{mtx};
 
     if (invalid_return_addresses.contains(return_address)) {
         return nullptr;
