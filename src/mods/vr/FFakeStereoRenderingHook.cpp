@@ -5906,6 +5906,13 @@ void FFakeStereoRenderingHook::attempt_hook_update_viewport_rhi(uintptr_t return
                 return;
             }
 
+            // Make sure this is no displacement reference to this. This can mean we accidentally found the vtable for IViewportRenderTargetProvider
+            // The vfunc pointer should be in the middle of the vtable, not the start.
+            if (utility::scan_displacement_reference(*utility::get_module_within(*init_dynamic_rhi), update_viewport_rhi_ptr)) {
+                SPDLOG_ERROR("Found displacement reference to UpdateViewportRHI, this is probably the vtable for IViewportRenderTargetProvider, aborting!");
+                return;
+            }
+
             m_update_viewport_rhi_hook = std::make_unique<PointerHook>((void**)update_viewport_rhi_ptr, &update_viewport_rhi_hook);
         } else {
             SPDLOG_ERROR("Failed to find InitDynamicRHI, cannot hook UpdateViewportRHI!");
