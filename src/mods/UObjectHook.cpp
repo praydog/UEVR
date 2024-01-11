@@ -2240,6 +2240,25 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
                 return state2 != nullptr && state2->path.resolve() == comp;
             });
 
+            // Finetuning of the controller rotation offset
+            // Convert to pitch/yaw/roll first.
+            auto euler = utility::math::euler_angles_from_steamvr(state->rotation_offset);
+            if (ImGui::DragFloat3("RotationOffset", &euler.x, 0.01f)) {
+                // Convert back to quaternion
+                state->rotation_offset = glm::quat{glm::yawPitchRoll(-euler.y, euler.x, -euler.z)};
+
+                if (existing != m_persistent_states.end()) {
+                    (*existing)->state.rotation_offset = state->rotation_offset;
+                }
+            }
+
+            // Finetuning of the controller position offset.
+            if (ImGui::DragFloat3("PositionOffset", &state->location_offset.x, 0.01f)) {
+                if (existing != m_persistent_states.end()) {
+                    (*existing)->state.location_offset = state->location_offset;
+                }
+            }
+
             auto save_state_logic = [&](const std::vector<std::string>& path) {
                 auto json = serialize_mc_state(path, state);
 
