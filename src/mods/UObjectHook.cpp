@@ -2837,6 +2837,25 @@ void UObjectHook::ui_handle_functions(void* object, sdk::UStruct* uclass) {
                         }
                     }
                     break;
+                case "UInt32Property"_fnv:
+                case "IntProperty"_fnv:
+                case "EnumProperty"_fnv:
+                    {
+                        static int value = 0;
+                        ImGui::InputInt("Value", &value);
+
+                        if (ImGui::Button("Call")) {
+                            struct {
+                                int value{};
+                                char padding[0x10];
+                            } params{};
+
+                            params.value = value;
+
+                            object_real->process_event(func, &params);
+                        }
+                    }
+                    break;
 
                 default:
                     break;
