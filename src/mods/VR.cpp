@@ -869,13 +869,13 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
             button_touch_inactive = !is_action_active_any_joystick(m_action_a_button_touch_left) && !is_action_active_any_joystick(m_action_b_button_touch_left);
         }
 
-        const auto dpad_active = (button_touch_inactive && thumbrest_check) || dpad_method == DPadMethod::LEFT_JOYSTICK || dpad_method == DPadMethod::RIGHT_JOYSTICK;
+        const auto dpad_active = (is_right_joystick_click_down &&  (dpad_method == DPadMethod::RIGHT_R3) && (! is_left_joystick_click_down)) || (button_touch_inactive && thumbrest_check) || dpad_method == DPadMethod::LEFT_JOYSTICK || dpad_method == DPadMethod::RIGHT_JOYSTICK;
 
         if (dpad_active) {
             SHORT ThumbY{0};
             SHORT ThumbX{0};
             // If someone is accidentally touching both thumbrests while also moving a joystick, this will default to left joystick.
-            if (dpad_method == DPadMethod::RIGHT_TOUCH || dpad_method == DPadMethod::LEFT_JOYSTICK) {
+            if (dpad_method == DPadMethod::RIGHT_TOUCH || dpad_method == DPadMethod::LEFT_JOYSTICK || dpad_method == DPadMethod::RIGHT_R3) {
                 ThumbY = state->Gamepad.sThumbLY;
                 ThumbX = state->Gamepad.sThumbLX;
             }
@@ -900,7 +900,12 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
                 state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
             }
 
-            if (dpad_method == DPadMethod::RIGHT_TOUCH || dpad_method == DPadMethod::LEFT_JOYSTICK) {
+            if(dpad_method == DPadMethod::RIGHT_R3)
+            {
+                state->Gamepad.wButtons &= ~XINPUT_GAMEPAD_RIGHT_THUMB;
+            }
+
+            if (dpad_method == DPadMethod::RIGHT_TOUCH || dpad_method == DPadMethod::LEFT_JOYSTICK || dpad_method == DPadMethod::RIGHT_R3) {
                 state->Gamepad.sThumbLY = 0;
                 state->Gamepad.sThumbLX = 0;
             }

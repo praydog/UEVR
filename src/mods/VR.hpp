@@ -50,6 +50,7 @@ public:
         LEFT_TOUCH,
         LEFT_JOYSTICK,
         RIGHT_JOYSTICK,
+        RIGHT_R3
     };
 
     static const inline std::string s_action_pose = "/actions/default/in/Pose";
@@ -744,7 +745,8 @@ private:
         "Right Thumbrest + Left Joystick",
         "Left Thumbrest + Right Joystick",
         "Left Joystick (Disables Standard Joystick Input)",
-        "Right Joystick (Disables Standard Joystick Input)"
+        "Right Joystick (Disables Standard Joystick Input)",
+        "Right Joystick Press + Left Joystick (Disables R3)"
     };
 
     const ModCombo::Ptr m_rendering_method{ ModCombo::create(generate_name("RenderingMethod"), s_rendering_method_names) };
