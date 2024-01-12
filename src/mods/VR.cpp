@@ -870,19 +870,19 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
     if (m_dpad_gesture_state.direction != DPadGestureState::Direction::NONE) {
         already_dpad_shifted = true;
 
-        if (m_dpad_gesture_state.direction == DPadGestureState::Direction::UP) {
+        if ((m_dpad_gesture_state.direction & DPadGestureState::Direction::UP) != 0) {
             state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_UP;
         }
 
-        if (m_dpad_gesture_state.direction == DPadGestureState::Direction::RIGHT) {
+        if ((m_dpad_gesture_state.direction & DPadGestureState::Direction::RIGHT) != 0) {
             state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
         }
 
-        if (m_dpad_gesture_state.direction == DPadGestureState::Direction::DOWN) {
+        if ((m_dpad_gesture_state.direction & DPadGestureState::Direction::DOWN) != 0) {
             state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
         }
 
-        if (m_dpad_gesture_state.direction == DPadGestureState::Direction::LEFT) {
+        if ((m_dpad_gesture_state.direction & DPadGestureState::Direction::LEFT) != 0) {
             state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
         }
 
