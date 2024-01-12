@@ -865,8 +865,37 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
     state->Gamepad.sThumbRX = (int16_t)std::clamp<float>(((float)state->Gamepad.sThumbRX + right_joystick_axis.x * 32767.0f), -32767.0f, 32767.0f);
     state->Gamepad.sThumbRY = (int16_t)std::clamp<float>(((float)state->Gamepad.sThumbRY + right_joystick_axis.y * 32767.0f), -32767.0f, 32767.0f);
 
+    bool already_dpad_shifted{false};
+
+    if (m_dpad_gesture_state.direction != DPadGestureState::Direction::NONE) {
+        already_dpad_shifted = true;
+
+        if (m_dpad_gesture_state.direction == DPadGestureState::Direction::UP) {
+            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_UP;
+        }
+
+        if (m_dpad_gesture_state.direction == DPadGestureState::Direction::RIGHT) {
+            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
+        }
+
+        if (m_dpad_gesture_state.direction == DPadGestureState::Direction::DOWN) {
+            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
+        }
+
+        if (m_dpad_gesture_state.direction == DPadGestureState::Direction::LEFT) {
+            state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
+        }
+
+        // Zero out the thumbstick values
+        state->Gamepad.sThumbLX = 0;
+        state->Gamepad.sThumbLY = 0;
+
+        std::scoped_lock _{m_dpad_gesture_state.mtx};
+        m_dpad_gesture_state.direction = DPadGestureState::Direction::NONE;
+    }
+
     // Touching the thumbrest allows us to use the thumbstick as a dpad.  Additional options are for controllers without capacitives/games that rely solely on DPad
-    if (m_dpad_shifting->value()) {
+    if (!already_dpad_shifted && m_dpad_shifting->value()) {
         bool button_touch_inactive{true};
         bool thumbrest_check{false};
 
@@ -1555,6 +1584,64 @@ void VR::update_action_states() {
     if (once2) {
         spdlog::info("VR: Updated action states");
         once2 = false;
+    }
+
+    update_dpad_gestures();
+}
+
+void VR::update_dpad_gestures() {
+    if (!is_hmd_active()) {
+        return;
+    }
+
+    // TODO: Other methods
+    if (get_dpad_method() != DPadMethod::GESTURE_HEAD) {
+        return;
+    }
+
+    const auto left_controller_pos = glm::vec3{get_position(get_left_controller_index())};
+    const auto hmd_transform = get_hmd_transform(m_frame_count);
+
+    // Check if controller is near HMD
+    const auto dist = glm::length(left_controller_pos - glm::vec3{hmd_transform[3]});
+
+    if (dist > 0.2f) {
+        return;
+    }
+
+    const auto dir_to_left = glm::normalize(left_controller_pos - glm::vec3{hmd_transform[3]});
+    const auto hmd_dir = glm::quat{glm::extractMatrixRotation(hmd_transform)} * glm::vec3{0.0f, 0.0f, 1.0f};
+
+    const auto angle = glm::acos(glm::dot(dir_to_left, hmd_dir));
+
+    constexpr float threshold = glm::radians(120.0f);
+
+    if (angle > threshold) {
+        return;
+    }
+
+    // Make sure the angle is to the left of the HMD
+    if (glm::cross(dir_to_left, hmd_dir).y < 0.0f) {
+        return;
+    }
+
+    // Send a vibration pulse to the controller
+    trigger_haptic_vibration(0.0f, 0.1f, 1.0f, 5.0f, m_left_joystick);
+
+    std::scoped_lock _{m_dpad_gesture_state.mtx};
+
+    const auto left_joystick_axis = get_joystick_axis(m_left_joystick);
+
+    if (left_joystick_axis.x < -0.5f) {
+        m_dpad_gesture_state.direction |= DPadGestureState::Direction::LEFT;
+    } else if (left_joystick_axis.x > 0.5f) {
+        m_dpad_gesture_state.direction |= DPadGestureState::Direction::RIGHT;
+    } 
+    
+    if (left_joystick_axis.y < -0.5f) {
+        m_dpad_gesture_state.direction |= DPadGestureState::Direction::DOWN;
+    } else if (left_joystick_axis.y > 0.5f) {
+        m_dpad_gesture_state.direction |= DPadGestureState::Direction::UP;
     }
 }
 

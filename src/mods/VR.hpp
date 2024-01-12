@@ -50,6 +50,7 @@ public:
         LEFT_TOUCH,
         LEFT_JOYSTICK,
         RIGHT_JOYSTICK,
+        GESTURE_HEAD,
     };
 
     static const inline std::string s_action_pose = "/actions/default/in/Pose";
@@ -139,6 +140,7 @@ public:
 
     void update_hmd_state(bool from_view_extensions = false, uint32_t frame_count = 0);
     void update_action_states();
+    void update_dpad_gestures();
 
     void reinitialize_renderer() {
         if (m_is_d3d12) {
@@ -754,7 +756,8 @@ private:
         "Right Thumbrest + Left Joystick",
         "Left Thumbrest + Right Joystick",
         "Left Joystick (Disables Standard Joystick Input)",
-        "Right Joystick (Disables Standard Joystick Input)"
+        "Right Joystick (Disables Standard Joystick Input)",
+        "Gesture (Head) + Left Joystick",
     };
 
     const ModCombo::Ptr m_rendering_method{ ModCombo::create(generate_name("RenderingMethod"), s_rendering_method_names) };
@@ -796,6 +799,18 @@ private:
     const ModSlider::Ptr m_aim_speed{ ModSlider::create(generate_name("AimSpeed"), 0.01f, 25.0f, 15.0f) };
     const ModToggle::Ptr m_dpad_shifting{ ModToggle::create(generate_name("DPadShifting"), true) };
     const ModCombo::Ptr m_dpad_shifting_method{ ModCombo::create(generate_name("DPadShiftingMethod"), s_dpad_method_names, DPadMethod::RIGHT_TOUCH) };
+    
+    struct DPadGestureState {
+        std::recursive_mutex mtx{};
+        enum Direction : uint8_t {
+            NONE,
+            UP = 1 << 0,
+            RIGHT = 1 << 1,
+            DOWN = 1 << 2,
+            LEFT = 1 << 3,
+        };
+        uint8_t direction{NONE};
+    } m_dpad_gesture_state{};
 
     //const ModToggle::Ptr m_headlocked_aim{ ModToggle::create(generate_name("HeadLockedAim"), false) };
     //const ModToggle::Ptr m_headlocked_aim_controller_based{ ModToggle::create(generate_name("HeadLockedAimControllerBased"), false) };
