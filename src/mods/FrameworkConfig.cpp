@@ -16,6 +16,8 @@ void FrameworkConfig::draw_main() {
     m_show_cursor_key->draw("Show Cursor Key");
     m_remember_menu_state->draw("Remember Menu Open/Closed State");
     m_enable_l3_r3_toggle->draw("Enable L3 + R3 Toggle");
+    ImGui::SameLine();
+    m_l3_r3_long_press->draw("L3 + R3 Long Press Menu Toggle");
     m_always_show_cursor->draw("Always Show Cursor");
 }
 

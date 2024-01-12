@@ -1064,9 +1064,22 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
             return;
         }
 
+        bool should_open = true;
+
         const auto now = std::chrono::steady_clock::now();
 
-        if (now - m_last_xinput_l3_r3_menu_open >= std::chrono::seconds(1)) {
+        if (FrameworkConfig::get()->is_l3_r3_long_press() && !g_framework->is_drawing_ui()) {
+            if (!m_xinput_context.menu_longpress_begin_held) {
+                m_xinput_context.menu_longpress_begin = now;
+            }
+
+            m_xinput_context.menu_longpress_begin_held = true;
+            should_open = (now - m_xinput_context.menu_longpress_begin) >= std::chrono::seconds(1);
+        } else {
+            m_xinput_context.menu_longpress_begin_held = false;
+        }
+
+        if (should_open && now - m_last_xinput_l3_r3_menu_open >= std::chrono::seconds(1)) {
             m_last_xinput_l3_r3_menu_open = std::chrono::steady_clock::now();
             g_framework->set_draw_ui(!g_framework->is_drawing_ui());
 
@@ -1074,6 +1087,7 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
         }
     } else if (is_using_this_controller) {
         m_xinput_context.headlocked_begin_held = false;
+        m_xinput_context.menu_longpress_begin_held = false;
     }
 
     // We need to adjust the stick values based on the selected movement orientation value if the user wants to do this
@@ -1142,13 +1156,15 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
         io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
 
         // Headlocked aim toggle
-        if ((state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0 && (state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0) {
-            if (!m_xinput_context.headlocked_begin_held) {
-                m_xinput_context.headlocked_begin = std::chrono::steady_clock::now();
-                m_xinput_context.headlocked_begin_held = true;
+        if (!FrameworkConfig::get()->is_l3_r3_long_press()) {
+            if ((state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0 && (state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0) {
+                if (!m_xinput_context.headlocked_begin_held) {
+                    m_xinput_context.headlocked_begin = std::chrono::steady_clock::now();
+                    m_xinput_context.headlocked_begin_held = true;
+                }
+            } else {
+                m_xinput_context.headlocked_begin_held = false;
             }
-        } else {
-            m_xinput_context.headlocked_begin_held = false;
         }
 
         // Now that we're drawing the UI, check for special button combos the user can use as shortcuts
@@ -1875,7 +1891,7 @@ void VR::on_frame() {
         m_rt_modifier.draw = false;
     }
 
-    if (is_allowed_draw_window && m_xinput_context.headlocked_begin_held) {
+    if (is_allowed_draw_window && m_xinput_context.headlocked_begin_held && !FrameworkConfig::get()->is_l3_r3_long_press()) {
         const auto rt_size = g_framework->get_rt_size();
 
         ImGui::Begin("AimMethod Notification", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav);

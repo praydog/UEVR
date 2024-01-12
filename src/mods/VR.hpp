@@ -1050,7 +1050,9 @@ private:
         }
 
         bool headlocked_begin_held{false};
+        bool menu_longpress_begin_held{false};
         std::chrono::steady_clock::time_point headlocked_begin{};
+        std::chrono::steady_clock::time_point menu_longpress_begin{};
     } m_xinput_context{};
 
     static std::string actions_json;
