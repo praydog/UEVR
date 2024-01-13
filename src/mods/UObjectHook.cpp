@@ -1731,6 +1731,14 @@ void UObjectHook::draw_developer() {
     if (ImGui::Button("Dump SDK")) {
         SDKDumper::dump();
     }
+
+    ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+    if (ImGui::TreeNode("Debug Stats")) {
+        // uint64_t
+        ImGui::Text("Constructor calls: %llu", m_debug.constructor_calls);
+        ImGui::Text("Destructor calls: %llu", m_debug.destructor_calls);
+        ImGui::TreePop();
+    }
 }
 
 void UObjectHook::draw_main() {
@@ -3207,6 +3215,7 @@ void* UObjectHook::add_object(void* rcx, void* rdx, void* r8, void* r9) {
             obj = (sdk::UObjectBase*)rdx;
         }
 
+        ++hook->m_debug.constructor_calls;
         hook->add_new_object(obj);
     }
 
@@ -3220,6 +3229,8 @@ void* UObjectHook::destructor(sdk::UObjectBase* object, void* rdx, void* r8, voi
         std::unique_lock _{hook->m_mutex};
 
         if (auto it = hook->m_meta_objects.find(object); it != hook->m_meta_objects.end()) {
+            ++hook->m_debug.destructor_calls;
+
 #ifdef VERBOSE_UOBJECTHOOK
             SPDLOG_INFO("Removing object {:x} {:s}", (uintptr_t)object, utility::narrow(it->second->full_name));
 #endif

@@ -137,6 +137,11 @@ private:
     bool m_wants_activate{false};
     float m_last_delta_time{1000.0f / 60.0f};
 
+    struct DebugInfo {
+        uint64_t constructor_calls{0};
+        uint64_t destructor_calls{0};
+    } m_debug{};
+
     glm::vec3 m_last_left_grip_location{};
     glm::vec3 m_last_right_grip_location{};
     glm::quat m_last_left_aim_rotation{glm::identity<glm::quat>()};
