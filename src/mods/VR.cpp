@@ -352,6 +352,10 @@ std::optional<std::string> VR::initialize_openxr() {
         // because the function requires the instance to be valid
         if (result != XR_SUCCESS) {
             m_openxr->error = "Could not create openxr instance: " + std::to_string((int32_t)result);
+            if (result == XR_ERROR_LIMIT_REACHED) {
+                m_openxr->error = "Could not create openxr instance: XR_ERROR_LIMIT_REACHED\n"
+                    "Ensure that the OpenXR plugin has been renamed or deleted from the game's binaries folder.";
+            }
             spdlog::error("[VR] {}", m_openxr->error.value());
 
             return std::nullopt;
