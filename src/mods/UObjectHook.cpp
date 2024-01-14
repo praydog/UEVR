@@ -1417,7 +1417,7 @@ sdk::UObject* UObjectHook::StatePath::resolve_base_object() const {
         if (player_controller == nullptr) {
             return nullptr;
         }
-        
+
         return player_controller->get_acknowledged_pawn();
         break;
     }
@@ -1434,7 +1434,7 @@ sdk::UObject* UObjectHook::StatePath::resolve_base_object() const {
     }
 
     case "Camera Manager"_fnv:
-    {      
+    {
         auto world = engine->get_world();
         if (world == nullptr) {
             return nullptr;
@@ -1445,7 +1445,7 @@ sdk::UObject* UObjectHook::StatePath::resolve_base_object() const {
         if (player_controller == nullptr) {
             return nullptr;
         }
-        
+
         return player_controller->get_player_camera_manager();
         break;
     }
@@ -1462,7 +1462,11 @@ sdk::UObject* UObjectHook::StatePath::resolve_base_object() const {
 
     return nullptr;
 }
+
+// unordered map of previously derived object name / property name matches (key is name in the JSON file,
+// value is object / property name from the game which can contain different numeric characters)
 std::unordered_map<std::string, std::string> cachedLookups;
+
 UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
     const auto base = resolve_base_object();
 
@@ -1507,6 +1511,8 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
             bool found = false;
             for (auto comp : components) {
                 const auto comp_name = utility::narrow(comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string());
+
+                // check for an exact match, or a cached match
                 if (comp_name == *next_it || (cachedLookups.find(*next_it) != cachedLookups.end() && cachedLookups[*next_it] == comp_name)) {
                     previous_data = comp;
                     previous_data_desc = comp->get_class();
@@ -1516,17 +1522,26 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
                 }
             }
 
+            // no match to the exact property name so check if it matches to anything ignoring numbers in the path
             if (!found) {
+                // copy the JSON object name and erase characters which are digits
                 std::string modified_name = *next_it;
                 modified_name.erase(
                     std::remove_if(std::begin(modified_name), std::end(modified_name), [](auto ch) { return std::isdigit(ch); }), modified_name.end());
+
                 for (auto comp : components) {
+                    // copy the object's name and erase characters which are digits
                     auto comp_name = utility::narrow(comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string());
                     comp_name.erase(std::remove_if(std::begin(comp_name), std::end(comp_name), [](auto ch) { return std::isdigit(ch); }),
                         comp_name.end());
+
+                     // if the mangled object from the JSON matches the mangled name from the game, we have our match
                     if (comp_name == modified_name) {
                         previous_data = comp;
                         previous_data_desc = comp->get_class();
+
+                        // recreate the 'correct' ojbect name from the game and cache the match (actual JSON object name -> actual
+                        // game object name) so we don't have to repeat this hack on every tick
                         auto const actual_object_name =
                             utility::narrow(comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string());
                         cachedLookups[*next_it] = actual_object_name;
@@ -1640,6 +1655,7 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
 
                     const auto obj_name = utility::narrow(obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string());
 
+                    // check for an exact match, or a cached match
                     if (obj_name == *prop_it || (cachedLookups.find(*prop_it) != cachedLookups.end() && cachedLookups[*prop_it] == obj_name)) {
                         found = true;
                         previous_data = obj;
@@ -1649,22 +1665,33 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
                         break;
                     }
                 }
+
+                // no match to the exact property name so check if it matches to anything ignoring numbers in the path
                 if (!found) {
+                    // copy the JSON property name and erase characters which are digits
                     std::string modified_name = *prop_it;
                     modified_name.erase(
                         std::remove_if(std::begin(modified_name), std::end(modified_name), [](auto ch) { return std::isdigit(ch); }),
                         modified_name.end());
+
                     for (auto obj : arr) {
                         if (obj == nullptr) {
                             continue;
                         }
+
+                        // copy the object's property name and erase characters which are digits
                         auto obj_name = utility::narrow(obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string());
                         obj_name.erase(std::remove_if(std::begin(obj_name), std::end(obj_name), [](auto ch) { return std::isdigit(ch); }),
                             obj_name.end());
+
+                        // if the mangled propname from the JSON matches the mangled name from the game, we have our match
                         if (obj_name == modified_name) {
                             found = true;
                             previous_data = obj;
                             previous_data_desc = obj->get_class();
+
+                            // recreate the 'correct' property name from the game and cache the match (actual JSON prop name -> actual
+                            // game prop name) so we don't have to repeat this hack on every tick
                             auto const actual_property_name =
                                 utility::narrow(obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string());
                             cachedLookups[*prop_it] = actual_property_name;
