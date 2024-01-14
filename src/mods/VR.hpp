@@ -51,6 +51,7 @@ public:
         LEFT_JOYSTICK,
         RIGHT_JOYSTICK,
         GESTURE_HEAD,
+        GESTURE_HEAD_RIGHT,
     };
 
     static const inline std::string s_action_pose = "/actions/default/in/Pose";
@@ -758,6 +759,7 @@ private:
         "Left Joystick (Disables Standard Joystick Input)",
         "Right Joystick (Disables Standard Joystick Input)",
         "Gesture (Head) + Left Joystick",
+        "Gesture (Head) + Right Joystick",
     };
 
     const ModCombo::Ptr m_rendering_method{ ModCombo::create(generate_name("RenderingMethod"), s_rendering_method_names) };

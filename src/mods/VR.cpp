@@ -1614,22 +1614,24 @@ void VR::update_dpad_gestures() {
         return;
     }
 
-    // TODO: Other methods
-    if (get_dpad_method() != DPadMethod::GESTURE_HEAD) {
+    const auto dpad_method = get_dpad_method();
+    if (dpad_method != DPadMethod::GESTURE_HEAD && dpad_method != DPadMethod::GESTURE_HEAD_RIGHT) {
         return;
     }
 
-    const auto left_controller_pos = glm::vec3{get_position(get_left_controller_index())};
+    const auto wanted_index = dpad_method == DPadMethod::GESTURE_HEAD ? get_left_controller_index() : get_right_controller_index();
+
+    const auto controller_pos = glm::vec3{get_position(wanted_index)};
     const auto hmd_transform = get_hmd_transform(m_frame_count);
 
     // Check if controller is near HMD
-    const auto dist = glm::length(left_controller_pos - glm::vec3{hmd_transform[3]});
+    const auto dist = glm::length(controller_pos - glm::vec3{hmd_transform[3]});
 
     if (dist > 0.2f) {
         return;
     }
 
-    const auto dir_to_left = glm::normalize(left_controller_pos - glm::vec3{hmd_transform[3]});
+    const auto dir_to_left = glm::normalize(controller_pos - glm::vec3{hmd_transform[3]});
     const auto hmd_dir = glm::quat{glm::extractMatrixRotation(hmd_transform)} * glm::vec3{0.0f, 0.0f, 1.0f};
 
     const auto angle = glm::acos(glm::dot(dir_to_left, hmd_dir));
@@ -1640,17 +1642,22 @@ void VR::update_dpad_gestures() {
         return;
     }
 
-    // Make sure the angle is to the left of the HMD
-    if (glm::cross(dir_to_left, hmd_dir).y < 0.0f) {
+    // Make sure the angle is to the left/right of the HMD
+    if (dpad_method == DPadMethod::GESTURE_HEAD_RIGHT) {
+        if (glm::cross(dir_to_left, hmd_dir).y > 0.0f) {
+            return;
+        }
+    } else if (glm::cross(dir_to_left, hmd_dir).y < 0.0f) {
         return;
     }
 
     // Send a vibration pulse to the controller
-    trigger_haptic_vibration(0.0f, 0.1f, 1.0f, 5.0f, m_left_joystick);
+    const auto chosen_joystick = dpad_method == DPadMethod::GESTURE_HEAD ? m_left_joystick : m_right_joystick;
+    trigger_haptic_vibration(0.0f, 0.1f, 1.0f, 5.0f, chosen_joystick);
 
     std::scoped_lock _{m_dpad_gesture_state.mtx};
 
-    const auto left_joystick_axis = get_joystick_axis(m_left_joystick);
+    const auto left_joystick_axis = get_joystick_axis(chosen_joystick);
 
     if (left_joystick_axis.x < -0.5f) {
         m_dpad_gesture_state.direction |= DPadGestureState::Direction::LEFT;
