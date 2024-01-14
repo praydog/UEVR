@@ -1561,7 +1561,6 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
             }
 
             const auto prop_t_name = prop_t->get_name().to_string();
-            //SPDLOG_ERROR("[JIM] inspecting property [{}], t_name is {}", prop_name, utility::narrow(prop_t_name));
             switch (utility::hash(utility::narrow(prop_t_name))) {
             case "ObjectProperty"_fnv:
             {
