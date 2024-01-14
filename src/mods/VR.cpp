@@ -689,6 +689,11 @@ bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
 void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {
     ZoneScopedN(__FUNCTION__);
 
+    if (std::chrono::steady_clock::now() - m_last_engine_tick > std::chrono::seconds(1)) {
+        SPDLOG_INFO_EVERY_N_SEC(1, "[VR] XInputGetState called, but engine tick hasn't been called in over a second. Is the game loading?");
+        update_action_states();
+    }
+
     if (*retval == ERROR_SUCCESS) {
         // Once here for normal gamepads, and once for the spoofed gamepad at the end
         update_imgui_state_from_xinput_state(*state, false);
@@ -1362,6 +1367,7 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     ZoneScopedN(__FUNCTION__);
 
     m_cvar_manager->on_pre_engine_tick(engine, delta);
+    m_last_engine_tick = std::chrono::steady_clock::now();
 
     if (!get_runtime()->loaded || !is_hmd_active()) {
         return;
@@ -1530,9 +1536,11 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
 void VR::update_action_states() {
     ZoneScopedN(__FUNCTION__);
 
+    std::scoped_lock _{m_actions_mtx};
+
     auto runtime = get_runtime();
 
-    if (runtime->wants_reinitialize) {
+    if (runtime == nullptr || runtime->wants_reinitialize) {
         return;
     }
 

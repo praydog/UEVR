@@ -632,6 +632,7 @@ private:
 
     mutable TracyLockable(std::recursive_mutex, m_openvr_mtx);
     mutable TracyLockable(std::recursive_mutex, m_reinitialize_mtx);
+    mutable TracyLockable(std::recursive_mutex, m_actions_mtx);
     mutable std::shared_mutex m_rotation_mtx{};
 
     std::vector<int32_t> m_controllers{};
@@ -727,6 +728,7 @@ private:
     std::chrono::steady_clock::time_point m_last_xinput_spoof_sent{};
     std::chrono::steady_clock::time_point m_last_xinput_l3_r3_menu_open{};
     std::chrono::steady_clock::time_point m_last_interaction_display{};
+    std::chrono::steady_clock::time_point m_last_engine_tick{};
 
     uint32_t m_lowest_xinput_user_index{};
 
