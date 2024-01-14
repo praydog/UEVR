@@ -3827,6 +3827,10 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         GameThreadWorker::get().execute();
     }
 
+    if (vr->is_sceneview_compatibility_enabled() && !g_hook->m_inside_manual_view_offset) {
+        return;
+    }
+
     const auto& mods = g_framework->get_mods()->get_mods();
 
     if (!is_full_pass) {

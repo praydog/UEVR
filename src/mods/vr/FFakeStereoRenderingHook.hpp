@@ -266,8 +266,12 @@ public:
         return m_embedded_rtm;
     }
 
+    bool m_inside_manual_view_offset{false};
+
     void calculate_stereo_view_offset_(const int32_t view_index, Rotator<float>* view_rotation, const float world_to_meters, Vector3f* view_location) {
+        m_inside_manual_view_offset = true;
         calculate_stereo_view_offset(nullptr, view_index, view_rotation, world_to_meters, view_location);
+        m_inside_manual_view_offset = false;
     }
 
     bool is_in_viewport_client_draw() const;
