@@ -1462,7 +1462,7 @@ sdk::UObject* UObjectHook::StatePath::resolve_base_object() const {
 
     return nullptr;
 }
-
+std::unordered_map<std::string, std::string> cachedLookups;
 UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
     const auto base = resolve_base_object();
 
@@ -1504,17 +1504,39 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
                 return nullptr;
             }
 
+            bool found = false;
             for (auto comp : components) {
-                const auto comp_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
-
-                if (utility::narrow(comp_name) == *next_it) {
+                const auto comp_name = utility::narrow(comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string());
+                if (comp_name == *next_it || (cachedLookups.find(*next_it) != cachedLookups.end() && cachedLookups[*next_it] == comp_name)) {
                     previous_data = comp;
                     previous_data_desc = comp->get_class();
                     ++it;
+                    found = true;
                     break;
                 }
             }
 
+            if (!found) {
+                std::string modified_name = *next_it;
+                modified_name.erase(
+                    std::remove_if(std::begin(modified_name), std::end(modified_name), [](auto ch) { return std::isdigit(ch); }), modified_name.end());
+                for (auto comp : components) {
+                    auto comp_name = utility::narrow(comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string());
+                    comp_name.erase(std::remove_if(std::begin(comp_name), std::end(comp_name), [](auto ch) { return std::isdigit(ch); }),
+                        comp_name.end());
+                    if (comp_name == modified_name) {
+                        previous_data = comp;
+                        previous_data_desc = comp->get_class();
+                        auto const actual_object_name =
+                            utility::narrow(comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string());
+                        cachedLookups[*next_it] = actual_object_name;
+                        SPDLOG_INFO("[UObjectHook] Fuzzy matched game object [{}] to profile property [{}] on text [{}], cached lookups now contains {} items",
+                            actual_object_name, *next_it, comp_name, cachedLookups.size());
+                        ++it;
+                        break;
+                    }
+                }
+            }
             break;
         }
         case "Properties"_fnv:
@@ -1539,6 +1561,7 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
             }
 
             const auto prop_t_name = prop_t->get_name().to_string();
+            //SPDLOG_ERROR("[JIM] inspecting property [{}], t_name is {}", prop_name, utility::narrow(prop_t_name));
             switch (utility::hash(utility::narrow(prop_t_name))) {
             case "ObjectProperty"_fnv:
             {
@@ -1616,15 +1639,42 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
                         continue;
                     }
 
-                    const auto obj_name = obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string();
+                    const auto obj_name = utility::narrow(obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string());
 
-                    if (utility::narrow(obj_name) == *prop_it) {
+                    if (obj_name == *prop_it || (cachedLookups.find(*prop_it) != cachedLookups.end() && cachedLookups[*prop_it] == obj_name)) {
                         found = true;
                         previous_data = obj;
                         previous_data_desc = obj->get_class();
                         ++it;
                         ++it;
                         break;
+                    }
+                }
+                if (!found) {
+                    std::string modified_name = *prop_it;
+                    modified_name.erase(
+                        std::remove_if(std::begin(modified_name), std::end(modified_name), [](auto ch) { return std::isdigit(ch); }),
+                        modified_name.end());
+                    for (auto obj : arr) {
+                        if (obj == nullptr) {
+                            continue;
+                        }
+                        auto obj_name = utility::narrow(obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string());
+                        obj_name.erase(std::remove_if(std::begin(obj_name), std::end(obj_name), [](auto ch) { return std::isdigit(ch); }),
+                            obj_name.end());
+                        if (obj_name == modified_name) {
+                            found = true;
+                            previous_data = obj;
+                            previous_data_desc = obj->get_class();
+                            auto const actual_property_name =
+                                utility::narrow(obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string());
+                            cachedLookups[*prop_it] = actual_property_name;
+                            SPDLOG_INFO("[UObjectHook] Fuzzy matched game property [{}] to profile property [{}] on text [{}], cached lookups now contains {} items",
+                                actual_property_name, *prop_it, obj_name, cachedLookups.size());
+                            ++it;
+                            ++it;
+                            break;
+                        }
                     }
                 }
 
@@ -2525,7 +2575,6 @@ std::optional<UObjectHook::StatePath> UObjectHook::try_get_path(sdk::UObject* ta
             }
         }
     }
-
     return std::nullopt;
 }
 
