@@ -413,8 +413,10 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
     const auto hmd_origin = glm::vec3{vr->get_transform(0)[3]};
     const auto pos = glm::vec3{rotation_offset * (hmd_origin - glm::vec3{vr->get_standing_origin()})};
 
+    const auto adjusted_world_to_meters = world_to_meters * vr->get_world_scale();
+
     const auto view_quat_inverse_flat = utility::math::flatten(view_quat_inverse);
-    const auto offset1 = quat_converter * (glm::normalize(view_quat_inverse_flat) * (pos * world_to_meters));
+    const auto offset1 = quat_converter * (glm::normalize(view_quat_inverse_flat) * (pos * adjusted_world_to_meters));
 
     glm::vec3 final_position{};
 
@@ -470,8 +472,8 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
     right_hand_position = glm::vec3{rotation_offset * (right_hand_position - hmd_origin)};
     left_hand_position = glm::vec3{rotation_offset * (left_hand_position - hmd_origin)};
 
-    right_hand_position = quat_converter * (glm::normalize(view_quat_inverse_flat) * (right_hand_position * world_to_meters));
-    left_hand_position = quat_converter * (glm::normalize(view_quat_inverse_flat) * (left_hand_position * world_to_meters));
+    right_hand_position = quat_converter * (glm::normalize(view_quat_inverse_flat) * (right_hand_position * adjusted_world_to_meters));
+    left_hand_position = quat_converter * (glm::normalize(view_quat_inverse_flat) * (left_hand_position * adjusted_world_to_meters));
 
     right_hand_position = final_position - right_hand_position;
     left_hand_position = final_position - left_hand_position;
