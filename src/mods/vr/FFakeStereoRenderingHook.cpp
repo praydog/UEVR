@@ -4826,21 +4826,21 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
     const auto ui_target = g_hook->get_render_target_manager()->get_ui_target();
 
     if (ui_target == nullptr) {
-        SPDLOG_INFO("No UI target, skipping!");
+        SPDLOG_INFO_EVERY_N_SEC(1, "No UI target, skipping!");
         return call_orig();
     }
 
     const auto viewport_rt_provider = viewport_info->get_rt_provider(g_hook->get_render_target_manager()->get_render_target());
 
     if (viewport_rt_provider == nullptr) {
-        SPDLOG_INFO("No viewport RT provider, skipping!");
+        SPDLOG_INFO_EVERY_N_SEC(1, "No viewport RT provider, skipping!");
         return call_orig();
     }
 
     const auto slate_resource = viewport_rt_provider->get_viewport_render_target_texture();
 
     if (slate_resource == nullptr) {
-        SPDLOG_INFO("No slate resource, skipping!");
+        SPDLOG_INFO_EVERY_N_SEC(1, "No slate resource, skipping!");
         return call_orig();
     }
     
