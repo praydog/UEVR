@@ -1379,7 +1379,7 @@ void Framework::draw_ui() {
             set_mouse_to_center();
             patch_set_cursor_pos();
         }
-
+        spdlog::set_level(static_cast<spdlog::level::level_enum>(VR::get()->get_log_level()));
         m_draw_ui = m_last_draw_ui;
         set_draw_ui(!m_draw_ui, true);
     }

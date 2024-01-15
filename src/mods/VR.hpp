@@ -82,6 +82,8 @@ public:
 public:
     static std::shared_ptr<VR>& get();
 
+    int get_log_level() { return m_log_level->value(); }
+
     std::string_view get_name() const override { return "VR"; }
 
     std::optional<std::string> clean_initialize();
@@ -741,6 +743,15 @@ private:
         "Alternating/AFR",
     };
 
+    static const inline std::vector<std::string> s_log_level_names {
+        "Trace",
+        "Debug",
+        "Info",
+        "Warn",
+        "Error",
+        "Critical"
+    };
+
     static const inline std::vector<std::string> s_synced_afr_method_names {
         "Skip Tick",
         "Skip Draw",
@@ -764,6 +775,7 @@ private:
         "Gesture (Head) + Right Joystick",
     };
 
+    const ModCombo::Ptr m_log_level{ ModCombo::create(generate_name("LogLevel"), s_log_level_names, SPDLOG_LEVEL_INFO) };
     const ModCombo::Ptr m_rendering_method{ ModCombo::create(generate_name("RenderingMethod"), s_rendering_method_names) };
     const ModCombo::Ptr m_synced_afr_method{ ModCombo::create(generate_name("SyncedSequentialMethod"), s_synced_afr_method_names, 1) };
     const ModToggle::Ptr m_extreme_compat_mode{ ModToggle::create(generate_name("ExtremeCompatibilityMode"), false, true) };
@@ -889,6 +901,7 @@ private:
     bool m_controller_test_mode{false};
 
     ValueList m_options{
+        *m_log_level,
         *m_rendering_method,
         *m_synced_afr_method,
         *m_extreme_compat_mode,

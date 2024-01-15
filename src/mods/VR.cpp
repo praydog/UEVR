@@ -2531,7 +2531,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         if (m_fake_stereo_hook != nullptr) {
             m_fake_stereo_hook->on_draw_ui();
         }
-
+        m_log_level->draw("Log Level");
         ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
         ImGui::DragFloat4("Right Bounds", (float*)&m_right_bounds, 0.005f, -2.0f, 2.0f);
         ImGui::DragFloat4("Left Bounds", (float*)&m_left_bounds, 0.005f, -2.0f, 2.0f);
