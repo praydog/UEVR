@@ -1463,10 +1463,6 @@ sdk::UObject* UObjectHook::StatePath::resolve_base_object() const {
     return nullptr;
 }
 
-// unordered map of previously derived object name / property name matches (key is name in the JSON file,
-// value is object / property name from the game which can contain different numeric characters)
-std::unordered_map<std::string, std::string> cachedLookups;
-
 UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
     const auto base = resolve_base_object();
 
@@ -1509,11 +1505,14 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
             }
 
             bool found = false;
+            auto original_name_from_profile = *next_it;
             for (auto comp : components) {
                 const auto comp_name = utility::narrow(comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string());
 
                 // check for an exact match, or a cached match
-                if (comp_name == *next_it || (cachedLookups.find(*next_it) != cachedLookups.end() && cachedLookups[*next_it] == comp_name)) {
+                if (comp_name == original_name_from_profile ||
+                        (cached_approximate_matches.find(original_name_from_profile) != cached_approximate_matches.end() &&
+                         cached_approximate_matches[original_name_from_profile] == comp_name)) {
                     previous_data = comp;
                     previous_data_desc = comp->get_class();
                     ++it;
@@ -1522,31 +1521,31 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
                 }
             }
 
-            // no match to the exact property name so check if it matches to anything ignoring numbers in the path
-            if (!found) {
+            // no exact match to the property name so check if it could match to anything ignoring numbers in the path
+            if (!found && std::any_of(original_name_from_profile.begin(), original_name_from_profile.end(), ::isdigit)) {
+
                 // copy the JSON object name and erase characters which are digits
-                std::string modified_name = *next_it;
-                modified_name.erase(
-                    std::remove_if(std::begin(modified_name), std::end(modified_name), [](auto ch) { return std::isdigit(ch); }), modified_name.end());
+                auto modified_name_from_profile = original_name_from_profile;
+                modified_name_from_profile.erase(std::remove_if(std::begin(modified_name_from_profile), std::end(modified_name_from_profile),
+                                                 [](auto ch) { return std::isdigit(ch); }), modified_name_from_profile.end());
 
                 for (auto comp : components) {
                     // copy the object's name and erase characters which are digits
-                    auto comp_name = utility::narrow(comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string());
-                    comp_name.erase(std::remove_if(std::begin(comp_name), std::end(comp_name), [](auto ch) { return std::isdigit(ch); }),
-                        comp_name.end());
+                    auto original_name_from_game = utility::narrow(comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string());
+                    auto modified_name_from_game = original_name_from_game;
+                    modified_name_from_game.erase(std::remove_if(std::begin(modified_name_from_game), std::end(modified_name_from_game),
+                                                  [](auto ch) { return std::isdigit(ch); }), modified_name_from_game.end());
 
-                     // if the mangled object from the JSON matches the mangled name from the game, we have our match
-                    if (comp_name == modified_name) {
+                    // if the mangled object from the JSON matches the mangled name from the game, we have our match
+                    if (modified_name_from_game == modified_name_from_profile) {
                         previous_data = comp;
                         previous_data_desc = comp->get_class();
 
-                        // recreate the 'correct' ojbect name from the game and cache the match (actual JSON object name -> actual
-                        // game object name) so we don't have to repeat this hack on every tick
-                        auto const actual_object_name =
-                            utility::narrow(comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string());
-                        cachedLookups[*next_it] = actual_object_name;
+                        // Cache the match (actual JSON object name -> actual game object name) so we don't have to repeat this hack on
+                        // every tick
+                        cached_approximate_matches[original_name_from_profile] = original_name_from_game;
                         SPDLOG_INFO("[UObjectHook] Fuzzy matched game object [{}] to profile property [{}] on text [{}], cached lookups now contains {} items",
-                            actual_object_name, *next_it, comp_name, cachedLookups.size());
+                            original_name_from_game, original_name_from_profile, modified_name_from_profile, cached_approximate_matches.size());
                         ++it;
                         break;
                     }
@@ -1646,6 +1645,7 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
                 }
 
                 bool found = false;
+                auto original_name_from_profile = *prop_it;
 
                 // Now look for the object in the array
                 for (auto obj : arr) {
@@ -1656,7 +1656,9 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
                     const auto obj_name = utility::narrow(obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string());
 
                     // check for an exact match, or a cached match
-                    if (obj_name == *prop_it || (cachedLookups.find(*prop_it) != cachedLookups.end() && cachedLookups[*prop_it] == obj_name)) {
+                    if (obj_name == original_name_from_profile ||
+                            (cached_approximate_matches.find(original_name_from_profile) != cached_approximate_matches.end() &&
+                             cached_approximate_matches[original_name_from_profile] == obj_name)) {
                         found = true;
                         previous_data = obj;
                         previous_data_desc = obj->get_class();
@@ -1666,13 +1668,13 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
                     }
                 }
 
-                // no match to the exact property name so check if it matches to anything ignoring numbers in the path
-                if (!found) {
+                // no exact match or cached approximate match to the property name so check if it matches to anything ignoring numbers in the path
+                if (!found && std::any_of(original_name_from_profile.begin(), original_name_from_profile.end(), ::isdigit)) {
+
                     // copy the JSON property name and erase characters which are digits
-                    std::string modified_name = *prop_it;
-                    modified_name.erase(
-                        std::remove_if(std::begin(modified_name), std::end(modified_name), [](auto ch) { return std::isdigit(ch); }),
-                        modified_name.end());
+                    auto modified_name_from_profile = original_name_from_profile;
+                    modified_name_from_profile.erase(std::remove_if(std::begin(modified_name_from_profile), std::end(modified_name_from_profile),
+                                                    [](auto ch) { return std::isdigit(ch); }), modified_name_from_profile.end());
 
                     for (auto obj : arr) {
                         if (obj == nullptr) {
@@ -1680,23 +1682,21 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
                         }
 
                         // copy the object's property name and erase characters which are digits
-                        auto obj_name = utility::narrow(obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string());
-                        obj_name.erase(std::remove_if(std::begin(obj_name), std::end(obj_name), [](auto ch) { return std::isdigit(ch); }),
-                            obj_name.end());
+                        auto original_name_from_game = utility::narrow(obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string());
+                        auto modified_name_from_game = original_name_from_game;
+                        modified_name_from_game.erase(std::remove_if(std::begin(modified_name_from_game), std::end(modified_name_from_game),
+                                                      [](auto ch) { return std::isdigit(ch); }), modified_name_from_game.end());
 
                         // if the mangled propname from the JSON matches the mangled name from the game, we have our match
-                        if (obj_name == modified_name) {
+                        if (modified_name_from_profile == modified_name_from_game) {
                             found = true;
                             previous_data = obj;
                             previous_data_desc = obj->get_class();
 
-                            // recreate the 'correct' property name from the game and cache the match (actual JSON prop name -> actual
-                            // game prop name) so we don't have to repeat this hack on every tick
-                            auto const actual_property_name =
-                                utility::narrow(obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string());
-                            cachedLookups[*prop_it] = actual_property_name;
+                            // Cache the match (actual JSON prop name -> actual game prop name) so we don't have to repeat this hack on every tick
+                            cached_approximate_matches[original_name_from_profile] = original_name_from_game;
                             SPDLOG_INFO("[UObjectHook] Fuzzy matched game property [{}] to profile property [{}] on text [{}], cached lookups now contains {} items",
-                                actual_property_name, *prop_it, obj_name, cachedLookups.size());
+                                original_name_from_game, original_name_from_profile, modified_name_from_profile, cached_approximate_matches.size());
                             ++it;
                             ++it;
                             break;

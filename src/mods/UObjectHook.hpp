@@ -370,6 +370,10 @@ private:
         ResolvedObject resolve()  const;
 
     private:
+        // unordered map of previously derived object name / property name matches (key is name in the JSON file,
+        // value is object / property name from the game which can contain different numeric characters)
+        inline static std::unordered_map<std::string, std::string> cached_approximate_matches;
+
         void clear() {
             m_path.clear();
         }
