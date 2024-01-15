@@ -282,6 +282,10 @@ const auto quat_converter = glm::quat{Matrix4x4f {
 void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
                                         const float world_to_meters, Vector3f* view_location, bool is_double)
 {
+    if (!m_fully_hooked) {
+        return;
+    }
+
     auto& vr = VR::get();
 
     if (!vr->is_hmd_active()) {
@@ -351,6 +355,10 @@ void UObjectHook::on_pre_calculate_stereo_view_offset(void* stereo_device, const
 void UObjectHook::on_post_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
                                                     const float world_to_meters, Vector3f* view_location, bool is_double)
 {
+    if (!m_fully_hooked) {
+        return;
+    }
+
     if (!VR::get()->is_hmd_active()) {
         return;
     }
