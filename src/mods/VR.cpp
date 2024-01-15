@@ -1713,6 +1713,9 @@ void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
 
     // Load camera offsets
     load_cameras();
+
+    // update the logging level
+    spdlog::set_level(static_cast<spdlog::level::level_enum>(this->get_log_level()));
 }
 
 void VR::on_config_save(utility::Config& cfg) {
