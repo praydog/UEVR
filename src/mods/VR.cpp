@@ -875,6 +875,8 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
     state->Gamepad.sThumbRY = (int16_t)std::clamp<float>(((float)state->Gamepad.sThumbRY + right_joystick_axis.y * 32767.0f), -32767.0f, 32767.0f);
 
     bool already_dpad_shifted{false};
+    bool true_left_joystick_as_dpad{false}; 
+    bool true_right_joystick_as_dpad{false}; 
 
     if (m_dpad_gesture_state.direction != DPadGestureState::Direction::NONE) {
         already_dpad_shifted = true;
@@ -895,9 +897,14 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
             state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
         }
 
-        // Zero out the thumbstick values
-        state->Gamepad.sThumbLX = 0;
-        state->Gamepad.sThumbLY = 0;
+        DPadMethod dpad_method = get_dpad_method();
+        if (dpad_method == DPadMethod::GESTURE_HEAD){
+            true_left_joystick_as_dpad = true;
+        }
+        else if (dpad_method == DPadMethod::GESTURE_HEAD_RIGHT) {
+            true_right_joystick_as_dpad = true;
+        }
+
 
         std::scoped_lock _{m_dpad_gesture_state.mtx};
         m_dpad_gesture_state.direction = DPadGestureState::Direction::NONE;
@@ -918,7 +925,10 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
             button_touch_inactive = !is_action_active_any_joystick(m_action_a_button_touch_left) && !is_action_active_any_joystick(m_action_b_button_touch_left);
         }
 
-        const auto dpad_active = (button_touch_inactive && thumbrest_check) || dpad_method == DPadMethod::LEFT_JOYSTICK || dpad_method == DPadMethod::RIGHT_JOYSTICK;
+        // Toggling UEVR menu using L3 + R3 has higher priority 
+        const auto dpad_active = (is_right_joystick_click_down &&  (dpad_method == DPadMethod::RIGHT_JOYSTICK_CLICK) && (! is_left_joystick_click_down)) 
+        || (is_left_joystick_click_down &&  (dpad_method == DPadMethod::LEFT_JOYSTICK_CLICK) && (! is_right_joystick_click_down)) 
+        || (button_touch_inactive && thumbrest_check) || dpad_method == DPadMethod::LEFT_JOYSTICK || dpad_method == DPadMethod::RIGHT_JOYSTICK;
 
         if (dpad_active) {
             float ty{0.0f};
@@ -926,17 +936,19 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
             //SHORT ThumbY{0};
             //SHORT ThumbX{0};
             // If someone is accidentally touching both thumbrests while also moving a joystick, this will default to left joystick.
-            if (dpad_method == DPadMethod::RIGHT_TOUCH || dpad_method == DPadMethod::LEFT_JOYSTICK) {
+            if (dpad_method == DPadMethod::RIGHT_TOUCH || dpad_method == DPadMethod::LEFT_JOYSTICK || dpad_method == DPadMethod::RIGHT_JOYSTICK_CLICK) {
                 //ThumbY = state->Gamepad.sThumbLY;
                 //ThumbX = state->Gamepad.sThumbLX;
                 ty = true_left_joystick_axis.y;
                 tx = true_left_joystick_axis.x;
+                true_left_joystick_as_dpad = true;
             }
-            else if (dpad_method == DPadMethod::LEFT_TOUCH || dpad_method == DPadMethod::RIGHT_JOYSTICK) {
+            else if (dpad_method == DPadMethod::LEFT_TOUCH || dpad_method == DPadMethod::RIGHT_JOYSTICK || dpad_method == DPadMethod::LEFT_JOYSTICK_CLICK) {
                 //ThumbY = state->Gamepad.sThumbRY;
                 //ThumbX = state->Gamepad.sThumbRX;
                 ty = true_right_joystick_axis.y;
                 tx = true_right_joystick_axis.x;
+                true_right_joystick_as_dpad = true;
             }
             
             if (ty >= 0.5f) {
@@ -955,26 +967,39 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
                 state->Gamepad.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
             }
 
-            if (dpad_method == DPadMethod::RIGHT_TOUCH || dpad_method == DPadMethod::LEFT_JOYSTICK) {
-                if (!wants_swap) {
-                    state->Gamepad.sThumbLY = 0;
-                    state->Gamepad.sThumbLX = 0;
-                } else {
-                    state->Gamepad.sThumbRY = 0;
-                    state->Gamepad.sThumbRX = 0;
-                }
+            if(dpad_method == DPadMethod::RIGHT_JOYSTICK_CLICK)
+            {
+                state->Gamepad.wButtons &= ~XINPUT_GAMEPAD_RIGHT_THUMB;
             }
-            else if (dpad_method == DPadMethod::LEFT_TOUCH || dpad_method == DPadMethod::RIGHT_JOYSTICK) {
-                if (!wants_swap) {
-                    state->Gamepad.sThumbRY = 0;
-                    state->Gamepad.sThumbRX = 0;
-                } else {
-                    state->Gamepad.sThumbLY = 0;
-                    state->Gamepad.sThumbLX = 0;
-                }
+            else if(dpad_method == DPadMethod::LEFT_JOYSTICK_CLICK) 
+            {
+                state->Gamepad.wButtons &= ~XINPUT_GAMEPAD_LEFT_THUMB;
             }
+
         }
     }
+
+    // Zero out the thumbstick values
+    if (true_left_joystick_as_dpad) {
+        if (!wants_swap) {
+            state->Gamepad.sThumbLY = 0;
+            state->Gamepad.sThumbLX = 0;
+        } else {
+            state->Gamepad.sThumbRY = 0;
+            state->Gamepad.sThumbRX = 0;
+        }
+    }
+    else if (true_right_joystick_as_dpad) {
+        if (!wants_swap) {
+            state->Gamepad.sThumbRY = 0;
+            state->Gamepad.sThumbRX = 0;
+        } else {
+            state->Gamepad.sThumbLY = 0;
+            state->Gamepad.sThumbLX = 0;
+        }
+    }
+
+
 
     // Determine if snapturn should be run on frame
     if (m_snapturn->value()) {
@@ -996,12 +1021,17 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
             else {
                 stick_axis = right_joystick_axis.x;
                 const auto& thumbrest_touch_left = !wants_swap ? m_action_thumbrest_touch_left : m_action_thumbrest_touch_right;
-                if (glm::abs(stick_axis) >= snapturn_deadzone && !(dpad_method == DPadMethod::LEFT_TOUCH && is_action_active_any_joystick(thumbrest_touch_left))) {
-                    if (stick_axis < 0) {
-                        m_snapturn_left = true;
+                const auto& stick_as_dpad = (!wants_swap) ? true_right_joystick_as_dpad : true_left_joystick_as_dpad;
+                if (glm::abs(stick_axis) >= snapturn_deadzone){
+                    if(!stick_as_dpad) {
+                        if (stick_axis < 0) {
+                            m_snapturn_left = true;
+                        }
+                        m_snapturn_on_frame = true;
                     }
-                    m_snapturn_on_frame = true;
-                    m_was_snapturn_run_on_input = true;
+                    // Requiring the joystick returning to its natrual position at least once before another snapturn,
+                    // even if no snapturn is actually run
+                    m_was_snapturn_run_on_input = true; 
                 }
             }
         }
