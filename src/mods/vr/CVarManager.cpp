@@ -520,6 +520,11 @@ void CVarManager::CVarStandard::freeze() {
         return;
     }
 
+    if (!m_ever_frozen) {
+        m_ever_frozen = true;
+        SPDLOG_INFO("[CVarManager] (Standard) First time freezing \"{}\"...", utility::narrow(m_name));
+    }
+
     switch(m_type) {
     case Type::BOOL:
         // Limiting the amount of times Set gets called with string conversions.
@@ -662,6 +667,11 @@ void CVarManager::CVarData::freeze() {
 
     if (!m_cvar_data) {
         return;
+    }
+
+    if (!m_ever_frozen) {
+        m_ever_frozen = true;
+        SPDLOG_INFO("[CVarManager] (Data) First time freezing \"{}\"...", utility::narrow(m_name));
     }
 
     // Points to the same thing, just different data internally.
