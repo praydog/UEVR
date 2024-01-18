@@ -2,10 +2,13 @@
 
 Universal Unreal Engine VR Mod (4/5)
 
+## Supported Engine Versions
+
 4.8 - 5.3
 
 ## Links
 
+- [Download](https://github.com/praydog/UEVR/releases)
 - [Documentation](https://praydog.github.io/uevr-docs)
 - [Flat2VR Discord](https://flat2vr.com)
 
@@ -30,6 +33,8 @@ Universal Unreal Engine VR Mod (4/5)
 ## Getting Started
 
 Before launching, ensure you have installed .NET 6.0. It should tell you where to install it upon first open, but if not, you can [download it from here](https://dotnet.microsoft.com/en-us/download/dotnet/6.0)
+
+Download the latest release from the [Releases page](https://github.com/praydog/UEVR/releases)
 
 1. Launch UEVRInjector.exe
 2. Launch the target game
