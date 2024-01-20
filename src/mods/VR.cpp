@@ -2312,6 +2312,12 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
             ImGui::TextWrapped("Note: This is only necessary if you are experiencing performance issues.");
         }
 
+        if (GetModuleHandleW(L"nvngx_dlssg.dll") != nullptr) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+            ImGui::TextWrapped("WARNING: DLSS Frame Generation has been detected. Make sure it is disabled within in-game settings.");
+            ImGui::PopStyleColor();
+        }
+
         ImGui::Text((std::string{"Runtime Information ("} + get_runtime()->name().data() + ")").c_str());
 
         m_desktop_fix->draw("Desktop Spectator View");
