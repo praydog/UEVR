@@ -2393,6 +2393,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
             m_aim_speed->draw("Speed");
             m_aim_interp->draw("Smoothing");
             // TODO: the labels describe the effect correctly, rename the variables etc to match
+            // and convert to SliderFloat3 compact layout
             m_left_aim_offset_x_degrees->draw("Left Controller Yaw");
             m_left_aim_offset_y_degrees->draw("Left Controller Roll");
             m_left_aim_offset_z_degrees->draw("Left Controller Pitch");
