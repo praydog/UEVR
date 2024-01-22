@@ -2392,12 +2392,13 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
 
             m_aim_speed->draw("Speed");
             m_aim_interp->draw("Smoothing");
-            m_left_aim_offset_x_degrees->draw("Left Controller X Rotation");
-            m_left_aim_offset_y_degrees->draw("Left Controller Y Rotation");
-            m_left_aim_offset_z_degrees->draw("Left Controller Z Rotation");
-            m_right_aim_offset_x_degrees->draw("Right Controller X Rotation");
-            m_right_aim_offset_y_degrees->draw("Right Controller Y Rotation");
-            m_right_aim_offset_z_degrees->draw("Right Controller Z Rotation");
+            // TODO: the labels describe the effect correctly, rename the variables etc to match
+            m_left_aim_offset_x_degrees->draw("Left Controller Yaw");
+            m_left_aim_offset_y_degrees->draw("Left Controller Roll");
+            m_left_aim_offset_z_degrees->draw("Left Controller Pitch");
+            m_right_aim_offset_x_degrees->draw("Right Controller Yaw");
+            m_right_aim_offset_y_degrees->draw("Right Controller Roll");
+            m_right_aim_offset_z_degrees->draw("Right Controller Pitch");
             m_aim_modify_player_control_rotation->draw("Modify Player Control Rotation");
             ImGui::SameLine();
             m_aim_use_pawn_control_rotation->draw("Use Pawn Control Rotation");
