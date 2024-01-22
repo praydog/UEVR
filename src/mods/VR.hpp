@@ -173,6 +173,34 @@ public:
         return get_rotation(index, true);
     }
 
+    Matrix4x4f get_left_controller_aim_rotation_with_offset() {
+        float x_offset_degrees = get_left_aim_offset_x_degrees();
+        float y_offset_degrees = get_left_aim_offset_y_degrees();
+        float z_offset_degrees = get_left_aim_offset_z_degrees();
+        // if there's no offsets defined, return the original:
+        auto const rotation = get_rotation(get_left_controller_index(), false);
+        if (x_offset_degrees == 0 && y_offset_degrees == 0 && z_offset_degrees == 0) {
+            return rotation;
+        } else {
+            auto const requested_rotation_offset = utility::math::ue_rotation_matrix(glm::vec3{x_offset_degrees, y_offset_degrees, -z_offset_degrees});
+            return rotation * requested_rotation_offset;
+        }
+    }
+
+    Matrix4x4f get_right_controller_aim_rotation_with_offset() {
+        float x_offset_degrees = get_right_aim_offset_x_degrees();
+        float y_offset_degrees = get_right_aim_offset_y_degrees();
+        float z_offset_degrees = get_right_aim_offset_z_degrees();
+        // if there's no offsets defined, return the original:
+        auto const rotation = get_rotation(get_right_controller_index(), false);
+        if (x_offset_degrees == 0 && y_offset_degrees == 0 && z_offset_degrees == 0) {
+            return rotation;
+        } else {
+            auto const requested_rotation_offset = utility::math::ue_rotation_matrix(glm::vec3{x_offset_degrees, y_offset_degrees, -z_offset_degrees});
+            return rotation * requested_rotation_offset;
+        }
+    }
+
     Matrix4x4f get_aim_rotation(uint32_t index) const {
         return get_rotation(index, false);
     }
@@ -446,6 +474,30 @@ public:
 
     float get_aim_speed() const {
         return m_aim_speed->value();
+    }
+
+    float get_left_aim_offset_x_degrees() const {
+        return m_left_aim_offset_x_degrees->value();
+    }
+
+    float get_left_aim_offset_y_degrees() const {
+        return m_left_aim_offset_y_degrees->value();
+    }
+
+    float get_left_aim_offset_z_degrees() const {
+        return m_left_aim_offset_z_degrees->value();
+    }
+    
+    float get_right_aim_offset_x_degrees() const {
+        return m_right_aim_offset_x_degrees->value();
+    }
+
+    float get_right_aim_offset_y_degrees() const {
+        return m_right_aim_offset_y_degrees->value();
+    }
+
+    float get_right_aim_offset_z_degrees() const {
+        return m_right_aim_offset_z_degrees->value();
     }
     
     bool is_aim_multiplayer_support_enabled() const {
@@ -800,7 +852,13 @@ private:
     const ModToggle::Ptr m_aim_modify_player_control_rotation{ ModToggle::create(generate_name("AimModifyPlayerControlRotation"), false) };
     const ModToggle::Ptr m_aim_multiplayer_support{ ModToggle::create(generate_name("AimMPSupport"), false) };
     const ModToggle::Ptr m_aim_interp{ ModToggle::create(generate_name("AimInterp"), true, true) };
-    const ModSlider::Ptr m_aim_speed{ ModSlider::create(generate_name("AimSpeed"), 0.01f, 25.0f, 15.0f) };
+    const ModSlider::Ptr m_aim_speed{ModSlider::create(generate_name("AimSpeed"), 0.01f, 25.0f, 15.0f)};
+    const ModSlider::Ptr m_left_aim_offset_x_degrees{ModSlider::create(generate_name("LeftAimOffsetXDegrees"), -90.0f, 90.0f, 0.0f)};
+    const ModSlider::Ptr m_left_aim_offset_y_degrees{ModSlider::create(generate_name("LeftAimOffsetYDegrees"), -90.0f, 90.0f, 0.0f)};
+    const ModSlider::Ptr m_left_aim_offset_z_degrees{ModSlider::create(generate_name("LeftAimOffsetZDegrees"), -90.0f, 90.0f, 0.0f)};
+    const ModSlider::Ptr m_right_aim_offset_x_degrees{ModSlider::create(generate_name("RightAimOffsetXDegrees"), -90.0f, 90.0f, 0.0f)};
+    const ModSlider::Ptr m_right_aim_offset_y_degrees{ModSlider::create(generate_name("RightAimOffsetYDegrees"), -90.0f, 90.0f, 0.0f)};
+    const ModSlider::Ptr m_right_aim_offset_z_degrees{ModSlider::create(generate_name("RightAimOffsetZDegrees"), -90.0f, 90.0f, 0.0f)};
     const ModToggle::Ptr m_dpad_shifting{ ModToggle::create(generate_name("DPadShifting"), true) };
     const ModCombo::Ptr m_dpad_shifting_method{ ModCombo::create(generate_name("DPadShiftingMethod"), s_dpad_method_names, DPadMethod::RIGHT_TOUCH) };
     
@@ -914,6 +972,12 @@ private:
         *m_aim_modify_player_control_rotation,
         *m_aim_multiplayer_support,
         *m_aim_speed,
+        *m_left_aim_offset_x_degrees,
+        *m_left_aim_offset_y_degrees,
+        *m_left_aim_offset_z_degrees,
+        *m_right_aim_offset_x_degrees,
+        *m_right_aim_offset_y_degrees,
+        *m_right_aim_offset_z_degrees,
         *m_aim_interp,
         *m_dpad_shifting,
         *m_dpad_shifting_method,
