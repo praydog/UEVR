@@ -2316,13 +2316,6 @@ void SceneViewExtensionAnalyzer::FillVtable<N>::fill2(std::array<uintptr_t, 50>&
 // 4.25something to 4.27
 // TODO: Add support for all versions via PDB dumps
 constexpr auto INIT_OPTIONS_OFFSET = 0x50;
-constexpr auto INIT_OPTIONS_VIEW_ORIGIN_OFFSET = 0;
-constexpr auto INIT_OPTIONS_ROTATION_MATRIX_OFFSET = 0x10;
-constexpr auto INIT_OPTIONS_VIEW_RECT_OFFSET = 0x90;
-constexpr auto INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET = 0xA0;
-constexpr auto INIT_OPTION_SCENE_STATE_INTERFACE_OFFSET = 0xB8;
-constexpr auto INIT_OPTIONS_PROJECTION_MATRIX_OFFSET = 0x50;
-constexpr auto INIT_OPTIONS_STEREO_PASS_OFFSET = 0x108;
 
 bool FFakeStereoRenderingHook::is_in_viewport_client_draw() const {
     return m_in_viewport_client_draw && GameThreadWorker::get().is_same_thread();
