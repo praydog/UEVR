@@ -198,6 +198,8 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
         return VRRuntime::Error::SUCCESS;
     }
 
+    const auto& vr = VR::get();
+
     /*if (!this->needs_pose_update) {
         return VRRuntime::Error::SUCCESS;
     }*/
@@ -296,7 +298,13 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
             return (VRRuntime::Error)result;
         }
 
-        this->aim_matrices[i] = Matrix4x4f{runtimes::OpenXR::to_glm(hand.aim_location.pose.orientation)};
+        auto orientation_aim = runtimes::OpenXR::to_glm(hand.aim_location.pose.orientation);
+
+        if (const auto pitch = vr->get_controller_pitch_offset(); pitch != 0.0f) {
+            orientation_aim = glm::rotate(orientation_aim, glm::radians(pitch), Vector3f{1.0f, 0.0f, 0.0f});
+        }
+
+        this->aim_matrices[i] = Matrix4x4f{orientation_aim};
         this->aim_matrices[i][3] = Vector4f{*(Vector3f*)&hand.aim_location.pose.position, 1.0f};
 
         hand.grip_location.next = &hand.grip_velocity;
@@ -307,7 +315,13 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
             return (VRRuntime::Error)result;
         }
 
-        this->grip_matrices[i] = Matrix4x4f{runtimes::OpenXR::to_glm(hand.grip_location.pose.orientation)};
+        auto orientation_grip = runtimes::OpenXR::to_glm(hand.grip_location.pose.orientation);
+
+        if (const auto pitch = vr->get_controller_pitch_offset(); pitch != 0.0f) {
+            orientation_grip = glm::rotate(orientation_grip, glm::radians(pitch), Vector3f{1.0f, 0.0f, 0.0f});
+        }
+
+        this->grip_matrices[i] = Matrix4x4f{orientation_grip};
         this->grip_matrices[i][3] = Vector4f{*(Vector3f*)&hand.grip_location.pose.position, 1.0f};
     }
 

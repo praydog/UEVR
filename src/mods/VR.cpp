@@ -2375,6 +2375,8 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Controller")) {
             m_joystick_deadzone->draw("VR Joystick Deadzone");
+            m_controller_pitch_offset->draw("Controller Pitch Offset");
+
             m_dpad_shifting->draw("DPad Shifting");
             ImGui::SameLine();
             m_swap_controllers->draw("Left-handed Controller Inputs");
