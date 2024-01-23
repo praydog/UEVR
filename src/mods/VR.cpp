@@ -2405,9 +2405,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Snap Turn")) {
             m_snapturn->draw("Enabled");
-            ImGui::TextWrapped("Set Snap Turn Rotation Angle in Degrees.");
             m_snapturn_angle->draw("Angle");
-            ImGui::TextWrapped("Set Snap Turn Joystick Deadzone.");
             m_snapturn_joystick_deadzone->draw("Deadzone");
         
             ImGui::TreePop();
