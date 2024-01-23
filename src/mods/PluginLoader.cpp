@@ -199,29 +199,20 @@ UEVR_SDKFunctions g_sdk_functions {
         return (UEVR_UObjectHandle)ugs->spawn_object((sdk::UClass*)klass, (sdk::UObject*)outer);
     },
     // execute_command
-    [](const wchar_t* command_name, const wchar_t* args) -> void {
-        if (command_name == nullptr) {
-            return;
-        }
-
-        const auto console_manager = sdk::FConsoleManager::get();
-        if (console_manager == nullptr) {
-            return;
-        }
-
-        auto obj = console_manager->find(command_name);
-
-        if (obj == nullptr) {
-            return;
-        }
-
-        auto command = obj->AsCommand();
-
+    [](const wchar_t* command) -> void {
         if (command == nullptr) {
             return;
         }
 
-        command->Execute(args);
+        sdk::UEngine::get()->exec(command);
+    },
+    // execute_command_ex
+    [](UEVR_UObjectHandle world, const wchar_t* command, void* output_device) -> void {
+        if (command == nullptr) {
+            return;
+        }
+
+        sdk::UEngine::get()->exec((sdk::UWorld*)world, command, output_device);
     }
 };
 
