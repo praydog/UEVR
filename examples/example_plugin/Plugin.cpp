@@ -129,6 +129,13 @@ public:
 
     void on_pre_engine_tick(UEVR_UGameEngineHandle engine, float delta) override {
         PLUGIN_LOG_ONCE("Pre Engine Tick: %f", delta);
+
+        static bool once = true;
+
+        if (once) {
+            once = false;
+            API::get()->sdk()->functions->execute_command(L"stat fps");
+        }
     }
 
     void on_post_engine_tick(UEVR_UGameEngineHandle engine, float delta) override {
