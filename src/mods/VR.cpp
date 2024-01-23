@@ -2392,19 +2392,50 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
 
             m_aim_speed->draw("Speed");
             m_aim_interp->draw("Smoothing");
-            // TODO: the labels describe the effect correctly, rename the variables etc to match
-            // and convert to SliderFloat3 compact layout
-            m_left_aim_offset_x_degrees->draw("Left Controller Yaw");
-            m_left_aim_offset_y_degrees->draw("Left Controller Roll");
-            m_left_aim_offset_z_degrees->draw("Left Controller Pitch");
-            m_right_aim_offset_x_degrees->draw("Right Controller Yaw");
-            m_right_aim_offset_y_degrees->draw("Right Controller Roll");
-            m_right_aim_offset_z_degrees->draw("Right Controller Pitch");
+
             m_aim_modify_player_control_rotation->draw("Modify Player Control Rotation");
             ImGui::SameLine();
             m_aim_use_pawn_control_rotation->draw("Use Pawn Control Rotation");
 
             m_aim_multiplayer_support->draw("Multiplayer Support");
+
+            ImGui::TreePop();
+        }
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Aim Offsets")) {
+            ImGui::TextWrapped("Motion Controller Rotation");
+
+            float left_controller_rotation_offset[] = {m_left_controller_rotation_offset_x->value(),
+                m_left_controller_rotation_offset_y->value(), m_left_controller_rotation_offset_z->value()};
+            if (ImGui::SliderFloat3("Left Rotation Offset", left_controller_rotation_offset, -180.0f, 180.0f)) {
+                m_left_controller_rotation_offset_x->value() = left_controller_rotation_offset[0];
+                m_left_controller_rotation_offset_y->value() = left_controller_rotation_offset[1];
+                m_left_controller_rotation_offset_z->value() = left_controller_rotation_offset[2];
+            }
+            float right_controller_rotation_offset[] = {m_right_controller_rotation_offset_x->value(),
+                m_right_controller_rotation_offset_y->value(), m_right_controller_rotation_offset_z->value()};
+            if (ImGui::SliderFloat3("Right Rotation Offset", right_controller_rotation_offset, -180.0f, 180.0f)) {
+                m_right_controller_rotation_offset_x->value() = right_controller_rotation_offset[0];
+                m_right_controller_rotation_offset_y->value() = right_controller_rotation_offset[1];
+                m_right_controller_rotation_offset_z->value() = right_controller_rotation_offset[2];
+            }
+
+            ImGui::TextWrapped("Motion Controller Position");
+            float left_controller_position_offset[] = {m_left_controller_position_offset_x->value(),
+                m_left_controller_position_offset_y->value(), m_left_controller_position_offset_z->value()};
+            if (ImGui::SliderFloat3("Left Position Offset", left_controller_position_offset, -1.0f, 1.0f)) {
+                m_left_controller_position_offset_x->value() = left_controller_position_offset[0];
+                m_left_controller_position_offset_y->value() = left_controller_position_offset[1];
+                m_left_controller_position_offset_z->value() = left_controller_position_offset[2];
+            }
+            float right_controller_position_offset[] = {m_right_controller_position_offset_x->value(),
+                m_right_controller_position_offset_y->value(), m_right_controller_position_offset_z->value()};
+            if (ImGui::SliderFloat3("Right Position Offset", right_controller_position_offset, -1.0f, 1.0f)) {
+                m_right_controller_position_offset_x->value() = right_controller_position_offset[0];
+                m_right_controller_position_offset_y->value() = right_controller_position_offset[1];
+                m_right_controller_position_offset_z->value() = right_controller_position_offset[2];
+            }
 
             ImGui::TreePop();
         }
