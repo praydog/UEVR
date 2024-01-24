@@ -2413,12 +2413,22 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
                 m_left_controller_rotation_offset_y->value() = left_controller_rotation_offset[1];
                 m_left_controller_rotation_offset_z->value() = left_controller_rotation_offset[2];
             }
+            if (ImGui::Button("Reset Left Rotation Offsets")) {
+                m_left_controller_rotation_offset_x->value() = 0.0f;
+                m_left_controller_rotation_offset_y->value() = 0.0f;
+                m_left_controller_rotation_offset_z->value() = 0.0f;
+            }
             float right_controller_rotation_offset[] = {m_right_controller_rotation_offset_x->value(),
                 m_right_controller_rotation_offset_y->value(), m_right_controller_rotation_offset_z->value()};
             if (ImGui::SliderFloat3("Right Rotation Offset", right_controller_rotation_offset, -180.0f, 180.0f)) {
                 m_right_controller_rotation_offset_x->value() = right_controller_rotation_offset[0];
                 m_right_controller_rotation_offset_y->value() = right_controller_rotation_offset[1];
                 m_right_controller_rotation_offset_z->value() = right_controller_rotation_offset[2];
+            }
+            if (ImGui::Button("Reset Right Rotation Offsets")) {
+                m_right_controller_rotation_offset_x->value() = 0.0f;
+                m_right_controller_rotation_offset_y->value() = 0.0f;
+                m_right_controller_rotation_offset_z->value() = 0.0f;
             }
 
             ImGui::TextWrapped("Motion Controller Position");
@@ -2429,6 +2439,11 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
                 m_left_controller_position_offset_y->value() = left_controller_position_offset[1];
                 m_left_controller_position_offset_z->value() = left_controller_position_offset[2];
             }
+            if (ImGui::Button("Reset Left Position Offsets")) {
+                m_left_controller_position_offset_x->value() = 0.0f;
+                m_left_controller_position_offset_y->value() = 0.0f;
+                m_left_controller_position_offset_z->value() = 0.0f;
+            }
             float right_controller_position_offset[] = {m_right_controller_position_offset_x->value(),
                 m_right_controller_position_offset_y->value(), m_right_controller_position_offset_z->value()};
             if (ImGui::SliderFloat3("Right Position Offset", right_controller_position_offset, -1.0f, 1.0f)) {
@@ -2436,7 +2451,11 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
                 m_right_controller_position_offset_y->value() = right_controller_position_offset[1];
                 m_right_controller_position_offset_z->value() = right_controller_position_offset[2];
             }
-
+            if (ImGui::Button("Reset Right Position Offsets")) {
+                m_right_controller_position_offset_x->value() = 0.0f;
+                m_right_controller_position_offset_y->value() = 0.0f;
+                m_right_controller_position_offset_z->value() = 0.0f;
+            }
             ImGui::TreePop();
         }
 

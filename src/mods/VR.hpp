@@ -54,11 +54,6 @@ public:
         GESTURE_HEAD_RIGHT,
     };
 
-    enum Side : int32_t {
-        LEFT,
-        RIGHT
-    };
-
     static const inline std::string s_action_pose = "/actions/default/in/Pose";
     static const inline std::string s_action_grip_pose = "/actions/default/in/GripPose";
     static const inline std::string s_action_trigger = "/actions/default/in/Trigger";
@@ -170,27 +165,35 @@ public:
         return get_position(index, false);
     }
 
-    glm::vec3 get_controller_position_with_offset(Side side) {
-        float x_offset = (side == Side::LEFT) ? get_left_controller_position_offset_x() : get_right_controller_position_offset_x();
-        float y_offset = (side == Side::LEFT) ? get_left_controller_position_offset_y() : get_right_controller_position_offset_y();
-        float z_offset = (side == Side::LEFT) ? get_left_controller_position_offset_z() : get_right_controller_position_offset_z();
+    glm::vec3 get_controller_position_with_offset(VRRuntime::Hand hand) {
+        float x_offset = (hand == VRRuntime::Hand::LEFT) ? get_left_controller_position_offset_x() : get_right_controller_position_offset_x();
+        float y_offset = (hand == VRRuntime::Hand::LEFT) ? get_left_controller_position_offset_y() : get_right_controller_position_offset_y();
+        float z_offset = (hand == VRRuntime::Hand::LEFT) ? get_left_controller_position_offset_z() : get_right_controller_position_offset_z();
         // if there's no offsets defined, return the original:
-        auto const position = get_position((side == Side::LEFT) ? get_left_controller_index() : get_right_controller_index(), false);
+        auto const position = get_position((hand == VRRuntime::Hand::LEFT) ? get_left_controller_index() : get_right_controller_index(), false);
         if (x_offset == 0 && y_offset == 0 && z_offset == 0) {
             return position;
         } else {
-            // TODO: rotate the requested offset to line up with the HMD, *then* apply it. The code below is nonsense:
-            auto const hmd_direction = glm::extractMatrixRotation(get_hmd_transform(m_frame_count));
-            return glm::vec3{position} - glm::vec3({(glm::vec4{z_offset, -y_offset, x_offset, 0} * hmd_direction)});
+            // if we offset the controller by some specified distance we need a frame of reference - what direction is "x"?. If we use
+            // the HMD direction then turning your head will make the gun move in the world independently of your hand position. If
+            // we use the controller's direction then the gun will move around when you rotate it (i.e. it will be on the end of an
+            // invisible 'stick' that's attached to the rotating controller). As there's no other frame of reference that makes any sense here,
+            // a stick it is. Whether the stick orientation is the offset or raw orientation is another complication
+            auto const actual_controller_rotation = get_rotation((hand == VRRuntime::Hand::LEFT) ? get_left_controller_index() : get_right_controller_index(), false);
+            auto const offset_controller_rotation = get_controller_rotation_with_offset(hand);
+            if (get_left_controller_position_offset_x() < 0) {
+                return position - offset_controller_rotation * glm::vec4{-x_offset, -y_offset, z_offset, 0};
+            }
+            return position - actual_controller_rotation * glm::vec4{-x_offset, -y_offset, z_offset, 0};            
         }
     }
 
-    Matrix4x4f get_controller_rotation_with_offset(Side side) {
-        float x_offset_degrees = (side == Side::LEFT) ? get_left_controller_rotation_offset_x() : get_right_controller_rotation_offset_x();
-        float y_offset_degrees = (side == Side::LEFT) ? get_left_controller_rotation_offset_y() : get_right_controller_rotation_offset_y();
-        float z_offset_degrees = (side == Side::LEFT) ? get_left_controller_rotation_offset_z() : get_right_controller_rotation_offset_z();
+    Matrix4x4f get_controller_rotation_with_offset(VRRuntime::Hand hand) {
+        float x_offset_degrees = (hand == VRRuntime::Hand::LEFT) ? get_left_controller_rotation_offset_x() : get_right_controller_rotation_offset_x();
+        float y_offset_degrees = (hand == VRRuntime::Hand::LEFT) ? get_left_controller_rotation_offset_y() : get_right_controller_rotation_offset_y();
+        float z_offset_degrees = (hand == VRRuntime::Hand::LEFT) ? get_left_controller_rotation_offset_z() : get_right_controller_rotation_offset_z();
         // if there's no offsets defined, return the original:
-        auto const rotation = get_rotation((side == Side::LEFT) ? get_left_controller_index() : get_right_controller_index(), false);
+        auto const rotation = get_rotation((hand == VRRuntime::Hand::LEFT) ? get_left_controller_index() : get_right_controller_index(), false);
         if (x_offset_degrees == 0 && y_offset_degrees == 0 && z_offset_degrees == 0) {
             return rotation;
         } else {

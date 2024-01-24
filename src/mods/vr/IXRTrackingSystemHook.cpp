@@ -1746,8 +1746,8 @@ void IXRTrackingSystemHook::update_view_rotation(sdk::UObject* reference_obj, Ro
         if (aim_type == VR::AimMethod::RIGHT_CONTROLLER || aim_type == VR::AimMethod::LEFT_CONTROLLER) {
             const auto controller_index = aim_type == VR::AimMethod::RIGHT_CONTROLLER ? vr->get_right_controller_index() : vr->get_left_controller_index();
             og_controller_rot = aim_type == VR::AimMethod::RIGHT_CONTROLLER ?
-                    glm::quat{ vr->get_controller_rotation_with_offset(VR::Side::RIGHT) } :
-                    glm::quat{ vr->get_controller_rotation_with_offset(VR::Side::LEFT) }; // glm::quat{vr->get_aim_rotation(controller_index)};
+                    glm::quat{ vr->get_controller_rotation_with_offset(VRRuntime::Hand::RIGHT) } :
+                    glm::quat{ vr->get_controller_rotation_with_offset(VRRuntime::Hand::LEFT) }; // glm::quat{vr->get_aim_rotation(controller_index)};
             og_controller_pos = glm::vec3{vr->get_aim_position(controller_index)};
             right_controller_forward = og_controller_rot * glm::vec3{0.0f, 0.0f, 1.0f};
         } else if (aim_type == VR::AimMethod::TWO_HANDED_RIGHT) { // two handed modes are for imitating rifle aiming
