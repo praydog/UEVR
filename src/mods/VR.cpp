@@ -697,6 +697,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
     if (*retval == ERROR_SUCCESS) {
         // Once here for normal gamepads, and once for the spoofed gamepad at the end
         update_imgui_state_from_xinput_state(*state, false);
+        gamepad_snapturn(*state);
     }
 
     const auto now = std::chrono::steady_clock::now();
@@ -2312,6 +2313,12 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
             ImGui::TextWrapped("Note: This is only necessary if you are experiencing performance issues.");
         }
 
+        if (GetModuleHandleW(L"nvngx_dlssg.dll") != nullptr) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+            ImGui::TextWrapped("WARNING: DLSS Frame Generation has been detected. Make sure it is disabled within in-game settings.");
+            ImGui::PopStyleColor();
+        }
+
         ImGui::Text((std::string{"Runtime Information ("} + get_runtime()->name().data() + ")").c_str());
 
         m_desktop_fix->draw("Desktop Spectator View");
@@ -2369,6 +2376,8 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Controller")) {
             m_joystick_deadzone->draw("VR Joystick Deadzone");
+            m_controller_pitch_offset->draw("Controller Pitch Offset");
+
             m_dpad_shifting->draw("DPad Shifting");
             ImGui::SameLine();
             m_swap_controllers->draw("Left-handed Controller Inputs");
@@ -2399,9 +2408,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Snap Turn")) {
             m_snapturn->draw("Enabled");
-            ImGui::TextWrapped("Set Snap Turn Rotation Angle in Degrees.");
             m_snapturn_angle->draw("Angle");
-            ImGui::TextWrapped("Set Snap Turn Joystick Deadzone.");
             m_snapturn_joystick_deadzone->draw("Deadzone");
         
             ImGui::TreePop();
@@ -3117,6 +3124,33 @@ void VR::recenter_view() {
     const auto new_rotation_offset = glm::normalize(glm::inverse(utility::math::flatten(glm::quat{get_rotation(0)})));
 
     set_rotation_offset(new_rotation_offset);
+}
+
+void VR::gamepad_snapturn(XINPUT_STATE& state) {
+    if (!m_snapturn->value()) {
+        return;
+    }
+
+    if (!is_hmd_active()) {
+        return;
+    }
+
+    const auto stick_axis = (float)state.Gamepad.sThumbRX / (float)std::numeric_limits<SHORT>::max();
+
+    if (!m_was_snapturn_run_on_input) {
+        if (glm::abs(stick_axis) > m_snapturn_joystick_deadzone->value()) {
+            m_snapturn_left = stick_axis < 0.0f;
+            m_snapturn_on_frame = true;
+            m_was_snapturn_run_on_input = true;
+            state.Gamepad.sThumbRX = 0;
+        }
+    } else {
+        if (glm::abs(stick_axis) < m_snapturn_joystick_deadzone->value()) {
+            m_was_snapturn_run_on_input = false;
+        } else {
+            state.Gamepad.sThumbRX = 0;
+        }
+    }
 }
 
 void VR::process_snapturn() {

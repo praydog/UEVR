@@ -198,6 +198,22 @@ UEVR_SDKFunctions g_sdk_functions {
 
         return (UEVR_UObjectHandle)ugs->spawn_object((sdk::UClass*)klass, (sdk::UObject*)outer);
     },
+    // execute_command
+    [](const wchar_t* command) -> void {
+        if (command == nullptr) {
+            return;
+        }
+
+        sdk::UEngine::get()->exec(command);
+    },
+    // execute_command_ex
+    [](UEVR_UObjectHandle world, const wchar_t* command, void* output_device) -> void {
+        if (command == nullptr) {
+            return;
+        }
+
+        sdk::UEngine::get()->exec((sdk::UWorld*)world, command, output_device);
+    }
 };
 
 namespace uevr {
