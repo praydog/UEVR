@@ -787,6 +787,7 @@ private:
     const ModToggle::Ptr m_swap_controllers{ ModToggle::create(generate_name("SwapControllerInputs"), false) };
 
     // Snap turn settings and globals
+    void gamepad_snapturn(XINPUT_STATE& state);
     void process_snapturn();
     
     const ModToggle::Ptr m_snapturn{ ModToggle::create(generate_name("SnapTurn"), false) };

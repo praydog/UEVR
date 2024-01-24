@@ -697,6 +697,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
     if (*retval == ERROR_SUCCESS) {
         // Once here for normal gamepads, and once for the spoofed gamepad at the end
         update_imgui_state_from_xinput_state(*state, false);
+        gamepad_snapturn(*state);
     }
 
     const auto now = std::chrono::steady_clock::now();
@@ -3123,6 +3124,33 @@ void VR::recenter_view() {
     const auto new_rotation_offset = glm::normalize(glm::inverse(utility::math::flatten(glm::quat{get_rotation(0)})));
 
     set_rotation_offset(new_rotation_offset);
+}
+
+void VR::gamepad_snapturn(XINPUT_STATE& state) {
+    if (!m_snapturn->value()) {
+        return;
+    }
+
+    if (!is_hmd_active()) {
+        return;
+    }
+
+    const auto stick_axis = (float)state.Gamepad.sThumbRX / (float)std::numeric_limits<SHORT>::max();
+
+    if (!m_was_snapturn_run_on_input) {
+        if (glm::abs(stick_axis) > m_snapturn_joystick_deadzone->value()) {
+            m_snapturn_left = stick_axis < 0.0f;
+            m_snapturn_on_frame = true;
+            m_was_snapturn_run_on_input = true;
+            state.Gamepad.sThumbRX = 0;
+        }
+    } else {
+        if (glm::abs(stick_axis) < m_snapturn_joystick_deadzone->value()) {
+            m_was_snapturn_run_on_input = false;
+        } else {
+            state.Gamepad.sThumbRX = 0;
+        }
+    }
 }
 
 void VR::process_snapturn() {
