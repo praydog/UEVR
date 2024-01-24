@@ -2376,7 +2376,9 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Controller")) {
             m_joystick_deadzone->draw("VR Joystick Deadzone");
-            m_controller_pitch_offset->draw("Controller Pitch Offset");
+
+            // JB: pitch offset is settable in the separate 'offsets' submenu
+            // m_controller_pitch_offset->draw("Controller Pitch Offset");
 
             m_dpad_shifting->draw("DPad Shifting");
             ImGui::SameLine();
@@ -2443,7 +2445,6 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
                 m_left_controller_position_offset_y->value() = 0.0f;
                 m_left_controller_position_offset_z->value() = 0.0f;
             }
-            ImGui::NewLine();
             float right_controller_position_offset[] = {m_right_controller_position_offset_x->value(),
                 m_right_controller_position_offset_y->value(), m_right_controller_position_offset_z->value()};
             if (ImGui::SliderFloat3("Right Position", right_controller_position_offset, -1.0f, 1.0f)) {
