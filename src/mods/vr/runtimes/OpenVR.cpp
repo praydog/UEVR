@@ -32,6 +32,23 @@ VRRuntime::Error OpenVR::update_poses(bool from_view_extensions, uint32_t frame_
 
     std::unique_lock _{ this->pose_mtx };
 
+    const auto& vr = VR::get();
+    const auto pitch_offset = vr->get_controller_pitch_offset();
+
+    auto correct_rotation = [pitch_offset](const glm::mat4& mat) {
+        if (pitch_offset == 0.0f) {
+            return mat;
+        }
+
+        const auto rot = glm::extractMatrixRotation(mat);
+        const auto rot_corrected = glm::rotate(rot, glm::radians(pitch_offset), glm::vec3{ 1.0f, 0.0f, 0.0f });
+
+        auto new_mat = rot_corrected;
+        new_mat[3] = mat[3];
+
+        return new_mat;
+    };
+
     memcpy(this->render_poses.data(), this->real_render_poses.data(), sizeof(this->render_poses));
     
     // Update grip and aim poses independently of render poses
@@ -49,47 +66,48 @@ VRRuntime::Error OpenVR::update_poses(bool from_view_extensions, uint32_t frame_
         const auto res1_grip = vr::VRInput()->GetPoseActionDataForNextFrame(this->grip_pose_action, vr::TrackingUniverseStanding, &left_grip_pose_data, sizeof(left_grip_pose_data), this->left_controller_handle);
         const auto res2_grip = vr::VRInput()->GetPoseActionDataForNextFrame(this->grip_pose_action, vr::TrackingUniverseStanding, &right_grip_pose_data, sizeof(right_grip_pose_data), this->right_controller_handle);
 
+
         if (this->left_controller_index < this->render_poses.size()) {
             if (res1_aim == vr::VRInputError_None) {
                 const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&left_aim_pose_data.pose.mDeviceToAbsoluteTracking };
-                this->aim_matrices[VRRuntime::Hand::LEFT] = glm::rowMajor4(matrix);
+                this->aim_matrices[VRRuntime::Hand::LEFT] = correct_rotation(glm::rowMajor4(matrix));
             } else {
                 const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&this->render_poses[this->left_controller_index].mDeviceToAbsoluteTracking.m };
-                this->aim_matrices[VRRuntime::Hand::LEFT] = glm::rowMajor4(matrix);
+                this->aim_matrices[VRRuntime::Hand::LEFT] = correct_rotation(glm::rowMajor4(matrix));
             }
 
             if (res1_grip == vr::VRInputError_None) {
                 const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&left_grip_pose_data.pose.mDeviceToAbsoluteTracking };
-                this->grip_matrices[VRRuntime::Hand::LEFT] = glm::rowMajor4(matrix);
+                this->grip_matrices[VRRuntime::Hand::LEFT] = correct_rotation(glm::rowMajor4(matrix));
             } else {
                 const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&this->render_poses[this->left_controller_index].mDeviceToAbsoluteTracking.m };
-                this->grip_matrices[VRRuntime::Hand::LEFT] = glm::rowMajor4(matrix);
+                this->grip_matrices[VRRuntime::Hand::LEFT] = correct_rotation(glm::rowMajor4(matrix));
             }
         }
 
         if (this->right_controller_index < this->render_poses.size()) {
             if (res2_aim == vr::VRInputError_None) {
                 const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&right_aim_pose_data.pose.mDeviceToAbsoluteTracking };
-                this->aim_matrices[VRRuntime::Hand::RIGHT] = glm::rowMajor4(matrix);
+                this->aim_matrices[VRRuntime::Hand::RIGHT] = correct_rotation(glm::rowMajor4(matrix));
             } else {
                 const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&this->render_poses[this->right_controller_index].mDeviceToAbsoluteTracking.m };
-                this->aim_matrices[VRRuntime::Hand::RIGHT] = glm::rowMajor4(matrix);
+                this->aim_matrices[VRRuntime::Hand::RIGHT] = correct_rotation(glm::rowMajor4(matrix));
             }
 
             if (res2_grip == vr::VRInputError_None) {
                 const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&right_grip_pose_data.pose.mDeviceToAbsoluteTracking };
-                this->grip_matrices[VRRuntime::Hand::RIGHT] = glm::rowMajor4(matrix);
+                this->grip_matrices[VRRuntime::Hand::RIGHT] = correct_rotation(glm::rowMajor4(matrix));
             } else {
                 const auto matrix = Matrix4x4f{ *(Matrix3x4f*)&this->render_poses[this->right_controller_index].mDeviceToAbsoluteTracking.m };
-                this->grip_matrices[VRRuntime::Hand::RIGHT] = glm::rowMajor4(matrix);
+                this->grip_matrices[VRRuntime::Hand::RIGHT] = correct_rotation(glm::rowMajor4(matrix));
             }
         }
     } else if (left_controller_index < this->render_poses.size() && right_controller_index < this->render_poses.size()) {
         const auto left_matrix = Matrix4x4f{ *(Matrix3x4f*)&this->render_poses[this->left_controller_index].mDeviceToAbsoluteTracking.m };
         const auto right_matrix = Matrix4x4f{ *(Matrix3x4f*)&this->render_poses[this->right_controller_index].mDeviceToAbsoluteTracking.m };
 
-        this->grip_matrices[VRRuntime::Hand::LEFT] = glm::rowMajor4(left_matrix);
-        this->grip_matrices[VRRuntime::Hand::RIGHT] = glm::rowMajor4(right_matrix);
+        this->grip_matrices[VRRuntime::Hand::LEFT] = correct_rotation(glm::rowMajor4(left_matrix));
+        this->grip_matrices[VRRuntime::Hand::RIGHT] = correct_rotation(glm::rowMajor4(right_matrix));
     }
 
     bool should_enqueue = false;
