@@ -1300,6 +1300,8 @@ void UObjectHook::update_persistent_states() {
                             obj_primcomp->set_visibility(true, false);
                         }
                     } else {
+                        obj_primcomp->set_render_custom_depth(false);
+                        
                         if (!obj_primcomp->set_render_in_main_pass(false).has_value()) {
                             obj_primcomp->set_visibility(false, false);
                         }
@@ -2420,6 +2422,11 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
 
     if (ImGui::Checkbox("Visible", &visible)) {
         if (comp->is_a(prim_comp_t)) {
+            // dont have a good way of telling what the original value was
+            if (!visible) {
+                prim_comp->set_render_custom_depth(false);
+            }
+
             if (!prim_comp->set_render_in_main_pass(visible).has_value()) {
                 comp->set_visibility(visible, false);
             }
