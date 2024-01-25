@@ -1279,6 +1279,7 @@ void UObjectHook::update_persistent_states() {
     // Persistent properties
     if (!m_persistent_properties.empty()) {
         const auto scene_comp_t = sdk::USceneComponent::static_class();
+        const auto primitive_comp_t = sdk::UPrimitiveComponent::static_class();
         for (const auto& prop_base : m_persistent_properties) {
             if (prop_base == nullptr) {
                 continue;
@@ -1290,11 +1291,27 @@ void UObjectHook::update_persistent_states() {
                 continue;
             }
 
-            if (prop_base->hide && obj.definition->is_a(scene_comp_t)) {
-                if (m_uobject_hook_disabled) {
-                    obj.as<sdk::USceneComponent*>()->set_visibility(true, false);
-                } else {
-                    obj.as<sdk::USceneComponent*>()->set_visibility(false, false);
+            if (prop_base->hide) {
+                if (obj.definition->is_a(primitive_comp_t)) {
+                    auto obj_primcomp = obj.as<sdk::UPrimitiveComponent*>();
+
+                    if (m_uobject_hook_disabled) {
+                        if (!obj_primcomp->set_render_in_main_pass(true).has_value()) {
+                            obj_primcomp->set_visibility(true, false);
+                        }
+                    } else {
+                        if (!obj_primcomp->set_render_in_main_pass(false).has_value()) {
+                            obj_primcomp->set_visibility(false, false);
+                        }
+                    }
+                } else if (obj.definition->is_a(scene_comp_t)) {
+                    auto obj_scenecomp = obj.as<sdk::USceneComponent*>();
+
+                    if (m_uobject_hook_disabled) {
+                        obj_scenecomp->set_visibility(true, false);
+                    } else {
+                        obj_scenecomp->set_visibility(false, false);
+                    }
                 }
             }
 
@@ -2396,10 +2413,19 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
         }
     }
 
-    bool visible = comp->is_visible();
+    const auto prim_comp_t = sdk::UPrimitiveComponent::static_class();
+    auto prim_comp = (sdk::UPrimitiveComponent*)comp;
+
+    bool visible = comp->is_a(prim_comp_t) ? prim_comp->is_rendering_in_main_pass() : comp->is_visible();
 
     if (ImGui::Checkbox("Visible", &visible)) {
-        comp->set_visibility(visible, false);
+        if (comp->is_a(prim_comp_t)) {
+            if (!prim_comp->set_render_in_main_pass(visible).has_value()) {
+                comp->set_visibility(visible, false);
+            }
+        } else {
+            comp->set_visibility(visible, false);
+        }
 
         if (visible) {
             // Check if we have a persistent property for this component
