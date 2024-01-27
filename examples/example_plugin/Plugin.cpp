@@ -73,17 +73,13 @@ public:
         const auto renderer_data = API::get()->param()->renderer;
 
         if (renderer_data->renderer_type == UEVR_RENDERER_D3D11) {
+            std::scoped_lock _{m_imgui_mutex};
+            
             ImGui_ImplDX11_NewFrame();
-            ImGui_ImplWin32_NewFrame();
-            ImGui::NewFrame();
-
-            internal_frame();
-
-            ImGui::EndFrame();
-            ImGui::Render();
-
             g_d3d11.render_imgui();
         } else if (renderer_data->renderer_type == UEVR_RENDERER_D3D12) {
+            std::scoped_lock _{m_imgui_mutex};
+
             auto command_queue = (ID3D12CommandQueue*)renderer_data->command_queue;
 
             if (command_queue == nullptr) {
@@ -91,14 +87,6 @@ public:
             }
 
             ImGui_ImplDX12_NewFrame();
-            ImGui_ImplWin32_NewFrame();
-            ImGui::NewFrame();
-
-            internal_frame();
-
-            ImGui::EndFrame();
-            ImGui::Render();
-
             g_d3d12.render_imgui();
         }
     }
@@ -135,6 +123,16 @@ public:
         if (once) {
             once = false;
             API::get()->sdk()->functions->execute_command(L"stat fps");
+        }
+
+        if (m_initialized) {
+            ImGui_ImplWin32_NewFrame();
+            ImGui::NewFrame();
+
+            internal_frame();
+
+            ImGui::EndFrame();
+            ImGui::Render();
         }
     }
 
@@ -234,6 +232,8 @@ private:
 private:
     HWND m_wnd{};
     bool m_initialized{false};
+
+    std::recursive_mutex m_imgui_mutex{};
 };
 
 // Actually creates the plugin. Very important that this global is created.
