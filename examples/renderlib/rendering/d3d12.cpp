@@ -10,17 +10,35 @@ bool D3D12::initialize() {
     auto device = (ID3D12Device*)renderer_data->device;
     auto swapchain = (IDXGISwapChain3*)renderer_data->swapchain;
 
-    if (FAILED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&this->cmd_allocator)))) {
-        return false;
-    }
+    for (auto& cmd : this->cmds) {
+        if (FAILED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmd.allocator)))) {
+            uevr::API::get()->log_error("[D3D12 plugin] Failed to create command allocator.");
+            return false;
+        }
 
-    if (FAILED(device->CreateCommandList(
-            0, D3D12_COMMAND_LIST_TYPE_DIRECT, this->cmd_allocator.Get(), nullptr, IID_PPV_ARGS(&this->cmd_list)))) {
-        return false;
-    }
+        cmd.allocator->SetName(L"D3D12 renderlib command allocator");
 
-    if (FAILED(this->cmd_list->Close())) {
-        return false;
+        if (FAILED(device->CreateCommandList(
+                0, D3D12_COMMAND_LIST_TYPE_DIRECT, cmd.allocator.Get(), nullptr, IID_PPV_ARGS(&cmd.list)))) 
+        {
+            uevr::API::get()->log_error("[D3D12 plugin] Failed to create command list.");
+            return false;
+        }
+
+        cmd.list->SetName(L"D3D12 renderlib command list");
+
+        if (FAILED(cmd.list->Close())) {
+            uevr::API::get()->log_error("[D3D12 plugin] Failed to close command list.");
+            return false;
+        }
+
+        if (FAILED(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&cmd.fence)))) {
+            uevr::API::get()->log_error("[D3D12 plugin] Failed to create fence.");
+            return false;
+        }
+
+        cmd.fence->SetName(L"D3D12 renderlib fence");
+        cmd.fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     }
 
     {
@@ -100,12 +118,19 @@ bool D3D12::initialize() {
     return true;
 }
 
-void D3D12::render_imgui() {
+void D3D12::render_imgui() {        
+    auto& cmd = this->cmds[this->frame_count++ % this->cmds.size()];
+
+    if (cmd.fence_event != nullptr && cmd.fence != nullptr && cmd.fence->GetCompletedValue() < cmd.fence_value) {
+        WaitForSingleObject(cmd.fence_event, 2000);
+        ResetEvent(cmd.fence_event);
+    }
+
     const auto renderer_data = uevr::API::get()->param()->renderer;
     auto command_queue = (ID3D12CommandQueue*)renderer_data->command_queue;
 
-    this->cmd_allocator->Reset();
-    this->cmd_list->Reset(g_d3d12.cmd_allocator.Get(), nullptr);
+    cmd.allocator->Reset();
+    cmd.list->Reset(cmd.allocator.Get(), nullptr);
 
     auto device = (ID3D12Device*)renderer_data->device;
     float clear_color[]{0.0f, 0.0f, 0.0f, 0.0f};
@@ -137,17 +162,26 @@ void D3D12::render_imgui() {
     barrier.Transition.pResource = this->rts[bb_index].Get();
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    this->cmd_list->ResourceBarrier(1, &barrier);
+    cmd.list->ResourceBarrier(1, &barrier);
     rts[0] = this->get_cpu_rtv(device, (D3D12::RTV)bb_index);
-    this->cmd_list->OMSetRenderTargets(1, rts, FALSE, NULL);
-    this->cmd_list->SetDescriptorHeaps(1, this->srv_desc_heap.GetAddressOf());
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), this->cmd_list.Get());
+    cmd.list->OMSetRenderTargets(1, rts, FALSE, NULL);
+    cmd.list->SetDescriptorHeaps(1, this->srv_desc_heap.GetAddressOf());
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmd.list.Get());
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-    this->cmd_list->ResourceBarrier(1, &barrier);
-    this->cmd_list->Close();
+    cmd.list->ResourceBarrier(1, &barrier);
 
-    command_queue->ExecuteCommandLists(1, (ID3D12CommandList* const*)this->cmd_list.GetAddressOf());
+    if (FAILED(cmd.list->Close())) {
+        uevr::API::get()->log_error("[D3D12 plugin] Failed to close command list.");
+        return;
+    }
+
+    command_queue->ExecuteCommandLists(1, (ID3D12CommandList* const*)cmd.list.GetAddressOf());
+
+    ID3D12CommandList* const cmd_lists[] = {cmd.list.Get()};
+    command_queue->ExecuteCommandLists(1, cmd_lists);
+    command_queue->Signal(cmd.fence.Get(), ++cmd.fence_value);
+    cmd.fence->SetEventOnCompletion(cmd.fence_value, cmd.fence_event);
 }
 
 void D3D12::render_imgui_vr(ID3D12GraphicsCommandList* command_list, D3D12_CPU_DESCRIPTOR_HANDLE* rtv) {

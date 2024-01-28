@@ -112,6 +112,7 @@ public:
         }
 
         if (renderer_data->renderer_type == UEVR_RENDERER_D3D12) {
+            g_d3d12.reset();
             ImGui_ImplDX12_Shutdown();
             g_d3d12 = {};
         }
