@@ -178,6 +178,8 @@ public:
         }
 
         if (m_initialized) {
+            std::scoped_lock _{m_imgui_mutex};
+
             ImGui_ImplWin32_NewFrame();
             ImGui::NewFrame();
 
