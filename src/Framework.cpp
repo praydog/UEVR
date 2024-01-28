@@ -501,6 +501,10 @@ void Framework::on_frame_d3d11() {
     context->OMSetRenderTargets(1, m_d3d11.rt_rtv.GetAddressOf(), NULL);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
+    for (auto& mod : m_mods->get_mods()) {
+        mod->on_post_render_vr_framework_dx11(context.Get(), m_d3d11.rt.Get(), m_d3d11.rt_rtv.Get());
+    }
+
     // Set the back buffer to be the render target.
     context->OMSetRenderTargets(1, m_d3d11.bb_rtv.GetAddressOf(), nullptr);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -632,6 +636,11 @@ void Framework::on_frame_d3d12() {
 
         ImGui::GetIO().BackendRendererUserData = m_d3d12.imgui_backend_datas[1];
         ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmd_ctx->cmd_list.Get());
+
+        for (auto& mod : m_mods->get_mods()) {
+            rts[0] = m_d3d12.get_cpu_rtv(device, D3D12::RTV::IMGUI);
+            mod->on_post_render_vr_framework_dx12(cmd_ctx->cmd_list.Get(), m_d3d12.get_rt(D3D12::RTV::IMGUI).Get(), &rts[0]);
+        }
         
         barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
