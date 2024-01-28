@@ -149,3 +149,12 @@ void D3D12::render_imgui() {
 
     command_queue->ExecuteCommandLists(1, (ID3D12CommandList* const*)this->cmd_list.GetAddressOf());
 }
+
+void D3D12::render_imgui_vr(ID3D12GraphicsCommandList* command_list, D3D12_CPU_DESCRIPTOR_HANDLE* rtv) {
+    D3D12_CPU_DESCRIPTOR_HANDLE rts[1]{};
+    rts[0] = *rtv;
+    command_list->OMSetRenderTargets(1, rts, FALSE, NULL);
+    command_list->SetDescriptorHeaps(1, this->srv_desc_heap.GetAddressOf());
+
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), command_list);
+}

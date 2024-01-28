@@ -52,6 +52,7 @@ struct D3D12 {
 
     bool initialize();
     void render_imgui();
+    void render_imgui_vr(ID3D12GraphicsCommandList* command_list, D3D12_CPU_DESCRIPTOR_HANDLE* rtv);
 };
 
 extern D3D12 g_d3d12;

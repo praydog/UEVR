@@ -4,9 +4,7 @@
 #include "shared.hpp"
 
 struct D3D11 {
-    ComPtr<ID3D11Texture2D> blank_rt{};
     ComPtr<ID3D11Texture2D> rt{};
-    ComPtr<ID3D11RenderTargetView> blank_rt_rtv{};
     ComPtr<ID3D11RenderTargetView> rt_rtv{};
     ComPtr<ID3D11ShaderResourceView> rt_srv{};
     uint32_t rt_width{};
@@ -15,6 +13,7 @@ struct D3D11 {
 
     bool initialize();
     void render_imgui();
+    void render_imgui_vr(ID3D11DeviceContext* context, ID3D11RenderTargetView* rtv);
 };
 
 extern D3D11 g_d3d11;

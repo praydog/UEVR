@@ -61,6 +61,8 @@ public:
     }
 
     void on_present() override {
+        std::scoped_lock _{m_imgui_mutex};
+
         if (!m_initialized) {
             if (!initialize_imgui()) {
                 API::get()->log_info("Failed to initialize imgui");
@@ -72,27 +74,35 @@ public:
 
         const auto renderer_data = API::get()->param()->renderer;
 
-        if (renderer_data->renderer_type == UEVR_RENDERER_D3D11) {
-            std::scoped_lock _{m_imgui_mutex};
-            
-            ImGui_ImplDX11_NewFrame();
-            g_d3d11.render_imgui();
-        } else if (renderer_data->renderer_type == UEVR_RENDERER_D3D12) {
-            std::scoped_lock _{m_imgui_mutex};
-
-            auto command_queue = (ID3D12CommandQueue*)renderer_data->command_queue;
-
-            if (command_queue == nullptr) {
+        if (!API::get()->param()->vr->is_hmd_active()) {
+            if (!m_was_rendering_desktop) {
+                m_was_rendering_desktop = true;
+                on_device_reset();
                 return;
             }
 
-            ImGui_ImplDX12_NewFrame();
-            g_d3d12.render_imgui();
+            m_was_rendering_desktop = true;
+
+            if (renderer_data->renderer_type == UEVR_RENDERER_D3D11) {
+                ImGui_ImplDX11_NewFrame();
+                g_d3d11.render_imgui();
+            } else if (renderer_data->renderer_type == UEVR_RENDERER_D3D12) {
+                auto command_queue = (ID3D12CommandQueue*)renderer_data->command_queue;
+
+                if (command_queue == nullptr) {
+                    return;
+                }
+
+                ImGui_ImplDX12_NewFrame();
+                g_d3d12.render_imgui();
+            }
         }
     }
 
     void on_device_reset() override {
         PLUGIN_LOG_ONCE("Example Device Reset");
+
+        std::scoped_lock _{m_imgui_mutex};
 
         const auto renderer_data = API::get()->param()->renderer;
 
@@ -107,6 +117,48 @@ public:
         }
 
         m_initialized = false;
+    }
+
+    void on_post_render_vr_framework_dx11(ID3D11DeviceContext* context, ID3D11Texture2D* texture, ID3D11RenderTargetView* rtv) override {
+        PLUGIN_LOG_ONCE("Post Render VR Framework DX11");
+
+        const auto vr_active = API::get()->param()->vr->is_hmd_active();
+
+        if (!m_initialized || !vr_active) {
+            return;
+        }
+
+        if (m_was_rendering_desktop) {
+            m_was_rendering_desktop = false;
+            on_device_reset();
+            return;
+        }
+
+        std::scoped_lock _{m_imgui_mutex};
+
+        ImGui_ImplDX11_NewFrame();
+        g_d3d11.render_imgui_vr(context, rtv);
+    }
+
+    void on_post_render_vr_framework_dx12(ID3D12GraphicsCommandList* command_list, ID3D12Resource* rt, D3D12_CPU_DESCRIPTOR_HANDLE* rtv) override {
+        PLUGIN_LOG_ONCE("Post Render VR Framework DX12");
+
+        const auto vr_active = API::get()->param()->vr->is_hmd_active();
+
+        if (!m_initialized || !vr_active) {
+            return;
+        }
+
+        if (m_was_rendering_desktop) {
+            m_was_rendering_desktop = false;
+            on_device_reset();
+            return;
+        }
+
+        std::scoped_lock _{m_imgui_mutex};
+
+        ImGui_ImplDX12_NewFrame();
+        g_d3d12.render_imgui_vr(command_list, rtv);
     }
 
     bool on_message(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) override { 
@@ -183,6 +235,8 @@ private:
             return true;
         }
 
+        std::scoped_lock _{m_imgui_mutex};
+
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
 
@@ -232,6 +286,7 @@ private:
 private:
     HWND m_wnd{};
     bool m_initialized{false};
+    bool m_was_rendering_desktop{false};
 
     std::recursive_mutex m_imgui_mutex{};
 };
