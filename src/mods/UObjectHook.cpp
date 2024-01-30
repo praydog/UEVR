@@ -1296,15 +1296,9 @@ void UObjectHook::update_persistent_states() {
                     auto obj_primcomp = obj.as<sdk::UPrimitiveComponent*>();
 
                     if (m_uobject_hook_disabled) {
-                        if (!obj_primcomp->set_render_in_main_pass(true).has_value()) {
-                            obj_primcomp->set_visibility(true, false);
-                        }
+                        obj_primcomp->set_overall_visibility(true);
                     } else {
-                        obj_primcomp->set_render_custom_depth(false);
-                        
-                        if (!obj_primcomp->set_render_in_main_pass(false).has_value()) {
-                            obj_primcomp->set_visibility(false, false);
-                        }
+                        obj_primcomp->set_overall_visibility(false);
                     }
                 } else if (obj.definition->is_a(scene_comp_t)) {
                     auto obj_scenecomp = obj.as<sdk::USceneComponent*>();
@@ -2422,14 +2416,7 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
 
     if (ImGui::Checkbox("Visible", &visible)) {
         if (comp->is_a(prim_comp_t)) {
-            // dont have a good way of telling what the original value was
-            if (!visible) {
-                prim_comp->set_render_custom_depth(false);
-            }
-
-            if (!prim_comp->set_render_in_main_pass(visible).has_value()) {
-                comp->set_visibility(visible, false);
-            }
+            prim_comp->set_overall_visibility(visible);
         } else {
             comp->set_visibility(visible, false);
         }
@@ -2887,6 +2874,22 @@ void UObjectHook::ui_handle_functions(void* object, sdk::UStruct* uclass) {
                             object_real->process_event(func, &params);
                         }
                     }
+                    break;
+                case "StrProperty"_fnv:
+                {
+                    if (ImGui::Button("Call")) {
+                        struct {
+                            sdk::TArrayLite<wchar_t> str{};
+                            char padding[0x10];
+                        } params{};
+
+                        params.str.data = (wchar_t*)L"Hello world!";
+                        params.str.count = wcslen(params.str.data);
+                        params.str.capacity = params.str.count + 1;
+
+                        object_real->process_event(func, &params);
+                    }
+                }
                     break;
                 case "UInt32Property"_fnv:
                 case "IntProperty"_fnv:
