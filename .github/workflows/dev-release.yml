@@ -33,6 +33,11 @@ jobs:
             echo ${{github.sha}} > ${{github.workspace}}/revision.txt
             7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/build/bin/${{matrix.target}}/*
             7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/revision.txt
+
+      - name: Hash zip
+        run: |
+            $ReleaseHash-Full = Get-FileHash -Algorithm SHA256 ${{github.workspace}}/${{matrix.target}}.zip
+            $ReleaseHash-Full.Hash | Out-File -FilePath ${{github.workspace}}/${{matrix.target}}.zip.sha256
         
       - name: Create Release
         if: github.ref == 'refs/heads/master'
@@ -43,6 +48,6 @@ jobs:
             token: ${{ secrets.CI_NIGHTLY }}
             name: ${{format('UEVR Nightly {0} ({1})', github.run_number, github.sha)}}
             tag: ${{format('nightly-{0}-{1}', github.run_number, github.sha)}}
-            artifacts: ${{github.workspace}}/${{matrix.target}}.zip
+            artifacts: "${{github.workspace}}/${{matrix.target}}.zip,${{github.workspace}}/${{matrix.target}}.zip.sha256"
             makeLatest: true
             bodyFile: ${{github.workspace}}/nightly-body.md
