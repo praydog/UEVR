@@ -8,7 +8,8 @@ Universal Unreal Engine VR Mod (4/5)
 
 ## Links
 
-- [Download](https://github.com/praydog/UEVR/releases)
+- [Download (Stable release)](https://github.com/praydog/UEVR/releases)
+- [Download (Nightly release)](https://github.com/praydog/UEVR-nightly/releases/latest)
 - [Documentation](https://praydog.github.io/uevr-docs)
 - [Flat2VR Discord](https://flat2vr.com)
 
