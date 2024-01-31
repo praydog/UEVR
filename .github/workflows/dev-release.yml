@@ -1,7 +1,7 @@
 name: Dev Release
 on: [push, workflow_dispatch]
 env:
-  BUILD_TYPE: Release
+  BUILD_TYPE: RelWithDebInfo
 jobs:
   dev-release:
     runs-on: windows-latest
@@ -10,7 +10,7 @@ jobs:
         target: [uevr]
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4.1.1
         with:
           token: ${{ secrets.UESDK_PULLER }}
           submodules: recursive
@@ -22,12 +22,27 @@ jobs:
         run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ${{matrix.target}}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2.3.1
+        uses: actions/upload-artifact@v4.3.0
         with:
           name: ${{matrix.target}}
           path: ${{github.workspace}}/build/bin/${{matrix.target}}/*
           if-no-files-found: error
 
-      - name: Set outputs
-        id: vars
-        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      - name: Compress artifacts
+        run: |
+            echo ${{github.sha}} > ${{github.workspace}}/revision.txt
+            7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/build/bin/${{matrix.target}}/*
+            7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/revision.txt
+        
+      - name: Create Release
+        if: github.ref == 'refs/heads/master'
+        uses: ncipollo/release-action@v1.13.0
+        with:
+            repo: UEVR-nightly
+            owner: praydog
+            token: ${{ secrets.CI_NIGHTLY }}
+            name: ${{format('UEVR Nightly {0} ({1})', github.run_number, github.sha)}}
+            tag: ${{format('nightly-{0}-{1}', github.run_number, github.sha)}}
+            artifacts: ${{github.workspace}}/${{matrix.target}}.zip
+            makeLatest: true
+            bodyFile: ${{github.workspace}}/nightly-body.md
