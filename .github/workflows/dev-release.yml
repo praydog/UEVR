@@ -36,8 +36,8 @@ jobs:
 
       - name: Hash zip
         run: |
-            $ReleaseHash-Full = Get-FileHash -Algorithm SHA256 ${{github.workspace}}/${{matrix.target}}.zip
-            $ReleaseHash-Full.Hash | Out-File -FilePath ${{github.workspace}}/${{matrix.target}}.zip.sha256
+            $ReleaseHash = Get-FileHash -Algorithm SHA256 ${{github.workspace}}/${{matrix.target}}.zip
+            $ReleaseHash.Hash | Out-File -FilePath ${{github.workspace}}/${{matrix.target}}.zip.sha256
         
       - name: Create Release
         if: github.ref == 'refs/heads/master'
