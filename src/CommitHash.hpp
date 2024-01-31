@@ -1,0 +1,4 @@
+#pragma once 
+#define UEVR_COMMIT_HASH "d921a7f616a228e549a0f6826266dcd88a5066f9" 
+#define UEVR_BUILD_DATE "31.01.2024" 
+#define UEVR_BUILD_TIME "00:00" 

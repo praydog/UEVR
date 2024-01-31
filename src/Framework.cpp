@@ -26,6 +26,7 @@
 #include "mods/VR.hpp"
 #include "mods/ImGuiThemeHelpers.hpp"
 
+#include "CommitHash.hpp"
 #include "ExceptionHandler.hpp"
 #include "LicenseStrings.hpp"
 #include "mods/FrameworkConfig.hpp"
@@ -1157,9 +1158,11 @@ void Framework::draw_ui() {
     if (!m_last_draw_ui || m_cursor_state_changed) {
         m_cursor_state_changed = false;
     }
+    
+    static const auto UEVR_NAME = std::format("UEVR [rev. {:.8}][{} {}]", UEVR_COMMIT_HASH, UEVR_BUILD_DATE, UEVR_BUILD_TIME);
 
     ImGui::SetNextWindowSize(ImVec2(window_w, window_h), ImGuiCond_::ImGuiCond_Once);
-    ImGui::Begin("UEVR", &m_draw_ui);
+    ImGui::Begin(UEVR_NAME.c_str(), &m_draw_ui);
 
     ImGui::BeginGroup();
     ImGui::Columns(2);
