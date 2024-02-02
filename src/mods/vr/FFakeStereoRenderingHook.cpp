@@ -1724,7 +1724,7 @@ void FFakeStereoRenderingHook::viewport_draw_hook(void* viewport, bool should_pr
     call_orig();
 }
 
-void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_client, void* viewport, void* canvas, void* a4) {
+void FFakeStereoRenderingHook::game_viewport_client_draw_hook(sdk::UGameViewportClient* viewport_client, sdk::FViewport* viewport, sdk::FCanvas* canvas, void* a4) {
     ZoneScopedN(__FUNCTION__);
 
     // AHUD Compatibility
@@ -1734,14 +1734,10 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_cli
     // TODO: Probably fix the scissor and/or view rects.
     // Also TODO: Figure out how games that bypass this render directly to the scene RT anyways.
     if (g_framework->is_game_data_intialized() && VR::get()->is_ahud_compatibility_enabled()) {
-        if (const auto debug_canvas_index = sdk::FViewport::get_debug_canvas_index(); debug_canvas_index.has_value() && viewport != nullptr) {
-            const auto vp_vtable = *(uintptr_t**)viewport;
-            const auto get_debug_canvas = (void*(*)(void*))vp_vtable[*debug_canvas_index];
-            const auto debug_canvas = get_debug_canvas(viewport);
+        const auto debug_canvas = viewport->get_debug_canvas();
 
-            if (debug_canvas != nullptr) {
-                canvas = debug_canvas;
-            }
+        if (debug_canvas != nullptr) {
+            canvas = debug_canvas;
         }
     }
 

@@ -25,6 +25,9 @@ struct FSceneViewFamily;
 
 namespace sdk {
 struct FSceneViewStateInterface;
+class FViewport;
+class FCanvas;
+class UGameViewportClient;
 }
 
 // Injector-specific structure for VRRenderTargetManager that they will all secondarily inherit from
@@ -340,7 +343,7 @@ private:
     static void viewport_draw_hook(void* viewport, bool should_present);
 
     // UGameViewportClient
-    static void game_viewport_client_draw_hook(void* gameviewportclient, void* viewport, void* canvas, void* a4);
+    static void game_viewport_client_draw_hook(sdk::UGameViewportClient*, sdk::FViewport*, sdk::FCanvas*, void*);
 
     // FSceneViewport
     static void update_viewport_rhi_hook(void* viewport, size_t destroyed, size_t new_size_x, size_t new_size_y, size_t new_window_mode, size_t preferred_pixel_format);
