@@ -1733,7 +1733,7 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(sdk::UGameViewport
     // This allows the UI to be displayed correctly in VR.
     // TODO: Probably fix the scissor and/or view rects.
     // Also TODO: Figure out how games that bypass this render directly to the scene RT anyways.
-    if (g_framework->is_game_data_intialized() && VR::get()->is_ahud_compatibility_enabled()) {
+    if (g_framework->is_game_data_intialized() && VR::get()->is_ahud_compatibility_enabled() && viewport != nullptr) {
         const auto debug_canvas = viewport->get_debug_canvas();
 
         if (debug_canvas != nullptr) {
