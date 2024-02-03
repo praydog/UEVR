@@ -10,7 +10,7 @@ jobs:
         target: [uevr]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
           token: ${{ secrets.UESDK_PULLER }}
           submodules: recursive
@@ -22,7 +22,7 @@ jobs:
         run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ${{matrix.target}}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4.3.0
+        uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8
         with:
           name: ${{matrix.target}}
           path: ${{github.workspace}}/build/bin/${{matrix.target}}/*
@@ -41,7 +41,7 @@ jobs:
         
       - name: Create Release
         if: github.ref == 'refs/heads/master'
-        uses: ncipollo/release-action@v1.13.0
+        uses: ncipollo/release-action@6c75be85e571768fa31b40abf38de58ba0397db5
         with:
             repo: UEVR-nightly
             owner: praydog
