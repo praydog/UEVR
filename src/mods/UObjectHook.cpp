@@ -2170,12 +2170,14 @@ void UObjectHook::draw_main() {
 
 void UObjectHook::ui_handle_object(sdk::UObject* object) {
     if (object == nullptr) {
+        ImGui::Text("nullptr");
         return;
     }
 
     const auto uclass = object->get_class();
 
     if (uclass == nullptr) {
+        ImGui::Text("null class");
         return;
     }
 
