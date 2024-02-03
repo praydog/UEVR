@@ -2839,7 +2839,40 @@ void UObjectHook::ui_handle_functions(void* object, sdk::UStruct* uclass) {
     });
 
     for (auto func : sorted_functions) {
-        if (is_real_object && ImGui::TreeNode(utility::narrow(func->get_fname().to_string()).data())) {
+        const auto made = ImGui::TreeNode(utility::narrow(func->get_fname().to_string()).data());
+
+        if (ImGui::BeginPopupContextItem()) {
+            if (ImGui::Button("Copy Name")) {
+                if (OpenClipboard(NULL)) {
+                    EmptyClipboard();
+                    HGLOBAL hcd = GlobalAlloc(GMEM_DDESHARE, func->get_fname().to_string().size() + 1);
+                    char* data = (char*)GlobalLock(hcd);
+                    strcpy(data, utility::narrow(func->get_fname().to_string()).c_str());
+                    GlobalUnlock(hcd);
+                    SetClipboardData(CF_TEXT, hcd);
+                    CloseClipboard();
+                }
+            }
+
+            if (ImGui::Button("Copy Address")) {
+                const auto addr = (uintptr_t)func;
+                const auto hex = (std::stringstream{} << std::hex << addr).str();
+
+                if (OpenClipboard(NULL)) {
+                    EmptyClipboard();
+                    HGLOBAL hcd = GlobalAlloc(GMEM_DDESHARE, hex.size() + 1);
+                    char* data = (char*)GlobalLock(hcd);
+                    strcpy(data, hex.c_str());
+                    GlobalUnlock(hcd);
+                    SetClipboardData(CF_TEXT, hcd);
+                    CloseClipboard();
+                }
+            }
+
+            ImGui::EndPopup();
+        }
+
+        if (is_real_object && made) {
             auto parameters = func->get_child_properties();
 
             if (parameters == nullptr || (parameters->get_next() == nullptr && parameters->get_field_name().to_string() == L"ReturnValue")) {
