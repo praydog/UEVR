@@ -56,12 +56,12 @@ add_subdirectory(dependencies/submodules/UESDK)
 
 include(FetchContent)
 
-message(STATUS "Fetching bddisasm (v1.34.10)...")
+message(STATUS "Fetching bddisasm (70db095765ab2066dd88dfb7bbcc42259ed167c5)...")
 FetchContent_Declare(bddisasm
 	GIT_REPOSITORY
 		"https://github.com/bitdefender/bddisasm"
 	GIT_TAG
-		v1.34.10
+		70db095765ab2066dd88dfb7bbcc42259ed167c5
 )
 FetchContent_MakeAvailable(bddisasm)
 

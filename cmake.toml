@@ -45,7 +45,7 @@ include-directories = ["dependencies/submodules/glm"]
 
 [fetch-content.bddisasm]
 git = "https://github.com/bitdefender/bddisasm"
-tag = "v1.34.10"
+tag = "70db095765ab2066dd88dfb7bbcc42259ed167c5"
 
 [fetch-content.kananlib]
 git = "https://github.com/cursey/kananlib"
