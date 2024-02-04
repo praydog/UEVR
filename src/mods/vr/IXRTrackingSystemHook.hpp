@@ -71,6 +71,9 @@ private:
     static void* get_base_orientation(sdk::IXRTrackingSystem*, void* q);
     static void* get_base_position(sdk::IXRTrackingSystem*, void* pos);
     static void* get_base_rotation(sdk::IXRTrackingSystem*, void* rot);
+    static void* reset_orientation_and_position(sdk::IXRTrackingSystem*, float);
+    static void* reset_orientation(sdk::IXRTrackingSystem*, float);
+    static void* reset_position(sdk::IXRTrackingSystem*);
 
     // IHeadMountedDisplay
     static bool is_hmd_connected(sdk::IHeadMountedDisplay*);

@@ -535,6 +535,24 @@ void IXRTrackingSystemHook::initialize() {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_base_rotation_index not implemented");
         }
 
+        if (trackvt.ResetOrientation_index().has_value()) {
+            m_xrtracking_vtable[trackvt.ResetOrientation_index().value()] = (uintptr_t)&reset_orientation;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: reset_orientation_index not implemented");
+        }
+
+        if (trackvt.ResetPosition_index().has_value()) {
+            m_xrtracking_vtable[trackvt.ResetPosition_index().value()] = (uintptr_t)&reset_position;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: reset_position_index not implemented");
+        }
+
+        if (trackvt.ResetOrientationAndPosition_index().has_value()) {
+            m_xrtracking_vtable[trackvt.ResetOrientationAndPosition_index().value()] = (uintptr_t)&reset_orientation_and_position;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: reset_orientation_and_position_index not implemented");
+        }
+
         if (m_is_4_26) {
             if (trackvt.GetStereoRenderingDevice_index().has_value()) {
                 m_xrtracking_vtable[trackvt.GetStereoRenderingDevice_index().value()] = (uintptr_t)&get_stereo_rendering_device;
@@ -571,6 +589,24 @@ void IXRTrackingSystemHook::initialize() {
                 m_hmd_vtable[hmdvt.GetIdealDebugCanvasRenderTargetSize_index().value() + 1] = (uintptr_t)&get_ideal_debug_canvas_render_target_size;
             } else {
                 SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_ideal_debug_canvas_render_target_size_index not implemented");
+            }
+
+            if (hmdvt.ResetOrientation_index().has_value()) {
+                m_hmd_vtable[hmdvt.ResetPosition_index().value()] = (uintptr_t)&reset_orientation;
+            } else {
+                SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: reset_orientation_index not implemented");
+            }
+
+            if (hmdvt.ResetPosition_index().has_value()) {
+                m_hmd_vtable[hmdvt.ResetPosition_index().value()] = (uintptr_t)&reset_position;
+            } else {
+                SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: reset_position_index not implemented");
+            }
+
+            if (hmdvt.ResetOrientationAndPosition_index().has_value()) {
+                m_hmd_vtable[hmdvt.ResetOrientationAndPosition_index().value()] = (uintptr_t)&reset_orientation_and_position;
+            } else {
+                SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: reset_orientation_and_position_index not implemented");
             }
 
             m_hmd_device.vtable = m_hmd_vtable.data();
@@ -1336,6 +1372,34 @@ void* IXRTrackingSystemHook::get_base_rotation(sdk::IXRTrackingSystem*, void* a2
     }
 
     return a2;
+}
+
+void* IXRTrackingSystemHook::reset_orientation_and_position(sdk::IXRTrackingSystem*, float yaw) {
+    SPDLOG_INFO_ONCE("reset_orientation_and_position {:x}", (uintptr_t)_ReturnAddress());
+
+    auto& vr = VR::get();
+    vr->set_standing_origin(vr->get_position(vr->get_hmd_index()));
+    vr->recenter_view();
+
+    return nullptr;
+}
+
+void* IXRTrackingSystemHook::reset_orientation(sdk::IXRTrackingSystem*, float yaw) {
+    SPDLOG_INFO_ONCE("reset_orientation {:x}", (uintptr_t)_ReturnAddress());
+
+    auto& vr = VR::get();
+    vr->recenter_view();
+
+    return nullptr;
+}
+
+void* IXRTrackingSystemHook::reset_position(sdk::IXRTrackingSystem*) {
+    SPDLOG_INFO_ONCE("reset_position {:x}", (uintptr_t)_ReturnAddress());
+
+    auto& vr = VR::get();
+    vr->set_standing_origin(vr->get_position(vr->get_hmd_index()));
+
+    return nullptr;
 }
 
 bool IXRTrackingSystemHook::is_hmd_connected(sdk::IHeadMountedDisplay*) {
