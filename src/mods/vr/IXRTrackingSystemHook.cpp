@@ -25,6 +25,8 @@
 #include <sdk/vtables/IXRTrackingSystemVTables.hpp>
 #include <sdk/structures/FXRMotionControllerData.hpp>
 #include <sdk/structures/FXRHMDData.hpp>
+#include <sdk/UHeadMountedDisplayFunctionLibrary.hpp>
+#include <sdk/UFunction.hpp>
 
 #include "IXRTrackingSystemHook.hpp"
 
@@ -932,6 +934,20 @@ bool IXRTrackingSystemHook::analyze_head_tracking_allowed(uintptr_t return_addre
     return true;
 }
 
+void* IXRTrackingSystemHook::get_orientation_and_position_native(void* rcx, void* rdx, void* r8, void* r9) {
+    SPDLOG_INFO_ONCE("GetOrientationAndPosition native function {:x}", (uintptr_t)_ReturnAddress());
+
+    auto og = g_hook->m_native_get_oap_hook->get_original<decltype(&get_orientation_and_position_native)>();
+
+    g_hook->m_within_get_oap_native = true;
+
+    const auto result = og(rcx, rdx, r8, r9);
+
+    g_hook->m_within_get_oap_native = false;
+
+    return result;
+}
+
 bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
     SPDLOG_INFO_ONCE("is_head_tracking_allowed {:x}", (uintptr_t)_ReturnAddress());
 
@@ -945,7 +961,59 @@ bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
         return true;
     }
 
+    static bool is_allowed_return_true = false;
+    static bool attempted_check = false;
+
     if (!vr->is_any_aim_method_active()) {
+        if (!is_allowed_return_true && !attempted_check) try {
+            attempted_check = true;
+            const auto uobjectarray = sdk::FUObjectArray::get();
+
+            if (uobjectarray == nullptr) {
+                SPDLOG_ERROR("Failed to find FUObjectArray");
+                return false;
+            }
+
+            const auto hmd_lib = sdk::UHeadMountedDisplayFunctionLibrary::static_class();
+
+            if (hmd_lib == nullptr) {
+                SPDLOG_ERROR("Failed to find UHeadMountedDisplayFunctionLibrary");
+                return false;
+            }
+
+            auto get_orientation_and_position_fn = hmd_lib->find_function(L"GetOrientationAndPosition");
+
+            if (get_orientation_and_position_fn == nullptr) {
+                SPDLOG_ERROR("Failed to find GetOrientationAndPosition");
+                return false;
+            }
+
+            if (sdk::UFunction::get_native_function_offset() == 0) {
+                SPDLOG_ERROR("UFunction::get_native_function_offset is 0");
+                return false;
+            }
+
+            auto& native_fn = get_orientation_and_position_fn->get_native_function();
+
+            if (native_fn == nullptr || IsBadReadPtr(native_fn, sizeof(void*))) {
+                SPDLOG_ERROR("Failed to find native function for GetOrientationAndPosition");
+                return false;
+            }
+
+            g_hook->m_native_get_oap_hook = std::make_unique<PointerHook>((void**)&native_fn, get_orientation_and_position_native);
+            is_allowed_return_true = true;
+
+            SPDLOG_INFO("Hooked GetOrientationAndPosition native function");
+        } catch(...) {
+
+        }
+
+        // Only allow this to return true if BP functions are the ones calling it
+        // Like GetOrientationAndPosition
+        if (is_allowed_return_true) {
+            return g_hook->m_within_get_oap_native;
+        }
+
         return false;
     }
 
