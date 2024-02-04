@@ -964,7 +964,7 @@ bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
     static bool is_allowed_return_true = false;
     static bool attempted_check = false;
 
-    if (!vr->is_any_aim_method_active()) {
+    if (vr->wants_blueprint_load()) {
         if (!is_allowed_return_true && !attempted_check) try {
             attempted_check = true;
             const auto uobjectarray = sdk::FUObjectArray::get();
@@ -1005,9 +1005,11 @@ bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
 
             SPDLOG_INFO("Hooked GetOrientationAndPosition native function");
         } catch(...) {
-
+            SPDLOG_ERROR("Failed to hook GetOrientationAndPosition native function due to exception");
         }
+    }
 
+    if (!vr->is_any_aim_method_active()) {
         // Only allow this to return true if BP functions are the ones calling it
         // Like GetOrientationAndPosition
         if (is_allowed_return_true) {
@@ -1025,8 +1027,9 @@ bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
             g_hook->analyze_head_tracking_allowed(return_address);
         }
     }
+    
 
-    return !g_hook->m_process_view_rotation_hook;
+    return !g_hook->m_process_view_rotation_hook || (is_allowed_return_true && g_hook->m_within_get_oap_native);
 }
 
 bool IXRTrackingSystemHook::is_head_tracking_allowed_for_world(sdk::IXRTrackingSystem*, void*) {
