@@ -9,7 +9,7 @@ jobs:
       matrix:
         target: [uevr]
     steps:
-      - name: Checkout
+      - name: Checkout backend
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
           token: ${{ secrets.UESDK_PULLER }}
@@ -18,8 +18,22 @@ jobs:
       - name: Configure CMake
         run: cmake -S ${{github.workspace}} -B ${{github.workspace}}/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
-      - name: Build
+      - name: Build backend
         run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ${{matrix.target}}
+
+      - name: Checkout frontend
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          repository: praydog/uevr-frontend
+          path: frontend
+
+      - name: Set up dotnet
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: 6.0.x
+
+      - name: Build frontend
+        run: dotnet publish '${{github.workspace}}/frontend' --output '${{github.workspace}}/build/bin/${{matrix.target}}' --configuration Release
 
       - name: Upload artifacts
         uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8
@@ -30,24 +44,24 @@ jobs:
 
       - name: Compress artifacts
         run: |
-            echo ${{github.sha}} > ${{github.workspace}}/revision.txt
-            7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/build/bin/${{matrix.target}}/*
-            7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/revision.txt
+          echo ${{github.sha}} > ${{github.workspace}}/revision.txt
+          7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/build/bin/${{matrix.target}}/*
+          7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/revision.txt
 
       - name: Hash zip
         run: |
-            $ReleaseHash = Get-FileHash -Algorithm SHA256 ${{github.workspace}}/${{matrix.target}}.zip
-            $ReleaseHash.Hash | Out-File -FilePath ${{github.workspace}}/${{matrix.target}}.zip.sha256
-        
+          $ReleaseHash = Get-FileHash -Algorithm SHA256 ${{github.workspace}}/${{matrix.target}}.zip
+          $ReleaseHash.Hash | Out-File -FilePath ${{github.workspace}}/${{matrix.target}}.zip.sha256
+
       - name: Create Release
         if: github.ref == 'refs/heads/master'
         uses: ncipollo/release-action@6c75be85e571768fa31b40abf38de58ba0397db5
         with:
-            repo: UEVR-nightly
-            owner: praydog
-            token: ${{ secrets.CI_NIGHTLY }}
-            name: ${{format('UEVR Nightly {0} ({1})', github.run_number, github.sha)}}
-            tag: ${{format('nightly-{0}-{1}', github.run_number, github.sha)}}
-            artifacts: "${{github.workspace}}/${{matrix.target}}.zip,${{github.workspace}}/${{matrix.target}}.zip.sha256"
-            makeLatest: true
-            bodyFile: ${{github.workspace}}/nightly-body.md
+          repo: UEVR-nightly
+          owner: praydog
+          token: ${{ secrets.CI_NIGHTLY }}
+          name: ${{format('UEVR Nightly {0} ({1})', github.run_number, github.sha)}}
+          tag: ${{format('nightly-{0}-{1}', github.run_number, github.sha)}}
+          artifacts: "${{github.workspace}}/${{matrix.target}}.zip,${{github.workspace}}/${{matrix.target}}.zip.sha256"
+          makeLatest: true
+          bodyFile: ${{github.workspace}}/nightly-body.md
