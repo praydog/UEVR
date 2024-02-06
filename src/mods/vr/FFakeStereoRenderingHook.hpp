@@ -48,7 +48,7 @@ public:
     bool need_reallocate_depth_texture(const void* DepthTarget);
 
 public:
-    FRHITexture2D* get_ui_target() { return ui_target; }
+    FRHITexture2D*& get_ui_target() { return ui_target; }
     FRHITexture2D* get_render_target() { return render_target; }
     void set_render_target(FRHITexture2D* rt) { render_target = rt; }
 
@@ -341,6 +341,7 @@ private:
 
     // FViewport
     static void viewport_draw_hook(void* viewport, bool should_present);
+    static FRHITexture2D** viewport_get_render_target_texture_hook(sdk::FViewport* viewport);
 
     // UGameViewportClient
     static void game_viewport_client_draw_hook(sdk::UGameViewportClient*, sdk::FViewport*, sdk::FCanvas*, void*);
@@ -388,6 +389,7 @@ private:
     std::unique_ptr<PointerHook> m_get_desired_number_of_views_hook{};
     std::unique_ptr<PointerHook> m_get_view_pass_for_index_hook{};
     std::unique_ptr<PointerHook> m_update_viewport_rhi_hook{};
+    std::unique_ptr<PointerHook> m_viewport_get_render_target_texture_hook{};
 
     std::unique_ptr<IXRTrackingSystemHook> m_tracking_system_hook{};
 
@@ -428,7 +430,9 @@ private:
     bool m_has_view_extension_hook{false};
     bool m_has_game_viewport_client_draw_hook{false};
     bool m_skip_next_adjust_view_rect{true};
+    bool m_inside_slate_draw_window{false};
     int32_t m_skip_next_adjust_view_rect_count{1};
+    uint32_t m_slate_draw_window_thread_id{0};
 
     // Synchronized AFR
     float m_ignored_engine_delta{0.0f};
