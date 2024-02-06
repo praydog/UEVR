@@ -21,6 +21,9 @@ jobs:
       - name: Build backend
         run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ${{matrix.target}}
 
+      - name: Build plugin nullifier
+        run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target vr-plugin-nullifier
+
       - name: Checkout frontend
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
@@ -39,13 +42,16 @@ jobs:
         uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8
         with:
           name: ${{matrix.target}}
-          path: ${{github.workspace}}/build/bin/${{matrix.target}}/*
+          path: |
+            ${{github.workspace}}/build/bin/${{matrix.target}}/*
+            ${{github.workspace}}/build/bin/vr-plugin-nullifier/UEVRPluginNullifier.dll
           if-no-files-found: error
 
       - name: Compress artifacts
         run: |
           echo ${{github.sha}} > ${{github.workspace}}/revision.txt
           7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/build/bin/${{matrix.target}}/*
+          7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/build/bin/vr-plugin-nullifier/UEVRPluginNullifier.dll
           7z a ${{github.workspace}}/${{matrix.target}}.zip ${{github.workspace}}/revision.txt
 
       - name: Hash zip
