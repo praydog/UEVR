@@ -325,7 +325,7 @@ std::optional<std::string> VR::initialize_openxr() {
         // Append the current executable name to the application base name
         {
             const auto exe = utility::get_executable();
-            const auto full_path = utility::get_module_path(exe);
+            const auto full_path = utility::get_module_pathw(exe);
 
             if (full_path) {
                 const auto fs_path = std::filesystem::path(*full_path);
