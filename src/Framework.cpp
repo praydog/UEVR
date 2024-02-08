@@ -940,11 +940,11 @@ void Framework::on_direct_input_keys(const std::array<uint8_t, 256>& keys) {
 
 std::filesystem::path Framework::get_persistent_dir() {
     auto return_appdata_dir = []() -> std::filesystem::path {
-        char app_data_path[MAX_PATH]{};
-        SHGetSpecialFolderPathA(0, app_data_path, CSIDL_APPDATA, false);
+        wchar_t app_data_path[MAX_PATH]{};
+        SHGetSpecialFolderPathW(0, app_data_path, CSIDL_APPDATA, false);
 
         const auto exe_name = [&]() {
-            const auto result = std::filesystem::path(*utility::get_module_path(utility::get_executable())).stem().string();
+            const auto result = std::filesystem::path(*utility::get_module_pathw(utility::get_executable())).stem().string();
             const auto dir = std::filesystem::path(app_data_path) / "UnrealVRMod" / result;
             std::filesystem::create_directories(dir);
 
