@@ -430,6 +430,7 @@ private:
 
         std::vector<std::shared_ptr<PropertyState>> properties{};
         bool hide{false};
+        bool hide_legacy{false};
     };
 
     glm::vec3 m_last_camera_location{};
