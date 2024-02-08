@@ -25,6 +25,8 @@
 #include <sdk/vtables/IXRTrackingSystemVTables.hpp>
 #include <sdk/structures/FXRMotionControllerData.hpp>
 #include <sdk/structures/FXRHMDData.hpp>
+#include <sdk/UHeadMountedDisplayFunctionLibrary.hpp>
+#include <sdk/UFunction.hpp>
 
 #include "IXRTrackingSystemHook.hpp"
 
@@ -535,6 +537,24 @@ void IXRTrackingSystemHook::initialize() {
             SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_base_rotation_index not implemented");
         }
 
+        if (trackvt.ResetOrientation_index().has_value()) {
+            m_xrtracking_vtable[trackvt.ResetOrientation_index().value()] = (uintptr_t)&reset_orientation;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: reset_orientation_index not implemented");
+        }
+
+        if (trackvt.ResetPosition_index().has_value()) {
+            m_xrtracking_vtable[trackvt.ResetPosition_index().value()] = (uintptr_t)&reset_position;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: reset_position_index not implemented");
+        }
+
+        if (trackvt.ResetOrientationAndPosition_index().has_value()) {
+            m_xrtracking_vtable[trackvt.ResetOrientationAndPosition_index().value()] = (uintptr_t)&reset_orientation_and_position;
+        } else {
+            SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: reset_orientation_and_position_index not implemented");
+        }
+
         if (m_is_4_26) {
             if (trackvt.GetStereoRenderingDevice_index().has_value()) {
                 m_xrtracking_vtable[trackvt.GetStereoRenderingDevice_index().value()] = (uintptr_t)&get_stereo_rendering_device;
@@ -571,6 +591,24 @@ void IXRTrackingSystemHook::initialize() {
                 m_hmd_vtable[hmdvt.GetIdealDebugCanvasRenderTargetSize_index().value() + 1] = (uintptr_t)&get_ideal_debug_canvas_render_target_size;
             } else {
                 SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: get_ideal_debug_canvas_render_target_size_index not implemented");
+            }
+
+            if (hmdvt.ResetOrientation_index().has_value()) {
+                m_hmd_vtable[hmdvt.ResetPosition_index().value()] = (uintptr_t)&reset_orientation;
+            } else {
+                SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: reset_orientation_index not implemented");
+            }
+
+            if (hmdvt.ResetPosition_index().has_value()) {
+                m_hmd_vtable[hmdvt.ResetPosition_index().value()] = (uintptr_t)&reset_position;
+            } else {
+                SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: reset_position_index not implemented");
+            }
+
+            if (hmdvt.ResetOrientationAndPosition_index().has_value()) {
+                m_hmd_vtable[hmdvt.ResetOrientationAndPosition_index().value()] = (uintptr_t)&reset_orientation_and_position;
+            } else {
+                SPDLOG_ERROR("IXRTrackingSystemHook::IXRTrackingSystemHook: reset_orientation_and_position_index not implemented");
             }
 
             m_hmd_device.vtable = m_hmd_vtable.data();
@@ -896,6 +934,34 @@ bool IXRTrackingSystemHook::analyze_head_tracking_allowed(uintptr_t return_addre
     return true;
 }
 
+void* IXRTrackingSystemHook::get_orientation_and_position_native(void* rcx, void* rdx, void* r8, void* r9) {
+    SPDLOG_INFO_ONCE("GetOrientationAndPosition native function {:x}", (uintptr_t)_ReturnAddress());
+
+    const auto og = g_hook->m_native_get_oap_hook->get_original<decltype(&get_orientation_and_position_native)>();
+
+    g_hook->m_within_get_oap_native = true;
+
+    const auto result = og(rcx, rdx, r8, r9);
+
+    g_hook->m_within_get_oap_native = false;
+
+    return result;
+}
+
+void* IXRTrackingSystemHook::is_head_mounted_display_enabled_native(void* rcx, void* rdx, void* r8, void* r9) {
+    SPDLOG_INFO_ONCE("IsHeadMountedDisplayEnabled native function {:x}", (uintptr_t)_ReturnAddress());
+
+    const auto og = g_hook->m_native_is_hmd_enabled_hook->get_original<decltype(&is_head_mounted_display_enabled_native)>();
+
+    g_hook->m_within_is_hmd_enabled_native = true;
+
+    const auto result = og(rcx, rdx, r8, r9);
+
+    g_hook->m_within_is_hmd_enabled_native = false;
+
+    return result;
+}
+
 bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
     SPDLOG_INFO_ONCE("is_head_tracking_allowed {:x}", (uintptr_t)_ReturnAddress());
 
@@ -909,8 +975,68 @@ bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
         return true;
     }
 
+    static bool attempted_check = false;
+
+    if (vr->wants_blueprint_load() && !attempted_check) try {
+        attempted_check = true;
+        const auto uobjectarray = sdk::FUObjectArray::get();
+
+        if (uobjectarray == nullptr) {
+            SPDLOG_ERROR("Failed to find FUObjectArray");
+            return false;
+        }
+
+        const auto hmd_lib = sdk::UHeadMountedDisplayFunctionLibrary::static_class();
+
+        if (hmd_lib == nullptr) {
+            SPDLOG_ERROR("Failed to find UHeadMountedDisplayFunctionLibrary");
+            return false;
+        }
+
+        if (sdk::UFunction::get_native_function_offset() == 0) {
+            SPDLOG_ERROR("UFunction::get_native_function_offset is 0");
+            return false;
+        }
+
+        // GetOrientationAndPosition hook
+        auto get_orientation_and_position_fn = hmd_lib->find_function(L"GetOrientationAndPosition");
+
+        if (get_orientation_and_position_fn != nullptr) {
+            auto& native_fn_get_oap = get_orientation_and_position_fn->get_native_function();
+
+            if (native_fn_get_oap != nullptr && !IsBadReadPtr(native_fn_get_oap, sizeof(void*))) {
+                g_hook->m_native_get_oap_hook = std::make_unique<PointerHook>((void**)&native_fn_get_oap, get_orientation_and_position_native);
+                SPDLOG_INFO("Hooked GetOrientationAndPosition native function");
+            } else {
+                SPDLOG_ERROR("Failed to hook GetOrientationAndPosition native function");
+            }
+        } else {
+            SPDLOG_ERROR("Failed to find GetOrientationAndPosition native function");
+        }
+
+        // IsHeadMountedDisplayEnabled hook
+        auto is_head_mounted_display_enabled_fn = hmd_lib->find_function(L"IsHeadMountedDisplayEnabled");
+
+        if (is_head_mounted_display_enabled_fn != nullptr) {
+            auto& native_fn_is_hmd_enabled = is_head_mounted_display_enabled_fn->get_native_function();
+
+            if (native_fn_is_hmd_enabled != nullptr && !IsBadReadPtr(native_fn_is_hmd_enabled, sizeof(void*))) {
+                g_hook->m_native_is_hmd_enabled_hook = std::make_unique<PointerHook>((void**)&native_fn_is_hmd_enabled, is_head_mounted_display_enabled_native);
+                SPDLOG_INFO("Hooked IsHeadMountedDisplayEnabled native function");
+            } else {
+                SPDLOG_ERROR("Failed to hook IsHeadMountedDisplayEnabled native function");
+            }
+        } else {
+            SPDLOG_ERROR("Failed to find IsHeadMountedDisplayEnabled native function");
+        }
+    } catch(...) {
+        SPDLOG_ERROR("Failed to hook native functions due to exception");
+    }
+
     if (!vr->is_any_aim_method_active()) {
-        return false;
+        // Only allow this to return true if BP functions are the ones calling it
+        // Like GetOrientationAndPosition
+        return g_hook->is_within_valid_head_tracking_allowed_code();
     }
 
     if (!g_hook->m_process_view_rotation_hook && !g_hook->m_attempted_hook_view_rotation) {
@@ -921,8 +1047,9 @@ bool IXRTrackingSystemHook::is_head_tracking_allowed(sdk::IXRTrackingSystem*) {
             g_hook->analyze_head_tracking_allowed(return_address);
         }
     }
+    
 
-    return !g_hook->m_process_view_rotation_hook;
+    return !g_hook->m_process_view_rotation_hook || g_hook->is_within_valid_head_tracking_allowed_code();
 }
 
 bool IXRTrackingSystemHook::is_head_tracking_allowed_for_world(sdk::IXRTrackingSystem*, void*) {
@@ -1336,6 +1463,34 @@ void* IXRTrackingSystemHook::get_base_rotation(sdk::IXRTrackingSystem*, void* a2
     }
 
     return a2;
+}
+
+void* IXRTrackingSystemHook::reset_orientation_and_position(sdk::IXRTrackingSystem*, float yaw) {
+    SPDLOG_INFO_ONCE("reset_orientation_and_position {:x}", (uintptr_t)_ReturnAddress());
+
+    auto& vr = VR::get();
+    vr->set_standing_origin(vr->get_position(vr->get_hmd_index()));
+    vr->recenter_view();
+
+    return nullptr;
+}
+
+void* IXRTrackingSystemHook::reset_orientation(sdk::IXRTrackingSystem*, float yaw) {
+    SPDLOG_INFO_ONCE("reset_orientation {:x}", (uintptr_t)_ReturnAddress());
+
+    auto& vr = VR::get();
+    vr->recenter_view();
+
+    return nullptr;
+}
+
+void* IXRTrackingSystemHook::reset_position(sdk::IXRTrackingSystem*) {
+    SPDLOG_INFO_ONCE("reset_position {:x}", (uintptr_t)_ReturnAddress());
+
+    auto& vr = VR::get();
+    vr->set_standing_origin(vr->get_position(vr->get_hmd_index()));
+
+    return nullptr;
 }
 
 bool IXRTrackingSystemHook::is_hmd_connected(sdk::IHeadMountedDisplay*) {

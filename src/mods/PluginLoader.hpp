@@ -31,6 +31,9 @@ public:
     bool on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) override;
     void on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) override;
     void on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) override;
+
+    void on_post_render_vr_framework_dx11(ID3D11DeviceContext* context, ID3D11Texture2D*, ID3D11RenderTargetView* rtv) override;
+    void on_post_render_vr_framework_dx12(ID3D12GraphicsCommandList* command_list, ID3D12Resource* rt, D3D12_CPU_DESCRIPTOR_HANDLE* rtv) override;
     
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
     void on_post_engine_tick(sdk::UGameEngine* engine, float delta) override;
@@ -53,6 +56,10 @@ public:
     using UEVR_OnXInputGetStateCb = std::function<std::remove_pointer<::UEVR_OnXInputGetStateCb>::type>;
     using UEVR_OnXInputSetStateCb = std::function<std::remove_pointer<::UEVR_OnXInputSetStateCb>::type>;
 
+    /* VR Renderer */
+    using UEVR_OnPostRenderVRFrameworkDX11Cb = std::function<std::remove_pointer<::UEVR_OnPostRenderVRFrameworkDX11Cb>::type>;
+    using UEVR_OnPostRenderVRFrameworkDX12Cb = std::function<std::remove_pointer<::UEVR_OnPostRenderVRFrameworkDX12Cb>::type>;
+
     /* Engine specific callbacks */
     using UEVR_Engine_TickCb = std::function<std::remove_pointer<::UEVR_Engine_TickCb>::type>;
     using UEVR_Slate_DrawWindow_RenderThreadCb = std::function<std::remove_pointer<::UEVR_Slate_DrawWindow_RenderThreadCb>::type>;
@@ -64,6 +71,8 @@ public:
     bool add_on_message(UEVR_OnMessageCb cb);
     bool add_on_xinput_get_state(UEVR_OnXInputGetStateCb cb);
     bool add_on_xinput_set_state(UEVR_OnXInputSetStateCb cb);
+    bool add_on_post_render_vr_framework_dx11(UEVR_OnPostRenderVRFrameworkDX11Cb cb);
+    bool add_on_post_render_vr_framework_dx12(UEVR_OnPostRenderVRFrameworkDX12Cb cb);
 
     bool add_on_pre_engine_tick(UEVR_Engine_TickCb cb);
     bool add_on_post_engine_tick(UEVR_Engine_TickCb cb);
@@ -91,6 +100,8 @@ private:
     std::shared_mutex m_api_cb_mtx;
     std::vector<PluginLoader::UEVR_OnPresentCb> m_on_present_cbs{};
     std::vector<PluginLoader::UEVR_OnDeviceResetCb> m_on_device_reset_cbs{};
+    std::vector<PluginLoader::UEVR_OnPostRenderVRFrameworkDX11Cb> m_on_post_render_vr_framework_dx11_cbs{};
+    std::vector<PluginLoader::UEVR_OnPostRenderVRFrameworkDX12Cb> m_on_post_render_vr_framework_dx12_cbs{};
     std::vector<PluginLoader::UEVR_OnMessageCb> m_on_message_cbs{};
     std::vector<PluginLoader::UEVR_OnXInputGetStateCb> m_on_xinput_get_state_cbs{};
     std::vector<PluginLoader::UEVR_OnXInputSetStateCb> m_on_xinput_set_state_cbs{};
@@ -108,6 +119,12 @@ private:
         // Plugin
         (std::vector<void*>*)&m_on_present_cbs,
         (std::vector<void*>*)&m_on_device_reset_cbs,
+
+        // VR Renderer
+        (std::vector<void*>*)&m_on_post_render_vr_framework_dx11_cbs,
+        (std::vector<void*>*)&m_on_post_render_vr_framework_dx12_cbs,
+
+        // Windows CBs
         (std::vector<void*>*)&m_on_message_cbs,
         (std::vector<void*>*)&m_on_xinput_get_state_cbs,
         (std::vector<void*>*)&m_on_xinput_set_state_cbs,

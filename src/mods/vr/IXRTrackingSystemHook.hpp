@@ -71,6 +71,9 @@ private:
     static void* get_base_orientation(sdk::IXRTrackingSystem*, void* q);
     static void* get_base_position(sdk::IXRTrackingSystem*, void* pos);
     static void* get_base_rotation(sdk::IXRTrackingSystem*, void* rot);
+    static void* reset_orientation_and_position(sdk::IXRTrackingSystem*, float);
+    static void* reset_orientation(sdk::IXRTrackingSystem*, float);
+    static void* reset_position(sdk::IXRTrackingSystem*);
 
     // IHeadMountedDisplay
     static bool is_hmd_connected(sdk::IHeadMountedDisplay*);
@@ -86,6 +89,10 @@ private:
     // And the function that calls it is also a virtual function (APlayerController::UpdateRotation)
     static void* process_view_rotation_analyzer(void*, size_t, size_t, size_t, size_t, size_t);
     static void process_view_rotation(sdk::APlayerCameraManager* pcm, float delta_time, Rotator<float>* rot, Rotator<float>* delta_rot);
+
+    // UHeadMountedDisplayFunctionLibrary
+    static void* get_orientation_and_position_native(void*, void*, void*, void*);
+    static void* is_head_mounted_display_enabled_native(void*, void*, void*, void*);
 
     void pre_update_view_rotation(sdk::UObject* reference_obj, Rotator<float>* rot);
 
@@ -122,6 +129,17 @@ private:
 
     SharedPtr m_xr_camera_shared{};
     SharedPtr m_view_extension_shared{};
+
+    // Hook for the UFunction GetOrientationAndPosition
+    std::unique_ptr<PointerHook> m_native_get_oap_hook{};
+    bool m_within_get_oap_native{false};
+
+    std::unique_ptr<PointerHook> m_native_is_hmd_enabled_hook{};
+    bool m_within_is_hmd_enabled_native{false};
+
+    bool is_within_valid_head_tracking_allowed_code() const {
+        return m_within_get_oap_native || m_within_is_hmd_enabled_native;
+    }
 
     uintptr_t m_addr_of_process_view_rotation_ptr{};
     //std::unique_ptr<PointerHook> m_process_view_rotation_hook{};

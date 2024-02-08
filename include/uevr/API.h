@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 4
+#define UEVR_PLUGIN_VERSION_MINOR 5
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -134,12 +134,21 @@ typedef struct {
     double m[4][4];
 } UEVR_Matrix4x4d;
 
-
+/* Generic DX renderer callbacks */
 typedef void (*UEVR_OnPresentCb)();
 typedef void (*UEVR_OnDeviceResetCb)();
+
+/* VR Specific renderer callbacks */
+typedef void (*UEVR_OnPostRenderVRFrameworkDX11Cb)(void*, void*, void*); /* immediate_context, ID3D11Texture2D* resource, ID3D11RenderTargetView* rtv */
+/* On DX12 the resource state is D3D12_RESOURCE_STATE_RENDER_TARGET */
+typedef void (*UEVR_OnPostRenderVRFrameworkDX12Cb)(void*, void*, void*); /* command_list, ID3D12Resource* resource, D3D12_CPU_DESCRIPTOR_HANDLE* rtv */
+
+/* Windows callbacks*/
 typedef bool (*UEVR_OnMessageCb)(void*, unsigned int, unsigned long long, long long);
 typedef void (*UEVR_OnXInputGetStateCb)(unsigned int*, unsigned int, void*); /* retval, dwUserIndex, pState, read MSDN for details */
 typedef void (*UEVR_OnXInputSetStateCb)(unsigned int*, unsigned int, void*); /* retval, dwUserIndex, pVibration, read MSDN for details */
+
+/* UE Callbacks */
 typedef void (*UEVR_Engine_TickCb)(UEVR_UGameEngineHandle engine, float delta_seconds);
 typedef void (*UEVR_Slate_DrawWindow_RenderThreadCb)(UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info);
 typedef void (*UEVR_ViewportClient_DrawCb)(UEVR_UGameViewportClientHandle viewport_client, UEVR_FViewportHandle viewport, UEVR_FCanvasHandle canvas);
@@ -148,11 +157,20 @@ DECLARE_UEVR_HANDLE(UEVR_StereoRenderingDeviceHandle);
 /* the position and rotation must be converted to double format based on the is_double parameter. */
 typedef void (*UEVR_Stereo_CalculateStereoViewOffsetCb)(UEVR_StereoRenderingDeviceHandle, int view_index, float world_to_meters, UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double);
 
+/* Generic DX Renderer */
 typedef bool (*UEVR_OnPresentFn)(UEVR_OnPresentCb);
 typedef bool (*UEVR_OnDeviceResetFn)(UEVR_OnDeviceResetCb);
+
+/* VR Renderer */
+typedef bool (*UEVR_OnPostRenderVRFrameworkDX11Fn)(UEVR_OnPostRenderVRFrameworkDX11Cb);
+typedef bool (*UEVR_OnPostRenderVRFrameworkDX12Fn)(UEVR_OnPostRenderVRFrameworkDX12Cb);
+
+/* Windows */
 typedef bool (*UEVR_OnMessageFn)(UEVR_OnMessageCb);
 typedef bool (*UEVR_OnXInputGetStateFn)(UEVR_OnXInputGetStateCb);
 typedef bool (*UEVR_OnXInputSetStateFn)(UEVR_OnXInputSetStateCb);
+
+/* Engine */
 typedef bool (*UEVR_Engine_TickFn)(UEVR_Engine_TickCb);
 typedef bool (*UEVR_Slate_DrawWindow_RenderThreadFn)(UEVR_Slate_DrawWindow_RenderThreadCb);
 typedef bool (*UEVR_Stereo_CalculateStereoViewOffsetFn)(UEVR_Stereo_CalculateStereoViewOffsetCb);
@@ -166,6 +184,8 @@ typedef struct {
     UEVR_OnMessageFn on_message;
     UEVR_OnXInputGetStateFn on_xinput_get_state;
     UEVR_OnXInputSetStateFn on_xinput_set_state;
+    UEVR_OnPostRenderVRFrameworkDX11Fn on_post_render_vr_framework_dx11;
+    UEVR_OnPostRenderVRFrameworkDX12Fn on_post_render_vr_framework_dx12;
 } UEVR_PluginCallbacks;
 
 typedef struct {
