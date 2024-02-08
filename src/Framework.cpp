@@ -44,8 +44,10 @@ UEVRSharedMemory::UEVRSharedMemory() {
     m_data = (Data*)MapViewOfFile(m_memory, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Data));
 
     if (m_data != nullptr) {
-        auto p = *utility::get_module_path(utility::get_executable());
-        strcpy_s(m_data->path, p.c_str());
+        const auto p = *utility::get_module_pathw(utility::get_executable());
+        std::memset(m_data->path, 0, sizeof(m_data->path));
+        std::wcsncpy(m_data->path, p.c_str(), p.length());
+        m_data->path[p.length()] = L'\0';
         m_data->pid = GetCurrentProcessId();
         spdlog::info("Mapped memory!");
     } else {
