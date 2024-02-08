@@ -29,6 +29,7 @@
 #include <sdk/FName.hpp>
 #include <sdk/UObjectArray.hpp>
 #include <sdk/FBoolProperty.hpp>
+#include <sdk/FViewport.hpp>
 
 #include <sdk/UGameplayStatics.hpp>
 #include <sdk/APawn.hpp>
@@ -1661,6 +1662,8 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_18() {
 bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
     SPDLOG_INFO("Attempting to hook UGameViewportClient::Draw...");
 
+    // We need to cache the canvas index before we hook the draw function or else this doesn't work.
+    sdk::FViewport::get_debug_canvas_index();
     auto game_viewport_client_draw = sdk::UGameViewportClient::get_draw_function();
 
     if (!game_viewport_client_draw) {
@@ -1721,8 +1724,109 @@ void FFakeStereoRenderingHook::viewport_draw_hook(void* viewport, bool should_pr
     call_orig();
 }
 
-void FFakeStereoRenderingHook::game_viewport_client_draw_hook(void* viewport_client, void* viewport, void* canvas, void* a4) {
+// This function needs some more work for more rigorous filtering
+// However it does its job on the relevant titles
+// This is only used for the UI compatibility mode.
+FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hook(sdk::FViewport* viewport) {
+    const auto retaddr = (uintptr_t)_ReturnAddress();
+    static std::unordered_set<uintptr_t> redirected_retaddrs{};
+    static std::unordered_set<uintptr_t> call_original_retaddrs{};
+    static std::recursive_mutex retaddr_mutex{};
+    static bool has_view_family_tex{false};
+
+    SPDLOG_INFO_ONCE("FViewport::GetRenderTargetTexture called!");
+    const auto og = g_hook->m_viewport_get_render_target_texture_hook->get_original<decltype(&viewport_get_render_target_texture_hook)>();
+    const auto& vr = VR::get();
+
+    if (!vr->is_ahud_compatibility_enabled() || !vr->is_hmd_active() || g_hook->m_slate_draw_window_thread_id == 0) {
+        return og(viewport);
+    }
+
+    {
+        std::scoped_lock _{retaddr_mutex};
+
+        if (call_original_retaddrs.contains(retaddr)) {
+            return og(viewport);
+        }
+
+        // Hacky way to allow the first texture to go through
+        // For the games that are using something other than ViewFamilyTexture as the scene RT.
+        if (!call_original_retaddrs.empty() && !redirected_retaddrs.contains(retaddr) && !has_view_family_tex) {
+            return og(viewport);
+        }
+
+        if (!redirected_retaddrs.contains(retaddr) && !call_original_retaddrs.contains(retaddr)) {
+            SPDLOG_INFO("FViewport::GetRenderTargetTexture called from {:x}", retaddr);
+            
+            // Analyze surrounding code to determine if this is a valid call.
+            auto func_start = utility::find_function_start(retaddr);
+
+            if (!func_start) {
+                func_start = retaddr;
+            }
+
+            // The function that has this string reference should ALWAYS get passed
+            // back to the original function, this is the actual scene render target.
+            // Everything else we will redirect to the UI render target.
+            if (utility::find_string_reference_in_path(*func_start, L"ViewFamilyTexture", false)) {
+                SPDLOG_INFO("Found view family texture reference @ {:x}", retaddr);
+                call_original_retaddrs.insert(retaddr);
+                has_view_family_tex = true;
+                return og(viewport);
+            }
+
+            // Probably NOT...
+            /*if (utility::find_string_reference_in_path(*func_start, L"r.RHICmdAsyncRHIThreadDispatch")) {
+                SPDLOG_INFO("Found RHICmdAsyncRHIThreadDispatch reference @ {:x}", retaddr);
+                call_original_retaddrs.insert(retaddr);
+                return og(viewport);
+            }*/
+
+            if (utility::find_string_reference_in_path(*func_start, L"FinalPostProcessColor", false)) {
+                SPDLOG_INFO("Found FinalPostProcessColor reference @ {:x}", retaddr);
+                call_original_retaddrs.insert(retaddr);
+                return og(viewport);
+            }
+
+            // TODO? this needs some more rigorous filtering
+            // some games are insane and have multiple "UnknownTexture" references...
+            if (utility::find_string_reference_in_path(*func_start, L"UnknownTexture", false)) {
+                SPDLOG_INFO("Found unknown texture reference @ {:x}", retaddr);
+                call_original_retaddrs.insert(retaddr);
+                return og(viewport);
+            }
+
+            SPDLOG_INFO("Redirecting FViewport::GetRenderTargetTexture call to UI render target @ {:x}", retaddr);
+            redirected_retaddrs.insert(retaddr);
+        }
+    }
+
+    // Finally redirect the call to the UI render target.
+    auto& ui_target = g_hook->get_render_target_manager()->get_ui_target();
+
+    if (ui_target != nullptr) {
+        return &ui_target;
+    }
+
+    return og(viewport);
+}
+
+void FFakeStereoRenderingHook::game_viewport_client_draw_hook(sdk::UGameViewportClient* viewport_client, sdk::FViewport* viewport, sdk::FCanvas* canvas, void* a4) {
     ZoneScopedN(__FUNCTION__);
+
+    // UI compatibility mode
+    // Tries to redirect calls to GetRenderTargetTexture to point towards our UI
+    // texture instead of the scene render target, if it's not the scene itself/the view family texture.
+    // This usually isn't needed but sometimes there are bespoke changes to the rendering pipeline
+    // or uses of the AHUD class that make it necessary.
+    if (g_framework->is_game_data_intialized() && VR::get()->is_ahud_compatibility_enabled() && viewport != nullptr) {
+        if (g_hook->m_viewport_get_render_target_texture_hook == nullptr) {
+            SPDLOG_INFO("Hooking FViewport::GetRenderTargetTexture...");
+            void** vp_vtable = *(void***)viewport;
+            g_hook->m_viewport_get_render_target_texture_hook = std::make_unique<PointerHook>(&vp_vtable[1], &viewport_get_render_target_texture_hook);
+            SPDLOG_INFO("Hooked FViewport::GetRenderTargetTexture!");
+        }
+    }
 
     auto call_orig = [=]() {
         ZoneScopedN("UGameViewportClient::Draw");
@@ -2316,13 +2420,6 @@ void SceneViewExtensionAnalyzer::FillVtable<N>::fill2(std::array<uintptr_t, 50>&
 // 4.25something to 4.27
 // TODO: Add support for all versions via PDB dumps
 constexpr auto INIT_OPTIONS_OFFSET = 0x50;
-constexpr auto INIT_OPTIONS_VIEW_ORIGIN_OFFSET = 0;
-constexpr auto INIT_OPTIONS_ROTATION_MATRIX_OFFSET = 0x10;
-constexpr auto INIT_OPTIONS_VIEW_RECT_OFFSET = 0x90;
-constexpr auto INIT_OPTIONS_CONSTRAINED_VIEW_RECT_OFFSET = 0xA0;
-constexpr auto INIT_OPTION_SCENE_STATE_INTERFACE_OFFSET = 0xB8;
-constexpr auto INIT_OPTIONS_PROJECTION_MATRIX_OFFSET = 0x50;
-constexpr auto INIT_OPTIONS_STEREO_PASS_OFFSET = 0x108;
 
 bool FFakeStereoRenderingHook::is_in_viewport_client_draw() const {
     return m_in_viewport_client_draw && GameThreadWorker::get().is_same_thread();
@@ -4806,12 +4903,17 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
         mod->on_pre_slate_draw_window(renderer, command_list, viewport_info);
     }
 
+    g_hook->m_inside_slate_draw_window = true;
+    g_hook->m_slate_draw_window_thread_id = GetCurrentThreadId();
+
     auto call_orig = [&]() {
         auto ret = g_hook->m_slate_thread_hook.call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
 
         for (auto& mod : mods) {
             mod->on_post_slate_draw_window(renderer, command_list, viewport_info);
         }
+
+        g_hook->m_inside_slate_draw_window = false;
 
         return ret;
     };

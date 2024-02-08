@@ -500,6 +500,10 @@ public:
         return m_sceneview_compatibility_mode->value();
     }
 
+    bool is_ahud_compatibility_enabled() const {
+        return m_compatibility_ahud->value();
+    }
+
     bool is_ghosting_fix_enabled() const {
         return m_ghosting_fix->value();
     }
@@ -544,6 +548,10 @@ public:
 
     int get_snapturn_angle() const {
         return m_snapturn_angle->value();
+    }
+
+    float get_controller_pitch_offset() const {
+        return m_controller_pitch_offset->value();
     }
 
     bool should_skip_post_init_properties() const {
@@ -795,6 +803,7 @@ private:
     const ModToggle::Ptr m_swap_controllers{ ModToggle::create(generate_name("SwapControllerInputs"), false) };
 
     // Snap turn settings and globals
+    void gamepad_snapturn(XINPUT_STATE& state);
     void process_snapturn();
     
     const ModToggle::Ptr m_snapturn{ ModToggle::create(generate_name("SnapTurn"), false) };
@@ -803,6 +812,8 @@ private:
     bool m_snapturn_on_frame{false};
     bool m_snapturn_left{false};
     bool m_was_snapturn_run_on_input{false};
+
+    const ModSlider::Ptr m_controller_pitch_offset{ ModSlider::create(generate_name("ControllerPitchOffset"), -90.0f, 90.0f, 0.0f) };
 
     // Aim method and movement orientation are not the same thing, but they can both have the same options
     const ModCombo::Ptr m_aim_method{ ModCombo::create(generate_name("AimMethod"), s_aim_method_names, AimMethod::GAME) };
@@ -851,6 +862,8 @@ private:
 
     const ModToggle::Ptr m_compatibility_skip_pip{ ModToggle::create(generate_name("Compatibility_SkipPostInitProperties"), false, true) };
     const ModToggle::Ptr m_compatibility_skip_uobjectarray_init{ ModToggle::create(generate_name("Compatibility_SkipUObjectArrayInit"), false, true) };
+
+    const ModToggle::Ptr m_compatibility_ahud{ ModToggle::create(generate_name("Compatibility_AHUD"), false, true) };
 
     // Keybinds
     const ModKey::Ptr m_keybind_recenter{ ModKey::create(generate_name("RecenterViewKey")) };
@@ -921,6 +934,7 @@ private:
         *m_snapturn,
         *m_snapturn_joystick_deadzone,
         *m_snapturn_angle,
+        *m_controller_pitch_offset,
         *m_aim_method,
         *m_movement_orientation,
         *m_aim_use_pawn_control_rotation,
@@ -944,6 +958,7 @@ private:
         *m_splitscreen_view_index,
         *m_compatibility_skip_pip,
         *m_compatibility_skip_uobjectarray_init,
+        *m_compatibility_ahud,
         *m_sceneview_compatibility_mode,
         *m_keybind_recenter,
         *m_keybind_set_standing_origin,

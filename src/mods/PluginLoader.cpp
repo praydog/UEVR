@@ -104,6 +104,22 @@ bool on_xinput_set_state(UEVR_OnXInputSetStateCb cb) {
 
     return PluginLoader::get()->add_on_xinput_set_state(cb);
 }
+
+bool on_post_render_vr_framework_dx11(UEVR_OnPostRenderVRFrameworkDX11Cb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_post_render_vr_framework_dx11(cb);
+}
+
+bool on_post_render_vr_framework_dx12(UEVR_OnPostRenderVRFrameworkDX12Cb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_post_render_vr_framework_dx12(cb);
+}
 }
 
 UEVR_PluginCallbacks g_plugin_callbacks {
@@ -111,7 +127,9 @@ UEVR_PluginCallbacks g_plugin_callbacks {
     uevr::on_device_reset,
     uevr::on_message,
     uevr::on_xinput_get_state,
-    uevr::on_xinput_set_state
+    uevr::on_xinput_set_state,
+    uevr::on_post_render_vr_framework_dx11,
+    uevr::on_post_render_vr_framework_dx12
 };
 
 UEVR_PluginFunctions g_plugin_functions {
@@ -198,6 +216,22 @@ UEVR_SDKFunctions g_sdk_functions {
 
         return (UEVR_UObjectHandle)ugs->spawn_object((sdk::UClass*)klass, (sdk::UObject*)outer);
     },
+    // execute_command
+    [](const wchar_t* command) -> void {
+        if (command == nullptr) {
+            return;
+        }
+
+        sdk::UEngine::get()->exec(command);
+    },
+    // execute_command_ex
+    [](UEVR_UObjectHandle world, const wchar_t* command, void* output_device) -> void {
+        if (command == nullptr) {
+            return;
+        }
+
+        sdk::UEngine::get()->exec((sdk::UWorld*)world, command, output_device);
+    }
 };
 
 namespace uevr {
@@ -1046,6 +1080,32 @@ void PluginLoader::on_device_reset() {
     }
 }
 
+void PluginLoader::on_post_render_vr_framework_dx11(ID3D11DeviceContext* context, ID3D11Texture2D* tex, ID3D11RenderTargetView* rtv) {
+    std::shared_lock _{m_api_cb_mtx};
+
+    for (auto&& cb : m_on_post_render_vr_framework_dx11_cbs) {
+        try {
+            cb((void*)context, (void*)tex, (void*)rtv);
+        } catch(...) {
+            spdlog::error("[APIProxy] Exception occurred in on_post_render_vr_framework_dx11 callback; one of the plugins has an error.");
+            continue;
+        }
+    }
+}
+
+void PluginLoader::on_post_render_vr_framework_dx12(ID3D12GraphicsCommandList* command_list, ID3D12Resource* tex, D3D12_CPU_DESCRIPTOR_HANDLE* rtv) {
+    std::shared_lock _{m_api_cb_mtx};
+
+    for (auto&& cb : m_on_post_render_vr_framework_dx12_cbs) {
+        try {
+            cb((void*)command_list, (void*)tex, (void*)rtv);
+        } catch(...) {
+            spdlog::error("[APIProxy] Exception occurred in on_post_render_vr_framework_dx12 callback; one of the plugins has an error.");
+            continue;
+        }
+    }
+}
+
 bool PluginLoader::on_message(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     std::shared_lock _{m_api_cb_mtx};
 
@@ -1224,6 +1284,20 @@ bool PluginLoader::add_on_xinput_set_state(UEVR_OnXInputSetStateCb cb) {
     std::unique_lock _{m_api_cb_mtx};
 
     m_on_xinput_set_state_cbs.push_back(cb);
+    return true;
+}
+
+bool PluginLoader::add_on_post_render_vr_framework_dx11(UEVR_OnPostRenderVRFrameworkDX11Cb cb) {
+    std::unique_lock _{m_api_cb_mtx};
+
+    m_on_post_render_vr_framework_dx11_cbs.push_back(cb);
+    return true;
+}
+
+bool PluginLoader::add_on_post_render_vr_framework_dx12(UEVR_OnPostRenderVRFrameworkDX12Cb cb) {
+    std::unique_lock _{m_api_cb_mtx};
+
+    m_on_post_render_vr_framework_dx12_cbs.push_back(cb);
     return true;
 }
 

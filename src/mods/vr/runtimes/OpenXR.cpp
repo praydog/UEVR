@@ -158,7 +158,7 @@ VRRuntime::Error OpenXR::synchronize_frame(std::optional<uint32_t> frame_count) 
 
         // Initialize all the existing frame states if they aren't already so we don't get some random error when calling xrEndFrame
         for (auto& pipeline_state : this->pipeline_states) {
-            if (pipeline_state.frame_state.predictedDisplayTime == 0) {
+            if (pipeline_state.frame_state.predictedDisplayTime <= 0) {
                 pipeline_state.frame_state = this->frame_state;
             }
         }
@@ -198,6 +198,8 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
         return VRRuntime::Error::SUCCESS;
     }
 
+    const auto& vr = VR::get();
+
     /*if (!this->needs_pose_update) {
         return VRRuntime::Error::SUCCESS;
     }*/
@@ -218,8 +220,29 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
 
     auto& pipeline_state = this->pipeline_states[frame_count % OpenXR::QUEUE_SIZE];
 
-    if (pipeline_state.frame_state.predictedDisplayTime == 0) {
+    if (pipeline_state.frame_state.predictedDisplayTime <= 1000) {
         pipeline_state.frame_state = this->frame_state;
+        pipeline_state.prev_frame_count = frame_count;
+    }
+
+    // Only signal that we got the first valid pose if the display time becomes a sane value
+    if (!this->got_first_valid_poses) {
+        // Seen on VDXR
+        if (pipeline_state.frame_state.predictedDisplayTime <= pipeline_state.frame_state.predictedDisplayPeriod) {
+            spdlog::info("[VR] Frame state predicted display time is less than predicted display period!");
+            return VRRuntime::Error::SUCCESS;
+        }
+
+        // Seen on VDXR. If for some reason the above if statement doesn't work, this will catch it.
+        if (pipeline_state.frame_state.predictedDisplayTime == 11111111) {
+            spdlog::info("[VR] Frame state predicted display time is 11111111!");
+            return VRRuntime::Error::SUCCESS;
+        }
+    }
+    
+    // Not a sane value
+    if (pipeline_state.frame_state.predictedDisplayTime <= 1000) {
+        return VRRuntime::Error::SUCCESS;
     }
 
     // Pre-emptively update the frame state
@@ -236,10 +259,6 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
     }
 
     const auto display_time = pipeline_state.frame_state.predictedDisplayTime + (XrDuration)(pipeline_state.frame_state.predictedDisplayPeriod * this->prediction_scale);
-
-    if (display_time <= 1000) {
-        return VRRuntime::Error::SUCCESS;
-    }
 
     XrViewLocateInfo view_locate_info{XR_TYPE_VIEW_LOCATE_INFO};
     view_locate_info.viewConfigurationType = this->view_config;
@@ -296,7 +315,13 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
             return (VRRuntime::Error)result;
         }
 
-        this->aim_matrices[i] = Matrix4x4f{runtimes::OpenXR::to_glm(hand.aim_location.pose.orientation)};
+        auto orientation_aim = runtimes::OpenXR::to_glm(hand.aim_location.pose.orientation);
+
+        if (const auto pitch = vr->get_controller_pitch_offset(); pitch != 0.0f) {
+            orientation_aim = glm::rotate(orientation_aim, glm::radians(pitch), Vector3f{1.0f, 0.0f, 0.0f});
+        }
+
+        this->aim_matrices[i] = Matrix4x4f{orientation_aim};
         this->aim_matrices[i][3] = Vector4f{*(Vector3f*)&hand.aim_location.pose.position, 1.0f};
 
         hand.grip_location.next = &hand.grip_velocity;
@@ -307,12 +332,23 @@ VRRuntime::Error OpenXR::update_poses(bool from_view_extensions, uint32_t frame_
             return (VRRuntime::Error)result;
         }
 
-        this->grip_matrices[i] = Matrix4x4f{runtimes::OpenXR::to_glm(hand.grip_location.pose.orientation)};
+        auto orientation_grip = runtimes::OpenXR::to_glm(hand.grip_location.pose.orientation);
+
+        if (const auto pitch = vr->get_controller_pitch_offset(); pitch != 0.0f) {
+            orientation_grip = glm::rotate(orientation_grip, glm::radians(pitch), Vector3f{1.0f, 0.0f, 0.0f});
+        }
+
+        this->grip_matrices[i] = Matrix4x4f{orientation_grip};
         this->grip_matrices[i][3] = Vector4f{*(Vector3f*)&hand.grip_location.pose.position, 1.0f};
     }
 
     if (!this->got_first_valid_poses) {
-        this->got_first_valid_poses = (this->view_space_location.locationFlags & (XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) != 0;
+        constexpr auto wanted_flags = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
+        this->got_first_valid_poses = (this->view_space_location.locationFlags & wanted_flags) == wanted_flags;
+
+        if (this->got_first_valid_poses) {
+            spdlog::info("[OpenXR] Got first valid poses at time: {} {} {}", display_time, pipeline_state.frame_state.predictedDisplayTime, pipeline_state.frame_state.predictedDisplayPeriod);
+        }
     }
 
     this->got_first_poses = true;

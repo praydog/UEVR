@@ -121,6 +121,7 @@ public:
         };
 
         bool m_frozen{false};
+        bool m_ever_frozen{false};
     };
 
     class CVarStandard : public CVar {
