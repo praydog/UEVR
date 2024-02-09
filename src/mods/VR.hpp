@@ -180,10 +180,6 @@ public:
             // invisible 'stick' that's attached to the rotating controller). As there's no other frame of reference that makes any sense here,
             // a stick it is. Whether the stick orientation is the offset or raw orientation is another complication
             auto const actual_controller_rotation = get_rotation((hand == VRRuntime::Hand::LEFT) ? get_left_controller_index() : get_right_controller_index(), false);
-            auto const offset_controller_rotation = get_controller_rotation_with_offset(hand);
-            if (get_left_controller_position_offset_x() < 0) {
-                return position - offset_controller_rotation * glm::vec4{-x_offset, -y_offset, z_offset, 0};
-            }
             return position - actual_controller_rotation * glm::vec4{-x_offset, -y_offset, z_offset, 0};            
         }
     }
