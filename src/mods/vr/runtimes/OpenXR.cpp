@@ -473,41 +473,51 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
     std::unique_lock ___{ this->pose_mtx };
     // TODO: other flavours of projection - mirrored asymmetric (like the CV1), horizontal symmetry but not vertical, others?
     const bool override_projection = VR::get()->get_projection_override() == VR::PROJECTION_OVERRIDE::FULLY_SYMMETRIC;
-    const auto left_top = tan(this->views[0].fov.angleUp);
-    const auto left_bottom = tan(this->views[0].fov.angleDown);
-    const auto left_left = tan(this->views[0].fov.angleLeft);
-    const auto left_right = tan(this->views[0].fov.angleRight);
-    const auto right_top = tan(this->views[1].fov.angleUp);
-    const auto right_bottom = tan(this->views[1].fov.angleDown);
-    const auto right_left = tan(this->views[1].fov.angleLeft);
-    const auto right_right = tan(this->views[1].fov.angleRight);
+    auto left_top = tan(this->views[0].fov.angleUp);
+    auto left_bottom = tan(this->views[0].fov.angleDown);
+    auto left_left = tan(this->views[0].fov.angleLeft);
+    auto left_right = tan(this->views[0].fov.angleRight);
+    auto right_top = tan(this->views[1].fov.angleUp);
+    auto right_bottom = tan(this->views[1].fov.angleDown);
+    auto right_left = tan(this->views[1].fov.angleLeft);
+    auto right_right = tan(this->views[1].fov.angleRight);
     // SPDLOG_INFO("projection overried {}", override_projection);
     if (override_projection) {
         const auto tan_half_fov = new float[2];
         tan_half_fov[0] = std::max(std::max(-left_left, left_right),
                                    std::max(-right_left, right_right));
-        tan_half_fov[1] = std::max(std::max(-left_top, left_bottom),
-                                   std::max(-right_top, right_bottom));
+        tan_half_fov[1] = std::max(std::max(left_top, -left_bottom),
+                                   std::max(right_top, -right_bottom));
 
         m_left_view_bounds[0] = 0.5f + 0.5f * left_left / tan_half_fov[0];
         m_left_view_bounds[1] = 0.5f + 0.5f * left_right / tan_half_fov[0];
-        m_left_view_bounds[2] = 0.5f - 0.5f * left_bottom / tan_half_fov[1]; // bottom then top
-        m_left_view_bounds[3] = 0.5f - 0.5f * left_top / tan_half_fov[1];
+        m_left_view_bounds[2] = 0.5f - 0.5f * left_top / tan_half_fov[1];
+        m_left_view_bounds[3] = 0.5f - 0.5f * left_bottom / tan_half_fov[1];
 
         m_right_view_bounds[0] = 0.5f + 0.5f * right_left / tan_half_fov[0];
         m_right_view_bounds[1] = 0.5f + 0.5f * right_right / tan_half_fov[0];
-        m_right_view_bounds[2] = 0.5f - 0.5f * right_bottom / tan_half_fov[1]; // bottom then top
-        m_right_view_bounds[3] = 0.5f - 0.5f * right_top / tan_half_fov[1];
+        m_right_view_bounds[2] = 0.5f - 0.5f * right_top / tan_half_fov[1];
+        m_right_view_bounds[3] = 0.5f - 0.5f * right_bottom / tan_half_fov[1];
+
+        left_left = -tan_half_fov[0];
+        left_right = tan_half_fov[0];
+        right_left = -tan_half_fov[0];
+        right_right = tan_half_fov[0];
+        left_top = tan_half_fov[1];
+        left_bottom = -tan_half_fov[1];
+        right_top = tan_half_fov[1];
+        right_bottom = -tan_half_fov[1];
+
     } else {
         m_left_view_bounds[0] = 0;
-        m_left_view_bounds[0] = 1;
-        m_left_view_bounds[0] = 0;
-        m_left_view_bounds[0] = 1;
+        m_left_view_bounds[1] = 1;
+        m_left_view_bounds[2] = 0;
+        m_left_view_bounds[3] = 1;
 
         m_right_view_bounds[0] = 0;
-        m_right_view_bounds[0] = 1;
-        m_right_view_bounds[0] = 0;
-        m_right_view_bounds[0] = 1;
+        m_right_view_bounds[1] = 1;
+        m_right_view_bounds[2] = 0;
+        m_right_view_bounds[3] = 1;
     }
     for (auto i = 0; i < 2; ++i) {
         const auto& pose = this->views[i].pose;
@@ -521,7 +531,11 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
             const auto bottom = eye == 0 ? left_bottom : right_bottom;
             const auto left = eye == 0 ? left_left : right_left;
             const auto right = eye == 0 ? left_right : right_right;
-
+            //SPDLOG_INFO("Original {}, {}, {}, {}", tan(this->views[eye].fov.angleLeft), tan(this->views[eye].fov.angleRight),
+            //    tan(this->views[eye].fov.angleUp), tan(this->views[eye].fov.angleDown));
+            //SPDLOG_INFO("Modified {}, {}, {}, {}", left, right, top, bottom);
+            // this->raw_projections[eye][2] * -1.0f, this->raw_projections[eye][3] * -1.0f);
+            // SPDLOG_INFO("Modified {}, {}, {}, {}", left, right, top, bottom);
             float sum_rl = (right + left);
             float sum_tb = (top + bottom);
             float inv_rl = (1.0f / (right - left));
@@ -1769,36 +1783,32 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
             projection_layer_views[i].fov = pipelined_stage_views[i].fov;
             projection_layer_views[i].subImage.swapchain = swapchain->handle;
 
-            int offset_x = 0, offset_y = 0, extent_x = 0, extent_y = 0;
+            int32_t offset_x = 0, offset_y = 0, extent_x = 0, extent_y = 0;
             // if we're working with a double-wide texture, use half the view bounds adjustment (as they apply to a single eye)
             float width_factor = is_afr ? 1 : 0.5;
             if (i == 0) {
                 // left eye
                 offset_x = m_left_view_bounds[0] * swapchain->width * width_factor;
-                extent_x = m_left_view_bounds[1] * swapchain->width * width_factor;
+                extent_x = m_left_view_bounds[1] * swapchain->width * width_factor - offset_x;
                 offset_y = m_left_view_bounds[2] * swapchain->height;
-                extent_y = m_left_view_bounds[3] * swapchain->height;
+                extent_y = m_left_view_bounds[3] * swapchain->height - offset_y;
+                //SPDLOG_INFO("Left image, width {} height {}, bounds {}, {}, {}, {}", swapchain->width, swapchain->height,
+                //    m_left_view_bounds[0], m_left_view_bounds[1], m_left_view_bounds[2], m_left_view_bounds[3]);
+
             } else {
-                // right eye
-                offset_x = m_right_view_bounds[0] * swapchain->width * width_factor;
-                extent_x = m_right_view_bounds[1] * swapchain->width * width_factor;
+                // right eye, for double wide move to the right half of the texture:
+                int32_t left_start = is_afr ? 0 : swapchain->width / 2;
+                offset_x = left_start + m_right_view_bounds[0] * swapchain->width * width_factor;
+                extent_x = m_right_view_bounds[1] * swapchain->width * width_factor - m_right_view_bounds[0] * swapchain->width * width_factor;
                 offset_y = m_right_view_bounds[2] * swapchain->height;
-                extent_y = m_right_view_bounds[3] * swapchain->height;
-                if (!is_afr) {
-                    // for double wide move to the right half of the texture:
-                    offset_x += swapchain->width;
-                }
+                extent_y = m_right_view_bounds[3] * swapchain->height - offset_y;
+                //SPDLOG_INFO("Right image, width {} height {}, bounds {}, {}, {}, {}", swapchain->width, swapchain->height,
+                //    m_right_view_bounds[0], m_right_view_bounds[1], m_right_view_bounds[2], m_right_view_bounds[3]);
             }
+
+            //SPDLOG_INFO("image calc {}, {}, {}, {}", offset_x, extent_x, offset_y, extent_y);
             projection_layer_views[i].subImage.imageRect.offset = {offset_x, offset_y};
             projection_layer_views[i].subImage.imageRect.extent = {extent_x, extent_y};
-
-            /* if (is_afr) {
-                projection_layer_views[i].subImage.imageRect.offset = {0, 0};
-                projection_layer_views[i].subImage.imageRect.extent = {swapchain->width, swapchain->height};
-            } else {
-                projection_layer_views[i].subImage.imageRect.offset = {(swapchain->width / 2) * i, 0};
-                projection_layer_views[i].subImage.imageRect.extent = {swapchain->width / 2, swapchain->height};
-            }*/
 
             if (has_depth) {
                 Swapchain* depth_swapchain = nullptr;
@@ -1816,30 +1826,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
                 depth_layers[i].type = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR;
                 depth_layers[i].next = nullptr;
                 depth_layers[i].subImage.swapchain = depth_swapchain->handle;
-                /* 
-                const auto is_afr = VR::get()->is_using_afr();
-                bool doublewide_depth = true;
 
-                if (is_afr) {
-                    doublewide_depth = false;
-                }
-    
-                XrExtent2Di depth_extent = {depth_swapchain->width, depth_swapchain->height};
-
-                if (doublewide_depth) {
-                    depth_extent.width /= 2;
-                }
-
-                depth_extent = {std::min<int>(get_width(), depth_extent.width), std::min<int>(get_height(), depth_extent.height)};
-
-                if (is_afr) {
-                    // Always the left half of the depth texture.
-                    depth_layers[i].subImage.imageRect.offset = {0, 0};
-                    depth_layers[i].subImage.imageRect.extent = depth_extent;
-                } else {
-                    depth_layers[i].subImage.imageRect.offset = {depth_extent.width * i, 0};
-                    depth_layers[i].subImage.imageRect.extent = depth_extent;
-                }*/
                 depth_layers[i].subImage.imageRect.offset = {offset_x, offset_y};
                 depth_layers[i].subImage.imageRect.extent = {std::min<int>(get_width(), extent_x), std::min<int>(get_height(), extent_y)};
                 depth_layers[i].minDepth = 0.0f;
