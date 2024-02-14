@@ -471,7 +471,44 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
 
     std::unique_lock __{ this->eyes_mtx };
     std::unique_lock ___{ this->pose_mtx };
+    // TODO: other flavours of projection - mirrored asymmetric (like the CV1), horizontal symmetry but not vertical, others?
+    const bool override_projection = VR::get()->get_projection_override() == VR::PROJECTION_OVERRIDE::FULLY_SYMMETRIC;
+    const auto left_top = tan(this->views[0].fov.angleUp);
+    const auto left_bottom = tan(this->views[0].fov.angleDown);
+    const auto left_left = tan(this->views[0].fov.angleLeft);
+    const auto left_right = tan(this->views[0].fov.angleRight);
+    const auto right_top = tan(this->views[1].fov.angleUp);
+    const auto right_bottom = tan(this->views[1].fov.angleDown);
+    const auto right_left = tan(this->views[1].fov.angleLeft);
+    const auto right_right = tan(this->views[1].fov.angleRight);
+    // SPDLOG_INFO("projection overried {}", override_projection);
+    if (override_projection) {
+        const auto tan_half_fov = new float[2];
+        tan_half_fov[0] = std::max(std::max(-left_left, left_right),
+                                   std::max(-right_left, right_right));
+        tan_half_fov[1] = std::max(std::max(-left_top, left_bottom),
+                                   std::max(-right_top, right_bottom));
 
+        m_left_view_bounds[0] = 0.5f + 0.5f * left_left / tan_half_fov[0];
+        m_left_view_bounds[1] = 0.5f + 0.5f * left_right / tan_half_fov[0];
+        m_left_view_bounds[2] = 0.5f - 0.5f * left_bottom / tan_half_fov[1]; // bottom then top
+        m_left_view_bounds[3] = 0.5f - 0.5f * left_top / tan_half_fov[1];
+
+        m_right_view_bounds[0] = 0.5f + 0.5f * right_left / tan_half_fov[0];
+        m_right_view_bounds[1] = 0.5f + 0.5f * right_right / tan_half_fov[0];
+        m_right_view_bounds[2] = 0.5f - 0.5f * right_bottom / tan_half_fov[1]; // bottom then top
+        m_right_view_bounds[3] = 0.5f - 0.5f * right_top / tan_half_fov[1];
+    } else {
+        m_left_view_bounds[0] = 0;
+        m_left_view_bounds[0] = 1;
+        m_left_view_bounds[0] = 0;
+        m_left_view_bounds[0] = 1;
+
+        m_right_view_bounds[0] = 0;
+        m_right_view_bounds[0] = 1;
+        m_right_view_bounds[0] = 0;
+        m_right_view_bounds[0] = 1;
+    }
     for (auto i = 0; i < 2; ++i) {
         const auto& pose = this->views[i].pose;
         const auto& fov = this->views[i].fov;
@@ -480,10 +517,10 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         //XrMatrix4x4f_CreateProjection((XrMatrix4x4f*)&this->projections[i], GRAPHICS_D3D, tan(fov.angleLeft), tan(fov.angleRight), tan(fov.angleUp), tan(fov.angleDown), nearz, farz);
 
         auto get_mat = [&](int eye) {
-            const auto top = tan(fov.angleUp);
-            const auto bottom = tan(fov.angleDown);
-            const auto left = tan(fov.angleLeft);
-            const auto right = tan(fov.angleRight);
+            const auto top = eye == 0 ? left_top : right_top;
+            const auto bottom = eye == 0 ? left_bottom : right_bottom;
+            const auto left = eye == 0 ? left_left : right_left;
+            const auto right = eye == 0 ? left_right : right_right;
 
             float sum_rl = (right + left);
             float sum_tb = (top + bottom);
@@ -1714,7 +1751,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
         projection_layer_views.resize(pipelined_stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
         depth_layers.resize(projection_layer_views.size(), {XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR});
 
-        for (auto i = 0; i < projection_layer_views.size(); ++i) {
+        for (auto i = 0; i < projection_layer_views.size(); ++i) {            
             Swapchain* swapchain = nullptr;
 
             if (is_afr) {
@@ -1732,13 +1769,36 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
             projection_layer_views[i].fov = pipelined_stage_views[i].fov;
             projection_layer_views[i].subImage.swapchain = swapchain->handle;
 
-            if (is_afr) {
+            int offset_x = 0, offset_y = 0, extent_x = 0, extent_y = 0;
+            // if we're working with a double-wide texture, use half the view bounds adjustment (as they apply to a single eye)
+            float width_factor = is_afr ? 1 : 0.5;
+            if (i == 0) {
+                // left eye
+                offset_x = m_left_view_bounds[0] * swapchain->width * width_factor;
+                extent_x = m_left_view_bounds[1] * swapchain->width * width_factor;
+                offset_y = m_left_view_bounds[2] * swapchain->height;
+                extent_y = m_left_view_bounds[3] * swapchain->height;
+            } else {
+                // right eye
+                offset_x = m_right_view_bounds[0] * swapchain->width * width_factor;
+                extent_x = m_right_view_bounds[1] * swapchain->width * width_factor;
+                offset_y = m_right_view_bounds[2] * swapchain->height;
+                extent_y = m_right_view_bounds[3] * swapchain->height;
+                if (!is_afr) {
+                    // for double wide move to the right half of the texture:
+                    offset_x += swapchain->width;
+                }
+            }
+            projection_layer_views[i].subImage.imageRect.offset = {offset_x, offset_y};
+            projection_layer_views[i].subImage.imageRect.extent = {extent_x, extent_y};
+
+            /* if (is_afr) {
                 projection_layer_views[i].subImage.imageRect.offset = {0, 0};
                 projection_layer_views[i].subImage.imageRect.extent = {swapchain->width, swapchain->height};
             } else {
                 projection_layer_views[i].subImage.imageRect.offset = {(swapchain->width / 2) * i, 0};
                 projection_layer_views[i].subImage.imageRect.extent = {swapchain->width / 2, swapchain->height};
-            }
+            }*/
 
             if (has_depth) {
                 Swapchain* depth_swapchain = nullptr;
@@ -1756,11 +1816,11 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
                 depth_layers[i].type = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR;
                 depth_layers[i].next = nullptr;
                 depth_layers[i].subImage.swapchain = depth_swapchain->handle;
-
+                /* 
                 const auto is_afr = VR::get()->is_using_afr();
                 bool doublewide_depth = true;
 
-                if (is_afr /*&& depth_swapchain->width == get_width() && depth_swapchain->height == get_height()*/) {
+                if (is_afr) {
                     doublewide_depth = false;
                 }
     
@@ -1779,8 +1839,9 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
                 } else {
                     depth_layers[i].subImage.imageRect.offset = {depth_extent.width * i, 0};
                     depth_layers[i].subImage.imageRect.extent = depth_extent;
-                }
-
+                }*/
+                depth_layers[i].subImage.imageRect.offset = {offset_x, offset_y};
+                depth_layers[i].subImage.imageRect.extent = {std::min<int>(get_width(), extent_x), std::min<int>(get_height(), extent_y)};
                 depth_layers[i].minDepth = 0.0f;
                 depth_layers[i].maxDepth = 1.0f;
                 auto wtm = VR::get()->get_world_to_meters();
