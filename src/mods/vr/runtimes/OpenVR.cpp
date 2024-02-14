@@ -208,13 +208,13 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
 
         VR::get()->m_left_bounds.uMin = 0.5f + 0.5f * this->raw_projections[vr::Eye_Left][0] / tan_half_fov[0];
         VR::get()->m_left_bounds.uMax = 0.5f + 0.5f * this->raw_projections[vr::Eye_Left][1] / tan_half_fov[0];
-        VR::get()->m_left_bounds.vMin = 0.5f - 0.5f * this->raw_projections[vr::Eye_Left][3] / tan_half_fov[1]; // bottom then top
-        VR::get()->m_left_bounds.vMax = 0.5f - 0.5f * this->raw_projections[vr::Eye_Left][2] / tan_half_fov[1];
+        VR::get()->m_left_bounds.vMin = 0.5f + 0.5f * this->raw_projections[vr::Eye_Left][2] / tan_half_fov[1];
+        VR::get()->m_left_bounds.vMax = 0.5f + 0.5f * this->raw_projections[vr::Eye_Left][3] / tan_half_fov[1];
 
         VR::get()->m_right_bounds.uMin = 0.5f + 0.5f * this->raw_projections[vr::Eye_Right][0] / tan_half_fov[0];
         VR::get()->m_right_bounds.uMax = 0.5f + 0.5f * this->raw_projections[vr::Eye_Right][1] / tan_half_fov[0];
-        VR::get()->m_right_bounds.vMin = 0.5f - 0.5f * this->raw_projections[vr::Eye_Right][3] / tan_half_fov[1]; // bottom then top
-        VR::get()->m_right_bounds.vMax = 0.5f - 0.5f * this->raw_projections[vr::Eye_Right][2] / tan_half_fov[1];
+        VR::get()->m_right_bounds.vMin = 0.5f + 0.5f * this->raw_projections[vr::Eye_Right][2] / tan_half_fov[1];
+        VR::get()->m_right_bounds.vMax = 0.5f + 0.5f * this->raw_projections[vr::Eye_Right][3] / tan_half_fov[1];
     } else {
         VR::get()->m_left_bounds.uMin = 0;
         VR::get()->m_left_bounds.uMax = 1;
