@@ -1731,6 +1731,7 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
     const auto retaddr = (uintptr_t)_ReturnAddress();
     static std::unordered_set<uintptr_t> redirected_retaddrs{};
     static std::unordered_set<uintptr_t> call_original_retaddrs{};
+    static std::unordered_set<uintptr_t> seen_retaddrs{};
     static std::recursive_mutex retaddr_mutex{};
     static bool has_view_family_tex{false};
 
@@ -1744,22 +1745,20 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
 
     {
         std::scoped_lock _{retaddr_mutex};
+        utility::ScopeGuard guard{[&](){ seen_retaddrs.insert(retaddr); }};
 
         if (call_original_retaddrs.contains(retaddr)) {
             return og(viewport);
         }
 
-        // Hacky way to allow the first texture to go through
-        // For the games that are using something other than ViewFamilyTexture as the scene RT.
-        if (!call_original_retaddrs.empty() && !redirected_retaddrs.contains(retaddr) && !has_view_family_tex) {
-            return og(viewport);
-        }
+        std::optional<size_t> func_start{};
 
-        if (!redirected_retaddrs.contains(retaddr) && !call_original_retaddrs.contains(retaddr)) {
+        // ALWAYS check the retaddr for ViewFamilyTexture first and never skip it
+        // This will fix the case where we run into some other texture initially.
+        if (!seen_retaddrs.contains(retaddr)) {
             SPDLOG_INFO("FViewport::GetRenderTargetTexture called from {:x}", retaddr);
-            
-            // Analyze surrounding code to determine if this is a valid call.
-            auto func_start = utility::find_function_start(retaddr);
+
+            func_start = utility::find_function_start(retaddr);
 
             if (!func_start) {
                 func_start = retaddr;
@@ -1773,6 +1772,22 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
                 call_original_retaddrs.insert(retaddr);
                 has_view_family_tex = true;
                 return og(viewport);
+            }
+        }
+
+        // Hacky way to allow the first texture to go through
+        // For the games that are using something other than ViewFamilyTexture as the scene RT.
+        if (!call_original_retaddrs.empty() && !redirected_retaddrs.contains(retaddr) && !has_view_family_tex) {
+            return og(viewport);
+        }
+
+        if (!redirected_retaddrs.contains(retaddr) && !call_original_retaddrs.contains(retaddr)) {
+            if (!func_start) {
+                func_start = utility::find_function_start(retaddr);
+
+                if (!func_start) {
+                    func_start = retaddr;
+                }
             }
 
             // Probably NOT...
