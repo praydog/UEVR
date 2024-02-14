@@ -2524,6 +2524,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
             m_compatibility_skip_pip->draw("Skip PostInitProperties");
             m_sceneview_compatibility_mode->draw("SceneView Compatibility Mode");
             m_extreme_compat_mode->draw("Extreme Compatibility Mode");
+            m_force_symmetric_projection->draw("Force Symmetric Projection (OpenVR only)");
             ImGui::TreePop();
         }
 

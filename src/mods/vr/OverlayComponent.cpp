@@ -327,6 +327,8 @@ void OverlayComponent::update_slate_openvr() {
 
     const auto is_d3d11 = g_framework->get_renderer_type() == Framework::RendererType::D3D11;
 
+    // TODO: do the sizing / scaling calculations below need to take into account non-standard VRTextureBounds_t
+    // when we force a symmetrical eye projection matrix?
     vr::VRTextureBounds_t bounds{};
     bounds.uMin = 0.0f;
     bounds.uMax = 1.0f;
@@ -424,6 +426,8 @@ bool OverlayComponent::update_wrist_overlay_openvr() {
         // so it doesn't become too intrusive during gameplay
         const auto scale = m_closed_ui ? 0.25f : 1.0f;
 
+        // TODO: do the sizing / scaling calculations below need to take into account non-standard VRTextureBounds_t
+        // when we force a symmetrical eye projection matrix?
         vr::VRTextureBounds_t bounds{};
         bounds.uMin = last_window_pos.x / render_target_width ;
         bounds.uMax = (last_window_pos.x + last_window_size.x) / render_target_width;
@@ -667,6 +671,8 @@ void OverlayComponent::update_overlay_openvr() {
         vr::VROverlay()->ShowOverlay(m_overlay_handle);
 
         // Show the entire texture
+        // TODO: do the sizing / scaling calculations below need to take into account non-standard VRTextureBounds_t
+        // when we force a symmetrical eye projection matrix?
         vr::VRTextureBounds_t bounds{};
         bounds.uMin = 0.0f;
         bounds.uMax = 1.0f;

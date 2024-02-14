@@ -178,6 +178,7 @@ VRRuntime::Error OpenVR::consume_events(std::function<void(void*)> callback) {
     return VRRuntime::Error::SUCCESS;
 }
 
+// TODO: this is called 6 times per tick, which seems a bit generous
 VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
     std::unique_lock __{ this->eyes_mtx };
     const auto local_left = this->hmd->GetEyeToHeadTransform(vr::Eye_Left);
@@ -195,11 +196,44 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
     this->hmd->GetProjectionRaw(vr::Eye_Left, &this->raw_projections[vr::Eye_Left][0], &this->raw_projections[vr::Eye_Left][1], &this->raw_projections[vr::Eye_Left][2], &this->raw_projections[vr::Eye_Left][3]);
     this->hmd->GetProjectionRaw(vr::Eye_Right, &this->raw_projections[vr::Eye_Right][0], &this->raw_projections[vr::Eye_Right][1], &this->raw_projections[vr::Eye_Right][2], &this->raw_projections[vr::Eye_Right][3]);
 
+    // TODO: other flavours of projection - mirrored asymmetric (like the CV1), horizontal symmetry but not vertical, others?
+    const bool override_projection = VR::get()->get_projection_override() == VR::PROJECTION_OVERRIDE::FULLY_SYMMETRIC;
+    const auto tan_half_fov = new float[2];
+    //SPDLOG_INFO("projection overried {}", override_projection);
+    if (override_projection) {
+        tan_half_fov[0] = std::max(std::max(-this->raw_projections[vr::Eye_Left][0], this->raw_projections[vr::Eye_Left][1]),
+                                   std::max(-this->raw_projections[vr::Eye_Right][0], this->raw_projections[vr::Eye_Right][1]));
+        tan_half_fov[1] = std::max(std::max(-this->raw_projections[vr::Eye_Left][2], this->raw_projections[vr::Eye_Left][3]),
+                                   std::max(-this->raw_projections[vr::Eye_Right][2], this->raw_projections[vr::Eye_Right][3]));
+
+        VR::get()->m_left_bounds.uMin = 0.5f + 0.5f * this->raw_projections[vr::Eye_Left][0] / tan_half_fov[0];
+        VR::get()->m_left_bounds.uMax = 0.5f + 0.5f * this->raw_projections[vr::Eye_Left][1] / tan_half_fov[0];
+        VR::get()->m_left_bounds.vMin = 0.5f - 0.5f * this->raw_projections[vr::Eye_Left][3] / tan_half_fov[1]; // bottom then top
+        VR::get()->m_left_bounds.vMax = 0.5f - 0.5f * this->raw_projections[vr::Eye_Left][2] / tan_half_fov[1];
+
+        VR::get()->m_right_bounds.uMin = 0.5f + 0.5f * this->raw_projections[vr::Eye_Right][0] / tan_half_fov[0];
+        VR::get()->m_right_bounds.uMax = 0.5f + 0.5f * this->raw_projections[vr::Eye_Right][1] / tan_half_fov[0];
+        VR::get()->m_right_bounds.vMin = 0.5f - 0.5f * this->raw_projections[vr::Eye_Right][3] / tan_half_fov[1]; // bottom then top
+        VR::get()->m_right_bounds.vMax = 0.5f - 0.5f * this->raw_projections[vr::Eye_Right][2] / tan_half_fov[1];
+    } else {
+        VR::get()->m_left_bounds.uMin = 0;
+        VR::get()->m_left_bounds.uMax = 1;
+        VR::get()->m_left_bounds.vMin = 0;
+        VR::get()->m_left_bounds.vMax = 1;
+        VR::get()->m_right_bounds.uMin = 0;
+        VR::get()->m_right_bounds.uMax = 1;
+        VR::get()->m_right_bounds.vMin = 0;
+        VR::get()->m_right_bounds.vMax = 1;
+    }
     auto get_mat = [&](vr::EVREye eye) {
-        const auto left =   this->raw_projections[eye][0] * -1.0f;
-        const auto right =  this->raw_projections[eye][1] * -1.0f;
-        const auto top =    this->raw_projections[eye][2] * -1.0f;
-        const auto bottom = this->raw_projections[eye][3] * -1.0f;
+
+        const auto left =   override_projection ? tan_half_fov[0] : this->raw_projections[eye][0] * -1.0f;
+        const auto right =  override_projection ? -tan_half_fov[0] : this->raw_projections[eye][1] * -1.0f;
+        const auto top =    override_projection ? tan_half_fov[1] : this->raw_projections[eye][2] * -1.0f;
+        const auto bottom = override_projection ? -tan_half_fov[1] : this->raw_projections[eye][3] * -1.0f;
+
+        //SPDLOG_INFO("Original {}, {}, {}, {}", this->raw_projections[eye][0] * -1.0f, this->raw_projections[eye][1] * -1.0f, this->raw_projections[eye][2] * -1.0f, this->raw_projections[eye][3] * -1.0f);
+        //SPDLOG_INFO("Modified {}, {}, {}, {}", left, right, top, bottom);
         float sum_rl = (left + right);
         float sum_tb = (top + bottom);
         float inv_rl = (1.0f / (left - right));

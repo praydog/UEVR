@@ -54,6 +54,11 @@ public:
         GESTURE_HEAD_RIGHT,
     };
 
+    enum PROJECTION_OVERRIDE : int32_t {
+        NONE,
+        FULLY_SYMMETRIC
+    };
+
     static const inline std::string s_action_pose = "/actions/default/in/Pose";
     static const inline std::string s_action_grip_pose = "/actions/default/in/GripPose";
     static const inline std::string s_action_trigger = "/actions/default/in/Trigger";
@@ -101,6 +106,11 @@ public:
             {"Debug", true},
         };
     }
+
+    // texture bounds to tell OpenVR which parts of the submitted texture to render (default - use the whole texture).
+    // Will be modified to accommodate forced symmetrical eye projection
+    vr::VRTextureBounds_t m_right_bounds{0.0f, 0.0f, 1.0f, 1.0f};
+    vr::VRTextureBounds_t m_left_bounds{0.0f, 0.0f, 1.0f, 1.0f};
 
     void on_config_load(const utility::Config& cfg, bool set_defaults) override;
     void on_config_save(utility::Config& cfg) override;
@@ -564,6 +574,10 @@ public:
         return m_extreme_compat_mode->value();
     }
 
+    auto get_projection_override() const {
+        return m_force_symmetric_projection->value() ? VR::PROJECTION_OVERRIDE::FULLY_SYMMETRIC : VR::PROJECTION_OVERRIDE::NONE;
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;
@@ -645,9 +659,6 @@ private:
 
     std::vector<int32_t> m_controllers{};
     std::unordered_set<int32_t> m_controllers_set{};
-
-    vr::VRTextureBounds_t m_right_bounds{ 0.0f, 0.0f, 1.0f, 1.0f };
-    vr::VRTextureBounds_t m_left_bounds{ 0.0f, 0.0f, 1.0f, 1.0f };
 
     glm::vec3 m_overlay_rotation{-1.550f, 0.0f, -1.330f};
     glm::vec4 m_overlay_position{0.0f, 0.06f, -0.07f, 1.0f};
@@ -789,6 +800,7 @@ private:
     const ModToggle::Ptr m_2d_screen_mode{ ModToggle::create(generate_name("2DScreenMode"), false) };
     const ModToggle::Ptr m_roomscale_movement{ ModToggle::create(generate_name("RoomscaleMovement"), false) };
     const ModToggle::Ptr m_swap_controllers{ ModToggle::create(generate_name("SwapControllerInputs"), false) };
+    const ModToggle::Ptr m_force_symmetric_projection{ ModToggle::create(generate_name("ForceSymmetricProjection"), false ) };
 
     // Snap turn settings and globals
     void gamepad_snapturn(XINPUT_STATE& state);
@@ -918,6 +930,7 @@ private:
         *m_2d_screen_mode,
         *m_roomscale_movement,
         *m_swap_controllers,
+        *m_force_symmetric_projection,
         *m_snapturn,
         *m_snapturn_joystick_deadzone,
         *m_snapturn_angle,
