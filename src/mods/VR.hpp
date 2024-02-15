@@ -54,21 +54,16 @@ public:
         GESTURE_HEAD_RIGHT,
     };
 
-    enum L3_R3_LONG_PRESS_MODE : int32_t {
-        TOGGLE_AIM_MODE,
-        TOGGLE_DISABLE_UOBJECT_HOOK
-    };
-
     enum HORIZONTAL_PROJECTION_OVERRIDE : int32_t {
-        NONE,
-        SYMMETRIC,
-        MIRROR
+        HORIZONTAL_DEFAULT,
+        HORIZONTAL_SYMMETRIC,
+        HORIZONTAL_MIRROR
     };
 
     enum VERTICAL_PROJECTION_OVERRIDE : int32_t {
-        NONE,
-        SYMMETRIC,
-        MATCHED
+        VERTICAL_DEFAULT,
+        VERTICAL_SYMMETRIC,
+        VERTICAL_MATCHED
     };
 
     static const inline std::string s_action_pose = "/actions/default/in/Pose";
@@ -811,7 +806,6 @@ private:
         "Matched",
     };
 
-    const ModCombo::Ptr m_log_level{ ModCombo::create(generate_name("LogLevel"), s_log_level_names, SPDLOG_LEVEL_INFO) };
     const ModCombo::Ptr m_rendering_method{ ModCombo::create(generate_name("RenderingMethod"), s_rendering_method_names) };
     const ModCombo::Ptr m_synced_afr_method{ ModCombo::create(generate_name("SyncedSequentialMethod"), s_synced_afr_method_names, 1) };
     const ModToggle::Ptr m_extreme_compat_mode{ ModToggle::create(generate_name("ExtremeCompatibilityMode"), false, true) };

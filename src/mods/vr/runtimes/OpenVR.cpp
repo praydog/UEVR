@@ -201,9 +201,10 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
         const auto tan_half_fov = new float[4];
 
         // TODO: mirrored
-        if (vr->get_horiztonal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::SYMMETRIC) {
-            tan_half_fov[0] = std::max(std::max(-this->raw_projections[eye][0], this->raw_projections[eye][1]),
-                                       std::max(-this->raw_projections[eye][0], this->raw_projections[eye][1]));
+        if (vr->get_horiztonal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_SYMMETRIC) {
+            // TODO: don't need to repeat this calculation for each eye
+            tan_half_fov[0] = std::max(std::max(-this->raw_projections[0][0], this->raw_projections[0][1]),
+                                       std::max(-this->raw_projections[1][0], this->raw_projections[1][1]));
             tan_half_fov[1] = -tan_half_fov[0];
         } else {
             tan_half_fov[0] = -this->raw_projections[eye][0];
@@ -211,9 +212,10 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
         }
 
         // TODO: matched
-        if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::SYMMETRIC) {
-            tan_half_fov[2] = std::max(std::max(-this->raw_projections[eye][2], this->raw_projections[eye][3]),
-                                       std::max(-this->raw_projections[eye][2], this->raw_projections[eye][3]));
+        if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::VERTICAL_SYMMETRIC) {
+            // TODO: don't need to repeat this calculation for each eye
+            tan_half_fov[2] = std::max(std::max(-this->raw_projections[0][2], this->raw_projections[0][3]),
+                                       std::max(-this->raw_projections[1][2], this->raw_projections[1][3]));
             tan_half_fov[3] = -tan_half_fov[2];
         } else {
             tan_half_fov[2] = -this->raw_projections[eye][2];

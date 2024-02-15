@@ -471,47 +471,18 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
 
     std::unique_lock __{ this->eyes_mtx };
     std::unique_lock ___{ this->pose_mtx };
-    // TODO: other flavours of projection - mirrored asymmetric (like the CV1), horizontal symmetry but not vertical, others?
-    const bool override_projection = VR::get()->get_projection_override() == VR::PROJECTION_OVERRIDE::FULLY_SYMMETRIC;
-    auto left_top = tan(this->views[0].fov.angleUp);
-    auto left_bottom = tan(this->views[0].fov.angleDown);
-    auto left_left = tan(this->views[0].fov.angleLeft);
-    auto left_right = tan(this->views[0].fov.angleRight);
-    auto right_top = tan(this->views[1].fov.angleUp);
-    auto right_bottom = tan(this->views[1].fov.angleDown);
-    auto right_left = tan(this->views[1].fov.angleLeft);
-    auto right_right = tan(this->views[1].fov.angleRight);
-    // SPDLOG_INFO("projection overried {}", override_projection);
-    if (override_projection) {
-        const auto tan_half_fov = new float[2];
-        tan_half_fov[0] = std::max(std::max(-left_left, left_right),
-                                   std::max(-right_left, right_right));
-        tan_half_fov[1] = std::max(std::max(left_top, -left_bottom),
-                                   std::max(right_top, -right_bottom));
 
-        m_left_view_bounds[0] = 0.5f + 0.5f * left_left / tan_half_fov[0];
-        m_left_view_bounds[1] = 0.5f + 0.5f * left_right / tan_half_fov[0];
-        m_left_view_bounds[2] = 0.5f - 0.5f * left_top / tan_half_fov[1];
-        m_left_view_bounds[3] = 0.5f - 0.5f * left_bottom / tan_half_fov[1];
+    auto& vr = VR::get();
 
-        m_right_view_bounds[0] = 0.5f + 0.5f * right_left / tan_half_fov[0];
-        m_right_view_bounds[1] = 0.5f + 0.5f * right_right / tan_half_fov[0];
-        m_right_view_bounds[2] = 0.5f - 0.5f * right_top / tan_half_fov[1];
-        m_right_view_bounds[3] = 0.5f - 0.5f * right_bottom / tan_half_fov[1];
-
-        left_left = -tan_half_fov[0];
-        left_right = tan_half_fov[0];
-        right_left = -tan_half_fov[0];
-        right_right = tan_half_fov[0];
-        left_top = tan_half_fov[1];
-        left_bottom = -tan_half_fov[1];
-        right_top = tan_half_fov[1];
-        right_bottom = -tan_half_fov[1];
-
-    } else {
-        set_default_horizontal_view_bounds();
-        set_default_vertical_view_bounds();
-    }
+    // TODO: check signs
+    this->raw_projections[0][0] = tan(this->views[0].fov.angleLeft);
+    this->raw_projections[0][1] = tan(this->views[0].fov.angleRight);
+    this->raw_projections[0][2] = tan(this->views[0].fov.angleUp);
+    this->raw_projections[0][3] = tan(this->views[0].fov.angleDown);
+    this->raw_projections[1][0] = tan(this->views[1].fov.angleLeft);
+    this->raw_projections[1][1] = tan(this->views[1].fov.angleRight);
+    this->raw_projections[1][2] = tan(this->views[1].fov.angleUp);
+    this->raw_projections[1][3] = tan(this->views[1].fov.angleDown);
     for (auto i = 0; i < 2; ++i) {
         const auto& pose = this->views[i].pose;
         const auto& fov = this->views[i].fov;
@@ -519,11 +490,40 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         // Update projection matrix
         //XrMatrix4x4f_CreateProjection((XrMatrix4x4f*)&this->projections[i], GRAPHICS_D3D, tan(fov.angleLeft), tan(fov.angleRight), tan(fov.angleUp), tan(fov.angleDown), nearz, farz);
 
+        // NOTE the sign convention for left-right is opposite to how it is in OpenVR. Up/down is the same
         auto get_mat = [&](int eye) {
-            const auto top = eye == 0 ? left_top : right_top;
-            const auto bottom = eye == 0 ? left_bottom : right_bottom;
-            const auto left = eye == 0 ? left_left : right_left;
-            const auto right = eye == 0 ? left_right : right_right;
+            const auto tan_half_fov = new float[4];
+
+        // TODO: mirrored
+        if (vr->get_horiztonal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_SYMMETRIC) {
+            // TODO: don't need to repeat this calculation for each eye
+            tan_half_fov[0] = std::max(std::max(-this->raw_projections[0][0], this->raw_projections[0][1]),
+                                       std::max(-this->raw_projections[1][0], this->raw_projections[1][1]));
+            tan_half_fov[1] = -tan_half_fov[0];
+        } else {
+            tan_half_fov[0] = -this->raw_projections[eye][0];
+            tan_half_fov[1] = -this->raw_projections[eye][1];
+        }
+
+        // TODO: matched
+        if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::VERTICAL_SYMMETRIC) {
+            // TODO: don't need to repeat this calculation for each eye
+            tan_half_fov[2] = std::max(std::max(-this->raw_projections[0][2], this->raw_projections[0][3]),
+                                       std::max(-this->raw_projections[1][2], this->raw_projections[1][3]));
+            tan_half_fov[3] = -tan_half_fov[2];
+        } else {
+            tan_half_fov[2] = -this->raw_projections[eye][2];
+            tan_half_fov[3] = -this->raw_projections[eye][3];
+        }
+        m_view_bounds[eye][0] = 0.5f + 0.5f * this->raw_projections[eye][0] / tan_half_fov[0];
+        m_view_bounds[eye][1] = 0.5f + 0.5f * this->raw_projections[eye][1] / tan_half_fov[1];
+        m_view_bounds[eye][2] = 0.5f + 0.5f * this->raw_projections[eye][2] / tan_half_fov[2];
+        m_view_bounds[eye][3] = 0.5f + 0.5f * this->raw_projections[eye][3] / tan_half_fov[3];
+        const auto left =   tan_half_fov[0];
+        const auto right =  tan_half_fov[1];
+        const auto top =    tan_half_fov[2];
+        const auto bottom = tan_half_fov[3];
+
             //SPDLOG_INFO("Original {}, {}, {}, {}", tan(this->views[eye].fov.angleLeft), tan(this->views[eye].fov.angleRight),
             //    tan(this->views[eye].fov.angleUp), tan(this->views[eye].fov.angleDown));
             //SPDLOG_INFO("Modified {}, {}, {}, {}", left, right, top, bottom);
@@ -1779,26 +1779,12 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
             int32_t offset_x = 0, offset_y = 0, extent_x = 0, extent_y = 0;
             // if we're working with a double-wide texture, use half the view bounds adjustment (as they apply to a single eye)
             float width_factor = is_afr ? 1 : 0.5;
-            if (i == 0) {
-                // left eye
-                offset_x = m_left_view_bounds[0] * swapchain->width * width_factor;
-                extent_x = m_left_view_bounds[1] * swapchain->width * width_factor - offset_x;
-                offset_y = m_left_view_bounds[2] * swapchain->height;
-                extent_y = m_left_view_bounds[3] * swapchain->height - offset_y;
-                //SPDLOG_INFO("Left image, width {} height {}, bounds {}, {}, {}, {}", swapchain->width, swapchain->height,
-                //    m_left_view_bounds[0], m_left_view_bounds[1], m_left_view_bounds[2], m_left_view_bounds[3]);
-
-            } else {
-                // right eye, for double wide move to the right half of the texture:
-                int32_t left_start = is_afr ? 0 : swapchain->width / 2;
-                offset_x = left_start + m_right_view_bounds[0] * swapchain->width * width_factor;
-                extent_x = m_right_view_bounds[1] * swapchain->width * width_factor - m_right_view_bounds[0] * swapchain->width * width_factor;
-                offset_y = m_right_view_bounds[2] * swapchain->height;
-                extent_y = m_right_view_bounds[3] * swapchain->height - offset_y;
-                //SPDLOG_INFO("Right image, width {} height {}, bounds {}, {}, {}, {}", swapchain->width, swapchain->height,
-                //    m_right_view_bounds[0], m_right_view_bounds[1], m_right_view_bounds[2], m_right_view_bounds[3]);
-            }
-
+            int32_t left_start = is_afr || i == 0 ? 0 : swapchain->width / 2;
+            offset_x = left_start + m_view_bounds[i][0] * swapchain->width * width_factor;
+            extent_x = m_view_bounds[i][1] * swapchain->width * width_factor - offset_x;
+            offset_y = m_view_bounds[i][2] * swapchain->height;
+            extent_y = m_view_bounds[i][3] * swapchain->height - offset_y;
+            
             //SPDLOG_INFO("image calc {}, {}, {}, {}", offset_x, extent_x, offset_y, extent_y);
             projection_layer_views[i].subImage.imageRect.offset = {offset_x, offset_y};
             projection_layer_views[i].subImage.imageRect.extent = {extent_x, extent_y};
