@@ -581,7 +581,7 @@ public:
         return m_extreme_compat_mode->value();
     }
 
-    auto get_horiztonal_projection_override() const {
+    auto get_horizontal_projection_override() const {
         return m_horizontal_projection_override->value();
     }
 

@@ -398,7 +398,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 (void*)&left, vr::TextureType_DirectX12, vr::ColorSpace_Auto,
                 submit_pose
             };
-            auto const left_bounds = vr::VRTextureBounds_t{runtime->m_view_bounds[0][0], runtime->m_view_bounds[0][2],
+            const auto left_bounds = vr::VRTextureBounds_t{runtime->m_view_bounds[0][0], runtime->m_view_bounds[0][2],
                                                            runtime->m_view_bounds[0][1], runtime->m_view_bounds[0][3]};
             auto e = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &left_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
 
@@ -497,7 +497,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                     (void*)&left, vr::TextureType_DirectX12, vr::ColorSpace_Auto,
                     submit_pose
                 };
-                auto const left_bounds = vr::VRTextureBounds_t{runtime->m_view_bounds[0][0], runtime->m_view_bounds[0][2],
+                const auto left_bounds = vr::VRTextureBounds_t{runtime->m_view_bounds[0][0], runtime->m_view_bounds[0][2],
                                                                runtime->m_view_bounds[0][1], runtime->m_view_bounds[0][3]};
                 auto e = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &left_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
 
@@ -523,7 +523,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 (void*)&right, vr::TextureType_DirectX12, vr::ColorSpace_Auto,
                 submit_pose
             };
-            auto const right_bounds = vr::VRTextureBounds_t{runtime->m_view_bounds[1][0], runtime->m_view_bounds[1][2],
+            const auto right_bounds = vr::VRTextureBounds_t{runtime->m_view_bounds[1][0], runtime->m_view_bounds[1][2],
                                                             runtime->m_view_bounds[1][1], runtime->m_view_bounds[1][3]};
             auto e = vr::VRCompositor()->Submit(vr::Eye_Right, &right_eye, &right_bounds, vr::EVRSubmitFlags::Submit_TextureWithPose);
             runtime->frame_synced = false;

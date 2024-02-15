@@ -509,14 +509,14 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
 
         // NOTE the sign convention for left-right is opposite to how it is in OpenVR. Up/down is the same
         auto get_mat = [&](int eye) {
-            const auto tan_half_fov = new float[4];
+            std::array<float, 4> tan_half_fov{};
 
-            if (vr->get_horiztonal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_SYMMETRIC) {
+            if (vr->get_horizontal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_SYMMETRIC) {
                 // TODO: don't need to repeat this calculation for each eye?
                 tan_half_fov[0] = -std::max(std::max(-this->raw_projections[0][0], this->raw_projections[0][1]),
                                             std::max(-this->raw_projections[1][0], this->raw_projections[1][1]));
                 tan_half_fov[1] = -tan_half_fov[0];
-            } else if (vr->get_horiztonal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_MIRROR) {
+            } else if (vr->get_horizontal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_MIRROR) {
                 float max_outer = std::max(-this->raw_projections[0][0], this->raw_projections[1][1]);
                 float max_inner = std::max(this->raw_projections[0][1], -this->raw_projections[1][0]);
                 tan_half_fov[0] = eye == 0 ? -max_outer : -max_inner;

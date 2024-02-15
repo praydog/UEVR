@@ -2525,7 +2525,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
             m_sceneview_compatibility_mode->draw("SceneView Compatibility Mode");
             m_extreme_compat_mode->draw("Extreme Compatibility Mode");
 
-            m_horizontal_projection_override->draw("Horiztonal Projection");
+            m_horizontal_projection_override->draw("Horizontal Projection");
             m_vertical_projection_override->draw("Vertical Projection");
             m_grow_rectangle_for_projection_cropping->draw("Scale Render Target");
             ImGui::TreePop();
