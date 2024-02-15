@@ -494,35 +494,37 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         auto get_mat = [&](int eye) {
             const auto tan_half_fov = new float[4];
 
-        // TODO: mirrored
-        if (vr->get_horiztonal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_SYMMETRIC) {
-            // TODO: don't need to repeat this calculation for each eye
-            tan_half_fov[0] = std::max(std::max(-this->raw_projections[0][0], this->raw_projections[0][1]),
-                                       std::max(-this->raw_projections[1][0], this->raw_projections[1][1]));
-            tan_half_fov[1] = -tan_half_fov[0];
-        } else {
-            tan_half_fov[0] = -this->raw_projections[eye][0];
-            tan_half_fov[1] = -this->raw_projections[eye][1];
-        }
+            // TODO: mirrored
+            if (vr->get_horiztonal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_SYMMETRIC) {
+                // TODO: don't need to repeat this calculation for each eye
+                tan_half_fov[0] = std::max(std::max(-this->raw_projections[0][0], this->raw_projections[0][1]),
+                                           std::max(-this->raw_projections[1][0], this->raw_projections[1][1]));
+                tan_half_fov[1] = -tan_half_fov[0];
+            } else {
+                tan_half_fov[0] = -this->raw_projections[eye][0];
+                tan_half_fov[1] = -this->raw_projections[eye][1];
+            }
 
-        // TODO: matched
-        if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::VERTICAL_SYMMETRIC) {
-            // TODO: don't need to repeat this calculation for each eye
-            tan_half_fov[2] = std::max(std::max(-this->raw_projections[0][2], this->raw_projections[0][3]),
-                                       std::max(-this->raw_projections[1][2], this->raw_projections[1][3]));
-            tan_half_fov[3] = -tan_half_fov[2];
-        } else {
-            tan_half_fov[2] = -this->raw_projections[eye][2];
-            tan_half_fov[3] = -this->raw_projections[eye][3];
-        }
-        m_view_bounds[eye][0] = 0.5f + 0.5f * this->raw_projections[eye][0] / tan_half_fov[0];
-        m_view_bounds[eye][1] = 0.5f + 0.5f * this->raw_projections[eye][1] / tan_half_fov[1];
-        m_view_bounds[eye][2] = 0.5f + 0.5f * this->raw_projections[eye][2] / tan_half_fov[2];
-        m_view_bounds[eye][3] = 0.5f + 0.5f * this->raw_projections[eye][3] / tan_half_fov[3];
-        const auto left =   tan_half_fov[0];
-        const auto right =  tan_half_fov[1];
-        const auto top =    tan_half_fov[2];
-        const auto bottom = tan_half_fov[3];
+            // TODO: matched
+            if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::VERTICAL_SYMMETRIC) {
+                // TODO: don't need to repeat this calculation for each eye
+                tan_half_fov[2] = std::max(std::max(-this->raw_projections[0][2], this->raw_projections[0][3]),
+                                           std::max(-this->raw_projections[1][2], this->raw_projections[1][3]));
+                tan_half_fov[3] = -tan_half_fov[2];
+            } else {
+                tan_half_fov[2] = -this->raw_projections[eye][2];
+                tan_half_fov[3] = -this->raw_projections[eye][3];
+            }
+            m_view_bounds[eye][0] = 0.5f + 0.5f * this->raw_projections[eye][0] / tan_half_fov[0];
+            m_view_bounds[eye][1] = 0.5f + 0.5f * this->raw_projections[eye][1] / tan_half_fov[1];
+            m_view_bounds[eye][2] = 0.5f + 0.5f * this->raw_projections[eye][2] / tan_half_fov[2];
+            m_view_bounds[eye][3] = 0.5f + 0.5f * this->raw_projections[eye][3] / tan_half_fov[3];
+            const auto left =   tan_half_fov[0];
+            const auto right =  tan_half_fov[1];
+            const auto top =    tan_half_fov[2];
+            const auto bottom = tan_half_fov[3];
+
+            // signs: at this point we expect left[0] and bottom[3] to be negative
 
             //SPDLOG_INFO("Original {}, {}, {}, {}", tan(this->views[eye].fov.angleLeft), tan(this->views[eye].fov.angleRight),
             //    tan(this->views[eye].fov.angleUp), tan(this->views[eye].fov.angleDown));
