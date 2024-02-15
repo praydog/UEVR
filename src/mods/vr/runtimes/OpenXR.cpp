@@ -483,6 +483,9 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
     this->raw_projections[1][1] = tan(this->views[1].fov.angleRight);
     this->raw_projections[1][2] = tan(this->views[1].fov.angleUp);
     this->raw_projections[1][3] = tan(this->views[1].fov.angleDown);
+    // SPDLOG_INFO("Original left  {}, {}, {}, {}", this->raw_projections[0][0], this->raw_projections[0][1],this->raw_projections[0][2], this->raw_projections[0][3]);
+    // SPDLOG_INFO("Original right {}, {}, {}, {}", this->raw_projections[1][0], this->raw_projections[1][1],this->raw_projections[1][2], this->raw_projections[1][3]);
+
     for (auto i = 0; i < 2; ++i) {
         const auto& pose = this->views[i].pose;
         const auto& fov = this->views[i].fov;
@@ -494,30 +497,38 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         auto get_mat = [&](int eye) {
             const auto tan_half_fov = new float[4];
 
-            // TODO: mirrored
             if (vr->get_horiztonal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_SYMMETRIC) {
-                // TODO: don't need to repeat this calculation for each eye
-                tan_half_fov[0] = std::max(std::max(-this->raw_projections[0][0], this->raw_projections[0][1]),
-                                           std::max(-this->raw_projections[1][0], this->raw_projections[1][1]));
+                // TODO: don't need to repeat this calculation for each eye?
+                tan_half_fov[0] = -std::max(std::max(-this->raw_projections[0][0], this->raw_projections[0][1]),
+                                            std::max(-this->raw_projections[1][0], this->raw_projections[1][1]));
                 tan_half_fov[1] = -tan_half_fov[0];
+            } else if (vr->get_horiztonal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_MIRROR) {
+                float max_outer = std::max(-this->raw_projections[0][0], this->raw_projections[1][1]);
+                float max_inner = std::max(this->raw_projections[0][1], -this->raw_projections[1][0]);
+                tan_half_fov[0] = eye == 0 ? -max_outer : -max_inner;
+                tan_half_fov[1] = eye == 0 ? max_inner : max_outer;
             } else {
-                tan_half_fov[0] = -this->raw_projections[eye][0];
-                tan_half_fov[1] = -this->raw_projections[eye][1];
+                tan_half_fov[0] = this->raw_projections[eye][0];
+                tan_half_fov[1] = this->raw_projections[eye][1];
             }
 
-            // TODO: matched
             if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::VERTICAL_SYMMETRIC) {
-                // TODO: don't need to repeat this calculation for each eye
-                tan_half_fov[2] = std::max(std::max(-this->raw_projections[0][2], this->raw_projections[0][3]),
-                                           std::max(-this->raw_projections[1][2], this->raw_projections[1][3]));
+                // TODO: don't need to repeat this calculation for each eye?
+                tan_half_fov[2] = std::max(std::max(this->raw_projections[0][2], -this->raw_projections[0][3]),
+                                           std::max(this->raw_projections[1][2], -this->raw_projections[1][3]));
                 tan_half_fov[3] = -tan_half_fov[2];
+            } else if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::VERTICAL_MATCHED) {
+                float max_top = std::max(this->raw_projections[0][2], this->raw_projections[1][2]);
+                float max_bottom = std::max(-this->raw_projections[0][3], -this->raw_projections[1][3]);
+                tan_half_fov[2] = max_top;
+                tan_half_fov[3] = -max_bottom;
             } else {
-                tan_half_fov[2] = -this->raw_projections[eye][2];
-                tan_half_fov[3] = -this->raw_projections[eye][3];
+                tan_half_fov[2] = this->raw_projections[eye][2];
+                tan_half_fov[3] = this->raw_projections[eye][3];
             }
-            m_view_bounds[eye][0] = 0.5f + 0.5f * this->raw_projections[eye][0] / tan_half_fov[0];
+            m_view_bounds[eye][0] = 0.5f - 0.5f * this->raw_projections[eye][0] / tan_half_fov[0];
             m_view_bounds[eye][1] = 0.5f + 0.5f * this->raw_projections[eye][1] / tan_half_fov[1];
-            m_view_bounds[eye][2] = 0.5f + 0.5f * this->raw_projections[eye][2] / tan_half_fov[2];
+            m_view_bounds[eye][2] = 0.5f - 0.5f * this->raw_projections[eye][2] / tan_half_fov[2];
             m_view_bounds[eye][3] = 0.5f + 0.5f * this->raw_projections[eye][3] / tan_half_fov[3];
             const auto left =   tan_half_fov[0];
             const auto right =  tan_half_fov[1];
@@ -525,12 +536,8 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
             const auto bottom = tan_half_fov[3];
 
             // signs: at this point we expect left[0] and bottom[3] to be negative
-
-            //SPDLOG_INFO("Original {}, {}, {}, {}", tan(this->views[eye].fov.angleLeft), tan(this->views[eye].fov.angleRight),
-            //    tan(this->views[eye].fov.angleUp), tan(this->views[eye].fov.angleDown));
-            //SPDLOG_INFO("Modified {}, {}, {}, {}", left, right, top, bottom);
-            // this->raw_projections[eye][2] * -1.0f, this->raw_projections[eye][3] * -1.0f);
-            // SPDLOG_INFO("Modified {}, {}, {}, {}", left, right, top, bottom);
+            // SPDLOG_INFO("derived for eye {} {}, {}, {}, {}", eye, left, right, top, bottom);
+            // SPDLOG_INFO("derived bounds eye {} {}, {}, {}, {}", eye, m_view_bounds[eye][0], m_view_bounds[eye][1], m_view_bounds[eye][2], m_view_bounds[eye][3]);
             float sum_rl = (right + left);
             float sum_tb = (top + bottom);
             float inv_rl = (1.0f / (right - left));
@@ -1780,14 +1787,19 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
 
             int32_t offset_x = 0, offset_y = 0, extent_x = 0, extent_y = 0;
             // if we're working with a double-wide texture, use half the view bounds adjustment (as they apply to a single eye)
-            float width_factor = is_afr ? 1 : 0.5;
-            int32_t left_start = is_afr || i == 0 ? 0 : swapchain->width / 2;
-            offset_x = left_start + m_view_bounds[i][0] * swapchain->width * width_factor;
-            extent_x = m_view_bounds[i][1] * swapchain->width * width_factor - offset_x;
+            int texture_area_width = is_afr ? swapchain->width : swapchain->width / 2;
+            if (is_afr || i == 0) {
+                offset_x = m_view_bounds[i][0] * texture_area_width;
+                extent_x = m_view_bounds[i][1] * texture_area_width - offset_x;
+            } else {
+                // right eye double-wide
+                offset_x = texture_area_width + m_view_bounds[i][0] * texture_area_width;
+                extent_x = m_view_bounds[i][1] * texture_area_width - (offset_x - texture_area_width);
+            }
             offset_y = m_view_bounds[i][2] * swapchain->height;
             extent_y = m_view_bounds[i][3] * swapchain->height - offset_y;
             
-            //SPDLOG_INFO("image calc {}, {}, {}, {}", offset_x, extent_x, offset_y, extent_y);
+            // SPDLOG_INFO("image calc for eye {} {}, {}, {}, {}", i, offset_x, extent_x, offset_y, extent_y);
             projection_layer_views[i].subImage.imageRect.offset = {offset_x, offset_y};
             projection_layer_views[i].subImage.imageRect.extent = {extent_x, extent_y};
 
