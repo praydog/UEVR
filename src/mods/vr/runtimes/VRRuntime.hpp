@@ -193,4 +193,7 @@ struct VRRuntime {
     uint32_t internal_frame_count{};
     uint32_t internal_render_frame_count{};
     bool has_render_frame_count{false};
+
+    // view bounds proportions - left xmin, xmax, ymin, ymax then right xmin, xmax, ymin, ymax
+    float m_view_bounds[2][4] = {0, 1, 0, 1, 0, 1, 0, 1};
 };

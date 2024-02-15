@@ -54,9 +54,21 @@ public:
         GESTURE_HEAD_RIGHT,
     };
 
-    enum PROJECTION_OVERRIDE : int32_t {
+    enum L3_R3_LONG_PRESS_MODE : int32_t {
+        TOGGLE_AIM_MODE,
+        TOGGLE_DISABLE_UOBJECT_HOOK
+    };
+
+    enum HORIZONTAL_PROJECTION_OVERRIDE : int32_t {
         NONE,
-        FULLY_SYMMETRIC
+        SYMMETRIC,
+        MIRROR
+    };
+
+    enum VERTICAL_PROJECTION_OVERRIDE : int32_t {
+        NONE,
+        SYMMETRIC,
+        MATCHED
     };
 
     static const inline std::string s_action_pose = "/actions/default/in/Pose";
@@ -574,8 +586,12 @@ public:
         return m_extreme_compat_mode->value();
     }
 
-    auto get_projection_override() const {
-        return m_force_symmetric_projection->value() ? VR::PROJECTION_OVERRIDE::FULLY_SYMMETRIC : VR::PROJECTION_OVERRIDE::NONE;
+    auto get_horiztonal_projection_override() const {
+        return m_horizontal_projection_override->value();
+    }
+
+    auto get_vertical_projection_override() const {
+        return m_vertical_projection_override->value();
     }
 
 private:
@@ -783,6 +799,19 @@ private:
         "Gesture (Head) + Right Joystick",
     };
 
+    static const inline std::vector<std::string> s_horizontal_projection_override_names{
+        "Raw / default",
+        "Symmetrical",
+        "Mirrored",
+    };
+
+    static const inline std::vector<std::string> s_vertical_projection_override_names{
+        "Raw / default",
+        "Symmetrical",
+        "Matched",
+    };
+
+    const ModCombo::Ptr m_log_level{ ModCombo::create(generate_name("LogLevel"), s_log_level_names, SPDLOG_LEVEL_INFO) };
     const ModCombo::Ptr m_rendering_method{ ModCombo::create(generate_name("RenderingMethod"), s_rendering_method_names) };
     const ModCombo::Ptr m_synced_afr_method{ ModCombo::create(generate_name("SyncedSequentialMethod"), s_synced_afr_method_names, 1) };
     const ModToggle::Ptr m_extreme_compat_mode{ ModToggle::create(generate_name("ExtremeCompatibilityMode"), false, true) };
@@ -800,7 +829,8 @@ private:
     const ModToggle::Ptr m_2d_screen_mode{ ModToggle::create(generate_name("2DScreenMode"), false) };
     const ModToggle::Ptr m_roomscale_movement{ ModToggle::create(generate_name("RoomscaleMovement"), false) };
     const ModToggle::Ptr m_swap_controllers{ ModToggle::create(generate_name("SwapControllerInputs"), false) };
-    const ModToggle::Ptr m_force_symmetric_projection{ ModToggle::create(generate_name("ForceSymmetricProjection"), false ) };
+    const ModCombo::Ptr m_horizontal_projection_override{ModCombo::create(generate_name("HorizontalProjectionOverride"), s_horizontal_projection_override_names)};
+    const ModCombo::Ptr m_vertical_projection_override{ModCombo::create(generate_name("VerticalProjectionOverride"), s_vertical_projection_override_names)};
 
     // Snap turn settings and globals
     void gamepad_snapturn(XINPUT_STATE& state);
@@ -930,7 +960,8 @@ private:
         *m_2d_screen_mode,
         *m_roomscale_movement,
         *m_swap_controllers,
-        *m_force_symmetric_projection,
+        *m_horizontal_projection_override,
+        *m_vertical_projection_override,
         *m_snapturn,
         *m_snapturn_joystick_deadzone,
         *m_snapturn_angle,

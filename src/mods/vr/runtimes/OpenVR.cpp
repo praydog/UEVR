@@ -196,41 +196,37 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
     this->hmd->GetProjectionRaw(vr::Eye_Left, &this->raw_projections[vr::Eye_Left][0], &this->raw_projections[vr::Eye_Left][1], &this->raw_projections[vr::Eye_Left][2], &this->raw_projections[vr::Eye_Left][3]);
     this->hmd->GetProjectionRaw(vr::Eye_Right, &this->raw_projections[vr::Eye_Right][0], &this->raw_projections[vr::Eye_Right][1], &this->raw_projections[vr::Eye_Right][2], &this->raw_projections[vr::Eye_Right][3]);
 
-    // TODO: other flavours of projection - mirrored asymmetric (like the CV1), horizontal symmetry but not vertical, others?
-    const bool override_projection = VR::get()->get_projection_override() == VR::PROJECTION_OVERRIDE::FULLY_SYMMETRIC;
-    const auto tan_half_fov = new float[2];
-    //SPDLOG_INFO("projection overried {}", override_projection);
-    if (override_projection) {
-        tan_half_fov[0] = std::max(std::max(-this->raw_projections[vr::Eye_Left][0], this->raw_projections[vr::Eye_Left][1]),
-                                   std::max(-this->raw_projections[vr::Eye_Right][0], this->raw_projections[vr::Eye_Right][1]));
-        tan_half_fov[1] = std::max(std::max(-this->raw_projections[vr::Eye_Left][2], this->raw_projections[vr::Eye_Left][3]),
-                                   std::max(-this->raw_projections[vr::Eye_Right][2], this->raw_projections[vr::Eye_Right][3]));
-
-        VR::get()->m_left_bounds.uMin = 0.5f + 0.5f * this->raw_projections[vr::Eye_Left][0] / tan_half_fov[0];
-        VR::get()->m_left_bounds.uMax = 0.5f + 0.5f * this->raw_projections[vr::Eye_Left][1] / tan_half_fov[0];
-        VR::get()->m_left_bounds.vMin = 0.5f + 0.5f * this->raw_projections[vr::Eye_Left][2] / tan_half_fov[1];
-        VR::get()->m_left_bounds.vMax = 0.5f + 0.5f * this->raw_projections[vr::Eye_Left][3] / tan_half_fov[1];
-
-        VR::get()->m_right_bounds.uMin = 0.5f + 0.5f * this->raw_projections[vr::Eye_Right][0] / tan_half_fov[0];
-        VR::get()->m_right_bounds.uMax = 0.5f + 0.5f * this->raw_projections[vr::Eye_Right][1] / tan_half_fov[0];
-        VR::get()->m_right_bounds.vMin = 0.5f + 0.5f * this->raw_projections[vr::Eye_Right][2] / tan_half_fov[1];
-        VR::get()->m_right_bounds.vMax = 0.5f + 0.5f * this->raw_projections[vr::Eye_Right][3] / tan_half_fov[1];
-    } else {
-        VR::get()->m_left_bounds.uMin = 0;
-        VR::get()->m_left_bounds.uMax = 1;
-        VR::get()->m_left_bounds.vMin = 0;
-        VR::get()->m_left_bounds.vMax = 1;
-        VR::get()->m_right_bounds.uMin = 0;
-        VR::get()->m_right_bounds.uMax = 1;
-        VR::get()->m_right_bounds.vMin = 0;
-        VR::get()->m_right_bounds.vMax = 1;
-    }
+    auto& vr = VR::get();
     auto get_mat = [&](vr::EVREye eye) {
+        const auto tan_half_fov = new float[4];
 
-        const auto left =   override_projection ? tan_half_fov[0] : this->raw_projections[eye][0] * -1.0f;
-        const auto right =  override_projection ? -tan_half_fov[0] : this->raw_projections[eye][1] * -1.0f;
-        const auto top =    override_projection ? tan_half_fov[1] : this->raw_projections[eye][2] * -1.0f;
-        const auto bottom = override_projection ? -tan_half_fov[1] : this->raw_projections[eye][3] * -1.0f;
+        // TODO: mirrored
+        if (vr->get_horiztonal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::SYMMETRIC) {
+            tan_half_fov[0] = std::max(std::max(-this->raw_projections[eye][0], this->raw_projections[eye][1]),
+                                       std::max(-this->raw_projections[eye][0], this->raw_projections[eye][1]));
+            tan_half_fov[1] = -tan_half_fov[0];
+        } else {
+            tan_half_fov[0] = -this->raw_projections[eye][0];
+            tan_half_fov[1] = -this->raw_projections[eye][1];
+        }
+
+        // TODO: matched
+        if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::SYMMETRIC) {
+            tan_half_fov[2] = std::max(std::max(-this->raw_projections[eye][2], this->raw_projections[eye][3]),
+                                       std::max(-this->raw_projections[eye][2], this->raw_projections[eye][3]));
+            tan_half_fov[3] = -tan_half_fov[2];
+        } else {
+            tan_half_fov[2] = -this->raw_projections[eye][2];
+            tan_half_fov[3] = -this->raw_projections[eye][3];
+        }
+        m_view_bounds[eye][0] = 0.5f + 0.5f * this->raw_projections[eye][0] / tan_half_fov[0];
+        m_view_bounds[eye][1] = 0.5f + 0.5f * this->raw_projections[eye][1] / tan_half_fov[1];
+        m_view_bounds[eye][2] = 0.5f + 0.5f * this->raw_projections[eye][2] / tan_half_fov[2];
+        m_view_bounds[eye][3] = 0.5f + 0.5f * this->raw_projections[eye][3] / tan_half_fov[3];
+        const auto left =   tan_half_fov[0];
+        const auto right =  tan_half_fov[1];
+        const auto top =    tan_half_fov[2];
+        const auto bottom = tan_half_fov[3];
 
         //SPDLOG_INFO("Original {}, {}, {}, {}", this->raw_projections[eye][0] * -1.0f, this->raw_projections[eye][1] * -1.0f, this->raw_projections[eye][2] * -1.0f, this->raw_projections[eye][3] * -1.0f);
         //SPDLOG_INFO("Modified {}, {}, {}, {}", left, right, top, bottom);

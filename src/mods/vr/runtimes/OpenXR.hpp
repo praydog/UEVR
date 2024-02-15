@@ -486,8 +486,5 @@ public:
         "/interaction_profiles/htc/vive_controller",
     };
 
-private:
-    float m_left_view_bounds[4] = {0, 1, 0, 1};
-    float m_right_view_bounds[4] = {0, 1, 0, 1};
 };
 }

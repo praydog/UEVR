@@ -509,15 +509,8 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         right_bottom = -tan_half_fov[1];
 
     } else {
-        m_left_view_bounds[0] = 0;
-        m_left_view_bounds[1] = 1;
-        m_left_view_bounds[2] = 0;
-        m_left_view_bounds[3] = 1;
-
-        m_right_view_bounds[0] = 0;
-        m_right_view_bounds[1] = 1;
-        m_right_view_bounds[2] = 0;
-        m_right_view_bounds[3] = 1;
+        set_default_horizontal_view_bounds();
+        set_default_vertical_view_bounds();
     }
     for (auto i = 0; i < 2; ++i) {
         const auto& pose = this->views[i].pose;
