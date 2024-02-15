@@ -230,7 +230,7 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
         const auto top =    tan_half_fov[2];
         const auto bottom = tan_half_fov[3];
 
-        // signs : at this point we expect right and top to be negative
+        // signs : at this point we expect right [1] and bottom [3] to be negative
 
         //SPDLOG_INFO("Original {}, {}, {}, {}", this->raw_projections[eye][0] * -1.0f, this->raw_projections[eye][1] * -1.0f, this->raw_projections[eye][2] * -1.0f, this->raw_projections[eye][3] * -1.0f);
         //SPDLOG_INFO("Modified {}, {}, {}, {}", left, right, top, bottom);
