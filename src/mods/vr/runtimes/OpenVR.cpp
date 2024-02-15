@@ -136,11 +136,25 @@ VRRuntime::Error OpenVR::update_render_target_size() {
 }
 
 uint32_t OpenVR::get_width() const {
-    return this->w;
+    auto width = this->w;
+    // if we've altered the default projection matrix we'll be cropping the image - if the image bounds are non-standard and
+    // the setting's enabled, scale the recommended width so the cropped width is the same as the recommended width
+    if (!(m_view_bounds[0][0] == 0 && m_view_bounds[0][1] == 1 && m_view_bounds[1][0] == 0 && m_view_bounds[1][1] == 1) &&
+        VR::get()->should_grow_rectangle_for_projection_cropping()) {
+        width = width / std::max(m_view_bounds[0][1] - m_view_bounds[0][0], m_view_bounds[1][1] - m_view_bounds[1][0]);
+    }
+    return width;
 }
 
 uint32_t OpenVR::get_height() const {
-    return this->h;
+    auto height = this->h;
+    // if we've altered the default projection matrix we'll be cropping the image - if the image bounds are non-standard and
+    // the setting's enabled, scale the recommended height so the cropped width is the same as the recommended height
+    if (!(m_view_bounds[0][2] == 0 && m_view_bounds[0][3] == 1 && m_view_bounds[1][2] == 0 && m_view_bounds[1][3] == 1) &&
+        VR::get()->should_grow_rectangle_for_projection_cropping()) {
+        height = height / std::max(m_view_bounds[0][3] - m_view_bounds[0][2], m_view_bounds[1][3] - m_view_bounds[1][2]);
+    }
+    return height;
 }
 
 VRRuntime::Error OpenVR::consume_events(std::function<void(void*)> callback) {

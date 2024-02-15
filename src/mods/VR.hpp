@@ -589,6 +589,10 @@ public:
         return m_vertical_projection_override->value();
     }
 
+    bool should_grow_rectangle_for_projection_cropping() const {
+        return m_grow_rectangle_for_projection_cropping->value();
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;
@@ -825,6 +829,7 @@ private:
     const ModToggle::Ptr m_swap_controllers{ ModToggle::create(generate_name("SwapControllerInputs"), false) };
     const ModCombo::Ptr m_horizontal_projection_override{ModCombo::create(generate_name("HorizontalProjectionOverride"), s_horizontal_projection_override_names)};
     const ModCombo::Ptr m_vertical_projection_override{ModCombo::create(generate_name("VerticalProjectionOverride"), s_vertical_projection_override_names)};
+    const ModToggle::Ptr m_grow_rectangle_for_projection_cropping{ModToggle::create(generate_name("GrowRectangleForProjectionCropping"), false)};
 
     // Snap turn settings and globals
     void gamepad_snapturn(XINPUT_STATE& state);
@@ -956,6 +961,7 @@ private:
         *m_swap_controllers,
         *m_horizontal_projection_override,
         *m_vertical_projection_override,
+        *m_grow_rectangle_for_projection_cropping,
         *m_snapturn,
         *m_snapturn_joystick_deadzone,
         *m_snapturn_angle,

@@ -2527,6 +2527,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
 
             m_horizontal_projection_override->draw("Horiztonal Projection");
             m_vertical_projection_override->draw("Vertical Projection");
+            m_grow_rectangle_for_projection_cropping->draw("Scale Render Target");
             ImGui::TreePop();
         }
 

@@ -382,16 +382,30 @@ uint32_t OpenXR::get_width() const {
     if (this->view_configs.empty()) {
         return 0;
     }
-
-    return (uint32_t)((float)this->view_configs[0].recommendedImageRectWidth * this->resolution_scale->value());
+    auto width = (float)this->view_configs[0].recommendedImageRectWidth* this->resolution_scale->value();
+    // if we've altered the default projection matrix we'll be cropping the image - if the image bounds are non-standard and
+    // the setting's enabled, scale the recommended width so the cropped width is the same as the recommended width
+    if (!(m_view_bounds[0][0] == 0 && m_view_bounds[0][1] == 1 && m_view_bounds[1][0] == 0 && m_view_bounds[1][1] == 1) &&
+        VR::get()->should_grow_rectangle_for_projection_cropping()) {
+        // Grow the recommended size to account for the cropping needed when altering the projection matrix
+        width = width / std::max(m_view_bounds[0][1] - m_view_bounds[0][0], m_view_bounds[1][1] - m_view_bounds[1][0]);
+    }
+    return (uint32_t)width;
 }
 
 uint32_t OpenXR::get_height() const {
     if (this->view_configs.empty()) {
         return 0;
     }
-
-    return (uint32_t)((float)this->view_configs[0].recommendedImageRectHeight * this->resolution_scale->value());
+    auto height = (float)this->view_configs[0].recommendedImageRectHeight * this->resolution_scale->value();
+    // if we've altered the default projection matrix we'll be cropping the image - if the image bounds are non-standard and
+    // the setting's enabled, scale the recommended height so the cropped width is the same as the recommended height
+    if (!(m_view_bounds[0][2] == 0 && m_view_bounds[0][3] == 1 && m_view_bounds[1][2] == 0 && m_view_bounds[1][3] == 1) &&
+        VR::get()->should_grow_rectangle_for_projection_cropping()) {
+        // Grow the recommended size to account for the cropping needed when altering the projection matrix
+        height = height / std::max(m_view_bounds[0][3] - m_view_bounds[0][2], m_view_bounds[1][3] - m_view_bounds[1][2]);
+    }
+    return (uint32_t)height;
 }
 
 VRRuntime::Error OpenXR::consume_events(std::function<void(void*)> callback) {
