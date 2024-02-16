@@ -223,6 +223,7 @@ public:
     glm::quat get_rotation_offset();
     void set_rotation_offset(const glm::quat& offset);
     void recenter_view();
+    void recenter_horizon();
 
 
     template<typename T = VRRuntime>

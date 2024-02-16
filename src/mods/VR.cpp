@@ -2647,6 +2647,10 @@ void VR::on_draw_ui() {
 
     ImGui::SameLine();
 
+    if (ImGui::Button("Recenter Horizon")) {
+        recenter_horizon();
+    }
+
     if (ImGui::Button("Reinitialize Runtime")) {
         get_runtime()->wants_reinitialize = true;
     }
@@ -3123,6 +3127,14 @@ void VR::recenter_view() {
     ZoneScopedN(__FUNCTION__);
 
     const auto new_rotation_offset = glm::normalize(glm::inverse(utility::math::flatten(glm::quat{get_rotation(0)})));
+
+    set_rotation_offset(new_rotation_offset);
+}
+
+void VR::recenter_horizon() {
+    ZoneScopedN(__FUNCTION__);
+
+    const auto new_rotation_offset = glm::normalize(glm::inverse(glm::quat{get_rotation(0)}));
 
     set_rotation_offset(new_rotation_offset);
 }
