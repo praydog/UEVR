@@ -1864,6 +1864,10 @@ void VR::handle_keybinds() {
         recenter_view();
     }
 
+    if (m_keybind_recenter_horizon->is_key_down_once()) {
+        recenter_horizon();
+    }
+
     if (m_keybind_load_camera_0->is_key_down_once()) {
         load_camera(0);
     }
@@ -2488,6 +2492,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Playspace Keys")) {
             m_keybind_recenter->draw("Recenter View Key");
+            m_keybind_recenter_horizon->draw("Recenter Horizon Key");
             m_keybind_set_standing_origin->draw("Set Standing Origin Key");
 
             ImGui::TreePop();
