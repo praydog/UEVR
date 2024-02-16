@@ -530,6 +530,8 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     // Seems more robust than simply just checking the vtable index.
     m_uses_old_rendertarget_manager = *stereo_view_offset_index <= 11 && !render_texture_render_thread_func;
 
+    SPDLOG_INFO("Using old rendertarget manager: {}", m_uses_old_rendertarget_manager);
+
     if (!render_texture_render_thread_func) {
         // Fallback scan to checking for the first non-default virtual function (<= 4.18)
         SPDLOG_INFO("Failed to find RenderTexture_RenderThread, falling back to first non-default virtual function");
@@ -902,7 +904,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         SPDLOG_INFO("AllocateRenderTarget index: {}", allocate_render_target_index);
 
         m_embedded_rtm.calculate_render_target_size_hook = 
-            std::make_unique<PointerHook>((void**)calculate_render_target_size_func_ptr, +[](void* self, const FViewport& viewport, uint32_t& x, uint32_t& y) {
+            std::make_unique<PointerHook>((void**)calculate_render_target_size_func_ptr, +[](void* self, const sdk::FViewport& viewport, uint32_t& x, uint32_t& y) {
             #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
                 SPDLOG_INFO("CalculateRenderTargetSize (embedded)");
             #else
@@ -953,7 +955,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
 
         if (!need_reallocate_viewport_render_target_is_bad) {
             m_embedded_rtm.need_reallocate_viewport_render_target_hook = 
-                std::make_unique<PointerHook>((void**)need_reallocate_viewport_render_target_func_ptr, +[](void* self, FViewport* viewport) -> bool {
+                std::make_unique<PointerHook>((void**)need_reallocate_viewport_render_target_func_ptr, +[](void* self, sdk::FViewport* viewport) -> bool {
                 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
                     SPDLOG_INFO("NeedReallocateViewportRenderTarget (embedded): {:x}", (uintptr_t)_ReturnAddress());
                 #else
@@ -4984,7 +4986,7 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
 }
 
 // INTERNAL USE ONLY!!!!
-__declspec(noinline) void VRRenderTargetManager::CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) {
+__declspec(noinline) void VRRenderTargetManager::CalculateRenderTargetSize(const sdk::FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) {
     SPDLOG_INFO_ONCE("VRRenderTargetManager::CalculateRenderTargetSize called!");
 
     m_last_calculate_render_size_return_address = (uintptr_t)_ReturnAddress();
@@ -5029,7 +5031,7 @@ __declspec(noinline) bool VRRenderTargetManager::NeedReAllocateShadingRateTextur
     return false;
 }
 
-void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const FViewport& vp, class SViewport* vp_widget) {
+void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const sdk::FViewport& vp, class SViewport* vp_widget) {
     SPDLOG_INFO_ONCE("VRRenderTargetManager_Base::update_viewport called! {} {:x} {:x}", use_separate_rt, (uintptr_t)&vp, (uintptr_t)vp_widget);
 
     if (!g_framework->is_game_data_intialized()) {
@@ -5039,7 +5041,7 @@ void VRRenderTargetManager_Base::update_viewport(bool use_separate_rt, const FVi
     //SPDLOG_INFO("Widget: {:x}", (uintptr_t)ViewportWidget);
 }
 
-void VRRenderTargetManager_Base::calculate_render_target_size(const FViewport& viewport, uint32_t& x, uint32_t& y) {
+void VRRenderTargetManager_Base::calculate_render_target_size(const sdk::FViewport& viewport, uint32_t& x, uint32_t& y) {
     SPDLOG_INFO_ONCE("VRRenderTargetManager_Base::calculate_render_target_size called!");
 
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
@@ -5058,7 +5060,7 @@ void VRRenderTargetManager_Base::calculate_render_target_size(const FViewport& v
     SPDLOG_INFO("RenderTargetSize After: {}x{}", x, y);
 }
 
-bool VRRenderTargetManager_Base::need_reallocate_view_target(const FViewport& Viewport) {
+bool VRRenderTargetManager_Base::need_reallocate_view_target(const sdk::FViewport& Viewport) {
     SPDLOG_INFO_ONCE("VRRenderTargetManager_Base::need_reallocate_view_target called!");
 
     if (!g_framework->is_game_data_intialized()) {
@@ -5982,7 +5984,7 @@ __declspec(noinline) void FFakeStereoRenderingHook::update_viewport_rhi_hook(voi
     }
 
     if (!rtm.need_reallocate_viewport_render_target_called) {
-        const auto need_reallocate = g_hook->get_render_target_manager()->need_reallocate_view_target(*(FViewport*)viewport);
+        const auto need_reallocate = g_hook->get_render_target_manager()->need_reallocate_view_target(*(sdk::FViewport*)viewport);
 
         if (!need_reallocate) {
             SPDLOG_INFO_ONCE("Skipping UpdateViewportRHI (embedded) because NeedReallocateViewportRenderTarget() was not called and we don't need to reallocate anyway!");
