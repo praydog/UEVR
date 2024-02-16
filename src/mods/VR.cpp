@@ -1864,6 +1864,10 @@ void VR::handle_keybinds() {
         recenter_view();
     }
 
+    if (m_keybind_recenter_horizon->is_key_down_once()) {
+        recenter_horizon();
+    }
+
     if (m_keybind_load_camera_0->is_key_down_once()) {
         load_camera(0);
     }
@@ -2488,6 +2492,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Playspace Keys")) {
             m_keybind_recenter->draw("Recenter View Key");
+            m_keybind_recenter_horizon->draw("Recenter Horizon Key");
             m_keybind_set_standing_origin->draw("Set Standing Origin Key");
 
             ImGui::TreePop();
@@ -2655,6 +2660,10 @@ void VR::on_draw_ui() {
     }
 
     ImGui::SameLine();
+
+    if (ImGui::Button("Recenter Horizon")) {
+        recenter_horizon();
+    }
 
     if (ImGui::Button("Reinitialize Runtime")) {
         get_runtime()->wants_reinitialize = true;
@@ -3132,6 +3141,14 @@ void VR::recenter_view() {
     ZoneScopedN(__FUNCTION__);
 
     const auto new_rotation_offset = glm::normalize(glm::inverse(utility::math::flatten(glm::quat{get_rotation(0)})));
+
+    set_rotation_offset(new_rotation_offset);
+}
+
+void VR::recenter_horizon() {
+    ZoneScopedN(__FUNCTION__);
+
+    const auto new_rotation_offset = glm::normalize(glm::inverse(glm::quat{get_rotation(0)}));
 
     set_rotation_offset(new_rotation_offset);
 }

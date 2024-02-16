@@ -41,10 +41,10 @@ public:
 
     bool should_use_separate_render_target() const { return true; }
 
-    void update_viewport(bool use_separate_rt, const FViewport& vp, class SViewport* vp_widget = nullptr);
+    void update_viewport(bool use_separate_rt, const sdk::FViewport& vp, class SViewport* vp_widget = nullptr);
 
-    void calculate_render_target_size(const FViewport& viewport, uint32_t& x, uint32_t& y);
-    bool need_reallocate_view_target(const FViewport& Viewport);
+    void calculate_render_target_size(const sdk::FViewport& viewport, uint32_t& x, uint32_t& y);
+    bool need_reallocate_view_target(const sdk::FViewport& Viewport);
     bool need_reallocate_depth_texture(const void* DepthTarget);
 
 public:
@@ -93,16 +93,16 @@ public:
     virtual bool ShouldUseSeparateRenderTarget() const override { return VRRenderTargetManager_Base::should_use_separate_render_target(); }
 
     virtual void UpdateViewport(
-        bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override 
+        bool bUseSeparateRenderTarget, const sdk::FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override 
     {
         VRRenderTargetManager_Base::update_viewport(bUseSeparateRenderTarget, Viewport, ViewportWidget);
     }
 
-    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override;
+    virtual void CalculateRenderTargetSize(const sdk::FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override;
     virtual bool NeedReAllocateDepthTexture(const void* DepthTarget) override; // Not actually used, we are just checking the return address
     virtual bool NeedReAllocateShadingRateTexture(const void* ShadingRateTarget) override; // Not actually used, we are just checking the return address
 
-    virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
+    virtual bool NeedReAllocateViewportRenderTarget(const sdk::FViewport& Viewport) override {
         return VRRenderTargetManager_Base::need_reallocate_view_target(Viewport);
     }
 
@@ -124,15 +124,15 @@ struct VRRenderTargetManager_418 : IStereoRenderTargetManager_418, VRRenderTarge
     uint32_t GetNumberOfBufferedFrames() const override { return VRRenderTargetManager_Base::get_number_of_buffered_frames(); }
     virtual bool ShouldUseSeparateRenderTarget() const override { return VRRenderTargetManager_Base::should_use_separate_render_target(); }
 
-    virtual void UpdateViewport(bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override {
+    virtual void UpdateViewport(bool bUseSeparateRenderTarget, const sdk::FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override {
         VRRenderTargetManager_Base::update_viewport(bUseSeparateRenderTarget, Viewport, ViewportWidget);
     }
 
-    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override {
+    virtual void CalculateRenderTargetSize(const sdk::FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override {
         VRRenderTargetManager_Base::calculate_render_target_size(Viewport, InOutSizeX, InOutSizeY);
     }
 
-    virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
+    virtual bool NeedReAllocateViewportRenderTarget(const sdk::FViewport& Viewport) override {
         return VRRenderTargetManager_Base::need_reallocate_view_target(Viewport);
     }
 
@@ -150,15 +150,15 @@ struct VRRenderTargetManager_Special : IStereoRenderTargetManager_Special, VRRen
     uint32_t GetNumberOfBufferedFrames() const override { return VRRenderTargetManager_Base::get_number_of_buffered_frames(); }
     virtual bool ShouldUseSeparateRenderTarget() const override { return VRRenderTargetManager_Base::should_use_separate_render_target(); }
 
-    virtual void UpdateViewport(bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override {
+    virtual void UpdateViewport(bool bUseSeparateRenderTarget, const sdk::FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override {
         VRRenderTargetManager_Base::update_viewport(bUseSeparateRenderTarget, Viewport, ViewportWidget);
     }
 
-    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override {
+    virtual void CalculateRenderTargetSize(const sdk::FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override {
         VRRenderTargetManager_Base::calculate_render_target_size(Viewport, InOutSizeX, InOutSizeY);
     }
 
-    virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
+    virtual bool NeedReAllocateViewportRenderTarget(const sdk::FViewport& Viewport) override {
         return VRRenderTargetManager_Base::need_reallocate_view_target(Viewport);
     }
 

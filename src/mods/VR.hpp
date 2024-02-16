@@ -240,6 +240,7 @@ public:
     glm::quat get_rotation_offset();
     void set_rotation_offset(const glm::quat& offset);
     void recenter_view();
+    void recenter_horizon();
 
 
     template<typename T = VRRuntime>
@@ -896,6 +897,7 @@ private:
 
     // Keybinds
     const ModKey::Ptr m_keybind_recenter{ ModKey::create(generate_name("RecenterViewKey")) };
+    const ModKey::Ptr m_keybind_recenter_horizon{ ModKey::create(generate_name("RecenterHorizonKey")) };
     const ModKey::Ptr m_keybind_set_standing_origin{ ModKey::create(generate_name("ResetStandingOriginKey")) };
 
     const ModKey::Ptr m_keybind_load_camera_0{ ModKey::create(generate_name("LoadCamera0Key")) };
@@ -992,6 +994,7 @@ private:
         *m_compatibility_ahud,
         *m_sceneview_compatibility_mode,
         *m_keybind_recenter,
+        *m_keybind_recenter_horizon,
         *m_keybind_set_standing_origin,
         *m_keybind_load_camera_0,
         *m_keybind_load_camera_1,
