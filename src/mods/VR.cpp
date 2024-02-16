@@ -2525,9 +2525,14 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
             m_sceneview_compatibility_mode->draw("SceneView Compatibility Mode");
             m_extreme_compat_mode->draw("Extreme Compatibility Mode");
 
-            m_horizontal_projection_override->draw("Horizontal Projection");
-            m_vertical_projection_override->draw("Vertical Projection");
-            m_grow_rectangle_for_projection_cropping->draw("Scale Render Target");
+            // changes to any of these options should trigger a regeneration of the eye projection matrices
+            const auto horizontal_projection_changed = m_horizontal_projection_override->draw("Horizontal Projection");
+            const auto vertical_projection_changed = m_vertical_projection_override->draw("Vertical Projection");
+            const auto scale_render = m_grow_rectangle_for_projection_cropping->draw("Scale Render Target");
+            const auto scale_render_changed = get_runtime()->is_modifying_eye_texture_scale != scale_render;
+            get_runtime()->is_modifying_eye_texture_scale = scale_render;
+            get_runtime()->should_recalculate_eye_projections = horizontal_projection_changed || vertical_projection_changed || scale_render_changed;
+
             ImGui::TreePop();
         }
 

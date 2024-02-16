@@ -382,30 +382,14 @@ uint32_t OpenXR::get_width() const {
     if (this->view_configs.empty()) {
         return 0;
     }
-    auto width = (float)this->view_configs[0].recommendedImageRectWidth* this->resolution_scale->value();
-    // if we've altered the default projection matrix we'll be cropping the image - if the image bounds are non-standard and
-    // the setting's enabled, scale the recommended width so the cropped width is the same as the recommended width
-    if (!(m_view_bounds[0][0] == 0 && m_view_bounds[0][1] == 1 && m_view_bounds[1][0] == 0 && m_view_bounds[1][1] == 1) &&
-        VR::get()->should_grow_rectangle_for_projection_cropping()) {
-        // Grow the recommended size to account for the cropping needed when altering the projection matrix
-        width = width / std::max(m_view_bounds[0][1] - m_view_bounds[0][0], m_view_bounds[1][1] - m_view_bounds[1][0]);
-    }
-    return (uint32_t)width;
+    return (uint32_t)((float)this->view_configs[0].recommendedImageRectWidth * this->resolution_scale->value() * eye_width_adjustment);
 }
 
 uint32_t OpenXR::get_height() const {
     if (this->view_configs.empty()) {
         return 0;
     }
-    auto height = (float)this->view_configs[0].recommendedImageRectHeight * this->resolution_scale->value();
-    // if we've altered the default projection matrix we'll be cropping the image - if the image bounds are non-standard and
-    // the setting's enabled, scale the recommended height so the cropped width is the same as the recommended height
-    if (!(m_view_bounds[0][2] == 0 && m_view_bounds[0][3] == 1 && m_view_bounds[1][2] == 0 && m_view_bounds[1][3] == 1) &&
-        VR::get()->should_grow_rectangle_for_projection_cropping()) {
-        // Grow the recommended size to account for the cropping needed when altering the projection matrix
-        height = height / std::max(m_view_bounds[0][3] - m_view_bounds[0][2], m_view_bounds[1][3] - m_view_bounds[1][2]);
-    }
-    return (uint32_t)height;
+    return (uint32_t)((float)this->view_configs[0].recommendedImageRectHeight * this->resolution_scale->value() * eye_height_adjustment);
 }
 
 VRRuntime::Error OpenXR::consume_events(std::function<void(void*)> callback) {
@@ -483,93 +467,102 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         return VRRuntime::Error::SUCCESS;
     }
 
-    std::unique_lock __{ this->eyes_mtx };
+    // always update the pose:
     std::unique_lock ___{ this->pose_mtx };
+    const auto& left_pose = this->views[0].pose;
+    const auto& right_pose = this->views[1].pose;
+    this->eyes[0] = Matrix4x4f{OpenXR::to_glm(left_pose.orientation)};
+    this->eyes[0][3] = Vector4f{*(Vector3f*)&left_pose.position, 1.0f};
+    this->eyes[1] = Matrix4x4f{OpenXR::to_glm(right_pose.orientation)};
+    this->eyes[1][3] = Vector4f{*(Vector3f*)&right_pose.position, 1.0f};
 
-    auto& vr = VR::get();
+    auto get_mat = [&](int eye) {
+        const auto& vr = VR::get();
+        std::array<float, 4> tan_half_fov{};
 
-    // TODO: check signs
-    this->raw_projections[0][0] = tan(this->views[0].fov.angleLeft);
-    this->raw_projections[0][1] = tan(this->views[0].fov.angleRight);
-    this->raw_projections[0][2] = tan(this->views[0].fov.angleUp);
-    this->raw_projections[0][3] = tan(this->views[0].fov.angleDown);
-    this->raw_projections[1][0] = tan(this->views[1].fov.angleLeft);
-    this->raw_projections[1][1] = tan(this->views[1].fov.angleRight);
-    this->raw_projections[1][2] = tan(this->views[1].fov.angleUp);
-    this->raw_projections[1][3] = tan(this->views[1].fov.angleDown);
-    // SPDLOG_INFO("Original left  {}, {}, {}, {}", this->raw_projections[0][0], this->raw_projections[0][1],this->raw_projections[0][2], this->raw_projections[0][3]);
-    // SPDLOG_INFO("Original right {}, {}, {}, {}", this->raw_projections[1][0], this->raw_projections[1][1],this->raw_projections[1][2], this->raw_projections[1][3]);
+        if (vr->get_horizontal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_SYMMETRIC) {
+            tan_half_fov[0] = -std::max(std::max(-this->raw_projections[0][0], this->raw_projections[0][1]),
+                                        std::max(-this->raw_projections[1][0], this->raw_projections[1][1]));
+            tan_half_fov[1] = -tan_half_fov[0];
+        } else if (vr->get_horizontal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_MIRROR) {
+            float max_outer = std::max(-this->raw_projections[0][0], this->raw_projections[1][1]);
+            float max_inner = std::max(this->raw_projections[0][1], -this->raw_projections[1][0]);
+            tan_half_fov[0] = eye == 0 ? -max_outer : -max_inner;
+            tan_half_fov[1] = eye == 0 ? max_inner : max_outer;
+        } else {
+            tan_half_fov[0] = this->raw_projections[eye][0];
+            tan_half_fov[1] = this->raw_projections[eye][1];
+        }
 
-    for (auto i = 0; i < 2; ++i) {
-        const auto& pose = this->views[i].pose;
-        const auto& fov = this->views[i].fov;
+        if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::VERTICAL_SYMMETRIC) {
+            tan_half_fov[2] = std::max(std::max(this->raw_projections[0][2], -this->raw_projections[0][3]),
+                                        std::max(this->raw_projections[1][2], -this->raw_projections[1][3]));
+            tan_half_fov[3] = -tan_half_fov[2];
+        } else if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::VERTICAL_MATCHED) {
+            float max_top = std::max(this->raw_projections[0][2], this->raw_projections[1][2]);
+            float max_bottom = std::max(-this->raw_projections[0][3], -this->raw_projections[1][3]);
+            tan_half_fov[2] = max_top;
+            tan_half_fov[3] = -max_bottom;
+        } else {
+            tan_half_fov[2] = this->raw_projections[eye][2];
+            tan_half_fov[3] = this->raw_projections[eye][3];
+        }
+        view_bounds[eye][0] = 0.5f - 0.5f * this->raw_projections[eye][0] / tan_half_fov[0];
+        view_bounds[eye][1] = 0.5f + 0.5f * this->raw_projections[eye][1] / tan_half_fov[1];
+        view_bounds[eye][2] = 0.5f - 0.5f * this->raw_projections[eye][2] / tan_half_fov[2];
+        view_bounds[eye][3] = 0.5f + 0.5f * this->raw_projections[eye][3] / tan_half_fov[3];
 
-        // Update projection matrix
-        //XrMatrix4x4f_CreateProjection((XrMatrix4x4f*)&this->projections[i], GRAPHICS_D3D, tan(fov.angleLeft), tan(fov.angleRight), tan(fov.angleUp), tan(fov.angleDown), nearz, farz);
-
-        // NOTE the sign convention for left-right is opposite to how it is in OpenVR. Up/down is the same
-        auto get_mat = [&](int eye) {
-            std::array<float, 4> tan_half_fov{};
-
-            if (vr->get_horizontal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_SYMMETRIC) {
-                // TODO: don't need to repeat this calculation for each eye?
-                tan_half_fov[0] = -std::max(std::max(-this->raw_projections[0][0], this->raw_projections[0][1]),
-                                            std::max(-this->raw_projections[1][0], this->raw_projections[1][1]));
-                tan_half_fov[1] = -tan_half_fov[0];
-            } else if (vr->get_horizontal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_MIRROR) {
-                float max_outer = std::max(-this->raw_projections[0][0], this->raw_projections[1][1]);
-                float max_inner = std::max(this->raw_projections[0][1], -this->raw_projections[1][0]);
-                tan_half_fov[0] = eye == 0 ? -max_outer : -max_inner;
-                tan_half_fov[1] = eye == 0 ? max_inner : max_outer;
+        // if we've derived the right eye, we have up to date view bounds for both so adjust the render target if necessary
+        if (eye == 1) {
+            if (vr->should_grow_rectangle_for_projection_cropping()) {
+                eye_width_adjustment = 1 / std::max(view_bounds[0][1] - view_bounds[0][0], view_bounds[1][1] - view_bounds[1][0]);
+                eye_height_adjustment = 1 / std::max(view_bounds[0][3] - view_bounds[0][2], view_bounds[1][3] - view_bounds[1][2]);
             } else {
-                tan_half_fov[0] = this->raw_projections[eye][0];
-                tan_half_fov[1] = this->raw_projections[eye][1];
+                eye_width_adjustment = 1;
+                eye_height_adjustment = 1;
             }
+            SPDLOG_INFO("Eye texture proportion scale: {} by {}", eye_width_adjustment, eye_height_adjustment);
+        }
 
-            if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::VERTICAL_SYMMETRIC) {
-                // TODO: don't need to repeat this calculation for each eye?
-                tan_half_fov[2] = std::max(std::max(this->raw_projections[0][2], -this->raw_projections[0][3]),
-                                           std::max(this->raw_projections[1][2], -this->raw_projections[1][3]));
-                tan_half_fov[3] = -tan_half_fov[2];
-            } else if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::VERTICAL_MATCHED) {
-                float max_top = std::max(this->raw_projections[0][2], this->raw_projections[1][2]);
-                float max_bottom = std::max(-this->raw_projections[0][3], -this->raw_projections[1][3]);
-                tan_half_fov[2] = max_top;
-                tan_half_fov[3] = -max_bottom;
-            } else {
-                tan_half_fov[2] = this->raw_projections[eye][2];
-                tan_half_fov[3] = this->raw_projections[eye][3];
-            }
-            m_view_bounds[eye][0] = 0.5f - 0.5f * this->raw_projections[eye][0] / tan_half_fov[0];
-            m_view_bounds[eye][1] = 0.5f + 0.5f * this->raw_projections[eye][1] / tan_half_fov[1];
-            m_view_bounds[eye][2] = 0.5f - 0.5f * this->raw_projections[eye][2] / tan_half_fov[2];
-            m_view_bounds[eye][3] = 0.5f + 0.5f * this->raw_projections[eye][3] / tan_half_fov[3];
-            const auto left =   tan_half_fov[0];
-            const auto right =  tan_half_fov[1];
-            const auto top =    tan_half_fov[2];
-            const auto bottom = tan_half_fov[3];
+        const auto left =   tan_half_fov[0];
+        const auto right =  tan_half_fov[1];
+        const auto top =    tan_half_fov[2];
+        const auto bottom = tan_half_fov[3];
 
-            // signs: at this point we expect left[0] and bottom[3] to be negative
-            // SPDLOG_INFO("derived for eye {} {}, {}, {}, {}", eye, left, right, top, bottom);
-            // SPDLOG_INFO("derived bounds eye {} {}, {}, {}, {}", eye, m_view_bounds[eye][0], m_view_bounds[eye][1], m_view_bounds[eye][2], m_view_bounds[eye][3]);
-            float sum_rl = (right + left);
-            float sum_tb = (top + bottom);
-            float inv_rl = (1.0f / (right - left));
-            float inv_tb = (1.0f / (top - bottom));
+        // signs: at this point we expect left[0] and bottom[3] to be negative
+        SPDLOG_INFO("derived FOV for {} eye: {}, {}, {}, {}", eye == 0 ? "left" : "right", left, right, top, bottom);
+        SPDLOG_INFO("derived texture bounds {} eye: {}, {}, {}, {}", eye == 0 ? "left" : "right", view_bounds[eye][0], view_bounds[eye][1], view_bounds[eye][2], view_bounds[eye][3]);
+        float sum_rl = (right + left);
+        float sum_tb = (top + bottom);
+        float inv_rl = (1.0f / (right - left));
+        float inv_tb = (1.0f / (top - bottom));
 
-            return Matrix4x4f {
-                (2.0f * inv_rl), 0.0f, 0.0f, 0.0f,
-                0.0f, (2.0f * inv_tb), 0.0f, 0.0f,
-                (sum_rl * -inv_rl), (sum_tb * -inv_tb), 0.0f, 1.0f,
-                0.0f, 0.0f, nearz, 0.0f
-            };
+        return Matrix4x4f {
+            (2.0f * inv_rl), 0.0f, 0.0f, 0.0f,
+            0.0f, (2.0f * inv_tb), 0.0f, 0.0f,
+            (sum_rl * -inv_rl), (sum_tb * -inv_tb), 0.0f, 1.0f,
+            0.0f, 0.0f, nearz, 0.0f
         };
+    };
 
-        this->projections[i] = get_mat(i);
-
-        // Update view matrix
-        this->eyes[i] = Matrix4x4f{OpenXR::to_glm(pose.orientation)};
-        this->eyes[i][3] = Vector4f{*(Vector3f*)&pose.position, 1.0f};
+    // if we've not yet derived an eye projection matrix, or we've changed the projection, derive it here
+    // Hacky way to check for an uninitialised eye matrix - is there something better, is this necessary?
+    if (this->should_recalculate_eye_projections || this->projections[0][2][3] == 0) {
+        // deriving the texture bounds when modifying projections requires left and right raw projections so get them all before we start:
+        std::unique_lock __{this->eyes_mtx};
+        const auto& left_fov = this->views[0].fov;
+        this->raw_projections[0][0] = tan(left_fov.angleLeft);
+        this->raw_projections[0][1] = tan(left_fov.angleRight);
+        this->raw_projections[0][2] = tan(left_fov.angleUp);
+        this->raw_projections[0][3] = tan(left_fov.angleDown);
+        const auto& right_fov = this->views[1].fov;
+        this->raw_projections[1][0] = tan(right_fov.angleLeft);
+        this->raw_projections[1][1] = tan(right_fov.angleRight);
+        this->raw_projections[1][2] = tan(right_fov.angleUp);
+        this->raw_projections[1][3] = tan(right_fov.angleDown);
+        this->projections[0] = get_mat(0);
+        this->projections[1] = get_mat(1);
+        this->should_recalculate_eye_projections = false;
     }
 
     return VRRuntime::Error::SUCCESS;
@@ -1803,15 +1796,15 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
             // if we're working with a double-wide texture, use half the view bounds adjustment (as they apply to a single eye)
             int texture_area_width = is_afr ? swapchain->width : swapchain->width / 2;
             if (is_afr || i == 0) {
-                offset_x = m_view_bounds[i][0] * texture_area_width;
-                extent_x = m_view_bounds[i][1] * texture_area_width - offset_x;
+                offset_x = view_bounds[i][0] * texture_area_width;
+                extent_x = view_bounds[i][1] * texture_area_width - offset_x;
             } else {
                 // right eye double-wide
-                offset_x = texture_area_width + m_view_bounds[i][0] * texture_area_width;
-                extent_x = m_view_bounds[i][1] * texture_area_width - (offset_x - texture_area_width);
+                offset_x = texture_area_width + view_bounds[i][0] * texture_area_width;
+                extent_x = view_bounds[i][1] * texture_area_width - (offset_x - texture_area_width);
             }
-            offset_y = m_view_bounds[i][2] * swapchain->height;
-            extent_y = m_view_bounds[i][3] * swapchain->height - offset_y;
+            offset_y = view_bounds[i][2] * swapchain->height;
+            extent_y = view_bounds[i][3] * swapchain->height - offset_y;
             
             // SPDLOG_INFO("image calc for eye {} {}, {}, {}, {}", i, offset_x, extent_x, offset_y, extent_y);
             projection_layer_views[i].subImage.imageRect.offset = {offset_x, offset_y};
