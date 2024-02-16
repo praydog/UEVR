@@ -198,6 +198,7 @@ struct VRRuntime {
     // used to crop the rendered eye textures to account for projection adjustments
     float view_bounds[2][4] = {0, 1, 0, 1, 0, 1, 0, 1};
 
+    bool should_update_eye_matrices{true};
     bool should_recalculate_eye_projections{false};
     bool is_modifying_eye_texture_scale{false};
 

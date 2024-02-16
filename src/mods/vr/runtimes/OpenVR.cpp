@@ -20,8 +20,8 @@ VRRuntime::Error OpenVR::synchronize_frame(std::optional<uint32_t> frame_count) 
         this->got_first_valid_poses = true;
         this->got_first_sync = true;
         this->frame_synced = true;
+        this->should_update_eye_matrices = true;
     }
-
     return (VRRuntime::Error)ret;
 }
 
@@ -178,7 +178,12 @@ VRRuntime::Error OpenVR::consume_events(std::function<void(void*)> callback) {
     return VRRuntime::Error::SUCCESS;
 }
 
-VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
+VRRuntime::Error OpenVR::update_matrices(float nearz, float farz) {
+    // exit immediately if we've updated the eye matrices since the last frame sync, so we only do this
+    // operation once per sync
+    if (!this->should_update_eye_matrices) {
+        return VRRuntime::Error::SUCCESS;
+    }
 
     // always update the pose:
     std::unique_lock __{ this->eyes_mtx };
@@ -264,6 +269,8 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
         this->projections[vr::Eye_Right] = get_mat(vr::Eye_Right);
         this->should_recalculate_eye_projections = false;
     }
+    // don't allow the eye matrices to be derived again until after the next frame sync
+    this->should_update_eye_matrices = false;
     return VRRuntime::Error::SUCCESS;
 }
 

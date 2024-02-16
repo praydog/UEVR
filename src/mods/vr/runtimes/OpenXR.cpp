@@ -185,8 +185,8 @@ VRRuntime::Error OpenXR::synchronize_frame(std::optional<uint32_t> frame_count) 
 
         this->got_first_sync = true;
         this->frame_synced = true;
+        this->should_update_eye_matrices = true;
     }
-
     return VRRuntime::Error::SUCCESS;
 }
 
@@ -463,6 +463,12 @@ VRRuntime::Error OpenXR::consume_events(std::function<void(void*)> callback) {
 }
 
 VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
+    // exit immediately if we've updated the eye matrices since the last frame sync, so we only do this
+    // operation once per sync
+    if (!this->should_update_eye_matrices) {
+        return VRRuntime::Error::SUCCESS;
+    }
+
     if (!this->session_ready || this->views.empty()) {
         return VRRuntime::Error::SUCCESS;
     }
@@ -564,7 +570,8 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         this->projections[1] = get_mat(1);
         this->should_recalculate_eye_projections = false;
     }
-
+    // don't allow the eye matrices to be derived again until after the next frame sync
+    this->should_update_eye_matrices = false;
     return VRRuntime::Error::SUCCESS;
 }
 
