@@ -246,8 +246,10 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz) {
         const auto bottom = tan_half_fov[3];
 
         // signs : at this point we expect right [1] and bottom [3] to be negative
-        SPDLOG_INFO("derived FOV for {} eye: {}, {}, {}, {}", eye == 0 ? "left" : "right", left, right, top, bottom);
-        SPDLOG_INFO("derived texture bounds {} eye: {}, {}, {}, {}", eye == 0 ? "left" : "right", view_bounds[eye][0], view_bounds[eye][1], view_bounds[eye][2], view_bounds[eye][3]);
+        SPDLOG_INFO("Original FOV for {} eye: {}, {}, {}, {}", eye == 0 ? "left" : "right", -this->raw_projections[eye][0], -this->raw_projections[eye][1],
+                                                                                            -this->raw_projections[eye][2], -this->raw_projections[eye][3]);
+        SPDLOG_INFO("Derived FOV for {} eye:  {}, {}, {}, {}",  eye == 0 ? "left" : "right", left, right, top, bottom);
+        SPDLOG_INFO("Derived texture bounds {} eye: {}, {}, {}, {}", eye == 0 ? "left" : "right", view_bounds[eye][0], view_bounds[eye][1], view_bounds[eye][2], view_bounds[eye][3]);
         float sum_rl = (left + right);
         float sum_tb = (top + bottom);
         float inv_rl = (1.0f / (left - right));
@@ -262,12 +264,13 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz) {
     };
     // if we've not yet derived an eye projection matrix, or we've changed the projection, derive it here
     // Hacky way to check for an uninitialised eye matrix - is there something better, is this necessary?
-    if (this->should_recalculate_eye_projections || this->projections[vr::Eye_Left][2][3] == 0) {
+    if (this->should_recalculate_eye_projections || this->last_eye_matrix_nearz != nearz || this->projections[vr::Eye_Left][2][3] == 0) {
         this->hmd->GetProjectionRaw(vr::Eye_Left, &this->raw_projections[vr::Eye_Left][0], &this->raw_projections[vr::Eye_Left][1], &this->raw_projections[vr::Eye_Left][2], &this->raw_projections[vr::Eye_Left][3]);
         this->hmd->GetProjectionRaw(vr::Eye_Right, &this->raw_projections[vr::Eye_Right][0], &this->raw_projections[vr::Eye_Right][1], &this->raw_projections[vr::Eye_Right][2], &this->raw_projections[vr::Eye_Right][3]);
         this->projections[vr::Eye_Left] = get_mat(vr::Eye_Left);
         this->projections[vr::Eye_Right] = get_mat(vr::Eye_Right);
         this->should_recalculate_eye_projections = false;
+        this->last_eye_matrix_nearz = nearz;
     }
     // don't allow the eye matrices to be derived again until after the next frame sync
     this->should_update_eye_matrices = false;

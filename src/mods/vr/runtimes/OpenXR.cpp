@@ -536,8 +536,10 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         const auto bottom = tan_half_fov[3];
 
         // signs: at this point we expect left[0] and bottom[3] to be negative
-        SPDLOG_INFO("derived FOV for {} eye: {}, {}, {}, {}", eye == 0 ? "left" : "right", left, right, top, bottom);
-        SPDLOG_INFO("derived texture bounds {} eye: {}, {}, {}, {}", eye == 0 ? "left" : "right", view_bounds[eye][0], view_bounds[eye][1], view_bounds[eye][2], view_bounds[eye][3]);
+        SPDLOG_INFO("Original FOV for {} eye: {}, {}, {}, {}", eye == 0 ? "left" : "right", this->raw_projections[eye][0], this->raw_projections[eye][1],
+                                                                                            this->raw_projections[eye][2], this->raw_projections[eye][3]);
+        SPDLOG_INFO("Derived FOV for {} eye:  {}, {}, {}, {}", eye == 0 ? "left" : "right", left, right, top, bottom);
+        SPDLOG_INFO("Derived texture bounds {} eye: {}, {}, {}, {}", eye == 0 ? "left" : "right", view_bounds[eye][0], view_bounds[eye][1], view_bounds[eye][2], view_bounds[eye][3]);
         float sum_rl = (right + left);
         float sum_tb = (top + bottom);
         float inv_rl = (1.0f / (right - left));
@@ -553,7 +555,7 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
 
     // if we've not yet derived an eye projection matrix, or we've changed the projection, derive it here
     // Hacky way to check for an uninitialised eye matrix - is there something better, is this necessary?
-    if (this->should_recalculate_eye_projections || this->projections[0][2][3] == 0) {
+    if (this->should_recalculate_eye_projections || this->last_eye_matrix_nearz != nearz || this->projections[0][2][3] == 0) {
         // deriving the texture bounds when modifying projections requires left and right raw projections so get them all before we start:
         std::unique_lock __{this->eyes_mtx};
         const auto& left_fov = this->views[0].fov;
@@ -569,6 +571,7 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         this->projections[0] = get_mat(0);
         this->projections[1] = get_mat(1);
         this->should_recalculate_eye_projections = false;
+        this->last_eye_matrix_nearz = nearz;
     }
     // don't allow the eye matrices to be derived again until after the next frame sync
     this->should_update_eye_matrices = false;
