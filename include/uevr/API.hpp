@@ -102,6 +102,7 @@ public:
     struct FProperty;
     struct FFieldClass;
     struct FUObjectArray;
+    struct FName;
 
     template<typename T = UObject>
     T* find_uobject(std::wstring_view name) {
@@ -143,6 +144,33 @@ public:
         static const auto fn = sdk()->functions->get_uobject_array;
         return (FUObjectArray*)fn();
     }
+
+    struct FName {
+        inline UEVR_FNameHandle to_handle() { return (UEVR_FNameHandle)this; }
+        inline UEVR_FNameHandle to_handle() const { return (UEVR_FNameHandle)this; }
+
+        std::wstring to_string() const {
+            static const auto fn = initialize()->to_string;
+            const auto size = fn(to_handle(), nullptr, 0);
+            if (size == 0) {
+                return L"";
+            }
+
+            std::wstring result(size, L'\0');
+            fn(to_handle(), result.data(), size + 1);
+            return result;
+        }
+
+    private:
+        static inline const UEVR_FNameFunctions* s_functions{nullptr};
+        static inline const UEVR_FNameFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->fname;
+            }
+
+            return s_functions;
+        }
+    };
 
     struct UObject {
         inline UEVR_UObjectHandle to_handle() { return (UEVR_UObjectHandle)this; }
@@ -200,6 +228,11 @@ public:
         template<typename T>
         T& get_property(std::wstring_view name) {
             return *get_property_data<T>(name);
+        }
+
+        FName* get_fname() const {
+            static const auto fn = initialize()->get_fname;
+            return (FName*)fn(to_handle());
         }
 
     private:
@@ -355,17 +388,16 @@ public:
             static const auto fn = initialize()->get_next;
             return (FField*)fn(to_handle());
         }
-
-        // TODO: stubbed out for now
-        /*
-        inline std::wstring get_name() const {
+        
+        FName* get_fname() const {
+            static const auto fn = initialize()->get_fname;
+            return (FName*)fn(to_handle());
         }
 
         FFieldClass* get_class() const {
             static const auto fn = initialize()->get_class;
             return (FFieldClass*)fn(to_handle());
         }
-        */
 
     private:
         static inline const UEVR_FFieldFunctions* s_functions{nullptr};
@@ -401,24 +433,27 @@ public:
 
     struct FFieldClass {
         // TODO: stubbed out for now
-        /*inline UEVR_FFieldClassHandle to_handle() { return (UEVR_FFieldClassHandle)this; }
+        inline UEVR_FFieldClassHandle to_handle() { return (UEVR_FFieldClassHandle)this; }
         inline UEVR_FFieldClassHandle to_handle() const { return (UEVR_FFieldClassHandle)this; }
 
+        FName* get_fname() const {
+            static const auto fn = initialize()->get_fname;
+            return (FName*)fn(to_handle());
+        }
+
         std::wstring get_name() const {
-            static const auto fn = initialize()->get_name;
-            return fn(to_handle());
+            return get_fname()->to_string();
         }
 
     private:
         static inline const UEVR_FFieldClassFunctions* s_functions{nullptr};
         static inline const UEVR_FFieldClassFunctions* initialize() {
             if (s_functions == nullptr) {
-                s_functions = API::get()->sdk()->ffieldclass;
+                s_functions = API::get()->sdk()->ffield_class;
             }
 
             return s_functions;
         }
-        */
     };
 
     // TODO

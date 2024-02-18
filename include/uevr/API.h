@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 6
+#define UEVR_PLUGIN_VERSION_MINOR 7
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -66,6 +66,8 @@ DECLARE_UEVR_HANDLE(UEVR_FPropertyHandle);
 DECLARE_UEVR_HANDLE(UEVR_UStructHandle);
 DECLARE_UEVR_HANDLE(UEVR_UClassHandle);
 DECLARE_UEVR_HANDLE(UEVR_UFunctionHandle);
+DECLARE_UEVR_HANDLE(UEVR_FNameHandle);
+DECLARE_UEVR_HANDLE(UEVR_FFieldClassHandle);
 
 // OpenXR stuff
 DECLARE_UEVR_HANDLE(UEVR_XrInstance);
@@ -233,6 +235,8 @@ typedef struct {
 
 typedef struct {
     UEVR_FFieldHandle (*get_next)(UEVR_FFieldHandle field);
+    UEVR_FFieldClassHandle (*get_class)(UEVR_FFieldHandle field);
+    UEVR_FNameHandle (*get_fname)(UEVR_FFieldHandle field);
 } UEVR_FFieldFunctions;
 
 typedef struct {
@@ -263,6 +267,8 @@ typedef struct {
 
     void (*process_event)(UEVR_UObjectHandle object, UEVR_UFunctionHandle function, void* params);
     void (*call_function)(UEVR_UObjectHandle object, const wchar_t* name, void* params);
+
+    UEVR_FNameHandle (*get_fname)(UEVR_UObjectHandle object);
 } UEVR_UObjectFunctions;
 
 typedef struct {
@@ -279,6 +285,14 @@ typedef struct {
 } UEVR_UObjectHookFunctions;
 
 typedef struct {
+    UEVR_FNameHandle (*get_fname)(UEVR_FFieldClassHandle field_class);
+} UEVR_FFieldClassFunctions;
+
+typedef struct {
+    unsigned int (*to_string)(UEVR_FNameHandle name, wchar_t* buffer, unsigned int buffer_size);
+} UEVR_FNameFunctions;
+
+typedef struct {
     const UEVR_SDKFunctions* functions;
     const UEVR_SDKCallbacks* callbacks;
     const UEVR_UObjectFunctions* uobject;
@@ -289,6 +303,8 @@ typedef struct {
     const UEVR_UClassFunctions* uclass;
     const UEVR_UFunctionFunctions* ufunction;
     const UEVR_UObjectHookFunctions* uobject_hook;
+    const UEVR_FFieldClassFunctions* ffield_class;
+    const UEVR_FNameFunctions* fname;
 } UEVR_SDKData;
 
 DECLARE_UEVR_HANDLE(UEVR_IVRSystem);

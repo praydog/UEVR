@@ -24,6 +24,8 @@ SOFTWARE.
 #include <sstream>
 #include <mutex>
 #include <memory>
+#include <locale>
+#include <codecvt>
 
 #include <Windows.h>
 
@@ -178,6 +180,38 @@ public:
 
             API::get()->log_info("Running once on pre engine tick");
             API::get()->execute_command(L"stat fps");
+
+            // Log the UEngine name.
+            const auto uengine_fname = engine->get_fname();
+            const auto uengine_name = uengine_fname->to_string();
+
+            // Convert from wide to narrow string (we do not have utility::narrow in this context).
+            std::string uengine_name_narrow{std::wstring_convert<std::codecvt_utf8<wchar_t>>{}.to_bytes(uengine_name)};
+
+            API::get()->log_info("Engine name: %s", uengine_name_narrow.c_str());
+
+            // Go through all of engine's fields and log their names.
+            const auto engine_class_ours = (API::UStruct*)engine->get_class();
+            for (auto super = engine_class_ours; super != nullptr; super = super->get_super()) {
+                for (auto field = super->get_child_properties(); field != nullptr; field = field->get_next()) {
+                    const auto field_fname = field->get_fname();
+                    const auto field_name = field_fname->to_string();
+                    const auto field_class = field->get_class();
+
+                    std::wstring prepend{};
+
+                    if (field_class != nullptr) {
+                        const auto field_class_fname = field_class->get_fname();
+                        const auto field_class_name = field_class_fname->to_string();
+
+                        prepend = field_class_name + L" ";
+                    }
+
+                    // Convert from wide to narrow string (we do not have utility::narrow in this context).
+                    std::string field_name_narrow{std::wstring_convert<std::codecvt_utf8<wchar_t>>{}.to_bytes(prepend + field_name)};
+                    API::get()->log_info(" Field name: %s", field_name_narrow.c_str());
+                }
+            }
 
             // Check if we can find the GameInstance and call is_a() on it.
             const auto game_instance = engine->get_property<API::UObject*>(L"GameInstance");

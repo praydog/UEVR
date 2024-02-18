@@ -339,6 +339,10 @@ UEVR_UObjectFunctions g_uobject_functions {
     [](UEVR_UObjectHandle obj, const wchar_t* name, void* params) {
         UOBJECT(obj)->call_function(name, params);
     },
+    // get_fname
+    [](UEVR_UObjectHandle obj) {
+        return (UEVR_FNameHandle)&UOBJECT(obj)->get_fname();
+    },
 };
 
 UEVR_UObjectArrayFunctions g_uobject_array_functions {
@@ -354,6 +358,14 @@ UEVR_FFieldFunctions g_ffield_functions {
     // get_next
     [](UEVR_FFieldHandle field) {
         return (UEVR_FFieldHandle)FFIELD(field)->get_next();
+    },
+    // get_class
+    [](UEVR_FFieldHandle field) {
+        return (UEVR_FFieldClassHandle)FFIELD(field)->get_class();
+    },
+    // get_fname
+    [](UEVR_FFieldHandle field) {
+        return (UEVR_FNameHandle)&FFIELD(field)->get_field_name();
     },
 };
 
@@ -489,6 +501,35 @@ UEVR_UObjectHookFunctions g_uobjecthook_functions {
     uevr::uobjecthook::get_first_object_by_class_name
 };
 
+#define FFIELDCLASS(x) ((sdk::FFieldClass*)x)
+
+UEVR_FFieldClassFunctions g_ffield_class_functions {
+    // get_fname
+    [](UEVR_FFieldClassHandle field) {
+        return (UEVR_FNameHandle)&FFIELDCLASS(field)->get_name();
+    },
+};
+
+#define FNAME(x) ((sdk::FName*)x)
+
+UEVR_FNameFunctions g_fname_functions {
+    // to_string
+    [](UEVR_FNameHandle name, wchar_t* buffer, unsigned int buffer_size) -> unsigned int {
+        const auto result = FNAME(name)->to_string();
+
+        if (buffer == nullptr || buffer_size == 0) {
+            return (unsigned int)result.size();
+        }
+
+        const auto size = std::min<size_t>(result.size(), (size_t)buffer_size - 1);
+
+        memcpy(buffer, result.c_str(), size * sizeof(wchar_t));
+        buffer[size] = L'\0';
+
+        return (unsigned int)size;
+    },
+};
+
 UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
@@ -499,7 +540,9 @@ UEVR_SDKData g_sdk_data {
     &g_ustruct_functions,
     &g_uclass_functions,
     &g_ufunction_functions,
-    &g_uobjecthook_functions
+    &g_uobjecthook_functions,
+    &g_ffield_class_functions,
+    &g_fname_functions,
 };
 
 namespace uevr {
@@ -922,11 +965,11 @@ void PluginLoader::early_init() try {
     namespace fs = std::filesystem;
 
     std::scoped_lock _{m_mux};
-    std::string module_path{};
+    std::wstring module_path{};
 
     module_path.resize(1024, 0);
-    module_path.resize(GetModuleFileName(nullptr, module_path.data(), module_path.size()));
-    spdlog::info("[PluginLoader] Module path {}", module_path);
+    module_path.resize(GetModuleFileNameW(nullptr, module_path.data(), module_path.size()));
+    spdlog::info("[PluginLoader] Module path {}", utility::narrow(module_path));
 
     const auto plugin_path = Framework::get_persistent_dir() / "plugins";
 
