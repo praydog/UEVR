@@ -182,8 +182,7 @@ public:
             API::get()->execute_command(L"stat fps");
 
             // Log the UEngine name.
-            const auto uengine_fname = engine->get_fname();
-            const auto uengine_name = uengine_fname->to_string();
+            const auto uengine_name = engine->get_full_name();
 
             // Convert from wide to narrow string (we do not have utility::narrow in this context).
             std::string uengine_name_narrow{std::wstring_convert<std::codecvt_utf8<wchar_t>>{}.to_bytes(uengine_name)};
