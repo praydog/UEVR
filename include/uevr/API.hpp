@@ -181,58 +181,74 @@ public:
             return result;
         }
 
-        inline UClass* get_class() {
+        inline UClass* get_class() const {
             static const auto fn = initialize()->get_class;
             return (UClass*)fn(to_handle());
         }
 
-        inline UObject* get_outer() {
+        inline UObject* get_outer() const {
             static const auto fn = initialize()->get_outer;
             return (UObject*)fn(to_handle());
         }
 
-        inline bool is_a(UClass* cmp) {
+        inline bool is_a(UClass* cmp) const {
             static const auto fn = initialize()->is_a;
             return fn(to_handle(), cmp->to_handle());
         }
 
         template<typename T>
-        inline bool is_a() {
+        inline bool is_a() const {
             return is_a(T::static_class());
         }
 
-        void process_event(UFunction* function, void* params) {
+        void process_event(UFunction* function, void* params) const {
             static const auto fn = initialize()->process_event;
             fn(to_handle(), function->to_handle(), params);
         }
 
-        void call_function(std::wstring_view name, void* params) {
+        void call_function(std::wstring_view name, void* params) const {
             static const auto fn = initialize()->call_function;
             fn(to_handle(), name.data(), params);
         }
 
         // Pointer that points to the address of the data within the object, not the data itself
         template<typename T>
-        T* get_property_data(std::wstring_view name) {
+        T* get_property_data(std::wstring_view name) const {
             static const auto fn = initialize()->get_property_data;
             return (T*)fn(to_handle(), name.data());
         }
 
         // Pointer that points to the address of the data within the object, not the data itself
-        void* get_property_data(std::wstring_view name) {
+        void* get_property_data(std::wstring_view name) const {
             return get_property_data<void*>(name);
         }
 
         // use this if you know for sure that the property exists
         // or you will cause an access violation
         template<typename T>
-        T& get_property(std::wstring_view name) {
+        T& get_property(std::wstring_view name) const {
             return *get_property_data<T>(name);
         }
 
         FName* get_fname() const {
             static const auto fn = initialize()->get_fname;
             return (FName*)fn(to_handle());
+        }
+
+        std::wstring get_full_name() const {
+            const auto c = get_class();
+
+            if (c == nullptr) {
+                return L"";
+            }
+
+            auto obj_name = get_fname()->to_string();
+
+            for (auto outer = this->get_outer(); outer != nullptr && outer != this; outer = outer->get_outer()) {
+                obj_name = outer->get_fname()->to_string() + L'.' + obj_name;
+            }
+
+            return c->get_fname()->to_string() + L' ' + obj_name;
         }
 
     private:
