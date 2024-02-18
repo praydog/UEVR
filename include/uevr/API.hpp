@@ -201,12 +201,12 @@ public:
             return is_a(T::static_class());
         }
 
-        void process_event(UFunction* function, void* params) const {
+        void process_event(UFunction* function, void* params) {
             static const auto fn = initialize()->process_event;
             fn(to_handle(), function->to_handle(), params);
         }
 
-        void call_function(std::wstring_view name, void* params) const {
+        void call_function(std::wstring_view name, void* params) {
             static const auto fn = initialize()->call_function;
             fn(to_handle(), name.data(), params);
         }
@@ -271,22 +271,22 @@ public:
             return result;
         }
 
-        UStruct* get_super_struct() {
+        UStruct* get_super_struct() const {
             static const auto fn = initialize()->get_super_struct;
             return (UStruct*)fn(to_handle());
         }
 
-        UStruct* get_super() {
+        UStruct* get_super() const {
             return get_super_struct();
         }
         
-        UFunction* find_function(std::wstring_view name) {
+        UFunction* find_function(std::wstring_view name) const {
             static const auto fn = initialize()->find_function;
             return (UFunction*)fn(to_handle(), name.data());
         }
 
         // Not an array, it's a linked list. Meant to call ->get_next() until nullptr
-        FField* get_child_properties() {
+        FField* get_child_properties() const {
             static const auto fn = initialize()->get_child_properties;
             return (FField*)fn(to_handle());
         }
@@ -379,7 +379,7 @@ public:
             obj->process_event(this, params);
         }
 
-        void* get_native_function() {
+        void* get_native_function() const {
             static const auto fn = initialize()->get_native_function;
             return fn(to_handle());
         }
@@ -400,7 +400,7 @@ public:
         inline UEVR_FFieldHandle to_handle() { return (UEVR_FFieldHandle)this; }
         inline UEVR_FFieldHandle to_handle() const { return (UEVR_FFieldHandle)this; }
 
-        inline FField* get_next() {
+        inline FField* get_next() const {
             static const auto fn = initialize()->get_next;
             return (FField*)fn(to_handle());
         }
