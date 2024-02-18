@@ -168,24 +168,47 @@ public:
         return !ImGui::GetIO().WantCaptureMouse && !ImGui::GetIO().WantCaptureKeyboard;
     }
 
-    void on_pre_engine_tick(UEVR_UGameEngineHandle engine, float delta) override {
+    void on_pre_engine_tick(API::UGameEngine* engine, float delta) override {
         PLUGIN_LOG_ONCE("Pre Engine Tick: %f", delta);
 
         static bool once = true;
 
         if (once) {
-            API::get()->log_info("Running once on pre engine tick");
-
             once = false;
-            const auto sdk = API::get()->sdk();
-            sdk->functions->execute_command(L"stat fps");
-            sdk->uobject_hook->activate();
+
+            API::get()->log_info("Running once on pre engine tick");
+            API::get()->execute_command(L"stat fps");
+
+            // Check if we can find the GameInstance and call is_a() on it.
+            const auto game_instance = engine->get_property<API::UObject*>(L"GameInstance");
+
+            if (game_instance != nullptr) {
+                const auto game_instance_class = API::get()->find_uobject<API::UClass>(L"Class /Script/Engine.GameInstance");
+
+                if (game_instance->is_a(game_instance_class)) {
+                    const auto& local_players = game_instance->get_property<API::TArray<API::UObject*>>(L"LocalPlayers");
+
+                    if (local_players.count > 0 && local_players.data != nullptr) {
+                        const auto local_player = local_players.data[0];
+
+                        
+                    } else {
+                        API::get()->log_error("Failed to find LocalPlayers");
+                    }
+
+                    API::get()->log_info("GameInstance is a UGameInstance");
+                } else {
+                    API::get()->log_error("GameInstance is not a UGameInstance");
+                }
+            } else {
+                API::get()->log_error("Failed to find GameInstance");
+            }
 
             // Find the Engine object and compare it to the one we have.
-            const auto engine_class = (UEVR_UClassHandle)sdk->uobject_array->find_uobject(L"Class /Script/Engine.GameEngine");
+            const auto engine_class = API::get()->find_uobject<API::UClass>(L"Class /Script/Engine.GameEngine");
             if (engine_class != nullptr) {
                 // Round 1, check if we can find it via get_first_object_by_class.
-                const auto engine_searched = (UEVR_UGameEngineHandle)sdk->uobject_hook->get_first_object_by_class(engine_class, false);
+                const auto engine_searched = engine_class->get_first_object_matching<API::UGameEngine>(false);
 
                 if (engine_searched != nullptr) {
                     if (engine_searched == engine) {
@@ -198,12 +221,9 @@ public:
                 }
 
                 // Round 2, check if we can find it via get_objects_by_class.
-                std::vector<UEVR_UGameEngineHandle> objects{};
-                objects.resize(sdk->uobject_hook->get_objects_by_class(engine_class, nullptr, 0, false));
+                const auto objects = engine_class->get_objects_matching<API::UGameEngine>(false);
 
-                if (objects.size() > 0) {
-                    sdk->uobject_hook->get_objects_by_class(engine_class, (UEVR_UObjectHandle*)objects.data(), objects.size(), false);
-
+                if (!objects.empty()) {
                     for (const auto& obj : objects) {
                         if (obj == engine) {
                             API::get()->log_info("Found Engine object @ 0x%p", obj);
@@ -232,7 +252,7 @@ public:
         }
     }
 
-    void on_post_engine_tick(UEVR_UGameEngineHandle engine, float delta) override {
+    void on_post_engine_tick(API::UGameEngine* engine, float delta) override {
         PLUGIN_LOG_ONCE("Post Engine Tick: %f", delta);
     }
 

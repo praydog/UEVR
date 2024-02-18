@@ -420,7 +420,7 @@ namespace uobjecthook {
 
         const auto default_object = ((sdk::UClass*)klass)->get_class_default_object();
 
-        int i = 0;
+        unsigned int i = 0;
         for (auto&& obj : objects) {
             if (!allow_default && obj == default_object) {
                 continue;

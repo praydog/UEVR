@@ -89,6 +89,358 @@ public:
     template <typename... Args> void log_warn(const char* format, Args... args) { m_param->functions->log_warn(format, args...); }
     template <typename... Args> void log_info(const char* format, Args... args) { m_param->functions->log_info(format, args...); }
 
+public:
+    // C++ wrapper structs for the C structs
+    struct UObject;
+    struct UEngine;
+    struct UGameEngine;
+    struct UWorld;
+    struct UStruct;
+    struct UClass;
+    struct UFunction;
+    struct FField;
+    struct FProperty;
+    struct FFieldClass;
+    struct FUObjectArray;
+
+    template<typename T = UObject>
+    T* find_uobject(std::wstring_view name) {
+        static const auto fn = sdk()->uobject_array->find_uobject;
+        return (T*)fn(name.data());
+    }
+
+    UEngine* get_engine() {
+        static const auto fn = sdk()->functions->get_uengine;
+        return (UEngine*)fn();
+    }
+
+    UObject* get_player_controller(int32_t index) {
+        static const auto fn = sdk()->functions->get_player_controller;
+        return (UObject*)fn(index);
+    }
+
+    UObject* get_local_pawn(int32_t index) {
+        static const auto fn = sdk()->functions->get_local_pawn;
+        return (UObject*)fn(index);
+    }
+
+    UObject* spawn_object(UClass* klass, UObject* outer) {
+        static const auto fn = sdk()->functions->spawn_object;
+        return (UObject*)fn(klass->to_handle(), outer->to_handle());
+    }
+
+    void execute_command(std::wstring_view command) {
+        static const auto fn = sdk()->functions->execute_command;
+        fn(command.data());
+    }
+
+    void execute_command_ex(UWorld* world, std::wstring_view command, void* output_device) {
+        static const auto fn = sdk()->functions->execute_command_ex;
+        fn((UEVR_UObjectHandle)world, command.data(), output_device);
+    }
+
+    FUObjectArray* get_uobject_array() {
+        static const auto fn = sdk()->functions->get_uobject_array;
+        return (FUObjectArray*)fn();
+    }
+
+    struct UObject {
+        inline UEVR_UObjectHandle to_handle() { return (UEVR_UObjectHandle)this; }
+        inline UEVR_UObjectHandle to_handle() const { return (UEVR_UObjectHandle)this; }
+
+        static UClass* static_class() {
+            static auto result = API::get()->find_uobject<UClass>(L"Class /Script/CoreUObject.Object");
+            return result;
+        }
+
+        inline UClass* get_class() {
+            static const auto fn = initialize()->get_class;
+            return (UClass*)fn(to_handle());
+        }
+
+        inline UObject* get_outer() {
+            static const auto fn = initialize()->get_outer;
+            return (UObject*)fn(to_handle());
+        }
+
+        inline bool is_a(UClass* cmp) {
+            static const auto fn = initialize()->is_a;
+            return fn(to_handle(), cmp->to_handle());
+        }
+
+        template<typename T>
+        inline bool is_a() {
+            return is_a(T::static_class());
+        }
+
+        void process_event(UFunction* function, void* params) {
+            static const auto fn = initialize()->process_event;
+            fn(to_handle(), function->to_handle(), params);
+        }
+
+        void call_function(std::wstring_view name, void* params) {
+            static const auto fn = initialize()->call_function;
+            fn(to_handle(), name.data(), params);
+        }
+
+        // Pointer that points to the address of the data within the object, not the data itself
+        template<typename T>
+        T* get_property_data(std::wstring_view name) {
+            static const auto fn = initialize()->get_property_data;
+            return (T*)fn(to_handle(), name.data());
+        }
+
+        // Pointer that points to the address of the data within the object, not the data itself
+        void* get_property_data(std::wstring_view name) {
+            return get_property_data<void*>(name);
+        }
+
+        // use this if you know for sure that the property exists
+        // or you will cause an access violation
+        template<typename T>
+        T& get_property(std::wstring_view name) {
+            return *get_property_data<T>(name);
+        }
+
+    private:
+        static inline const UEVR_UObjectFunctions* s_functions{nullptr};
+        inline static const UEVR_UObjectFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->uobject;
+            }
+
+            return s_functions;
+        }
+    };
+
+    struct UStruct : public UObject {
+        inline UEVR_UStructHandle to_handle() { return (UEVR_UStructHandle)this; }
+        inline UEVR_UStructHandle to_handle() const { return (UEVR_UStructHandle)this; }
+
+        static UClass* static_class() {
+            static auto result = API::get()->find_uobject<UClass>(L"Class /Script/CoreUObject.Struct");
+            return result;
+        }
+
+        UStruct* get_super_struct() {
+            static const auto fn = initialize()->get_super_struct;
+            return (UStruct*)fn(to_handle());
+        }
+
+        UStruct* get_super() {
+            return get_super_struct();
+        }
+        
+        UFunction* find_function(std::wstring_view name) {
+            static const auto fn = initialize()->find_function;
+            return (UFunction*)fn(to_handle(), name.data());
+        }
+
+        // Not an array, it's a linked list. Meant to call ->get_next() until nullptr
+        FField* get_child_properties() {
+            static const auto fn = initialize()->get_child_properties;
+            return (FField*)fn(to_handle());
+        }
+
+    private:
+        static inline const UEVR_UStructFunctions* s_functions{nullptr};
+        inline static const UEVR_UStructFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->ustruct;
+            }
+
+            return s_functions;
+        }
+    };
+
+    struct UClass : public UStruct {
+        inline UEVR_UClassHandle to_handle() { return (UEVR_UClassHandle)this; }
+        inline UEVR_UClassHandle to_handle() const { return (UEVR_UClassHandle)this; }
+
+        static UClass* static_class() {
+            static auto result = API::get()->find_uobject<UClass>(L"Class /Script/CoreUObject.Class");
+            return result;
+        }
+
+        UObject* get_class_default_object() const {
+            static const auto fn = initialize()->get_class_default_object;
+            return (UObject*)fn(to_handle());
+        }
+
+        std::vector<UObject*> get_objects_matching(bool allow_default = false) const {
+            static auto activate_fn = API::get()->sdk()->uobject_hook->activate;
+            static auto fn = API::get()->sdk()->uobject_hook->get_objects_by_class;
+            activate_fn();
+            std::vector<UObject*> result{};
+            const auto size = fn(to_handle(), nullptr, 0, allow_default);
+            if (size == 0) {
+                return result;
+            }
+
+            result.resize(size);
+
+            fn(to_handle(), (UEVR_UObjectHandle*)result.data(), size, allow_default);
+            return result;
+        }
+
+        UObject* get_first_object_matching(bool allow_default = false) const {
+            static auto activate_fn = API::get()->sdk()->uobject_hook->activate;
+            static auto fn = API::get()->sdk()->uobject_hook->get_first_object_by_class;
+            activate_fn();
+            return (UObject*)fn(to_handle(), allow_default);
+        }
+
+        template<typename T>
+        std::vector<T*> get_objects_matching(bool allow_default = false) const {
+            std::vector<UObject*> objects = get_objects_matching(allow_default);
+
+            return *reinterpret_cast<std::vector<T*>*>(&objects);
+        }
+
+        template<typename T>
+        T* get_first_object_matching(bool allow_default = false) const {
+            return (T*)get_first_object_matching(allow_default);
+        }
+
+    private:
+        static inline const UEVR_UClassFunctions* s_functions{nullptr};
+        inline static const UEVR_UClassFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->uclass;
+            }
+
+            return s_functions;
+        }
+    };
+
+    struct UFunction : public UStruct {
+        inline UEVR_UFunctionHandle to_handle() { return (UEVR_UFunctionHandle)this; }
+        inline UEVR_UFunctionHandle to_handle() const { return (UEVR_UFunctionHandle)this; }
+
+        static UClass* static_class() {
+            static auto result = API::get()->find_uobject<UClass>(L"Class /Script/CoreUObject.Function");
+            return result;
+        }
+
+        void call(UObject* obj, void* params) {
+            if (obj == nullptr) {
+                return;
+            }
+
+            obj->process_event(this, params);
+        }
+
+        void* get_native_function() {
+            static const auto fn = initialize()->get_native_function;
+            return fn(to_handle());
+        }
+
+    private:
+        static inline const UEVR_UFunctionFunctions* s_functions{nullptr};
+        inline static const UEVR_UFunctionFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->ufunction;
+            }
+
+            return s_functions;
+        }
+    };
+
+    // Wrapper class for UField AND FField
+    struct FField {
+        inline UEVR_FFieldHandle to_handle() { return (UEVR_FFieldHandle)this; }
+        inline UEVR_FFieldHandle to_handle() const { return (UEVR_FFieldHandle)this; }
+
+        inline FField* get_next() {
+            static const auto fn = initialize()->get_next;
+            return (FField*)fn(to_handle());
+        }
+
+        // TODO: stubbed out for now
+        /*
+        inline std::wstring get_name() const {
+        }
+
+        FFieldClass* get_class() const {
+            static const auto fn = initialize()->get_class;
+            return (FFieldClass*)fn(to_handle());
+        }
+        */
+
+    private:
+        static inline const UEVR_FFieldFunctions* s_functions{nullptr};
+        static inline const UEVR_FFieldFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->ffield;
+            }
+
+            return s_functions;
+        }
+    };
+
+    // Wrapper class for FProperty AND UProperty
+    struct FProperty : public FField {
+        inline UEVR_FPropertyHandle to_handle() { return (UEVR_FPropertyHandle)this; }
+        inline UEVR_FPropertyHandle to_handle() const { return (UEVR_FPropertyHandle)this; }
+
+        int32_t get_offset() const {
+            static const auto fn = initialize()->get_offset;
+            return fn(to_handle());
+        }
+
+    private:
+        static inline const UEVR_FPropertyFunctions* s_functions{nullptr};
+        static inline const UEVR_FPropertyFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->fproperty;
+            }
+
+            return s_functions;
+        }
+    };
+
+    struct FFieldClass {
+        // TODO: stubbed out for now
+        /*inline UEVR_FFieldClassHandle to_handle() { return (UEVR_FFieldClassHandle)this; }
+        inline UEVR_FFieldClassHandle to_handle() const { return (UEVR_FFieldClassHandle)this; }
+
+        std::wstring get_name() const {
+            static const auto fn = initialize()->get_name;
+            return fn(to_handle());
+        }
+
+    private:
+        static inline const UEVR_FFieldClassFunctions* s_functions{nullptr};
+        static inline const UEVR_FFieldClassFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->ffieldclass;
+            }
+
+            return s_functions;
+        }
+        */
+    };
+
+    // TODO
+    struct UEngine : public UObject {
+
+    };
+
+    struct UGameEngine : public UEngine {
+
+    };
+
+    struct UWorld : public UObject {
+
+    };
+
+    template <typename T>
+    struct TArray {
+        T* data;
+        int32_t count;
+        int32_t capacity;
+    };
+
 private:
     const UEVR_PluginInitializeParam* m_param;
     const UEVR_SDKData* m_sdk;
