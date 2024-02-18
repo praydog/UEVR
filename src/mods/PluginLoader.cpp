@@ -21,6 +21,7 @@
 #include <sdk/UGameplayStatics.hpp>
 #include <sdk/APlayerController.hpp>
 
+#include "UObjectHook.hpp"
 #include "VR.hpp"
 
 #include "PluginLoader.hpp"
@@ -400,6 +401,94 @@ UEVR_UFunctionFunctions g_ufunction_functions {
     },
 };
 
+namespace uevr {
+namespace uobjecthook {
+    void activate() {
+        UObjectHook::get()->activate();
+    }
+
+    bool exists(UEVR_UObjectHandle obj) {
+        return UObjectHook::get()->exists((sdk::UObject*)obj);
+    }
+
+    int get_objects_by_class(UEVR_UClassHandle klass, UEVR_UObjectHandle* out_objects, unsigned int max_objects, bool allow_default) {
+        const auto objects = UObjectHook::get()->get_objects_by_class((sdk::UClass*)klass);
+
+        if (objects.empty()) {
+            return 0;
+        }
+
+        const auto default_object = ((sdk::UClass*)klass)->get_class_default_object();
+
+        int i = 0;
+        for (auto&& obj : objects) {
+            if (!allow_default && obj == default_object) {
+                continue;
+            }
+
+            if (i < max_objects && out_objects != nullptr) {
+                out_objects[i++] = (UEVR_UObjectHandle)obj;
+            } else {
+                i++;
+            }
+        }
+
+        return i;
+    }
+
+    int get_objects_by_class_name(const wchar_t* class_name, UEVR_UObjectHandle* out_objects, unsigned int max_objects, bool allow_default) {
+        const auto c = sdk::find_uobject<sdk::UClass>(class_name);
+
+        if (c == nullptr) {
+            return 0;
+        }
+
+        return get_objects_by_class((UEVR_UClassHandle)c, out_objects, max_objects, allow_default);
+    }
+
+    UEVR_UObjectHandle get_first_object_by_class(UEVR_UClassHandle klass, bool allow_default) {
+        const auto objects = UObjectHook::get()->get_objects_by_class((sdk::UClass*)klass);
+
+        if (objects.empty()) {
+            return nullptr;
+        }
+
+        if (allow_default) {
+            return (UEVR_UObjectHandle)*objects.begin();
+        }
+
+        const auto default_object = ((sdk::UClass*)klass)->get_class_default_object();
+
+        for (auto&& obj : objects) {
+            if (obj != default_object) {
+                return (UEVR_UObjectHandle)obj;
+            }
+        }
+
+        return (UEVR_UObjectHandle)nullptr;
+    }
+
+    UEVR_UObjectHandle get_first_object_by_class_name(const wchar_t* class_name, bool allow_default) {
+        const auto c = sdk::find_uobject<sdk::UClass>(class_name);
+
+        if (c == nullptr) {
+            return nullptr;
+        }
+
+        return get_first_object_by_class((UEVR_UClassHandle)c, allow_default);
+    }
+}
+}
+
+UEVR_UObjectHookFunctions g_uobjecthook_functions {
+    uevr::uobjecthook::activate,
+    uevr::uobjecthook::exists,
+    uevr::uobjecthook::get_objects_by_class,
+    uevr::uobjecthook::get_objects_by_class_name,
+    uevr::uobjecthook::get_first_object_by_class,
+    uevr::uobjecthook::get_first_object_by_class_name
+};
+
 UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
@@ -409,7 +498,8 @@ UEVR_SDKData g_sdk_data {
     &g_fproperty_functions,
     &g_ustruct_functions,
     &g_uclass_functions,
-    &g_ufunction_functions
+    &g_ufunction_functions,
+    &g_uobjecthook_functions
 };
 
 namespace uevr {

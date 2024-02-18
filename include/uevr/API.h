@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 5
+#define UEVR_PLUGIN_VERSION_MINOR 6
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -266,6 +266,19 @@ typedef struct {
 } UEVR_UObjectFunctions;
 
 typedef struct {
+    void (*activate)();
+    bool (*exists)(UEVR_UObjectHandle object);
+
+    /* if 0 or nullptr is passed, it will return how many objects are in the array */
+    /* so you can allocate the right amount of memory */
+    int (*get_objects_by_class)(UEVR_UClassHandle klass, UEVR_UObjectHandle* out_objects, unsigned int max_objects, bool allow_default);
+    int (*get_objects_by_class_name)(const wchar_t* class_name, UEVR_UObjectHandle* out_objects, unsigned int max_objects, bool allow_default);
+
+    UEVR_UObjectHandle (*get_first_object_by_class)(UEVR_UClassHandle klass, bool allow_default);
+    UEVR_UObjectHandle (*get_first_object_by_class_name)(const wchar_t* class_name, bool allow_default);
+} UEVR_UObjectHookFunctions;
+
+typedef struct {
     const UEVR_SDKFunctions* functions;
     const UEVR_SDKCallbacks* callbacks;
     const UEVR_UObjectFunctions* uobject;
@@ -275,6 +288,7 @@ typedef struct {
     const UEVR_UStructFunctions* ustruct;
     const UEVR_UClassFunctions* uclass;
     const UEVR_UFunctionFunctions* ufunction;
+    const UEVR_UObjectHookFunctions* uobject_hook;
 } UEVR_SDKData;
 
 DECLARE_UEVR_HANDLE(UEVR_IVRSystem);

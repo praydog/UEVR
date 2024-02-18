@@ -174,8 +174,49 @@ public:
         static bool once = true;
 
         if (once) {
+            API::get()->log_info("Running once on pre engine tick");
+
             once = false;
-            API::get()->sdk()->functions->execute_command(L"stat fps");
+            const auto sdk = API::get()->sdk();
+            sdk->functions->execute_command(L"stat fps");
+            sdk->uobject_hook->activate();
+
+            // Find the Engine object and compare it to the one we have.
+            const auto engine_class = (UEVR_UClassHandle)sdk->uobject_array->find_uobject(L"Class /Script/Engine.GameEngine");
+            if (engine_class != nullptr) {
+                // Round 1, check if we can find it via get_first_object_by_class.
+                const auto engine_searched = (UEVR_UGameEngineHandle)sdk->uobject_hook->get_first_object_by_class(engine_class, false);
+
+                if (engine_searched != nullptr) {
+                    if (engine_searched == engine) {
+                        API::get()->log_info("Found Engine object @ 0x%p", engine_searched);
+                    } else {
+                        API::get()->log_error("Found Engine object @ 0x%p, but it's not the same as the one we have", engine_searched);
+                    }
+                } else {
+                    API::get()->log_error("Failed to find Engine object");
+                }
+
+                // Round 2, check if we can find it via get_objects_by_class.
+                std::vector<UEVR_UGameEngineHandle> objects{};
+                objects.resize(sdk->uobject_hook->get_objects_by_class(engine_class, nullptr, 0, false));
+
+                if (objects.size() > 0) {
+                    sdk->uobject_hook->get_objects_by_class(engine_class, (UEVR_UObjectHandle*)objects.data(), objects.size(), false);
+
+                    for (const auto& obj : objects) {
+                        if (obj == engine) {
+                            API::get()->log_info("Found Engine object @ 0x%p", obj);
+                        } else {
+                            API::get()->log_info("Found unrelated Engine object @ 0x%p", obj);
+                        }
+                    }
+                } else {
+                    API::get()->log_error("Failed to find Engine objects");
+                }
+            } else {
+                API::get()->log_error("Failed to find Engine class");
+            }
         }
 
         if (m_initialized) {
