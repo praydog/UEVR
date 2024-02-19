@@ -733,6 +733,26 @@ unsigned int get_lowest_xinput_index() {
 void recenter_view() {
     VR::get()->recenter_view();
 }
+
+void recenter_horizon() {
+    VR::get()->recenter_horizon();
+}
+
+unsigned int get_aim_method() {
+    return (unsigned int)VR::get()->get_aim_method();
+}
+
+void set_aim_method(unsigned int method) {
+    VR::get()->set_aim_method((VR::AimMethod)method);
+}
+
+bool is_aim_allowed() {
+    return VR::get()->is_aim_allowed();
+}
+
+void set_aim_allowed(bool allowed) {
+    VR::get()->set_aim_allowed(allowed);
+}
 }
 }
 
@@ -768,6 +788,11 @@ UEVR_VRData g_vr_data {
     uevr::vr::get_movement_orientation,
     uevr::vr::get_lowest_xinput_index,
     uevr::vr::recenter_view,
+    uevr::vr::recenter_horizon,
+    uevr::vr::get_aim_method,
+    uevr::vr::set_aim_method,
+    uevr::vr::is_aim_allowed,
+    uevr::vr::set_aim_allowed
 };
 
 

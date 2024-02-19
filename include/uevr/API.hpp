@@ -448,7 +448,6 @@ public:
     };
 
     struct FFieldClass {
-        // TODO: stubbed out for now
         inline UEVR_FFieldClassHandle to_handle() { return (UEVR_FFieldClassHandle)this; }
         inline UEVR_FFieldClassHandle to_handle() const { return (UEVR_FFieldClassHandle)this; }
 

@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 7
+#define UEVR_PLUGIN_VERSION_MINOR 8
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -407,10 +407,15 @@ typedef struct {
     bool (*is_decoupled_pitch_enabled)();
     
     unsigned int (*get_movement_orientation)();
-
     unsigned int (*get_lowest_xinput_index)();
 
     void (*recenter_view)();
+    void (*recenter_horizon)();
+
+    unsigned int (*get_aim_method)();
+    void (*set_aim_method)(unsigned int method);
+    bool (*is_aim_allowed)();
+    void (*set_aim_allowed)(bool allowed);
 } UEVR_VRData;
 
 typedef struct {
