@@ -28,6 +28,7 @@ extern "C" {
     #include "API.h"
 }
 
+#include <string>
 #include <mutex>
 #include <array>
 #include <vector>
