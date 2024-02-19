@@ -590,6 +590,8 @@ set(LuaVR_SOURCES "")
 
 list(APPEND LuaVR_SOURCES
 	"lua-api/Main.cpp"
+	"lua-api/ScriptContext.cpp"
+	"lua-api/ScriptContext.hpp"
 )
 
 list(APPEND LuaVR_SOURCES

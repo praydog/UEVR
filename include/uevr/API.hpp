@@ -51,7 +51,7 @@ public:
         }
 
         if (s_instance != nullptr) {
-            throw std::runtime_error("API already initialized");
+            return s_instance;
         }
 
         s_instance = std::make_unique<API>(param);
