@@ -175,11 +175,55 @@ public:
 
         static bool once = true;
 
+        // Unit tests for the API basically.
         if (once) {
             once = false;
 
             API::get()->log_info("Running once on pre engine tick");
             API::get()->execute_command(L"stat fps");
+
+            // Iterate over all console variables.
+            const auto console_manager = API::get()->get_console_manager();
+
+            if (console_manager != nullptr) {
+                API::get()->log_info("Console manager @ 0x%p", console_manager);
+                const auto& objects = console_manager->get_console_objects();
+
+                for (const auto& object : objects) {
+                    if (object.key != nullptr) {
+                        // convert from wide to narrow string (we do not have utility::narrow in this context).
+                        std::string key_narrow{std::wstring_convert<std::codecvt_utf8<wchar_t>>{}.to_bytes(object.key)};
+                        if (object.value != nullptr) {
+                            const auto command = object.value->as_command();
+
+                            if (command != nullptr) {
+                                API::get()->log_info(" Console COMMAND: %s @ 0x%p", key_narrow.c_str(), object.value);
+                            } else {
+                                API::get()->log_info(" Console VARIABLE: %s @ 0x%p", key_narrow.c_str(), object.value);
+                            }
+                        }
+                    }
+                }
+
+                auto cvar = console_manager->find_variable(L"r.Color.Min");
+
+                if (cvar != nullptr) {
+                    API::get()->log_info("Found r.Color.Min @ 0x%p (%f)", cvar, cvar->get_float());
+                } else {
+                    API::get()->log_error("Failed to find r.Color.Min");
+                }
+
+                auto cvar2 = console_manager->find_variable(L"r.Upscale.Quality");
+
+                if (cvar2 != nullptr) {
+                    API::get()->log_info("Found r.Upscale.Quality @ 0x%p (%d)", cvar2, cvar2->get_int());
+                    cvar2->set(cvar2->get_int() + 1);
+                } else {
+                    API::get()->log_error("Failed to find r.Upscale.Quality");
+                }
+            } else {
+                API::get()->log_error("Failed to find console manager");
+            }
 
             // Log the UEngine name.
             const auto uengine_name = engine->get_full_name();

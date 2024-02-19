@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 8
+#define UEVR_PLUGIN_VERSION_MINOR 9
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -68,6 +68,11 @@ DECLARE_UEVR_HANDLE(UEVR_UClassHandle);
 DECLARE_UEVR_HANDLE(UEVR_UFunctionHandle);
 DECLARE_UEVR_HANDLE(UEVR_FNameHandle);
 DECLARE_UEVR_HANDLE(UEVR_FFieldClassHandle);
+DECLARE_UEVR_HANDLE(UEVR_FConsoleManagerHandle);
+DECLARE_UEVR_HANDLE(UEVR_IConsoleObjectHandle);
+DECLARE_UEVR_HANDLE(UEVR_IConsoleCommandHandle);
+DECLARE_UEVR_HANDLE(UEVR_IConsoleVariableHandle);
+DECLARE_UEVR_HANDLE(UEVR_TArrayHandle);
 
 // OpenXR stuff
 DECLARE_UEVR_HANDLE(UEVR_XrInstance);
@@ -225,9 +230,29 @@ typedef struct {
     UEVR_UObjectHandle (*get_local_pawn)(int index);
     UEVR_UObjectHandle (*spawn_object)(UEVR_UClassHandle klass, UEVR_UObjectHandle outer);
 
+    /* Handles exec commands, find_console_command does not */
     void (*execute_command)(const wchar_t* command);
     void (*execute_command_ex)(UEVR_UObjectHandle world, const wchar_t* command, void* output_device);
+
+    UEVR_FConsoleManagerHandle (*get_console_manager)();
 } UEVR_SDKFunctions;
+
+typedef struct {
+    UEVR_TArrayHandle (*get_console_objects)(UEVR_FConsoleManagerHandle mgr);
+    UEVR_IConsoleObjectHandle (*find_object)(UEVR_FConsoleManagerHandle mgr, const wchar_t* name);
+    UEVR_IConsoleVariableHandle (*find_variable)(UEVR_FConsoleManagerHandle mgr, const wchar_t* name);
+    UEVR_IConsoleCommandHandle (*find_command)(UEVR_FConsoleManagerHandle mgr, const wchar_t* name);
+
+    UEVR_IConsoleCommandHandle (*as_command)(UEVR_IConsoleObjectHandle object);
+
+    void (*variable_set)(UEVR_IConsoleVariableHandle cvar, const wchar_t* value);
+    void (*variable_set_ex)(UEVR_IConsoleVariableHandle cvar, const wchar_t* value, unsigned int flags);
+    int (*variable_get_int)(UEVR_IConsoleVariableHandle cvar);
+    float (*variable_get_float)(UEVR_IConsoleVariableHandle cvar);
+
+    /* better to just use execute_command if possible */
+    void (*command_execute)(UEVR_IConsoleCommandHandle cmd, const wchar_t* args);
+} UEVR_ConsoleFunctions;
 
 typedef struct {
     UEVR_UObjectHandle (*find_uobject)(const wchar_t* name);
@@ -305,6 +330,7 @@ typedef struct {
     const UEVR_UObjectHookFunctions* uobject_hook;
     const UEVR_FFieldClassFunctions* ffield_class;
     const UEVR_FNameFunctions* fname;
+    const UEVR_ConsoleFunctions* console;
 } UEVR_SDKData;
 
 DECLARE_UEVR_HANDLE(UEVR_IVRSystem);

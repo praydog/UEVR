@@ -77,11 +77,11 @@ public:
 
     }
 
-    inline const auto param() const {
+    inline const UEVR_PluginInitializeParam* param() const {
         return m_param;
     }
 
-    inline const auto sdk() const {
+    inline const UEVR_SDKData* sdk() const {
         return m_sdk;
     }
 
@@ -103,6 +103,14 @@ public:
     struct FFieldClass;
     struct FUObjectArray;
     struct FName;
+    struct FConsoleManager;
+    struct IConsoleObject;
+    struct IConsoleVariable;
+    struct IConsoleCommand;
+    struct ConsoleObjectElement;
+
+    template<typename T>
+    struct TArray;
 
     template<typename T = UObject>
     T* find_uobject(std::wstring_view name) {
@@ -143,6 +151,11 @@ public:
     FUObjectArray* get_uobject_array() {
         static const auto fn = sdk()->functions->get_uobject_array;
         return (FUObjectArray*)fn();
+    }
+
+    FConsoleManager* get_console_manager() {
+        static const auto fn = sdk()->functions->get_console_manager;
+        return (FConsoleManager*)fn();
     }
 
     struct FName {
@@ -471,6 +484,131 @@ public:
         }
     };
 
+    struct ConsoleObjectElement {
+        wchar_t* key;
+        int32_t unk[2];
+        IConsoleObject* value;
+        int32_t unk2[2];
+    };
+
+    struct FConsoleManager {
+        inline UEVR_FConsoleManagerHandle to_handle() { return (UEVR_FConsoleManagerHandle)this; }
+        inline UEVR_FConsoleManagerHandle to_handle() const { return (UEVR_FConsoleManagerHandle)this; }
+
+        TArray<ConsoleObjectElement>& get_console_objects() {
+            static const auto fn = initialize()->get_console_objects;
+            return *(TArray<ConsoleObjectElement>*)fn(to_handle());
+        }
+
+        IConsoleObject* find_object(std::wstring_view name) {
+            static const auto fn = initialize()->find_object;
+            return (IConsoleObject*)fn(to_handle(), name.data());
+        }
+
+        IConsoleVariable* find_variable(std::wstring_view name) {
+            static const auto fn = initialize()->find_variable;
+            return (IConsoleVariable*)fn(to_handle(), name.data());
+        }
+
+        IConsoleCommand* find_command(std::wstring_view name) {
+            static const auto fn = initialize()->find_command;
+            return (IConsoleCommand*)fn(to_handle(), name.data());
+        }
+
+    private:
+        static inline const UEVR_ConsoleFunctions* s_functions{nullptr};
+        static inline const UEVR_ConsoleFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->console;
+            }
+
+            return s_functions;
+        }
+    };
+
+    struct IConsoleObject {
+        inline UEVR_IConsoleObjectHandle to_handle() { return (UEVR_IConsoleObjectHandle)this; }
+        inline UEVR_IConsoleObjectHandle to_handle() const { return (UEVR_IConsoleObjectHandle)this; }
+
+        IConsoleCommand* as_command() {
+            static const auto fn = initialize()->as_command;
+            return (IConsoleCommand*)fn(to_handle());
+        }
+
+    private:
+        static inline const UEVR_ConsoleFunctions* s_functions{nullptr};
+        static inline const UEVR_ConsoleFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->console;
+            }
+
+            return s_functions;
+        }
+    };
+
+    struct IConsoleVariable : public IConsoleObject {
+        inline UEVR_IConsoleVariableHandle to_handle() { return (UEVR_IConsoleVariableHandle)this; }
+        inline UEVR_IConsoleVariableHandle to_handle() const { return (UEVR_IConsoleVariableHandle)this; }
+
+        void set(std::wstring_view value) {
+            static const auto fn = initialize()->variable_set;
+            fn(to_handle(), value.data());
+        }
+
+        void set_ex(std::wstring_view value, uint32_t flags = 0x80000000) {
+            static const auto fn = initialize()->variable_set_ex;
+            fn(to_handle(), value.data(), flags);
+        }
+
+        void set(float value) {
+            set(std::to_wstring(value));
+        }
+
+        void set(int value) {
+            set(std::to_wstring(value));
+        }
+
+        int get_int() const {
+            static const auto fn = initialize()->variable_get_int;
+            return fn(to_handle());
+        }
+
+        float get_float() const {
+            static const auto fn = initialize()->variable_get_float;
+            return fn(to_handle());
+        }
+
+    private:
+        static inline const UEVR_ConsoleFunctions* s_functions{nullptr};
+        static inline const UEVR_ConsoleFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->console;
+            }
+
+            return s_functions;
+        }
+    };
+
+    struct IConsoleCommand : public IConsoleObject {
+        inline UEVR_IConsoleCommandHandle to_handle() { return (UEVR_IConsoleCommandHandle)this; }
+        inline UEVR_IConsoleCommandHandle to_handle() const { return (UEVR_IConsoleCommandHandle)this; }
+
+        void execute(std::wstring_view args) {
+            static const auto fn = initialize()->command_execute;
+            fn(to_handle(), args.data());
+        }
+    
+    private:
+        static inline const UEVR_ConsoleFunctions* s_functions{nullptr};
+        static inline const UEVR_ConsoleFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->console;
+            }
+
+            return s_functions;
+        }
+    };
+
     // TODO
     struct UEngine : public UObject {
 
@@ -484,11 +622,38 @@ public:
 
     };
 
+    // One of the very few non-opaque structs
+    // because these have never changed, if they do its because of bespoke code
+    // TODO: fully implement, GMalloc and everything?
     template <typename T>
     struct TArray {
         T* data;
         int32_t count;
         int32_t capacity;
+
+        T* begin() {
+            return data;
+        }
+
+        T* end() {
+            if (data == nullptr) {
+                return nullptr;
+            }
+
+            return data + count;
+        }
+
+        T* begin() const {
+            return data;
+        }
+
+        T* end() const {
+            if (data == nullptr) {
+                return nullptr;
+            }
+
+            return data + count;
+        }
     };
 
 private:

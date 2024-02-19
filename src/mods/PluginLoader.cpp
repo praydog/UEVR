@@ -232,7 +232,11 @@ UEVR_SDKFunctions g_sdk_functions {
         }
 
         sdk::UEngine::get()->exec((sdk::UWorld*)world, command, output_device);
-    }
+    },
+    // get_console_manager
+    []() -> UEVR_FConsoleManagerHandle {
+        return (UEVR_FConsoleManagerHandle)sdk::FConsoleManager::get();
+    },
 };
 
 namespace uevr {
@@ -530,6 +534,103 @@ UEVR_FNameFunctions g_fname_functions {
     },
 };
 
+namespace uevr {
+namespace console {
+// get_console_objects
+UEVR_TArrayHandle get_console_objects(UEVR_FConsoleManagerHandle mgr) {
+    const auto console_manager = (sdk::FConsoleManager*)mgr;
+    if (console_manager == nullptr) {
+        return nullptr;
+    }
+    return (UEVR_TArrayHandle)&console_manager->get_console_objects();
+}
+
+UEVR_IConsoleObjectHandle find_object(UEVR_FConsoleManagerHandle mgr, const wchar_t* name) {
+    const auto console_manager = (sdk::FConsoleManager*)mgr;
+    if (console_manager == nullptr) {
+        return nullptr;
+    }
+    return (UEVR_IConsoleObjectHandle)console_manager->find(name);
+}
+
+// Naive implementation, but it's fine for now
+UEVR_IConsoleVariableHandle find_variable(UEVR_FConsoleManagerHandle mgr, const wchar_t* name) {
+    return (UEVR_IConsoleVariableHandle)find_object(mgr, name);
+}
+
+UEVR_IConsoleCommandHandle find_command(UEVR_FConsoleManagerHandle mgr, const wchar_t* name) {
+    auto obj = (sdk::IConsoleObject*)find_object(mgr, name);
+
+    if (obj == nullptr) {
+        return nullptr;
+    }
+
+    return (UEVR_IConsoleCommandHandle)obj->AsCommand();
+}
+
+UEVR_IConsoleCommandHandle as_commmand(UEVR_IConsoleObjectHandle obj) {
+    if (obj == nullptr) {
+        return nullptr;
+    }
+
+    return (UEVR_IConsoleCommandHandle)((sdk::IConsoleObject*)obj)->AsCommand();
+}
+
+void variable_set(UEVR_IConsoleVariableHandle var, const wchar_t* value) {
+    if (var == nullptr) {
+        return;
+    }
+
+    ((sdk::IConsoleVariable*)var)->Set(value);
+}
+
+void variable_set_ex(UEVR_IConsoleVariableHandle var, const wchar_t* value, unsigned int flags) {
+    if (var == nullptr) {
+        return;
+    }
+
+    ((sdk::IConsoleVariable*)var)->Set(value, flags);
+}
+
+int variable_get_int(UEVR_IConsoleVariableHandle var) {
+    if (var == nullptr) {
+        return 0;
+    }
+
+    return ((sdk::IConsoleVariable*)var)->GetInt();
+}
+
+float variable_get_float(UEVR_IConsoleVariableHandle var) {
+    if (var == nullptr) {
+        return 0.0f;
+    }
+
+    return ((sdk::IConsoleVariable*)var)->GetFloat();
+}
+
+void command_execute(UEVR_IConsoleCommandHandle cmd, const wchar_t* args) {
+    if (cmd == nullptr) {
+        return;
+    }
+
+    ((sdk::IConsoleCommand*)cmd)->Execute(args);
+}
+}
+}
+
+UEVR_ConsoleFunctions g_console_functions {
+    uevr::console::get_console_objects,
+    uevr::console::find_object,
+    uevr::console::find_variable,
+    uevr::console::find_command,
+    uevr::console::as_commmand,
+    uevr::console::variable_set,
+    uevr::console::variable_set_ex,
+    uevr::console::variable_get_int,
+    uevr::console::variable_get_float,
+    uevr::console::command_execute
+};
+
 UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
@@ -543,6 +644,7 @@ UEVR_SDKData g_sdk_data {
     &g_uobjecthook_functions,
     &g_ffield_class_functions,
     &g_fname_functions,
+    &g_console_functions
 };
 
 namespace uevr {
