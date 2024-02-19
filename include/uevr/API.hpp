@@ -162,6 +162,17 @@ public:
         inline UEVR_FNameHandle to_handle() { return (UEVR_FNameHandle)this; }
         inline UEVR_FNameHandle to_handle() const { return (UEVR_FNameHandle)this; }
 
+        enum class EFindName : uint32_t {
+            Find,
+            Add
+        };
+
+        FName() = default;
+        FName(std::wstring_view name, EFindName find_type = EFindName::Add) {
+            static const auto fn = initialize()->constructor;
+            fn(to_handle(), name.data(), (uint32_t)find_type);
+        }
+
         std::wstring to_string() const {
             static const auto fn = initialize()->to_string;
             const auto size = fn(to_handle(), nullptr, 0);
@@ -173,6 +184,9 @@ public:
             fn(to_handle(), result.data(), size + 1);
             return result;
         }
+
+        int32_t comparison_index{};
+        int32_t number{};
 
     private:
         static inline const UEVR_FNameFunctions* s_functions{nullptr};

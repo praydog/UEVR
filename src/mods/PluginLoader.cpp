@@ -532,6 +532,11 @@ UEVR_FNameFunctions g_fname_functions {
 
         return (unsigned int)size;
     },
+    // constructor
+    [](UEVR_FNameHandle name, const wchar_t* str, unsigned int find_type) {
+        auto& fname = *(sdk::FName*)name;
+        fname = sdk::FName{str, (sdk::EFindName)find_type};
+    }
 };
 
 namespace uevr {

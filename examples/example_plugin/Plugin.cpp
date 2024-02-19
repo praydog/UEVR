@@ -182,6 +182,10 @@ public:
             API::get()->log_info("Running once on pre engine tick");
             API::get()->execute_command(L"stat fps");
 
+            API::FName test_name{L"Left"};
+            std::string name_narrow{std::wstring_convert<std::codecvt_utf8<wchar_t>>{}.to_bytes(test_name.to_string())};
+            API::get()->log_info("Test FName: %s", name_narrow.c_str());
+
             // Iterate over all console variables.
             const auto console_manager = API::get()->get_console_manager();
 

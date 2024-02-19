@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 9
+#define UEVR_PLUGIN_VERSION_MINOR 10
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -315,6 +315,7 @@ typedef struct {
 
 typedef struct {
     unsigned int (*to_string)(UEVR_FNameHandle name, wchar_t* buffer, unsigned int buffer_size);
+    void (*constructor)(UEVR_FNameHandle name, const wchar_t* data, unsigned int find_type);
 } UEVR_FNameFunctions;
 
 typedef struct {
