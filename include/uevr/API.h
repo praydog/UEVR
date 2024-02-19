@@ -74,7 +74,7 @@ DECLARE_UEVR_HANDLE(UEVR_IConsoleCommandHandle);
 DECLARE_UEVR_HANDLE(UEVR_IConsoleVariableHandle);
 DECLARE_UEVR_HANDLE(UEVR_TArrayHandle);
 
-// OpenXR stuff
+/* OpenXR stuff */
 DECLARE_UEVR_HANDLE(UEVR_XrInstance);
 DECLARE_UEVR_HANDLE(UEVR_XrSession);
 DECLARE_UEVR_HANDLE(UEVR_XrSpace);
