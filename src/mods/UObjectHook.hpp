@@ -112,7 +112,8 @@ private:
     static inline const std::vector<std::string> s_allowed_bases {
         "Acknowledged Pawn",
         "Player Controller",
-        "Camera Manager"
+        "Camera Manager",
+        "World"
     };
 
     static std::filesystem::path get_persistent_dir();

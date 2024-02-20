@@ -185,10 +185,20 @@ void D3D12::render_imgui() {
 }
 
 void D3D12::render_imgui_vr(ID3D12GraphicsCommandList* command_list, D3D12_CPU_DESCRIPTOR_HANDLE* rtv) {
+    if (command_list == nullptr || rtv == nullptr) {
+        return;
+    }
+
+    auto draw_data = ImGui::GetDrawData();
+
+    if (draw_data == nullptr) {
+        return;
+    }
+
     D3D12_CPU_DESCRIPTOR_HANDLE rts[1]{};
     rts[0] = *rtv;
     command_list->OMSetRenderTargets(1, rts, FALSE, NULL);
     command_list->SetDescriptorHeaps(1, this->srv_desc_heap.GetAddressOf());
 
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), command_list);
+    ImGui_ImplDX12_RenderDrawData(draw_data, command_list);
 }

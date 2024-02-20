@@ -1528,9 +1528,15 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
             }
 
             for (auto comp : components) {
-                const auto comp_name = comp->get_class()->get_fname().to_string() + L" " + comp->get_fname().to_string();
+                const auto& comp_fname = comp->get_fname();
+                const auto comp_name = comp_fname.to_string_remove_numbers();
+                const auto comp_ends_with_number = comp_fname.get_number() != 0;
 
-                if (utility::narrow(comp_name) == *next_it) {
+                const auto comp_expanded_name = utility::narrow(comp->get_class()->get_fname().to_string() + L" " + comp_name);
+                const auto is_match = comp_ends_with_number ? next_it->starts_with(comp_expanded_name) 
+                                                            : *next_it == comp_expanded_name;
+
+                if (is_match) {
                     previous_data = comp;
                     previous_data_desc = comp->get_class();
                     ++it;
@@ -1639,9 +1645,15 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
                         continue;
                     }
 
-                    const auto obj_name = obj->get_class()->get_fname().to_string() + L" " + obj->get_fname().to_string();
+                    const auto& obj_fname = obj->get_fname();
+                    const auto obj_name = obj_fname.to_string_remove_numbers();
+                    const auto obj_ends_with_number = obj_fname.get_number() != 0;
 
-                    if (utility::narrow(obj_name) == *prop_it) {
+                    const auto obj_expanded_name = utility::narrow(obj->get_class()->get_fname().to_string() + L" " + obj_name);
+                    const auto is_match = obj_ends_with_number ? prop_it->starts_with(obj_expanded_name) 
+                                                               : *prop_it == obj_expanded_name;
+
+                    if (is_match) {
                         found = true;
                         previous_data = obj;
                         previous_data_desc = obj->get_class();

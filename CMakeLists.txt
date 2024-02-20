@@ -590,6 +590,8 @@ set(LuaVR_SOURCES "")
 
 list(APPEND LuaVR_SOURCES
 	"lua-api/Main.cpp"
+	"lua-api/ScriptContext.cpp"
+	"lua-api/ScriptContext.hpp"
 )
 
 list(APPEND LuaVR_SOURCES
@@ -622,6 +624,7 @@ target_include_directories(LuaVR PUBLIC
 target_link_libraries(LuaVR PUBLIC
 	lua
 	sol2
+	kananlib
 )
 
 set_target_properties(LuaVR PROPERTIES

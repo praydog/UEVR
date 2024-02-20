@@ -450,12 +450,24 @@ public:
         m_aim_temp_disabled = !value;
     }
 
+    bool is_aim_allowed() const {
+        return !m_aim_temp_disabled;
+    }
+
     AimMethod get_aim_method() const {
         if (m_aim_temp_disabled) {
             return AimMethod::GAME;
         }
 
         return (AimMethod)m_aim_method->value();
+    }
+
+    void set_aim_method(AimMethod method) {
+        if ((size_t)method >= s_aim_method_names.size()) {
+            method = AimMethod::GAME;
+        }
+
+        m_aim_method->value() = method;
     }
 
     AimMethod get_movement_orientation() const {
