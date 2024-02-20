@@ -1,5 +1,7 @@
 #pragma once
 
+
+#include <spdlog/common.h>
 #include "Mod.hpp"
 
 class FrameworkConfig : public Mod {
@@ -55,24 +57,28 @@ public:
         return m_advanced_mode->value();
     }
 
-    void toggle_advanced_mode() {
+    void toggle_advanced_mode() const {
         m_advanced_mode->toggle();
     }
 
-    auto& get_advanced_mode() {
+    auto& get_advanced_mode() const {
         return m_advanced_mode;
     }
 
-    auto& get_imgui_theme_value() {
+    auto& get_imgui_theme_value() const {
         return m_imgui_theme->value();
     }
 
-    auto& get_imgui_theme() {
+    auto& get_imgui_theme() const {
         return m_imgui_theme;
     }
 
-    int32_t get_font_size() {
+    int32_t get_font_size() const {
         return m_font_size->value();
+    }
+
+    spdlog::level::level_enum get_log_level() const {
+        return (spdlog::level::level_enum)m_log_level->value();
     }
 
 private:
@@ -82,6 +88,15 @@ private:
         "Default Light",
         "High Contrast",
     };
+
+    static inline std::vector<std::string> s_get_log_levels() {
+        std::vector<std::string> log_levels{};
+        for (auto& level : SPDLOG_LEVEL_NAMES) {
+            log_levels.emplace_back(level.data());
+        }
+
+        return log_levels;
+    };
     
     ModKey::Ptr m_menu_key{ ModKey::create(generate_name("MenuKey"), VK_INSERT) };
     ModToggle::Ptr m_menu_open{ ModToggle::create(generate_name("MenuOpen"), true) };
@@ -90,7 +105,10 @@ private:
     ModToggle::Ptr m_l3_r3_long_press{ ModToggle::create(generate_name("L3R3LongPress"), false) };
     ModToggle::Ptr m_always_show_cursor{ ModToggle::create(generate_name("AlwaysShowCursor"), false) };
     ModToggle::Ptr m_advanced_mode{ ModToggle::create(generate_name("AdvancedMode"), false) };
+    
     ModCombo::Ptr m_imgui_theme{ ModCombo::create(generate_name("ImGuiTheme"), s_imgui_themes, Framework::ImGuiThemes::DEFAULT_DARK) };
+    ModCombo::Ptr m_log_level{ ModCombo::create(generate_name("LogLevel"), s_get_log_levels(), spdlog::level::info) };
+    
     ModKey::Ptr m_show_cursor_key{ ModKey::create(generate_name("ShowCursorKey")) };
     ModInt32::Ptr m_font_size{ModInt32::create(generate_name("FontSize"), 16)};
 
@@ -103,6 +121,7 @@ private:
         *m_l3_r3_long_press,
         *m_advanced_mode,
         *m_imgui_theme,
+        *m_log_level,
         *m_always_show_cursor,
         *m_font_size,
     };
