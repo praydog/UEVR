@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 11
+#define UEVR_PLUGIN_VERSION_MINOR 12
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -73,6 +73,7 @@ DECLARE_UEVR_HANDLE(UEVR_IConsoleObjectHandle);
 DECLARE_UEVR_HANDLE(UEVR_IConsoleCommandHandle);
 DECLARE_UEVR_HANDLE(UEVR_IConsoleVariableHandle);
 DECLARE_UEVR_HANDLE(UEVR_TArrayHandle);
+DECLARE_UEVR_HANDLE(UEVR_FMallocHandle);
 
 /* OpenXR stuff */
 DECLARE_UEVR_HANDLE(UEVR_XrInstance);
@@ -320,6 +321,14 @@ typedef struct {
 } UEVR_FNameFunctions;
 
 typedef struct {
+    UEVR_FMallocHandle (*get)();
+
+    void* (*malloc)(UEVR_FMallocHandle instance, unsigned int size, unsigned int alignment);
+    void* (*realloc)(UEVR_FMallocHandle instance, void* ptr, unsigned int size, unsigned int alignment);
+    void (*free)(UEVR_FMallocHandle instance, void* ptr);
+} UEVR_FMallocFunctions;
+
+typedef struct {
     const UEVR_SDKFunctions* functions;
     const UEVR_SDKCallbacks* callbacks;
     const UEVR_UObjectFunctions* uobject;
@@ -333,6 +342,7 @@ typedef struct {
     const UEVR_FFieldClassFunctions* ffield_class;
     const UEVR_FNameFunctions* fname;
     const UEVR_ConsoleFunctions* console;
+    const UEVR_FMallocFunctions* malloc;
 } UEVR_SDKData;
 
 DECLARE_UEVR_HANDLE(UEVR_IVRSystem);

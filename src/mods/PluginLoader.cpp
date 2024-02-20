@@ -650,6 +650,33 @@ UEVR_ConsoleFunctions g_console_functions {
     uevr::console::command_execute
 };
 
+namespace uevr {
+namespace malloc {
+UEVR_FMallocHandle get() {
+    return (UEVR_FMallocHandle)sdk::FMalloc::get();
+}
+
+void* malloc(UEVR_FMallocHandle malloc, unsigned int size, uint32_t alignment) {
+    return ((sdk::FMalloc*)malloc)->malloc(size, alignment);
+}
+
+void* realloc(UEVR_FMallocHandle malloc, void* original, unsigned int size, uint32_t alignment) {
+    return ((sdk::FMalloc*)malloc)->realloc(original, size, alignment);
+}
+
+void free(UEVR_FMallocHandle malloc, void* original) {
+    return ((sdk::FMalloc*)malloc)->free(original);
+}
+}
+}
+
+UEVR_FMallocFunctions g_malloc_functions {
+    uevr::malloc::get,
+    uevr::malloc::malloc,
+    uevr::malloc::realloc,
+    uevr::malloc::free
+};
+
 UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
@@ -663,7 +690,8 @@ UEVR_SDKData g_sdk_data {
     &g_uobjecthook_functions,
     &g_ffield_class_functions,
     &g_fname_functions,
-    &g_console_functions
+    &g_console_functions,
+    &g_malloc_functions
 };
 
 namespace uevr {

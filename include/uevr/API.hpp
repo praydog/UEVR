@@ -178,6 +178,43 @@ public:
         return (FConsoleManager*)fn();
     }
 
+    struct FMalloc {
+        static FMalloc* get() {
+            static const auto fn = initialize()->get;
+            return (FMalloc*)fn();
+        }
+
+        inline UEVR_FMallocHandle to_handle() { return (UEVR_FMallocHandle)this; }
+        inline UEVR_FMallocHandle to_handle() const { return (UEVR_FMallocHandle)this; }
+
+        using FMallocSizeT = uint32_t; // because of C89
+
+        void* malloc(FMallocSizeT size, uint32_t alignment = 0) {
+            static const auto fn = initialize()->malloc;
+            return fn(to_handle(), size, alignment);
+        }
+        
+        void* realloc(void* original, FMallocSizeT size, uint32_t alignment = 0) {
+            static const auto fn = initialize()->realloc;
+            return fn(to_handle(), original, size, alignment);
+        }
+
+        void free(void* original) {
+            static const auto fn = initialize()->free;
+            fn(to_handle(), original);
+        }
+
+    private:
+        static inline const UEVR_FMallocFunctions* s_functions{nullptr};
+        static inline const UEVR_FMallocFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->malloc;
+            }
+
+            return s_functions;
+        }
+    };
+
     struct FName {
         inline UEVR_FNameHandle to_handle() { return (UEVR_FNameHandle)this; }
         inline UEVR_FNameHandle to_handle() const { return (UEVR_FNameHandle)this; }
@@ -657,12 +694,18 @@ public:
 
     // One of the very few non-opaque structs
     // because these have never changed, if they do its because of bespoke code
-    // TODO: fully implement, GMalloc and everything?
     template <typename T>
     struct TArray {
         T* data;
         int32_t count;
         int32_t capacity;
+
+        ~TArray() {
+            if (data != nullptr) {
+                FMalloc::get()->free(data);
+                data = nullptr;
+            }
+        }
 
         T* begin() {
             return data;
