@@ -196,6 +196,7 @@ headers = ["lua-api/**.hpp", "lua-api/**.h"]
 link-libraries = [
     "lua",
     "sol2",
+    "kananlib"
 ]
 
 [target.LuaVR.properties]

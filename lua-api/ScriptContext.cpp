@@ -2,6 +2,8 @@
 #include <iostream>
 #include <memory>
 
+#include <utility/String.hpp>
+
 #include <windows.h>
 
 #include "ScriptContext.hpp"
@@ -158,9 +160,28 @@ int ScriptContext::setup_bindings() {
         "get_console_manager", &UEVR_SDKFunctions::get_console_manager
     );
 
+    m_lua.new_usertype<UEVR_UObjectHookFunctions>("UEVR_UObjectHookFunctions",
+        "activate", &UEVR_UObjectHookFunctions::activate,
+        "exists", &UEVR_UObjectHookFunctions::exists,
+        "get_first_object_by_class", &UEVR_UObjectHookFunctions::get_first_object_by_class,
+        "get_first_object_by_class_name", &UEVR_UObjectHookFunctions::get_first_object_by_class_name
+        // The other functions are really C-oriented so... we will just wrap the C++ API for the rest
+    );
+
     m_lua.new_usertype<UEVR_SDKData>("UEVR_SDKData",
         "functions", &UEVR_SDKData::functions,
-        "callbacks", &UEVR_SDKData::callbacks
+        "callbacks", &UEVR_SDKData::callbacks,
+        "uobject", &UEVR_SDKData::uobject,
+        "uobject_array", &UEVR_SDKData::uobject_array,
+        "ffield", &UEVR_SDKData::ffield,
+        "fproperty", &UEVR_SDKData::fproperty,
+        "ustruct", &UEVR_SDKData::ustruct,
+        "uclass", &UEVR_SDKData::uclass,
+        "ufunction", &UEVR_SDKData::ufunction,
+        "uobject_hook", &UEVR_SDKData::uobject_hook,
+        "ffield_class", &UEVR_SDKData::ffield_class,
+        "fname", &UEVR_SDKData::fname,
+        "console", &UEVR_SDKData::console
     );
 
     m_lua.new_usertype<UEVR_VRData>("UEVR_VRData",
@@ -195,6 +216,7 @@ int ScriptContext::setup_bindings() {
         "set_aim_allowed", &UEVR_VRData::set_aim_allowed
     );
 
+    // TODO: Add operators to these types
     m_lua.new_usertype<UEVR_Vector2f>("UEVR_Vector2f",
         "x", &UEVR_Vector2f::x,
         "y", &UEVR_Vector2f::y
@@ -270,10 +292,115 @@ int ScriptContext::setup_bindings() {
         }
     );
 
+    m_lua.new_usertype<uevr::API::FName>("UEVR_FName",
+        "to_string", &uevr::API::FName::to_string
+    );
+
+    m_lua.new_usertype<uevr::API::UObject>("UEVR_UObject",
+        "static_class", &uevr::API::UObject::static_class,
+        "get_fname", &uevr::API::UObject::get_fname,
+        "get_full_name", &uevr::API::UObject::get_full_name,
+        "is_a", &uevr::API::UObject::is_a,
+        "get_class", &uevr::API::UObject::get_class,
+        "get_outer", &uevr::API::UObject::get_outer
+    );
+
+    m_lua.new_usertype<uevr::API::UStruct>("UEVR_UStruct",
+        sol::base_classes, sol::bases<uevr::API::UObject>(),
+        "static_class", &uevr::API::UStruct::static_class,
+        "get_super_struct", &uevr::API::UStruct::get_super_struct,
+        "get_super", &uevr::API::UStruct::get_super,
+        "find_function", &uevr::API::UStruct::find_function,
+        "get_child_properties", &uevr::API::UStruct::get_child_properties
+    );
+
+    m_lua.new_usertype<uevr::API::UClass>("UEVR_UClass",
+        sol::base_classes, sol::bases<uevr::API::UStruct, uevr::API::UObject>(),
+        "static_class", &uevr::API::UClass::static_class,
+        "get_class_default_object", &uevr::API::UClass::get_class_default_object,
+        "get_objects_matching", &uevr::API::UClass::get_objects_matching<uevr::API::UObject>,
+        "get_first_object_matching", &uevr::API::UClass::get_first_object_matching<uevr::API::UObject>
+    );
+
+    m_lua.new_usertype<uevr::API::UFunction>("UEVR_UFunction",
+        sol::base_classes, sol::bases<uevr::API::UStruct, uevr::API::UObject>(),
+        "static_class", &uevr::API::UFunction::static_class,
+        "call", &uevr::API::UFunction::call,
+        "get_native_function", &uevr::API::UFunction::get_native_function
+    );
+
+    m_lua.new_usertype<uevr::API::FField>("UEVR_FField",
+        "get_next", &uevr::API::FField::get_next,
+        "get_fname", &uevr::API::FField::get_fname,
+        "get_class", &uevr::API::FField::get_class
+    );
+
+    m_lua.new_usertype<uevr::API::FFieldClass>("UEVR_FFieldClass",
+        "get_fname", &uevr::API::FFieldClass::get_fname,
+        "get_name", &uevr::API::FFieldClass::get_name
+    );
+
+    m_lua.new_usertype<uevr::API::FConsoleManager>("UEVR_FConsoleManager",
+        "get_console_objects", &uevr::API::FConsoleManager::get_console_objects,
+        "find_object", &uevr::API::FConsoleManager::find_object,
+        "find_variable", &uevr::API::FConsoleManager::find_variable,
+        "find_command", &uevr::API::FConsoleManager::find_command
+    );
+
+    m_lua.new_usertype<uevr::API>("UEVR_API",
+        "sdk", &uevr::API::sdk,
+        "find_uobject", &uevr::API::find_uobject<uevr::API::UObject>,
+        "get_engine", &uevr::API::get_engine,
+        "get_player_controller", &uevr::API::get_player_controller,
+        "get_local_pawn", &uevr::API::get_local_pawn,
+        "spawn_object", &uevr::API::spawn_object,
+        "execute_command", &uevr::API::execute_command,
+        "execute_command_ex", &uevr::API::execute_command_ex,
+        "get_uobject_array", &uevr::API::get_uobject_array,
+        "get_console_manager", &uevr::API::get_console_manager
+    );
+
+    m_lua.new_usertype<uevr::API::IConsoleObject>("UEVR_IConsoleObject",
+        "as_command", &uevr::API::IConsoleObject::as_command
+    );
+
+    m_lua.new_usertype<uevr::API::IConsoleVariable>("UEVR_IConsoleVariable",
+        sol::base_classes, sol::bases<uevr::API::IConsoleObject>(),
+        "set", [](sol::this_state s, uevr::API::IConsoleVariable* self, sol::object value) {
+            if (value.is<int>()) {
+                self->set(value.as<int>());
+            } else if (value.is<float>()) {
+                self->set(value.as<float>());
+            } else if (value.is<std::wstring>()) {
+                self->set(value.as<std::wstring>());
+            } else if (value.is<std::string>()) {
+                const auto str = utility::widen(value.as<std::string>());
+                self->set(str);
+            } else {
+                throw sol::error("Invalid type for IConsoleVariable::set");
+            }
+        },
+        "set_float", [](uevr::API::IConsoleVariable& self, float value) {
+            self.set(value);
+        },
+        "set_int", [](uevr::API::IConsoleVariable& self, int value) {
+            self.set(value);
+        },
+        "set_ex", &uevr::API::IConsoleVariable::set_ex,
+        "get_int", &uevr::API::IConsoleVariable::get_int,
+        "get_float", &uevr::API::IConsoleVariable::get_float
+    );
+
+    m_lua.new_usertype<uevr::API::IConsoleCommand>("UEVR_IConsoleCommand",
+        sol::base_classes, sol::bases<uevr::API::IConsoleObject>(),
+        "execute", &uevr::API::IConsoleCommand::execute
+    );
+
     setup_callback_bindings();
 
     auto out = m_lua.create_table();
     out["params"] = m_plugin_initialize_param;
+    out["api"] = uevr::API::get().get();
 
     return out.push(m_lua.lua_state());
 }

@@ -224,11 +224,6 @@ public:
             return fn(to_handle(), cmp->to_handle());
         }
 
-        template<typename T>
-        inline bool is_a() const {
-            return is_a(T::static_class());
-        }
-
         void process_event(UFunction* function, void* params) {
             static const auto fn = initialize()->process_event;
             fn(to_handle(), function->to_handle(), params);
@@ -634,6 +629,10 @@ public:
     };
 
     struct UWorld : public UObject {
+
+    };
+
+    struct FUObjectArray {
 
     };
 

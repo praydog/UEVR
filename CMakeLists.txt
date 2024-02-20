@@ -624,6 +624,7 @@ target_include_directories(LuaVR PUBLIC
 target_link_libraries(LuaVR PUBLIC
 	lua
 	sol2
+	kananlib
 )
 
 set_target_properties(LuaVR PROPERTIES
