@@ -128,6 +128,7 @@ public:
     struct IConsoleVariable;
     struct IConsoleCommand;
     struct ConsoleObjectElement;
+    struct UObjectHook;
 
     template<typename T>
     struct TArray;
@@ -677,7 +678,9 @@ public:
 
     // TODO
     struct UEngine : public UObject {
-
+        static UEngine* get() {
+            return API::get()->get_engine();
+        }
     };
 
     struct UGameEngine : public UEngine {
@@ -689,7 +692,9 @@ public:
     };
 
     struct FUObjectArray {
-
+        static FUObjectArray* get() {
+            return API::get()->get_uobject_array();
+        }
     };
 
     // One of the very few non-opaque structs
@@ -729,6 +734,100 @@ public:
             }
 
             return data + count;
+        }
+
+        bool empty() const {
+            return count == 0 || data == nullptr;
+        }
+    };
+
+public:
+    // UEVR specific stuff
+    struct UObjectHook {
+        struct MotionControllerState;
+
+        static void activate() {
+            static const auto fn = initialize()->activate;
+            fn();
+        }
+
+        static bool exists(UObject* obj) {
+            static const auto fn = initialize()->exists;
+            return fn(obj->to_handle());
+        }
+
+        static std::vector<UObject*> get_objects_by_class(UClass* c, bool allow_default = false) {
+            if (c == nullptr) {
+                return {};
+            }
+
+            return c->get_objects_matching(allow_default);
+        }
+
+        static UObject* get_first_object_by_class(UClass* c, bool allow_default = false) {
+            if (c == nullptr) {
+                return nullptr;
+            }
+
+            return c->get_first_object_matching(allow_default);
+        }
+
+        // Must be a USceneComponent
+        // Also, do NOT keep the pointer around, it will be invalidated at any time
+        // Call it every time you need it
+        static MotionControllerState* get_or_add_motion_controller_state(UObject* obj) {
+            static const auto fn = initialize()->get_or_add_motion_controller_state;
+            return (MotionControllerState*)fn(obj->to_handle());
+        }
+
+        static MotionControllerState* get_motion_controller_state(UObject* obj) {
+            static const auto fn = initialize()->get_motion_controller_state;
+            return (MotionControllerState*)fn(obj->to_handle());
+        }
+
+        struct MotionControllerState {
+            inline UEVR_UObjectHookMotionControllerStateHandle to_handle() { return (UEVR_UObjectHookMotionControllerStateHandle)this; }
+            inline UEVR_UObjectHookMotionControllerStateHandle to_handle() const { return (UEVR_UObjectHookMotionControllerStateHandle)this; }
+
+            void set_rotation_offset(const UEVR_Quaternionf* offset) {
+                static const auto fn = initialize()->set_rotation_offset;
+                fn(to_handle(), offset);
+            }
+
+            void set_location_offset(const UEVR_Vector3f* offset) {
+                static const auto fn = initialize()->set_location_offset;
+                fn(to_handle(), offset);
+            }
+
+            void set_hand(uint32_t hand) {
+                static const auto fn = initialize()->set_hand;
+                fn(to_handle(), hand);
+            }
+
+            void set_permanent(bool permanent) {
+                static const auto fn = initialize()->set_permanent;
+                fn(to_handle(), permanent);
+            }
+
+        private:
+            static inline const UEVR_UObjectHookMotionControllerStateFunctions* s_functions{nullptr};
+            static inline const UEVR_UObjectHookMotionControllerStateFunctions* initialize() {
+                if (s_functions == nullptr) {
+                    s_functions = API::get()->sdk()->uobject_hook->mc_state;
+                }
+
+                return s_functions;
+            }
+        };
+
+    private:
+        static inline const UEVR_UObjectHookFunctions* s_functions{nullptr};
+        static inline const UEVR_UObjectHookFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->uobject_hook;
+            }
+
+            return s_functions;
         }
     };
 

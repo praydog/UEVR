@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 12
+#define UEVR_PLUGIN_VERSION_MINOR 13
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -298,6 +298,15 @@ typedef struct {
     UEVR_FNameHandle (*get_fname)(UEVR_UObjectHandle object);
 } UEVR_UObjectFunctions;
 
+DECLARE_UEVR_HANDLE(UEVR_UObjectHookMotionControllerStateHandle);
+
+typedef struct {
+    void (*set_rotation_offset)(UEVR_UObjectHookMotionControllerStateHandle, const UEVR_Quaternionf* rotation);
+    void (*set_location_offset)(UEVR_UObjectHookMotionControllerStateHandle, const UEVR_Vector3f* location);
+    void (*set_hand)(UEVR_UObjectHookMotionControllerStateHandle, unsigned int hand);
+    void (*set_permanent)(UEVR_UObjectHookMotionControllerStateHandle, bool permanent);
+} UEVR_UObjectHookMotionControllerStateFunctions;
+
 typedef struct {
     void (*activate)();
     bool (*exists)(UEVR_UObjectHandle object);
@@ -309,6 +318,11 @@ typedef struct {
 
     UEVR_UObjectHandle (*get_first_object_by_class)(UEVR_UClassHandle klass, bool allow_default);
     UEVR_UObjectHandle (*get_first_object_by_class_name)(const wchar_t* class_name, bool allow_default);
+
+    UEVR_UObjectHookMotionControllerStateHandle (*get_or_add_motion_controller_state)(UEVR_UObjectHandle object);
+    UEVR_UObjectHookMotionControllerStateHandle (*get_motion_controller_state)(UEVR_UObjectHandle object);
+
+    UEVR_UObjectHookMotionControllerStateFunctions* mc_state;
 } UEVR_UObjectHookFunctions;
 
 typedef struct {

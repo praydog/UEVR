@@ -20,6 +20,7 @@
 #include <sdk/UFunction.hpp>
 #include <sdk/UGameplayStatics.hpp>
 #include <sdk/APlayerController.hpp>
+#include <sdk/USceneComponent.hpp>
 
 #include "UObjectHook.hpp"
 #include "VR.hpp"
@@ -507,8 +508,88 @@ namespace uobjecthook {
 
         return get_first_object_by_class((UEVR_UClassHandle)c, allow_default);
     }
+
+    UEVR_UObjectHookMotionControllerStateHandle get_or_add_motion_controller_state(UEVR_UObjectHandle obj_handle) {
+        const auto obj = (sdk::USceneComponent*)obj_handle;
+        if (obj == nullptr || !obj->is_a(sdk::USceneComponent::static_class())) {
+            return nullptr;
+        }
+
+        const auto result = UObjectHook::get()->get_or_add_motion_controller_state(obj);
+
+        return (UEVR_UObjectHookMotionControllerStateHandle)result.get();
+    }
+
+    UEVR_UObjectHookMotionControllerStateHandle get_motion_controller_state(UEVR_UObjectHandle obj_handle) {
+        const auto obj = (sdk::USceneComponent*)obj_handle;
+        if (obj == nullptr || !obj->is_a(sdk::USceneComponent::static_class())) {
+            return nullptr;
+        }
+
+        const auto result = UObjectHook::get()->get_motion_controller_state(obj);
+
+        if (!result.has_value()) {
+            return nullptr;
+        }
+
+        return (UEVR_UObjectHookMotionControllerStateHandle)result->get();
+    }
+
+namespace mc_state {
+    void set_rotation_offset(UEVR_UObjectHookMotionControllerStateHandle state, const UEVR_Quaternionf* rotation) {
+        if (state == nullptr) {
+            return;
+        }
+
+        auto& s = *(UObjectHook::MotionControllerState*)state;
+        s.rotation_offset.x = rotation->x;
+        s.rotation_offset.y = rotation->y;
+        s.rotation_offset.z = rotation->z;
+        s.rotation_offset.w = rotation->w;
+    }
+
+    void set_location_offset(UEVR_UObjectHookMotionControllerStateHandle state, const UEVR_Vector3f* location) {
+        if (state == nullptr) {
+            return;
+        }
+
+        auto& s = *(UObjectHook::MotionControllerState*)state;
+        s.location_offset.x = location->x;
+        s.location_offset.y = location->y;
+        s.location_offset.z = location->z;
+    }
+
+    void set_hand(UEVR_UObjectHookMotionControllerStateHandle state, unsigned int hand) {
+        if (state == nullptr) {
+            return;
+        }
+
+        if (hand > 1) {
+            return;
+        }
+
+        auto& s = *(UObjectHook::MotionControllerState*)state;
+        s.hand = (uint8_t)hand;
+    }
+
+    void set_permanent(UEVR_UObjectHookMotionControllerStateHandle state, bool permanent) {
+        if (state == nullptr) {
+            return;
+        }
+
+        auto& s = *(UObjectHook::MotionControllerState*)state;
+        s.permanent = permanent;
+    }
 }
 }
+}
+
+UEVR_UObjectHookMotionControllerStateFunctions g_mc_functions {
+    uevr::uobjecthook::mc_state::set_rotation_offset,
+    uevr::uobjecthook::mc_state::set_location_offset,
+    uevr::uobjecthook::mc_state::set_hand,
+    uevr::uobjecthook::mc_state::set_permanent
+};
 
 UEVR_UObjectHookFunctions g_uobjecthook_functions {
     uevr::uobjecthook::activate,
@@ -516,7 +597,10 @@ UEVR_UObjectHookFunctions g_uobjecthook_functions {
     uevr::uobjecthook::get_objects_by_class,
     uevr::uobjecthook::get_objects_by_class_name,
     uevr::uobjecthook::get_first_object_by_class,
-    uevr::uobjecthook::get_first_object_by_class_name
+    uevr::uobjecthook::get_first_object_by_class_name,
+    uevr::uobjecthook::get_or_add_motion_controller_state,
+    uevr::uobjecthook::get_motion_controller_state,
+    &g_mc_functions
 };
 
 #define FFIELDCLASS(x) ((sdk::FFieldClass*)x)

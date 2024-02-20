@@ -186,6 +186,31 @@ public:
             std::string name_narrow{std::wstring_convert<std::codecvt_utf8<wchar_t>>{}.to_bytes(test_name.to_string())};
             API::get()->log_info("Test FName: %s", name_narrow.c_str());
 
+            // Test attaching skeletal mesh components with UObjectHook.
+            struct {
+                API::UClass* c;
+                API::TArray<API::UObject*> return_value{};
+            } component_params;
+
+            component_params.c = API::get()->find_uobject<API::UClass>(L"Class /Script/Engine.SkeletalMeshComponent");
+            const auto pawn = API::get()->get_local_pawn(0);
+
+            if (component_params.c != nullptr && pawn != nullptr) {
+                // either or.
+                pawn->call_function(L"K2_GetComponentsByClass", &component_params);
+                pawn->call_function(L"GetComponentsByClass", &component_params);
+
+                if (component_params.return_value.empty()) {
+                    API::get()->log_error("Failed to find any SkeletalMeshComponents");
+                }
+
+                for (auto mesh : component_params.return_value) {
+                    auto state = API::UObjectHook::get_or_add_motion_controller_state(mesh);
+                }
+            } else {
+                API::get()->log_error("Failed to find SkeletalMeshComponent class or local pawn");
+            }
+
             // Iterate over all console variables.
             const auto console_manager = API::get()->get_console_manager();
 
