@@ -218,7 +218,7 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz) {
         } else if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::VERTICAL_MATCHED) {
 
             tan_half_fov[2] = std::max(-this->raw_projections[0][2], -this->raw_projections[1][2]);
-            tan_half_fov[3] = std::max(this->raw_projections[0][3], this->raw_projections[1][3]);
+            tan_half_fov[3] = -std::max(this->raw_projections[0][3], this->raw_projections[1][3]);
         } else {
             tan_half_fov[2] = -this->raw_projections[eye][2];
             tan_half_fov[3] = -this->raw_projections[eye][3];
