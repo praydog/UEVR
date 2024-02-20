@@ -28,6 +28,8 @@ extern "C" {
     #include "API.h"
 }
 
+#include <optional>
+#include <filesystem>
 #include <string>
 #include <mutex>
 #include <array>
@@ -84,6 +86,23 @@ public:
 
     inline const UEVR_SDKData* sdk() const {
         return m_sdk;
+    }
+
+    std::filesystem::path get_persistent_dir(std::optional<std::wstring> file = std::nullopt) {
+        static const auto fn = param()->functions->get_persistent_dir;
+        const auto size = fn(nullptr, 0);
+        if (size == 0) {
+            return std::filesystem::path{};
+        }
+
+        std::wstring result(size, L'\0');
+        fn(result.data(), size + 1);
+
+        if (file.has_value()) {
+            return std::filesystem::path{result} / file.value();
+        }
+
+        return result;
     }
 
     template <typename... Args> void log_error(const char* format, Args... args) { m_param->functions->log_error(format, args...); }

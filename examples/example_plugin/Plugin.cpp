@@ -385,7 +385,8 @@ private:
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
 
-        ImGui::GetIO().IniFilename = "example_dll_ui.ini";
+        static const auto imgui_ini = API::get()->get_persistent_dir(L"imgui_example_plugin.ini").string();
+        ImGui::GetIO().IniFilename = imgui_ini.c_str();
 
         const auto renderer_data = API::get()->param()->renderer;
 

@@ -201,6 +201,7 @@ typedef struct {
     void (*log_info)(const char* format, ...);
     bool (*is_drawing_ui)();
     bool (*remove_callback)(void* cb);
+    unsigned int (*get_persistent_dir)(wchar_t* buffer, unsigned int buffer_size);
 } UEVR_PluginFunctions;
 
 typedef struct {

@@ -63,6 +63,19 @@ bool is_drawing_ui() {
 bool remove_callback(void* cb) {
     return PluginLoader::get()->remove_callback(cb);
 }
+
+unsigned int get_persistent_dir(wchar_t* buffer, unsigned int buffer_size) {
+    const auto path = g_framework->get_persistent_dir().wstring();
+    if (buffer == nullptr || buffer_size == 0) {
+        return (unsigned int)path.size();
+    }
+
+    const auto size = std::min<size_t>(path.size(), (size_t)buffer_size - 1);
+    memcpy(buffer, path.c_str(), size * sizeof(wchar_t));
+    buffer[size] = L'\0';
+
+    return (unsigned int)size;
+}
 }
 
 namespace uevr {
@@ -138,7 +151,8 @@ UEVR_PluginFunctions g_plugin_functions {
     uevr::log_warn,
     uevr::log_info,
     uevr::is_drawing_ui,
-    uevr::remove_callback
+    uevr::remove_callback,
+    uevr::get_persistent_dir
 };
 
 #define GET_ENGINE_WORLD_RETNULL() \
