@@ -19,6 +19,9 @@ class RenderTargetPoolHook : public ModComponent {
 public:
     RenderTargetPoolHook();
     void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) override;
+    void activate() {
+        m_wants_activate = true;
+    }
 
     IPooledRenderTarget* get_render_target(const std::wstring& name) {
         std::scoped_lock _{m_mutex};
@@ -67,8 +70,10 @@ private:
 
     bool m_attempted_hook{false};
     bool m_hooked{false};
+    bool m_wants_activate{false};
 
     std::recursive_mutex m_mutex{};
     SafetyHookInline m_find_free_element_hook{};
     std::unordered_map<std::wstring, IPooledRenderTarget*> m_render_targets{};
+    std::unordered_set<std::wstring> m_seen_names{};
 };

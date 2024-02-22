@@ -34,6 +34,7 @@ public:
     auto& get_ui_tex() { return m_ui_tex; }
 
     bool clear_tex(ID3D11Resource* rsrc, std::optional<DXGI_FORMAT> format = std::nullopt);
+    bool clear_tex(ID3D11Resource* rsrc, float* color, std::optional<DXGI_FORMAT> format = std::nullopt);
     void copy_tex(ID3D11Resource* src, ID3D11Resource* dst);
 
     void force_reset() { m_force_reset = true; }

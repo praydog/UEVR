@@ -18,6 +18,10 @@ RenderTargetPoolHook::RenderTargetPoolHook() {
 
 void RenderTargetPoolHook::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     if (!m_attempted_hook && VR::get()->is_depth_enabled()) {
+        m_wants_activate = true;
+    }
+
+    if (!m_attempted_hook && m_wants_activate) {
         m_attempted_hook = true;
         m_hooked = hook();
     }
@@ -66,7 +70,7 @@ bool RenderTargetPoolHook::find_free_element_hook(
     // Right now we are only using this for depth
     // and on some games it will crash if we mess with anything
     // so, TODO: fix the games that crash with depth enabled
-    if (!VR::get()->is_depth_enabled()) {
+    if (!g_hook->m_wants_activate) {
         std::scoped_lock _{g_hook->m_mutex};
         g_hook->m_render_targets.clear();
         return result;
@@ -77,11 +81,13 @@ bool RenderTargetPoolHook::find_free_element_hook(
 
         if (out != nullptr) {
             std::scoped_lock _{g_hook->m_mutex};
-            g_hook->m_render_targets[name] = out->reference;
 
-            /*if (out->reference != nullptr && out->reference->item.texture.texture != nullptr) {
-                const auto resource = out->reference->item.texture.texture->get_native_resource();
-            }*/
+            if (!g_hook->m_seen_names.contains(name)) {
+                g_hook->m_seen_names.insert(name);
+                SPDLOG_INFO("FRenderTargetPool::FindFreeElement called with name {}", utility::narrow(name));
+            }
+
+            g_hook->m_render_targets[name] = out->reference;
         }
     }
 

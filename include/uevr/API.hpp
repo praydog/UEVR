@@ -129,6 +129,8 @@ public:
     struct IConsoleCommand;
     struct ConsoleObjectElement;
     struct UObjectHook;
+    struct FRHITexture2D;
+    struct IPooledRenderTarget;
 
     template<typename T>
     struct TArray;
@@ -741,6 +743,26 @@ public:
         }
     };
 
+    struct FRHITexture2D {
+        inline UEVR_FRHITexture2DHandle to_handle() { return (UEVR_FRHITexture2DHandle)this; }
+        inline UEVR_FRHITexture2DHandle to_handle() const { return (UEVR_FRHITexture2DHandle)this; }
+
+        void* get_native_resource() const {
+            static const auto fn = initialize()->get_native_resource;
+            return fn(to_handle());
+        }
+
+    private:
+        static inline const UEVR_FRHITexture2DFunctions* s_functions{nullptr};
+        static inline const UEVR_FRHITexture2DFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->frhitexture2d;
+            }
+
+            return s_functions;
+        }
+    };
+
 public:
     // UEVR specific stuff
     struct UObjectHook {
@@ -825,6 +847,50 @@ public:
         static inline const UEVR_UObjectHookFunctions* initialize() {
             if (s_functions == nullptr) {
                 s_functions = API::get()->sdk()->uobject_hook;
+            }
+
+            return s_functions;
+        }
+    };
+
+    struct RenderTargetPoolHook {
+        static void activate() {
+            static const auto fn = initialize()->activate;
+            fn();
+        }
+
+        static IPooledRenderTarget* get_render_target(const wchar_t* name) {
+            static const auto fn = initialize()->get_render_target;
+            return (IPooledRenderTarget*)fn(name);
+        }
+
+    private:
+        static inline const UEVR_FRenderTargetPoolHookFunctions* s_functions{nullptr};
+        static inline const UEVR_FRenderTargetPoolHookFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->render_target_pool_hook;
+            }
+
+            return s_functions;
+        }
+    };
+
+    struct StereoHook {
+        static FRHITexture2D* get_scene_render_target() {
+            static const auto fn = initialize()->get_scene_render_target;
+            return (FRHITexture2D*)fn();
+        }
+
+        static FRHITexture2D* get_ui_render_target() {
+            static const auto fn = initialize()->get_ui_render_target;
+            return (FRHITexture2D*)fn();
+        }
+
+    private:
+        static inline const UEVR_FFakeStereoRenderingHookFunctions* s_functions{nullptr};
+        static inline const UEVR_FFakeStereoRenderingHookFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->stereo_hook;
             }
 
             return s_functions;

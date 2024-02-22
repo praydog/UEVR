@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 13
+#define UEVR_PLUGIN_VERSION_MINOR 14
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -74,6 +74,7 @@ DECLARE_UEVR_HANDLE(UEVR_IConsoleCommandHandle);
 DECLARE_UEVR_HANDLE(UEVR_IConsoleVariableHandle);
 DECLARE_UEVR_HANDLE(UEVR_TArrayHandle);
 DECLARE_UEVR_HANDLE(UEVR_FMallocHandle);
+DECLARE_UEVR_HANDLE(UEVR_FRHITexture2DHandle);
 
 /* OpenXR stuff */
 DECLARE_UEVR_HANDLE(UEVR_XrInstance);
@@ -342,6 +343,22 @@ typedef struct {
     void (*free)(UEVR_FMallocHandle instance, void* ptr);
 } UEVR_FMallocFunctions;
 
+DECLARE_UEVR_HANDLE(UEVR_IPooledRenderTargetHandle);
+
+typedef struct {
+    void (*activate)();
+    UEVR_IPooledRenderTargetHandle (*get_render_target)(const wchar_t* name);
+} UEVR_FRenderTargetPoolHookFunctions;
+
+typedef struct {
+    UEVR_FRHITexture2DHandle (*get_scene_render_target)();
+    UEVR_FRHITexture2DHandle (*get_ui_render_target)();
+} UEVR_FFakeStereoRenderingHookFunctions;
+
+typedef struct {
+    void* (*get_native_resource)(UEVR_FRHITexture2DHandle texture);
+} UEVR_FRHITexture2DFunctions;
+
 typedef struct {
     const UEVR_SDKFunctions* functions;
     const UEVR_SDKCallbacks* callbacks;
@@ -357,6 +374,9 @@ typedef struct {
     const UEVR_FNameFunctions* fname;
     const UEVR_ConsoleFunctions* console;
     const UEVR_FMallocFunctions* malloc;
+    const UEVR_FRenderTargetPoolHookFunctions* render_target_pool_hook;
+    const UEVR_FFakeStereoRenderingHookFunctions* stereo_hook;
+    const UEVR_FRHITexture2DFunctions* frhitexture2d;
 } UEVR_SDKData;
 
 DECLARE_UEVR_HANDLE(UEVR_IVRSystem);

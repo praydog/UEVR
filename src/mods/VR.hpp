@@ -397,7 +397,7 @@ public:
         return m_lowest_xinput_user_index;
     }
 
-    auto& get_render_target_pool_hook() {
+    auto& get_render_target_pool_hook() const {
         return m_render_target_pool_hook;
     }
 
@@ -575,6 +575,14 @@ public:
 
     bool is_extreme_compatibility_mode_enabled() const {
         return m_extreme_compat_mode->value();
+    }
+
+    vrmod::D3D11Component& d3d11() {
+        return m_d3d11;
+    }
+
+    vrmod::D3D12Component& d3d12() {
+        return m_d3d12;
     }
 
 private:

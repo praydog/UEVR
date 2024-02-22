@@ -22,6 +22,10 @@
 #include <sdk/APlayerController.hpp>
 #include <sdk/USceneComponent.hpp>
 
+#include "pluginloader/FFakeStereoRenderingFunctions.hpp"
+#include "pluginloader/FRenderTargetPoolHook.hpp"
+#include "pluginloader/FRHITexture2DFunctions.hpp"
+
 #include "UObjectHook.hpp"
 #include "VR.hpp"
 
@@ -775,7 +779,10 @@ UEVR_SDKData g_sdk_data {
     &g_ffield_class_functions,
     &g_fname_functions,
     &g_console_functions,
-    &g_malloc_functions
+    &g_malloc_functions,
+    &uevr::render_target_pool_hook::functions,
+    &uevr::stereo_hook::functions,
+    &uevr::frhitexture2d::functions
 };
 
 namespace uevr {
