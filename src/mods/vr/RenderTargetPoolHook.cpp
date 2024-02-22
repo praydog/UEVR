@@ -5,6 +5,7 @@
 
 #include <sdk/FRenderTargetPool.hpp>
 #include <sdk/EngineModule.hpp>
+#include <sdk/threading/RHIThreadWorker.hpp>
 
 #include "../VR.hpp"
 #include "../../utility/Logging.hpp"
@@ -90,9 +91,6 @@ bool RenderTargetPoolHook::find_free_element_hook(
         if (!g_hook->m_seen_names.contains(name)) {
             g_hook->m_seen_names.insert(name);
             SPDLOG_INFO("FRenderTargetPool::FindFreeElement called with name {}", utility::narrow(name));
-        }
-
-            g_hook->m_render_targets[name] = out->reference;
         }
     }
 
