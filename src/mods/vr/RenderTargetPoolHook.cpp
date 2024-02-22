@@ -79,13 +79,18 @@ bool RenderTargetPoolHook::find_free_element_hook(
     if (name != nullptr) {
         //SPDLOG_INFO("FRenderTargetPool::FindFreeElement called with name {}", utility::narrow(name));
 
-        if (out != nullptr) {
-            std::scoped_lock _{g_hook->m_mutex};
+        std::scoped_lock _{g_hook->m_mutex};
 
-            if (!g_hook->m_seen_names.contains(name)) {
-                g_hook->m_seen_names.insert(name);
-                SPDLOG_INFO("FRenderTargetPool::FindFreeElement called with name {}", utility::narrow(name));
-            }
+        if (out != nullptr) {
+            g_hook->m_render_targets[name] = out->reference;
+        } else {
+            g_hook->m_render_targets.erase(name);
+        }
+
+        if (!g_hook->m_seen_names.contains(name)) {
+            g_hook->m_seen_names.insert(name);
+            SPDLOG_INFO("FRenderTargetPool::FindFreeElement called with name {}", utility::narrow(name));
+        }
 
             g_hook->m_render_targets[name] = out->reference;
         }
