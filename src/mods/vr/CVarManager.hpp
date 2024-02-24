@@ -202,6 +202,7 @@ private:
 
         // Ints
         std::make_unique<CVarStandard>(L"Renderer", L"r.DefaultFeature.AntiAliasing", CVar::Type::INT, 0, 2),
+        std::make_unique<CVarStandard>(L"Renderer", L"r.DefaultFeature.AmbientOcclusion", CVar::Type::INT, 0, 2),
         std::make_unique<CVarStandard>(L"Renderer", L"r.TemporalAA.Algorithm", CVar::Type::INT, 0, 1),
         std::make_unique<CVarStandard>(L"Renderer", L"r.TemporalAA.Upsampling", CVar::Type::INT, 0, 1),
         std::make_unique<CVarStandard>(L"Renderer", L"r.Upscale.Quality", CVar::Type::INT, 0, 5),
