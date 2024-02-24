@@ -1825,11 +1825,89 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
             // The function that has this string reference should ALWAYS get passed
             // back to the original function, this is the actual scene render target.
             // Everything else we will redirect to the UI render target.
-            if (utility::find_string_reference_in_path(*func_start, L"ViewFamilyTexture", false)) {
+            if (utility::find_string_reference_in_path(*func_start, L"ViewFamilyTexture", false) || utility::find_string_reference_in_path(*func_start, L"ViewFamilyTarget", false)) {
                 SPDLOG_INFO("Found view family texture reference @ {:x}", retaddr);
                 data.call_original_retaddrs.insert(retaddr);
                 data.has_view_family_tex = true;
                 return og(viewport);
+            }
+
+            // There are multiple other HAL references we can use too.
+            static const auto hal_clear_solid_rectangle_fn = utility::find_function_from_string_ref(utility::get_executable(), "HAL::ClearSolidRectangle");
+            static std::unordered_set<uintptr_t> scaleform_hal_vtable_functions{};
+
+            const auto is_scaleform = hal_clear_solid_rectangle_fn.has_value();
+
+            if (hal_clear_solid_rectangle_fn.has_value() && scaleform_hal_vtable_functions.empty()) try {
+                scaleform_hal_vtable_functions.insert(*hal_clear_solid_rectangle_fn);
+
+                SPDLOG_INFO("Found HAL::ClearSolidRectangle function @ {:x}", *hal_clear_solid_rectangle_fn);
+                std::vector<uintptr_t> scaleform_hal_vtable_refs{};
+                const auto module_size = utility::get_module_size(utility::get_executable()).value_or(0);
+                const auto start = (uintptr_t)utility::get_executable();
+                const auto end = (uintptr_t)utility::get_executable() + module_size;
+                const auto hal_module = utility::get_module_within(*hal_clear_solid_rectangle_fn).value_or(nullptr);
+
+                // There are multiple HAL vtable, so just collect all of them.
+                for (auto i = start; i < end - 0x1000; i += sizeof(uintptr_t)) {
+                    const auto remaining = end - i;
+                    const auto function_ptr = utility::scan_ptr(i, remaining - 0x1000, *hal_clear_solid_rectangle_fn);
+
+                    if (!function_ptr.has_value()) {
+                        break;
+                    }
+
+                    i = *function_ptr;
+
+                    SPDLOG_INFO("Found HAL::ClearSolidRectangle function pointer @ {:x}", *function_ptr);
+                    for (auto j = 0; j < 100; ++j) {
+                        const auto entry = *(uintptr_t*)(*function_ptr + (j * sizeof(uintptr_t)));
+
+                        if (entry == 0 || IsBadReadPtr((void*)entry, sizeof(uintptr_t))) {
+                            break;
+                        }
+
+                        const auto is_same_module = utility::get_module_within(entry).value_or(nullptr) == hal_module;
+
+                        if (!is_same_module) {
+                            break;
+                        }
+
+                        scaleform_hal_vtable_functions.insert(entry);
+                    }
+                }
+            } catch(...) {
+                SPDLOG_ERROR("Failed to find Scaleform HAL vtable functions!");
+            }
+
+            // however, some games are not so easy and we have to do some extra analysis to verify
+            // that the return address here is a scaleform-based call.
+            if (is_scaleform && !scaleform_hal_vtable_functions.empty()) try {
+                // Walk the stack, get function starts and check if any are in the vtable
+                constexpr auto max_stack_depth = 100;
+                uintptr_t stack[max_stack_depth]{};
+
+                const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
+
+                for (auto i = 0; i < depth; ++i) {
+                    SPDLOG_INFO(" Stack[{}]: {:x}", i, stack[i]);
+                }
+
+                for (auto i = 1; i < std::min<uint16_t>(7, depth); ++i) {
+                    const auto scaleform_func_start = utility::find_function_start(stack[i]);
+
+                    if (!scaleform_func_start) {
+                        continue;
+                    }
+
+                    if (scaleform_hal_vtable_functions.contains(*scaleform_func_start)) {
+                        SPDLOG_INFO("Found Scaleform HAL vtable function reference @ {:x}", retaddr);
+                        data.redirected_retaddrs.insert(retaddr);
+                        break;
+                    }
+                }
+            } catch(...) {
+                SPDLOG_ERROR("Failed to walk stack for scaleform vtable functions!");
             }
         }
 
