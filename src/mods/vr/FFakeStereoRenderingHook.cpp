@@ -1839,6 +1839,19 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
                 return og(viewport);
             }
 
+            const auto next_fn_call = utility::scan_disasm(retaddr, 0x30, "E8 ? ? ? ?");
+
+            if (next_fn_call) {
+                const auto fn = utility::calculate_absolute(*next_fn_call + 1);
+
+                // I don't know of any other way to check this. I'm not sure what this function is.
+                // It seems like deep within a threaded or function for enqueueing a render command.
+                if (utility::scan(fn, 0x50, "01 01 01 01") && utility::scan(fn, 0x50, "22 00 00 00")) {
+                    SPDLOG_INFO("Found unknown screen space rendering call @ {:x}", retaddr);
+                    data.redirected_retaddrs.insert(retaddr);
+                }
+            }
+
             // There are multiple other HAL references we can use too.
             static const auto hal_clear_solid_rectangle_fn = utility::find_function_from_string_ref(utility::get_executable(), "HAL::ClearSolidRectangle");
             static std::unordered_set<uintptr_t> scaleform_hal_vtable_functions{};
@@ -1912,22 +1925,6 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
                         data.redirected_retaddrs.insert(retaddr);
                         found = true;
                         break;
-                    }
-                }
-
-                // Now just scan the next function that's called
-                if (!found) {
-                    const auto next_fn_call = utility::scan_disasm(retaddr, 0x30, "E8 ? ? ? ?");
-
-                    if (next_fn_call) {
-                        const auto fn = utility::calculate_absolute(*next_fn_call + 1);
-
-                        // I don't know of any other way to check this. I'm not sure what this function is.
-                        // It seems like deep within a threaded or function for enqueueing a render command.
-                        if (utility::scan(fn, 0x50, "01 01 01 01") && utility::scan(fn, 0x50, "22 00 00 00")) {
-                            SPDLOG_INFO("Found potential Scaleform function call @ {:x} (using alternate method)", retaddr);
-                            data.redirected_retaddrs.insert(retaddr);
-                        }
                     }
                 }
             } catch(...) {
