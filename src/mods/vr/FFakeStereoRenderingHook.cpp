@@ -125,6 +125,65 @@ void FFakeStereoRenderingHook::on_draw_ui() {
             m_tracking_system_hook->on_draw_ui();
         }
 
+        auto& data = m_viewport_rt_hook_data;
+        std::scoped_lock _{data.retaddr_mutex};
+
+        std::vector<uintptr_t> retaddrs{};
+        std::vector<std::string> items{};
+        for (auto& addr : data.seen_retaddrs) {
+            items.push_back(fmt::format("{:x}", addr));
+            retaddrs.push_back(addr);
+        }
+        
+        std::vector<const char*> citems{};
+        for (auto& item : items) {
+            citems.push_back(item.c_str());
+        }
+
+        if (!items.empty()) {
+            if (ImGui::BeginCombo("GetRenderTargetTexture Retaddrs", items[data.selected_retaddr].c_str())) {
+                for (int n = 0; n < items.size(); n++) {
+                    ImGui::PushID(n);
+                    auto retaddr = retaddrs[n];
+                    const bool is_selected = (data.selected_retaddr == n);
+
+                    // Calculate the text size for the current item
+                    const auto text_size = ImGui::CalcTextSize(items[n].c_str(), NULL, true);
+                    const auto padding = ImGui::GetStyle().ItemSpacing.x;
+                    const auto selectable_size = ImVec2{text_size.x + padding, text_size.y};
+
+                    if (ImGui::Selectable(items[n].c_str(), is_selected, ImGuiSelectableFlags_None, selectable_size)) {
+                        data.selected_retaddr = n;
+                    }
+
+                    ImGui::SameLine();
+                    if (ImGui::Button("Call Original")) {
+                        data.call_original_retaddrs.insert(retaddr);
+                        data.redirected_retaddrs.erase(retaddr);
+                    }
+
+                    ImGui::SameLine();
+                    if (ImGui::Button("Redirect")) {
+                        data.redirected_retaddrs.insert(retaddr);
+                        data.call_original_retaddrs.erase(retaddr);
+                    }
+
+                    ImGui::SameLine();
+                    if (data.call_original_retaddrs.contains(retaddr)) {
+                        ImGui::Text("[Calling Original]");
+                    } else if (data.redirected_retaddrs.contains(retaddr)) {
+                        ImGui::Text("[Redirected]");
+                    } else {
+                        ImGui::Text("[Default]");
+                    }
+
+                    ImGui::PopID();
+                }
+                ImGui::EndCombo();
+            }
+
+        }
+
         ImGui::TreePop();
     }
 
@@ -1731,11 +1790,6 @@ void FFakeStereoRenderingHook::viewport_draw_hook(void* viewport, bool should_pr
 // This is only used for the UI compatibility mode.
 FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hook(sdk::FViewport* viewport) {
     const auto retaddr = (uintptr_t)_ReturnAddress();
-    static std::unordered_set<uintptr_t> redirected_retaddrs{};
-    static std::unordered_set<uintptr_t> call_original_retaddrs{};
-    static std::unordered_set<uintptr_t> seen_retaddrs{};
-    static std::recursive_mutex retaddr_mutex{};
-    static bool has_view_family_tex{false};
 
     SPDLOG_INFO_ONCE("FViewport::GetRenderTargetTexture called!");
     const auto og = g_hook->m_viewport_get_render_target_texture_hook->get_original<decltype(&viewport_get_render_target_texture_hook)>();
@@ -1745,11 +1799,13 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
         return og(viewport);
     }
 
-    {
-        std::scoped_lock _{retaddr_mutex};
-        utility::ScopeGuard guard{[&](){ seen_retaddrs.insert(retaddr); }};
+    auto& data = g_hook->m_viewport_rt_hook_data;
 
-        if (call_original_retaddrs.contains(retaddr)) {
+    {
+        std::scoped_lock _{data.retaddr_mutex};
+        utility::ScopeGuard guard{[&](){ data.seen_retaddrs.insert(retaddr); }};
+
+        if (data.call_original_retaddrs.contains(retaddr)) {
             return og(viewport);
         }
 
@@ -1757,7 +1813,7 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
 
         // ALWAYS check the retaddr for ViewFamilyTexture first and never skip it
         // This will fix the case where we run into some other texture initially.
-        if (!seen_retaddrs.contains(retaddr)) {
+        if (!data.seen_retaddrs.contains(retaddr)) {
             SPDLOG_INFO("FViewport::GetRenderTargetTexture called from {:x}", retaddr);
 
             func_start = utility::find_function_start(retaddr);
@@ -1771,19 +1827,19 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
             // Everything else we will redirect to the UI render target.
             if (utility::find_string_reference_in_path(*func_start, L"ViewFamilyTexture", false)) {
                 SPDLOG_INFO("Found view family texture reference @ {:x}", retaddr);
-                call_original_retaddrs.insert(retaddr);
-                has_view_family_tex = true;
+                data.call_original_retaddrs.insert(retaddr);
+                data.has_view_family_tex = true;
                 return og(viewport);
             }
         }
 
         // Hacky way to allow the first texture to go through
         // For the games that are using something other than ViewFamilyTexture as the scene RT.
-        if (!call_original_retaddrs.empty() && !redirected_retaddrs.contains(retaddr) && !has_view_family_tex) {
+        if (!data.call_original_retaddrs.empty() && !data.redirected_retaddrs.contains(retaddr) && !data.has_view_family_tex) {
             return og(viewport);
         }
 
-        if (!redirected_retaddrs.contains(retaddr) && !call_original_retaddrs.contains(retaddr)) {
+        if (!data.redirected_retaddrs.contains(retaddr) && !data.call_original_retaddrs.contains(retaddr)) {
             if (!func_start) {
                 func_start = utility::find_function_start(retaddr);
 
@@ -1801,7 +1857,7 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
 
             if (utility::find_string_reference_in_path(*func_start, L"FinalPostProcessColor", false)) {
                 SPDLOG_INFO("Found FinalPostProcessColor reference @ {:x}", retaddr);
-                call_original_retaddrs.insert(retaddr);
+                data.call_original_retaddrs.insert(retaddr);
                 return og(viewport);
             }
 
@@ -1809,12 +1865,12 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
             // some games are insane and have multiple "UnknownTexture" references...
             if (utility::find_string_reference_in_path(*func_start, L"UnknownTexture", false)) {
                 SPDLOG_INFO("Found unknown texture reference @ {:x}", retaddr);
-                call_original_retaddrs.insert(retaddr);
+                data.call_original_retaddrs.insert(retaddr);
                 return og(viewport);
             }
 
             SPDLOG_INFO("Redirecting FViewport::GetRenderTargetTexture call to UI render target @ {:x}", retaddr);
-            redirected_retaddrs.insert(retaddr);
+            data.redirected_retaddrs.insert(retaddr);
         }
     }
 
