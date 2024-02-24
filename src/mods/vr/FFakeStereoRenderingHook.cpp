@@ -1832,6 +1832,13 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
                 return og(viewport);
             }
 
+            // We should always allow the viewport when used in a post processing context to go through.
+            if (utility::find_string_reference_in_path(*func_start, L"FinalPostProcessColor", false)) {
+                SPDLOG_INFO("Found FinalPostProcessColor reference @ {:x}", retaddr);
+                data.call_original_retaddrs.insert(retaddr);
+                return og(viewport);
+            }
+
             // There are multiple other HAL references we can use too.
             static const auto hal_clear_solid_rectangle_fn = utility::find_function_from_string_ref(utility::get_executable(), "HAL::ClearSolidRectangle");
             static std::unordered_set<uintptr_t> scaleform_hal_vtable_functions{};
@@ -1891,6 +1898,8 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
                     SPDLOG_INFO(" Stack[{}]: {:x}", i, stack[i]);
                 }
 
+                bool found = false;
+
                 for (auto i = 1; i < std::min<uint16_t>(7, depth); ++i) {
                     const auto scaleform_func_start = utility::find_virtual_function_start(stack[i]);
 
@@ -1901,7 +1910,24 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
                     if (scaleform_hal_vtable_functions.contains(*scaleform_func_start)) {
                         SPDLOG_INFO("Found Scaleform HAL vtable function reference @ {:x}", retaddr);
                         data.redirected_retaddrs.insert(retaddr);
+                        found = true;
                         break;
+                    }
+                }
+
+                // Now just scan the next function that's called
+                if (!found) {
+                    const auto next_fn_call = utility::scan_disasm(retaddr, 0x30, "E8 ? ? ? ?");
+
+                    if (next_fn_call) {
+                        const auto fn = utility::calculate_absolute(*next_fn_call + 1);
+
+                        // I don't know of any other way to check this. I'm not sure what this function is.
+                        // It seems like deep within a threaded or function for enqueueing a render command.
+                        if (utility::scan(fn, 0x50, "01 01 01 01") && utility::scan(fn, 0x50, "22 00 00 00")) {
+                            SPDLOG_INFO("Found potential Scaleform function call @ {:x} (using alternate method)", retaddr);
+                            data.redirected_retaddrs.insert(retaddr);
+                        }
                     }
                 }
             } catch(...) {
@@ -1930,12 +1956,6 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
                 call_original_retaddrs.insert(retaddr);
                 return og(viewport);
             }*/
-
-            if (utility::find_string_reference_in_path(*func_start, L"FinalPostProcessColor", false)) {
-                SPDLOG_INFO("Found FinalPostProcessColor reference @ {:x}", retaddr);
-                data.call_original_retaddrs.insert(retaddr);
-                return og(viewport);
-            }
 
             // TODO? this needs some more rigorous filtering
             // some games are insane and have multiple "UnknownTexture" references...
