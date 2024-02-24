@@ -1880,8 +1880,6 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
                 SPDLOG_ERROR("Failed to find Scaleform HAL vtable functions!");
             }
 
-            // however, some games are not so easy and we have to do some extra analysis to verify
-            // that the return address here is a scaleform-based call.
             if (is_scaleform && !scaleform_hal_vtable_functions.empty()) try {
                 // Walk the stack, get function starts and check if any are in the vtable
                 constexpr auto max_stack_depth = 100;
@@ -1894,7 +1892,7 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
                 }
 
                 for (auto i = 1; i < std::min<uint16_t>(7, depth); ++i) {
-                    const auto scaleform_func_start = utility::find_function_start(stack[i]);
+                    const auto scaleform_func_start = utility::find_virtual_function_start(stack[i]);
 
                     if (!scaleform_func_start) {
                         continue;
