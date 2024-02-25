@@ -128,6 +128,9 @@ public:
     struct IConsoleVariable;
     struct IConsoleCommand;
     struct ConsoleObjectElement;
+    struct UObjectHook;
+    struct FRHITexture2D;
+    struct IPooledRenderTarget;
 
     template<typename T>
     struct TArray;
@@ -177,6 +180,43 @@ public:
         static const auto fn = sdk()->functions->get_console_manager;
         return (FConsoleManager*)fn();
     }
+
+    struct FMalloc {
+        static FMalloc* get() {
+            static const auto fn = initialize()->get;
+            return (FMalloc*)fn();
+        }
+
+        inline UEVR_FMallocHandle to_handle() { return (UEVR_FMallocHandle)this; }
+        inline UEVR_FMallocHandle to_handle() const { return (UEVR_FMallocHandle)this; }
+
+        using FMallocSizeT = uint32_t; // because of C89
+
+        void* malloc(FMallocSizeT size, uint32_t alignment = 0) {
+            static const auto fn = initialize()->malloc;
+            return fn(to_handle(), size, alignment);
+        }
+        
+        void* realloc(void* original, FMallocSizeT size, uint32_t alignment = 0) {
+            static const auto fn = initialize()->realloc;
+            return fn(to_handle(), original, size, alignment);
+        }
+
+        void free(void* original) {
+            static const auto fn = initialize()->free;
+            fn(to_handle(), original);
+        }
+
+    private:
+        static inline const UEVR_FMallocFunctions* s_functions{nullptr};
+        static inline const UEVR_FMallocFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->malloc;
+            }
+
+            return s_functions;
+        }
+    };
 
     struct FName {
         inline UEVR_FNameHandle to_handle() { return (UEVR_FNameHandle)this; }
@@ -640,7 +680,9 @@ public:
 
     // TODO
     struct UEngine : public UObject {
-
+        static UEngine* get() {
+            return API::get()->get_engine();
+        }
     };
 
     struct UGameEngine : public UEngine {
@@ -652,17 +694,25 @@ public:
     };
 
     struct FUObjectArray {
-
+        static FUObjectArray* get() {
+            return API::get()->get_uobject_array();
+        }
     };
 
     // One of the very few non-opaque structs
     // because these have never changed, if they do its because of bespoke code
-    // TODO: fully implement, GMalloc and everything?
     template <typename T>
     struct TArray {
         T* data;
         int32_t count;
         int32_t capacity;
+
+        ~TArray() {
+            if (data != nullptr) {
+                FMalloc::get()->free(data);
+                data = nullptr;
+            }
+        }
 
         T* begin() {
             return data;
@@ -686,6 +736,164 @@ public:
             }
 
             return data + count;
+        }
+
+        bool empty() const {
+            return count == 0 || data == nullptr;
+        }
+    };
+
+    struct FRHITexture2D {
+        inline UEVR_FRHITexture2DHandle to_handle() { return (UEVR_FRHITexture2DHandle)this; }
+        inline UEVR_FRHITexture2DHandle to_handle() const { return (UEVR_FRHITexture2DHandle)this; }
+
+        void* get_native_resource() const {
+            static const auto fn = initialize()->get_native_resource;
+            return fn(to_handle());
+        }
+
+    private:
+        static inline const UEVR_FRHITexture2DFunctions* s_functions{nullptr};
+        static inline const UEVR_FRHITexture2DFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->frhitexture2d;
+            }
+
+            return s_functions;
+        }
+    };
+
+public:
+    // UEVR specific stuff
+    struct UObjectHook {
+        struct MotionControllerState;
+
+        static void activate() {
+            static const auto fn = initialize()->activate;
+            fn();
+        }
+
+        static bool exists(UObject* obj) {
+            static const auto fn = initialize()->exists;
+            return fn(obj->to_handle());
+        }
+
+        static std::vector<UObject*> get_objects_by_class(UClass* c, bool allow_default = false) {
+            if (c == nullptr) {
+                return {};
+            }
+
+            return c->get_objects_matching(allow_default);
+        }
+
+        static UObject* get_first_object_by_class(UClass* c, bool allow_default = false) {
+            if (c == nullptr) {
+                return nullptr;
+            }
+
+            return c->get_first_object_matching(allow_default);
+        }
+
+        // Must be a USceneComponent
+        // Also, do NOT keep the pointer around, it will be invalidated at any time
+        // Call it every time you need it
+        static MotionControllerState* get_or_add_motion_controller_state(UObject* obj) {
+            static const auto fn = initialize()->get_or_add_motion_controller_state;
+            return (MotionControllerState*)fn(obj->to_handle());
+        }
+
+        static MotionControllerState* get_motion_controller_state(UObject* obj) {
+            static const auto fn = initialize()->get_motion_controller_state;
+            return (MotionControllerState*)fn(obj->to_handle());
+        }
+
+        struct MotionControllerState {
+            inline UEVR_UObjectHookMotionControllerStateHandle to_handle() { return (UEVR_UObjectHookMotionControllerStateHandle)this; }
+            inline UEVR_UObjectHookMotionControllerStateHandle to_handle() const { return (UEVR_UObjectHookMotionControllerStateHandle)this; }
+
+            void set_rotation_offset(const UEVR_Quaternionf* offset) {
+                static const auto fn = initialize()->set_rotation_offset;
+                fn(to_handle(), offset);
+            }
+
+            void set_location_offset(const UEVR_Vector3f* offset) {
+                static const auto fn = initialize()->set_location_offset;
+                fn(to_handle(), offset);
+            }
+
+            void set_hand(uint32_t hand) {
+                static const auto fn = initialize()->set_hand;
+                fn(to_handle(), hand);
+            }
+
+            void set_permanent(bool permanent) {
+                static const auto fn = initialize()->set_permanent;
+                fn(to_handle(), permanent);
+            }
+
+        private:
+            static inline const UEVR_UObjectHookMotionControllerStateFunctions* s_functions{nullptr};
+            static inline const UEVR_UObjectHookMotionControllerStateFunctions* initialize() {
+                if (s_functions == nullptr) {
+                    s_functions = API::get()->sdk()->uobject_hook->mc_state;
+                }
+
+                return s_functions;
+            }
+        };
+
+    private:
+        static inline const UEVR_UObjectHookFunctions* s_functions{nullptr};
+        static inline const UEVR_UObjectHookFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->uobject_hook;
+            }
+
+            return s_functions;
+        }
+    };
+
+    struct RenderTargetPoolHook {
+        static void activate() {
+            static const auto fn = initialize()->activate;
+            fn();
+        }
+
+        static IPooledRenderTarget* get_render_target(const wchar_t* name) {
+            static const auto fn = initialize()->get_render_target;
+            return (IPooledRenderTarget*)fn(name);
+        }
+
+    private:
+        static inline const UEVR_FRenderTargetPoolHookFunctions* s_functions{nullptr};
+        static inline const UEVR_FRenderTargetPoolHookFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->render_target_pool_hook;
+            }
+
+            return s_functions;
+        }
+    };
+
+    struct StereoHook {
+        static FRHITexture2D* get_scene_render_target() {
+            static const auto fn = initialize()->get_scene_render_target;
+            return (FRHITexture2D*)fn();
+        }
+
+        static FRHITexture2D* get_ui_render_target() {
+            static const auto fn = initialize()->get_ui_render_target;
+            return (FRHITexture2D*)fn();
+        }
+
+    private:
+        static inline const UEVR_FFakeStereoRenderingHookFunctions* s_functions{nullptr};
+        static inline const UEVR_FFakeStereoRenderingHookFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->stereo_hook;
+            }
+
+            return s_functions;
         }
     };
 

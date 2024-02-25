@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 11
+#define UEVR_PLUGIN_VERSION_MINOR 15
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -73,6 +73,8 @@ DECLARE_UEVR_HANDLE(UEVR_IConsoleObjectHandle);
 DECLARE_UEVR_HANDLE(UEVR_IConsoleCommandHandle);
 DECLARE_UEVR_HANDLE(UEVR_IConsoleVariableHandle);
 DECLARE_UEVR_HANDLE(UEVR_TArrayHandle);
+DECLARE_UEVR_HANDLE(UEVR_FMallocHandle);
+DECLARE_UEVR_HANDLE(UEVR_FRHITexture2DHandle);
 
 /* OpenXR stuff */
 DECLARE_UEVR_HANDLE(UEVR_XrInstance);
@@ -297,6 +299,15 @@ typedef struct {
     UEVR_FNameHandle (*get_fname)(UEVR_UObjectHandle object);
 } UEVR_UObjectFunctions;
 
+DECLARE_UEVR_HANDLE(UEVR_UObjectHookMotionControllerStateHandle);
+
+typedef struct {
+    void (*set_rotation_offset)(UEVR_UObjectHookMotionControllerStateHandle, const UEVR_Quaternionf* rotation);
+    void (*set_location_offset)(UEVR_UObjectHookMotionControllerStateHandle, const UEVR_Vector3f* location);
+    void (*set_hand)(UEVR_UObjectHookMotionControllerStateHandle, unsigned int hand);
+    void (*set_permanent)(UEVR_UObjectHookMotionControllerStateHandle, bool permanent);
+} UEVR_UObjectHookMotionControllerStateFunctions;
+
 typedef struct {
     void (*activate)();
     bool (*exists)(UEVR_UObjectHandle object);
@@ -308,6 +319,11 @@ typedef struct {
 
     UEVR_UObjectHandle (*get_first_object_by_class)(UEVR_UClassHandle klass, bool allow_default);
     UEVR_UObjectHandle (*get_first_object_by_class_name)(const wchar_t* class_name, bool allow_default);
+
+    UEVR_UObjectHookMotionControllerStateHandle (*get_or_add_motion_controller_state)(UEVR_UObjectHandle object);
+    UEVR_UObjectHookMotionControllerStateHandle (*get_motion_controller_state)(UEVR_UObjectHandle object);
+
+    UEVR_UObjectHookMotionControllerStateFunctions* mc_state;
 } UEVR_UObjectHookFunctions;
 
 typedef struct {
@@ -318,6 +334,30 @@ typedef struct {
     unsigned int (*to_string)(UEVR_FNameHandle name, wchar_t* buffer, unsigned int buffer_size);
     void (*constructor)(UEVR_FNameHandle name, const wchar_t* data, unsigned int find_type);
 } UEVR_FNameFunctions;
+
+typedef struct {
+    UEVR_FMallocHandle (*get)();
+
+    void* (*malloc)(UEVR_FMallocHandle instance, unsigned int size, unsigned int alignment);
+    void* (*realloc)(UEVR_FMallocHandle instance, void* ptr, unsigned int size, unsigned int alignment);
+    void (*free)(UEVR_FMallocHandle instance, void* ptr);
+} UEVR_FMallocFunctions;
+
+DECLARE_UEVR_HANDLE(UEVR_IPooledRenderTargetHandle);
+
+typedef struct {
+    void (*activate)();
+    UEVR_IPooledRenderTargetHandle (*get_render_target)(const wchar_t* name);
+} UEVR_FRenderTargetPoolHookFunctions;
+
+typedef struct {
+    UEVR_FRHITexture2DHandle (*get_scene_render_target)();
+    UEVR_FRHITexture2DHandle (*get_ui_render_target)();
+} UEVR_FFakeStereoRenderingHookFunctions;
+
+typedef struct {
+    void* (*get_native_resource)(UEVR_FRHITexture2DHandle texture);
+} UEVR_FRHITexture2DFunctions;
 
 typedef struct {
     const UEVR_SDKFunctions* functions;
@@ -333,6 +373,10 @@ typedef struct {
     const UEVR_FFieldClassFunctions* ffield_class;
     const UEVR_FNameFunctions* fname;
     const UEVR_ConsoleFunctions* console;
+    const UEVR_FMallocFunctions* malloc;
+    const UEVR_FRenderTargetPoolHookFunctions* render_target_pool_hook;
+    const UEVR_FFakeStereoRenderingHookFunctions* stereo_hook;
+    const UEVR_FRHITexture2DFunctions* frhitexture2d;
 } UEVR_SDKData;
 
 DECLARE_UEVR_HANDLE(UEVR_IVRSystem);
@@ -444,6 +488,11 @@ typedef struct {
     void (*set_aim_method)(unsigned int method);
     bool (*is_aim_allowed)();
     void (*set_aim_allowed)(bool allowed);
+
+    unsigned int (*get_hmd_width)();
+    unsigned int (*get_hmd_height)();
+    unsigned int (*get_ui_width)();
+    unsigned int (*get_ui_height)();
 } UEVR_VRData;
 
 typedef struct {

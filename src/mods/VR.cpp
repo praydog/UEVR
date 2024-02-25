@@ -2356,7 +2356,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         m_disable_blur_widgets->draw("Disable Blur Widgets");
         m_uncap_framerate->draw("Uncap Framerate");
         m_enable_gui->draw("Enable GUI");
-        m_enable_depth->draw("Enable Depth");
+        m_enable_depth->draw("Enable Depth-based Latency Reduction");
         m_load_blueprint_code->draw("Load Blueprint Code");
         m_ghosting_fix->draw("Ghosting Fix");
 

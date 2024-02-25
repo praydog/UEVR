@@ -125,6 +125,65 @@ void FFakeStereoRenderingHook::on_draw_ui() {
             m_tracking_system_hook->on_draw_ui();
         }
 
+        auto& data = m_viewport_rt_hook_data;
+        std::scoped_lock _{data.retaddr_mutex};
+
+        std::vector<uintptr_t> retaddrs{};
+        std::vector<std::string> items{};
+        for (auto& addr : data.seen_retaddrs) {
+            items.push_back(fmt::format("{:x}", addr));
+            retaddrs.push_back(addr);
+        }
+        
+        std::vector<const char*> citems{};
+        for (auto& item : items) {
+            citems.push_back(item.c_str());
+        }
+
+        if (!items.empty()) {
+            if (ImGui::BeginCombo("GetRenderTargetTexture Retaddrs", items[data.selected_retaddr].c_str())) {
+                for (int n = 0; n < items.size(); n++) {
+                    ImGui::PushID(n);
+                    auto retaddr = retaddrs[n];
+                    const bool is_selected = (data.selected_retaddr == n);
+
+                    // Calculate the text size for the current item
+                    const auto text_size = ImGui::CalcTextSize(items[n].c_str(), NULL, true);
+                    const auto padding = ImGui::GetStyle().ItemSpacing.x;
+                    const auto selectable_size = ImVec2{text_size.x + padding, text_size.y};
+
+                    if (ImGui::Selectable(items[n].c_str(), is_selected, ImGuiSelectableFlags_None, selectable_size)) {
+                        data.selected_retaddr = n;
+                    }
+
+                    ImGui::SameLine();
+                    if (ImGui::Button("Call Original")) {
+                        data.call_original_retaddrs.insert(retaddr);
+                        data.redirected_retaddrs.erase(retaddr);
+                    }
+
+                    ImGui::SameLine();
+                    if (ImGui::Button("Redirect")) {
+                        data.redirected_retaddrs.insert(retaddr);
+                        data.call_original_retaddrs.erase(retaddr);
+                    }
+
+                    ImGui::SameLine();
+                    if (data.call_original_retaddrs.contains(retaddr)) {
+                        ImGui::Text("[Calling Original]");
+                    } else if (data.redirected_retaddrs.contains(retaddr)) {
+                        ImGui::Text("[Redirected]");
+                    } else {
+                        ImGui::Text("[Default]");
+                    }
+
+                    ImGui::PopID();
+                }
+                ImGui::EndCombo();
+            }
+
+        }
+
         ImGui::TreePop();
     }
 
@@ -1731,11 +1790,6 @@ void FFakeStereoRenderingHook::viewport_draw_hook(void* viewport, bool should_pr
 // This is only used for the UI compatibility mode.
 FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hook(sdk::FViewport* viewport) {
     const auto retaddr = (uintptr_t)_ReturnAddress();
-    static std::unordered_set<uintptr_t> redirected_retaddrs{};
-    static std::unordered_set<uintptr_t> call_original_retaddrs{};
-    static std::unordered_set<uintptr_t> seen_retaddrs{};
-    static std::recursive_mutex retaddr_mutex{};
-    static bool has_view_family_tex{false};
 
     SPDLOG_INFO_ONCE("FViewport::GetRenderTargetTexture called!");
     const auto og = g_hook->m_viewport_get_render_target_texture_hook->get_original<decltype(&viewport_get_render_target_texture_hook)>();
@@ -1745,11 +1799,13 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
         return og(viewport);
     }
 
-    {
-        std::scoped_lock _{retaddr_mutex};
-        utility::ScopeGuard guard{[&](){ seen_retaddrs.insert(retaddr); }};
+    auto& data = g_hook->m_viewport_rt_hook_data;
 
-        if (call_original_retaddrs.contains(retaddr)) {
+    {
+        std::scoped_lock _{data.retaddr_mutex};
+        utility::ScopeGuard guard{[&](){ data.seen_retaddrs.insert(retaddr); }};
+
+        if (data.call_original_retaddrs.contains(retaddr)) {
             return og(viewport);
         }
 
@@ -1757,7 +1813,7 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
 
         // ALWAYS check the retaddr for ViewFamilyTexture first and never skip it
         // This will fix the case where we run into some other texture initially.
-        if (!seen_retaddrs.contains(retaddr)) {
+        if (!data.seen_retaddrs.contains(retaddr)) {
             SPDLOG_INFO("FViewport::GetRenderTargetTexture called from {:x}", retaddr);
 
             func_start = utility::find_function_start(retaddr);
@@ -1769,21 +1825,120 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
             // The function that has this string reference should ALWAYS get passed
             // back to the original function, this is the actual scene render target.
             // Everything else we will redirect to the UI render target.
-            if (utility::find_string_reference_in_path(*func_start, L"ViewFamilyTexture", false)) {
+            if (utility::find_string_reference_in_path(*func_start, L"ViewFamilyTexture", false) || utility::find_string_reference_in_path(*func_start, L"ViewFamilyTarget", false)) {
                 SPDLOG_INFO("Found view family texture reference @ {:x}", retaddr);
-                call_original_retaddrs.insert(retaddr);
-                has_view_family_tex = true;
+                data.call_original_retaddrs.insert(retaddr);
+                data.has_view_family_tex = true;
                 return og(viewport);
+            }
+
+            // We should always allow the viewport when used in a post processing context to go through.
+            if (utility::find_string_reference_in_path(*func_start, L"FinalPostProcessColor", false)) {
+                SPDLOG_INFO("Found FinalPostProcessColor reference @ {:x}", retaddr);
+                data.call_original_retaddrs.insert(retaddr);
+                return og(viewport);
+            }
+
+            const auto next_fn_call = utility::scan_disasm(retaddr, 0x30, "E8 ? ? ? ?");
+
+            if (next_fn_call) {
+                const auto fn = utility::calculate_absolute(*next_fn_call + 1);
+
+                // I don't know of any other way to check this. I'm not sure what this function is.
+                // It seems like deep within a threaded or function for enqueueing a render command.
+                if (utility::scan(fn, 0x50, "01 01 01 01") && utility::scan(fn, 0x50, "22 00 00 00")) {
+                    SPDLOG_INFO("Found unknown screen space rendering call @ {:x}", retaddr);
+                    data.redirected_retaddrs.insert(retaddr);
+                }
+            }
+
+            // There are multiple other HAL references we can use too.
+            static const auto hal_clear_solid_rectangle_fn = utility::find_function_from_string_ref(utility::get_executable(), "HAL::ClearSolidRectangle");
+            static std::unordered_set<uintptr_t> scaleform_hal_vtable_functions{};
+
+            const auto is_scaleform = hal_clear_solid_rectangle_fn.has_value();
+
+            if (hal_clear_solid_rectangle_fn.has_value() && scaleform_hal_vtable_functions.empty()) try {
+                scaleform_hal_vtable_functions.insert(*hal_clear_solid_rectangle_fn);
+
+                SPDLOG_INFO("Found HAL::ClearSolidRectangle function @ {:x}", *hal_clear_solid_rectangle_fn);
+                std::vector<uintptr_t> scaleform_hal_vtable_refs{};
+                const auto module_size = utility::get_module_size(utility::get_executable()).value_or(0);
+                const auto start = (uintptr_t)utility::get_executable();
+                const auto end = (uintptr_t)utility::get_executable() + module_size;
+                const auto hal_module = utility::get_module_within(*hal_clear_solid_rectangle_fn).value_or(nullptr);
+
+                // There are multiple HAL vtable, so just collect all of them.
+                for (auto i = start; i < end - 0x1000; i += sizeof(uintptr_t)) {
+                    const auto remaining = end - i;
+                    const auto function_ptr = utility::scan_ptr(i, remaining - 0x1000, *hal_clear_solid_rectangle_fn);
+
+                    if (!function_ptr.has_value()) {
+                        break;
+                    }
+
+                    i = *function_ptr;
+
+                    SPDLOG_INFO("Found HAL::ClearSolidRectangle function pointer @ {:x}", *function_ptr);
+                    for (auto j = 0; j < 100; ++j) {
+                        const auto entry = *(uintptr_t*)(*function_ptr + (j * sizeof(uintptr_t)));
+
+                        if (entry == 0 || IsBadReadPtr((void*)entry, sizeof(uintptr_t))) {
+                            break;
+                        }
+
+                        const auto is_same_module = utility::get_module_within(entry).value_or(nullptr) == hal_module;
+
+                        if (!is_same_module) {
+                            break;
+                        }
+
+                        scaleform_hal_vtable_functions.insert(entry);
+                    }
+                }
+            } catch(...) {
+                SPDLOG_ERROR("Failed to find Scaleform HAL vtable functions!");
+            }
+
+            if (is_scaleform && !scaleform_hal_vtable_functions.empty()) try {
+                // Walk the stack, get function starts and check if any are in the vtable
+                constexpr auto max_stack_depth = 100;
+                uintptr_t stack[max_stack_depth]{};
+
+                const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
+
+                for (auto i = 0; i < depth; ++i) {
+                    SPDLOG_INFO(" Stack[{}]: {:x}", i, stack[i]);
+                }
+
+                bool found = false;
+
+                for (auto i = 1; i < std::min<uint16_t>(7, depth); ++i) {
+                    const auto scaleform_func_start = utility::find_virtual_function_start(stack[i]);
+
+                    if (!scaleform_func_start) {
+                        continue;
+                    }
+
+                    if (scaleform_hal_vtable_functions.contains(*scaleform_func_start)) {
+                        SPDLOG_INFO("Found Scaleform HAL vtable function reference @ {:x}", retaddr);
+                        data.redirected_retaddrs.insert(retaddr);
+                        found = true;
+                        break;
+                    }
+                }
+            } catch(...) {
+                SPDLOG_ERROR("Failed to walk stack for scaleform vtable functions!");
             }
         }
 
         // Hacky way to allow the first texture to go through
         // For the games that are using something other than ViewFamilyTexture as the scene RT.
-        if (!call_original_retaddrs.empty() && !redirected_retaddrs.contains(retaddr) && !has_view_family_tex) {
+        if (!data.call_original_retaddrs.empty() && !data.redirected_retaddrs.contains(retaddr) && !data.has_view_family_tex) {
             return og(viewport);
         }
 
-        if (!redirected_retaddrs.contains(retaddr) && !call_original_retaddrs.contains(retaddr)) {
+        if (!data.redirected_retaddrs.contains(retaddr) && !data.call_original_retaddrs.contains(retaddr)) {
             if (!func_start) {
                 func_start = utility::find_function_start(retaddr);
 
@@ -1799,22 +1954,16 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
                 return og(viewport);
             }*/
 
-            if (utility::find_string_reference_in_path(*func_start, L"FinalPostProcessColor", false)) {
-                SPDLOG_INFO("Found FinalPostProcessColor reference @ {:x}", retaddr);
-                call_original_retaddrs.insert(retaddr);
-                return og(viewport);
-            }
-
             // TODO? this needs some more rigorous filtering
             // some games are insane and have multiple "UnknownTexture" references...
             if (utility::find_string_reference_in_path(*func_start, L"UnknownTexture", false)) {
                 SPDLOG_INFO("Found unknown texture reference @ {:x}", retaddr);
-                call_original_retaddrs.insert(retaddr);
+                data.call_original_retaddrs.insert(retaddr);
                 return og(viewport);
             }
 
             SPDLOG_INFO("Redirecting FViewport::GetRenderTargetTexture call to UI render target @ {:x}", retaddr);
-            redirected_retaddrs.insert(retaddr);
+            data.redirected_retaddrs.insert(retaddr);
         }
     }
 

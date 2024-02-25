@@ -393,6 +393,15 @@ private:
 
     std::unique_ptr<IXRTrackingSystemHook> m_tracking_system_hook{};
 
+    struct {
+        std::unordered_set<uintptr_t> seen_retaddrs{};
+        std::unordered_set<uintptr_t> call_original_retaddrs{};
+        std::unordered_set<uintptr_t> redirected_retaddrs{};
+        std::recursive_mutex retaddr_mutex{};
+        bool has_view_family_tex{false};
+        int32_t selected_retaddr{0};
+    } m_viewport_rt_hook_data{};
+
     VRRenderTargetManager m_rtm{};
     VRRenderTargetManager_418 m_rtm_418{};
     VRRenderTargetManager_Special m_rtm_special{};

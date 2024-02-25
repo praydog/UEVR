@@ -20,6 +20,11 @@
 #include <sdk/UFunction.hpp>
 #include <sdk/UGameplayStatics.hpp>
 #include <sdk/APlayerController.hpp>
+#include <sdk/USceneComponent.hpp>
+
+#include "pluginloader/FFakeStereoRenderingFunctions.hpp"
+#include "pluginloader/FRenderTargetPoolHook.hpp"
+#include "pluginloader/FRHITexture2DFunctions.hpp"
 
 #include "UObjectHook.hpp"
 #include "VR.hpp"
@@ -507,8 +512,88 @@ namespace uobjecthook {
 
         return get_first_object_by_class((UEVR_UClassHandle)c, allow_default);
     }
+
+    UEVR_UObjectHookMotionControllerStateHandle get_or_add_motion_controller_state(UEVR_UObjectHandle obj_handle) {
+        const auto obj = (sdk::USceneComponent*)obj_handle;
+        if (obj == nullptr || !obj->is_a(sdk::USceneComponent::static_class())) {
+            return nullptr;
+        }
+
+        const auto result = UObjectHook::get()->get_or_add_motion_controller_state(obj);
+
+        return (UEVR_UObjectHookMotionControllerStateHandle)result.get();
+    }
+
+    UEVR_UObjectHookMotionControllerStateHandle get_motion_controller_state(UEVR_UObjectHandle obj_handle) {
+        const auto obj = (sdk::USceneComponent*)obj_handle;
+        if (obj == nullptr || !obj->is_a(sdk::USceneComponent::static_class())) {
+            return nullptr;
+        }
+
+        const auto result = UObjectHook::get()->get_motion_controller_state(obj);
+
+        if (!result.has_value()) {
+            return nullptr;
+        }
+
+        return (UEVR_UObjectHookMotionControllerStateHandle)result->get();
+    }
+
+namespace mc_state {
+    void set_rotation_offset(UEVR_UObjectHookMotionControllerStateHandle state, const UEVR_Quaternionf* rotation) {
+        if (state == nullptr) {
+            return;
+        }
+
+        auto& s = *(UObjectHook::MotionControllerState*)state;
+        s.rotation_offset.x = rotation->x;
+        s.rotation_offset.y = rotation->y;
+        s.rotation_offset.z = rotation->z;
+        s.rotation_offset.w = rotation->w;
+    }
+
+    void set_location_offset(UEVR_UObjectHookMotionControllerStateHandle state, const UEVR_Vector3f* location) {
+        if (state == nullptr) {
+            return;
+        }
+
+        auto& s = *(UObjectHook::MotionControllerState*)state;
+        s.location_offset.x = location->x;
+        s.location_offset.y = location->y;
+        s.location_offset.z = location->z;
+    }
+
+    void set_hand(UEVR_UObjectHookMotionControllerStateHandle state, unsigned int hand) {
+        if (state == nullptr) {
+            return;
+        }
+
+        if (hand > 1) {
+            return;
+        }
+
+        auto& s = *(UObjectHook::MotionControllerState*)state;
+        s.hand = (uint8_t)hand;
+    }
+
+    void set_permanent(UEVR_UObjectHookMotionControllerStateHandle state, bool permanent) {
+        if (state == nullptr) {
+            return;
+        }
+
+        auto& s = *(UObjectHook::MotionControllerState*)state;
+        s.permanent = permanent;
+    }
 }
 }
+}
+
+UEVR_UObjectHookMotionControllerStateFunctions g_mc_functions {
+    uevr::uobjecthook::mc_state::set_rotation_offset,
+    uevr::uobjecthook::mc_state::set_location_offset,
+    uevr::uobjecthook::mc_state::set_hand,
+    uevr::uobjecthook::mc_state::set_permanent
+};
 
 UEVR_UObjectHookFunctions g_uobjecthook_functions {
     uevr::uobjecthook::activate,
@@ -516,7 +601,10 @@ UEVR_UObjectHookFunctions g_uobjecthook_functions {
     uevr::uobjecthook::get_objects_by_class,
     uevr::uobjecthook::get_objects_by_class_name,
     uevr::uobjecthook::get_first_object_by_class,
-    uevr::uobjecthook::get_first_object_by_class_name
+    uevr::uobjecthook::get_first_object_by_class_name,
+    uevr::uobjecthook::get_or_add_motion_controller_state,
+    uevr::uobjecthook::get_motion_controller_state,
+    &g_mc_functions
 };
 
 #define FFIELDCLASS(x) ((sdk::FFieldClass*)x)
@@ -650,6 +738,33 @@ UEVR_ConsoleFunctions g_console_functions {
     uevr::console::command_execute
 };
 
+namespace uevr {
+namespace malloc {
+UEVR_FMallocHandle get() {
+    return (UEVR_FMallocHandle)sdk::FMalloc::get();
+}
+
+void* malloc(UEVR_FMallocHandle malloc, unsigned int size, uint32_t alignment) {
+    return ((sdk::FMalloc*)malloc)->malloc(size, alignment);
+}
+
+void* realloc(UEVR_FMallocHandle malloc, void* original, unsigned int size, uint32_t alignment) {
+    return ((sdk::FMalloc*)malloc)->realloc(original, size, alignment);
+}
+
+void free(UEVR_FMallocHandle malloc, void* original) {
+    return ((sdk::FMalloc*)malloc)->free(original);
+}
+}
+}
+
+UEVR_FMallocFunctions g_malloc_functions {
+    uevr::malloc::get,
+    uevr::malloc::malloc,
+    uevr::malloc::realloc,
+    uevr::malloc::free
+};
+
 UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
@@ -663,7 +778,11 @@ UEVR_SDKData g_sdk_data {
     &g_uobjecthook_functions,
     &g_ffield_class_functions,
     &g_fname_functions,
-    &g_console_functions
+    &g_console_functions,
+    &g_malloc_functions,
+    &uevr::render_target_pool_hook::functions,
+    &uevr::stereo_hook::functions,
+    &uevr::frhitexture2d::functions
 };
 
 namespace uevr {
@@ -874,6 +993,22 @@ bool is_aim_allowed() {
 void set_aim_allowed(bool allowed) {
     VR::get()->set_aim_allowed(allowed);
 }
+
+unsigned int get_hmd_width() {
+    return VR::get()->get_hmd_width();
+}
+
+unsigned int get_hmd_height() {
+    return VR::get()->get_hmd_height();
+}
+
+unsigned int get_ui_width() {
+    return (unsigned int)g_framework->get_rt_size().x;
+}
+
+unsigned int get_ui_height() {
+    return (unsigned int)g_framework->get_rt_size().y;
+}
 }
 }
 
@@ -913,7 +1048,11 @@ UEVR_VRData g_vr_data {
     uevr::vr::get_aim_method,
     uevr::vr::set_aim_method,
     uevr::vr::is_aim_allowed,
-    uevr::vr::set_aim_allowed
+    uevr::vr::set_aim_allowed,
+    uevr::vr::get_hmd_width,
+    uevr::vr::get_hmd_height,
+    uevr::vr::get_ui_width,
+    uevr::vr::get_ui_height
 };
 
 
