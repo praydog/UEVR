@@ -2408,8 +2408,6 @@ struct SceneViewExtensionAnalyzer {
         const auto func = (decltype(hooked_command_fn<N>)*)original_func;
         const auto frame_count = cmd_frame_counts[cmd];
 
-        static bool once2 = true;
-
         if (once) {
             SPDLOG_INFO("[ISceneViewExtension] Command list frame count: {}", frame_count);
             SPDLOG_INFO("[ISceneViewExtension] Original vtable: {:x}", (uintptr_t)original_vtable);
@@ -2418,7 +2416,7 @@ struct SceneViewExtensionAnalyzer {
 
         if (!found_correct_execute && !tested_execute_indices.contains(N) && VR::get()->get_present_thread_id() != 0) {
             tested_execute_indices.insert(N);
-            
+
             // N == 0 is a pretty safe heuristic
             // Otherwise if >= 1 gets called first, we can assume if the thread is the same
             // as the DXGI present thread, then it's the correct execute function
