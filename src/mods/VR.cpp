@@ -1993,6 +1993,8 @@ void VR::on_frame() {
 void VR::on_present() {
     ZoneScopedN(__FUNCTION__);
 
+    m_present_thread_id = GetCurrentThreadId();
+
     utility::ScopeGuard _guard {[&]() {
         if (!is_using_afr() || (m_render_frame_count + 1) % 2 == m_left_eye_interval) {
             SetEvent(m_present_finished_event);

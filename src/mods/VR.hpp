@@ -585,6 +585,10 @@ public:
         return m_d3d12;
     }
 
+    uint32_t get_present_thread_id() const {
+        return m_present_thread_id;
+    }
+
 private:
     Vector4f get_position_unsafe(uint32_t index) const;
     Vector4f get_velocity_unsafe(uint32_t index) const;
@@ -1015,6 +1019,8 @@ private:
     bool m_disable_projection_matrix_override{ false };
     bool m_disable_view_matrix_override{false};
     bool m_disable_backbuffer_size_override{false};
+
+    uint32_t m_present_thread_id{};
 
     struct XInputContext {
         struct PadContext {

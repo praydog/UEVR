@@ -2387,6 +2387,10 @@ struct SceneViewExtensionAnalyzer {
         SPDLOG_INFO("Done setting up BeginRenderViewFamily hook!");
     }
 
+    static inline std::unordered_set<int> tested_execute_indices{};
+    static inline int correct_execute_index{0};
+    static inline bool found_correct_execute{false};
+
     template<int N>
     static void* hooked_command_fn(sdk::FRHICommandBase_New* cmd, sdk::FRHICommandListBase* cmd_list, void* debug_context, void* r9, void* stack_1, void* stack_2, void* stack_3, void* stack_4, void* stack_5, void* stack_6, void* stack_7, void* stack_8) {
         std::scoped_lock _{vtable_mutex};
@@ -2396,7 +2400,6 @@ struct SceneViewExtensionAnalyzer {
 
         if (once) {
             SPDLOG_INFO("[ISceneViewExtension] Successfully hijacked command list! {}", N);
-            once = false;
         }
 
         const auto original_vtable = original_vtables[cmd];
@@ -2405,20 +2408,41 @@ struct SceneViewExtensionAnalyzer {
         const auto func = (decltype(hooked_command_fn<N>)*)original_func;
         const auto frame_count = cmd_frame_counts[cmd];
 
+        static bool once2 = true;
+
+        if (once) {
+            SPDLOG_INFO("[ISceneViewExtension] Command list frame count: {}", frame_count);
+            SPDLOG_INFO("[ISceneViewExtension] Original vtable: {:x}", (uintptr_t)original_vtable);
+            once = false;
+        }
+
+        if (!found_correct_execute && !tested_execute_indices.contains(N) && VR::get()->get_present_thread_id() != 0) {
+            tested_execute_indices.insert(N);
+            
+            // N == 0 is a pretty safe heuristic
+            // Otherwise if >= 1 gets called first, we can assume if the thread is the same
+            // as the DXGI present thread, then it's the correct execute function
+            if (N == 0 || GetCurrentThreadId() == VR::get()->get_present_thread_id()) {
+                correct_execute_index = N;
+                found_correct_execute = true;
+                SPDLOG_INFO("[ISceneViewExtension] Found correct execute index: {}", N);
+            }
+        }
+
         auto& vr = VR::get();
         auto runtime = vr->get_runtime();
 
         auto call_orig = [=]() {
             const auto result = func(cmd, cmd_list, debug_context, r9, stack_1, stack_2, stack_3, stack_4, stack_5, stack_6, stack_7, stack_8);
 
-            if (N == 0) {
+            if (N == correct_execute_index) {
                 runtime->enqueue_render_poses(frame_count);
             }
 
             return result;
         };
 
-        if (N != 0) {
+        if (N != correct_execute_index) {
             return call_orig();
         }
 
@@ -4447,8 +4471,6 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
     
     return out;
 }
-
-template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 __forceinline void FFakeStereoRenderingHook::render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list,
     FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size) 
