@@ -30,6 +30,12 @@ endif()
  
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
 
+# Enable PDB generation in release mode, but without the extra crap that RelWithDebInfo adds
+add_compile_options("$<$<CONFIG:Release>:/Zi>")
+add_link_options("$<$<CONFIG:Release>:/DEBUG>")
+add_link_options("$<$<CONFIG:Release>:/OPT:REF>")
+add_link_options("$<$<CONFIG:Release>:/OPT:ICF>")
+
 project(uevr-proj)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
