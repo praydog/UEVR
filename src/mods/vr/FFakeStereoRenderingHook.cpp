@@ -1833,7 +1833,9 @@ FRHITexture2D** FFakeStereoRenderingHook::viewport_get_render_target_texture_hoo
             }
 
             // We should always allow the viewport when used in a post processing context to go through.
-            if (utility::find_string_reference_in_path(*func_start, L"FinalPostProcessColor", false)) {
+            // There's two because this function stops itself at 200 instructions
+            // doing a second one from the retaddr allows us to go further.
+            if (utility::find_string_reference_in_path(*func_start, L"FinalPostProcessColor", false) || utility::find_string_reference_in_path(retaddr, L"FinalPostProcessColor", false)) {
                 SPDLOG_INFO("Found FinalPostProcessColor reference @ {:x}", retaddr);
                 data.call_original_retaddrs.insert(retaddr);
                 return og(viewport);
