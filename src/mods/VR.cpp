@@ -3211,14 +3211,16 @@ void VR::process_snapturn() {
 }
 
 void VR::update_statistics_overlay(sdk::UGameEngine* engine) {
-    if(!engine) return;
+    if (engine == nullptr) {
+        return;
+    }
     
-    if(m_show_fps_state != m_show_fps->value()) {
+    if (m_show_fps_state != m_show_fps->value()) {
         engine->exec(L"stat fps");
         m_show_fps_state = m_show_fps->value();
     }
     
-    if(m_show_statistics_state != m_show_statistics->value()) {
+    if (m_show_statistics_state != m_show_statistics->value()) {
         engine->exec(L"stat unit");
         m_show_statistics_state = m_show_statistics->value();
     }
