@@ -368,6 +368,15 @@ void CVarManager::display_console() {
                         GameThreadWorker::get().enqueue([command, widened_args]() {
                             command->Execute(widened_args);
                         });
+                    } else if (object == nullptr) {
+                        // Try UEngine::Exec
+                        std::string entire_command_str{entire_command.data()};
+                        GameThreadWorker::get().enqueue([entire_command_str]() {
+                            auto engine = sdk::UGameEngine::get();
+                            if (engine != nullptr) {
+                                engine->exec(utility::widen(entire_command_str).data());
+                            }
+                        });
                     }
                 }
 
