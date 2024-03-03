@@ -23,6 +23,8 @@ public:
     void dump_commands();
     void spawn_console();
 
+    void execute_console_script(sdk::UGameEngine* engine, const std::string& filename);
+
     bool is_hzbo_frozen_and_enabled() const {
         if (m_hzbo == nullptr) {
             return false;
@@ -194,6 +196,7 @@ private:
     
     bool m_wants_display_console{false};
     bool m_native_console_spawned{false};
+    bool m_should_execute_console_script{false};
 
     static inline std::vector<std::shared_ptr<CVarStandard>> s_default_standard_cvars {
         // Bools
