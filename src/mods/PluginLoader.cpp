@@ -20,7 +20,13 @@
 #include <sdk/UFunction.hpp>
 #include <sdk/UGameplayStatics.hpp>
 #include <sdk/APlayerController.hpp>
+#include <sdk/USceneComponent.hpp>
 
+#include "pluginloader/FFakeStereoRenderingFunctions.hpp"
+#include "pluginloader/FRenderTargetPoolHook.hpp"
+#include "pluginloader/FRHITexture2DFunctions.hpp"
+
+#include "UObjectHook.hpp"
 #include "VR.hpp"
 
 #include "PluginLoader.hpp"
@@ -61,6 +67,19 @@ bool is_drawing_ui() {
 }
 bool remove_callback(void* cb) {
     return PluginLoader::get()->remove_callback(cb);
+}
+
+unsigned int get_persistent_dir(wchar_t* buffer, unsigned int buffer_size) {
+    const auto path = g_framework->get_persistent_dir().wstring();
+    if (buffer == nullptr || buffer_size == 0) {
+        return (unsigned int)path.size();
+    }
+
+    const auto size = std::min<size_t>(path.size(), (size_t)buffer_size - 1);
+    memcpy(buffer, path.c_str(), size * sizeof(wchar_t));
+    buffer[size] = L'\0';
+
+    return (unsigned int)size;
 }
 }
 
@@ -104,6 +123,22 @@ bool on_xinput_set_state(UEVR_OnXInputSetStateCb cb) {
 
     return PluginLoader::get()->add_on_xinput_set_state(cb);
 }
+
+bool on_post_render_vr_framework_dx11(UEVR_OnPostRenderVRFrameworkDX11Cb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_post_render_vr_framework_dx11(cb);
+}
+
+bool on_post_render_vr_framework_dx12(UEVR_OnPostRenderVRFrameworkDX12Cb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_post_render_vr_framework_dx12(cb);
+}
 }
 
 UEVR_PluginCallbacks g_plugin_callbacks {
@@ -111,7 +146,9 @@ UEVR_PluginCallbacks g_plugin_callbacks {
     uevr::on_device_reset,
     uevr::on_message,
     uevr::on_xinput_get_state,
-    uevr::on_xinput_set_state
+    uevr::on_xinput_set_state,
+    uevr::on_post_render_vr_framework_dx11,
+    uevr::on_post_render_vr_framework_dx12
 };
 
 UEVR_PluginFunctions g_plugin_functions {
@@ -119,7 +156,8 @@ UEVR_PluginFunctions g_plugin_functions {
     uevr::log_warn,
     uevr::log_info,
     uevr::is_drawing_ui,
-    uevr::remove_callback
+    uevr::remove_callback,
+    uevr::get_persistent_dir
 };
 
 #define GET_ENGINE_WORLD_RETNULL() \
@@ -213,7 +251,11 @@ UEVR_SDKFunctions g_sdk_functions {
         }
 
         sdk::UEngine::get()->exec((sdk::UWorld*)world, command, output_device);
-    }
+    },
+    // get_console_manager
+    []() -> UEVR_FConsoleManagerHandle {
+        return (UEVR_FConsoleManagerHandle)sdk::FConsoleManager::get();
+    },
 };
 
 namespace uevr {
@@ -320,6 +362,10 @@ UEVR_UObjectFunctions g_uobject_functions {
     [](UEVR_UObjectHandle obj, const wchar_t* name, void* params) {
         UOBJECT(obj)->call_function(name, params);
     },
+    // get_fname
+    [](UEVR_UObjectHandle obj) {
+        return (UEVR_FNameHandle)&UOBJECT(obj)->get_fname();
+    },
 };
 
 UEVR_UObjectArrayFunctions g_uobject_array_functions {
@@ -335,6 +381,14 @@ UEVR_FFieldFunctions g_ffield_functions {
     // get_next
     [](UEVR_FFieldHandle field) {
         return (UEVR_FFieldHandle)FFIELD(field)->get_next();
+    },
+    // get_class
+    [](UEVR_FFieldHandle field) {
+        return (UEVR_FFieldClassHandle)FFIELD(field)->get_class();
+    },
+    // get_fname
+    [](UEVR_FFieldHandle field) {
+        return (UEVR_FNameHandle)&FFIELD(field)->get_field_name();
     },
 };
 
@@ -382,6 +436,335 @@ UEVR_UFunctionFunctions g_ufunction_functions {
     },
 };
 
+namespace uevr {
+namespace uobjecthook {
+    void activate() {
+        UObjectHook::get()->activate();
+    }
+
+    bool exists(UEVR_UObjectHandle obj) {
+        return UObjectHook::get()->exists((sdk::UObject*)obj);
+    }
+
+    int get_objects_by_class(UEVR_UClassHandle klass, UEVR_UObjectHandle* out_objects, unsigned int max_objects, bool allow_default) {
+        const auto objects = UObjectHook::get()->get_objects_by_class((sdk::UClass*)klass);
+
+        if (objects.empty()) {
+            return 0;
+        }
+
+        const auto default_object = ((sdk::UClass*)klass)->get_class_default_object();
+
+        unsigned int i = 0;
+        for (auto&& obj : objects) {
+            if (!allow_default && obj == default_object) {
+                continue;
+            }
+
+            if (i < max_objects && out_objects != nullptr) {
+                out_objects[i++] = (UEVR_UObjectHandle)obj;
+            } else {
+                i++;
+            }
+        }
+
+        return i;
+    }
+
+    int get_objects_by_class_name(const wchar_t* class_name, UEVR_UObjectHandle* out_objects, unsigned int max_objects, bool allow_default) {
+        const auto c = sdk::find_uobject<sdk::UClass>(class_name);
+
+        if (c == nullptr) {
+            return 0;
+        }
+
+        return get_objects_by_class((UEVR_UClassHandle)c, out_objects, max_objects, allow_default);
+    }
+
+    UEVR_UObjectHandle get_first_object_by_class(UEVR_UClassHandle klass, bool allow_default) {
+        const auto objects = UObjectHook::get()->get_objects_by_class((sdk::UClass*)klass);
+
+        if (objects.empty()) {
+            return nullptr;
+        }
+
+        if (allow_default) {
+            return (UEVR_UObjectHandle)*objects.begin();
+        }
+
+        const auto default_object = ((sdk::UClass*)klass)->get_class_default_object();
+
+        for (auto&& obj : objects) {
+            if (obj != default_object) {
+                return (UEVR_UObjectHandle)obj;
+            }
+        }
+
+        return (UEVR_UObjectHandle)nullptr;
+    }
+
+    UEVR_UObjectHandle get_first_object_by_class_name(const wchar_t* class_name, bool allow_default) {
+        const auto c = sdk::find_uobject<sdk::UClass>(class_name);
+
+        if (c == nullptr) {
+            return nullptr;
+        }
+
+        return get_first_object_by_class((UEVR_UClassHandle)c, allow_default);
+    }
+
+    UEVR_UObjectHookMotionControllerStateHandle get_or_add_motion_controller_state(UEVR_UObjectHandle obj_handle) {
+        const auto obj = (sdk::USceneComponent*)obj_handle;
+        if (obj == nullptr || !obj->is_a(sdk::USceneComponent::static_class())) {
+            return nullptr;
+        }
+
+        const auto result = UObjectHook::get()->get_or_add_motion_controller_state(obj);
+
+        return (UEVR_UObjectHookMotionControllerStateHandle)result.get();
+    }
+
+    UEVR_UObjectHookMotionControllerStateHandle get_motion_controller_state(UEVR_UObjectHandle obj_handle) {
+        const auto obj = (sdk::USceneComponent*)obj_handle;
+        if (obj == nullptr || !obj->is_a(sdk::USceneComponent::static_class())) {
+            return nullptr;
+        }
+
+        const auto result = UObjectHook::get()->get_motion_controller_state(obj);
+
+        if (!result.has_value()) {
+            return nullptr;
+        }
+
+        return (UEVR_UObjectHookMotionControllerStateHandle)result->get();
+    }
+
+namespace mc_state {
+    void set_rotation_offset(UEVR_UObjectHookMotionControllerStateHandle state, const UEVR_Quaternionf* rotation) {
+        if (state == nullptr) {
+            return;
+        }
+
+        auto& s = *(UObjectHook::MotionControllerState*)state;
+        s.rotation_offset.x = rotation->x;
+        s.rotation_offset.y = rotation->y;
+        s.rotation_offset.z = rotation->z;
+        s.rotation_offset.w = rotation->w;
+    }
+
+    void set_location_offset(UEVR_UObjectHookMotionControllerStateHandle state, const UEVR_Vector3f* location) {
+        if (state == nullptr) {
+            return;
+        }
+
+        auto& s = *(UObjectHook::MotionControllerState*)state;
+        s.location_offset.x = location->x;
+        s.location_offset.y = location->y;
+        s.location_offset.z = location->z;
+    }
+
+    void set_hand(UEVR_UObjectHookMotionControllerStateHandle state, unsigned int hand) {
+        if (state == nullptr) {
+            return;
+        }
+
+        if (hand > 1) {
+            return;
+        }
+
+        auto& s = *(UObjectHook::MotionControllerState*)state;
+        s.hand = (uint8_t)hand;
+    }
+
+    void set_permanent(UEVR_UObjectHookMotionControllerStateHandle state, bool permanent) {
+        if (state == nullptr) {
+            return;
+        }
+
+        auto& s = *(UObjectHook::MotionControllerState*)state;
+        s.permanent = permanent;
+    }
+}
+}
+}
+
+UEVR_UObjectHookMotionControllerStateFunctions g_mc_functions {
+    uevr::uobjecthook::mc_state::set_rotation_offset,
+    uevr::uobjecthook::mc_state::set_location_offset,
+    uevr::uobjecthook::mc_state::set_hand,
+    uevr::uobjecthook::mc_state::set_permanent
+};
+
+UEVR_UObjectHookFunctions g_uobjecthook_functions {
+    uevr::uobjecthook::activate,
+    uevr::uobjecthook::exists,
+    uevr::uobjecthook::get_objects_by_class,
+    uevr::uobjecthook::get_objects_by_class_name,
+    uevr::uobjecthook::get_first_object_by_class,
+    uevr::uobjecthook::get_first_object_by_class_name,
+    uevr::uobjecthook::get_or_add_motion_controller_state,
+    uevr::uobjecthook::get_motion_controller_state,
+    &g_mc_functions
+};
+
+#define FFIELDCLASS(x) ((sdk::FFieldClass*)x)
+
+UEVR_FFieldClassFunctions g_ffield_class_functions {
+    // get_fname
+    [](UEVR_FFieldClassHandle field) {
+        return (UEVR_FNameHandle)&FFIELDCLASS(field)->get_name();
+    },
+};
+
+#define FNAME(x) ((sdk::FName*)x)
+
+UEVR_FNameFunctions g_fname_functions {
+    // to_string
+    [](UEVR_FNameHandle name, wchar_t* buffer, unsigned int buffer_size) -> unsigned int {
+        const auto result = FNAME(name)->to_string();
+
+        if (buffer == nullptr || buffer_size == 0) {
+            return (unsigned int)result.size();
+        }
+
+        const auto size = std::min<size_t>(result.size(), (size_t)buffer_size - 1);
+
+        memcpy(buffer, result.c_str(), size * sizeof(wchar_t));
+        buffer[size] = L'\0';
+
+        return (unsigned int)size;
+    },
+    // constructor
+    [](UEVR_FNameHandle name, const wchar_t* str, unsigned int find_type) {
+        auto& fname = *(sdk::FName*)name;
+        fname = sdk::FName{str, (sdk::EFindName)find_type};
+    }
+};
+
+namespace uevr {
+namespace console {
+// get_console_objects
+UEVR_TArrayHandle get_console_objects(UEVR_FConsoleManagerHandle mgr) {
+    const auto console_manager = (sdk::FConsoleManager*)mgr;
+    if (console_manager == nullptr) {
+        return nullptr;
+    }
+    return (UEVR_TArrayHandle)&console_manager->get_console_objects();
+}
+
+UEVR_IConsoleObjectHandle find_object(UEVR_FConsoleManagerHandle mgr, const wchar_t* name) {
+    const auto console_manager = (sdk::FConsoleManager*)mgr;
+    if (console_manager == nullptr) {
+        return nullptr;
+    }
+    return (UEVR_IConsoleObjectHandle)console_manager->find(name);
+}
+
+// Naive implementation, but it's fine for now
+UEVR_IConsoleVariableHandle find_variable(UEVR_FConsoleManagerHandle mgr, const wchar_t* name) {
+    return (UEVR_IConsoleVariableHandle)find_object(mgr, name);
+}
+
+UEVR_IConsoleCommandHandle find_command(UEVR_FConsoleManagerHandle mgr, const wchar_t* name) {
+    auto obj = (sdk::IConsoleObject*)find_object(mgr, name);
+
+    if (obj == nullptr) {
+        return nullptr;
+    }
+
+    return (UEVR_IConsoleCommandHandle)obj->AsCommand();
+}
+
+UEVR_IConsoleCommandHandle as_commmand(UEVR_IConsoleObjectHandle obj) {
+    if (obj == nullptr) {
+        return nullptr;
+    }
+
+    return (UEVR_IConsoleCommandHandle)((sdk::IConsoleObject*)obj)->AsCommand();
+}
+
+void variable_set(UEVR_IConsoleVariableHandle var, const wchar_t* value) {
+    if (var == nullptr) {
+        return;
+    }
+
+    ((sdk::IConsoleVariable*)var)->Set(value);
+}
+
+void variable_set_ex(UEVR_IConsoleVariableHandle var, const wchar_t* value, unsigned int flags) {
+    if (var == nullptr) {
+        return;
+    }
+
+    ((sdk::IConsoleVariable*)var)->Set(value, flags);
+}
+
+int variable_get_int(UEVR_IConsoleVariableHandle var) {
+    if (var == nullptr) {
+        return 0;
+    }
+
+    return ((sdk::IConsoleVariable*)var)->GetInt();
+}
+
+float variable_get_float(UEVR_IConsoleVariableHandle var) {
+    if (var == nullptr) {
+        return 0.0f;
+    }
+
+    return ((sdk::IConsoleVariable*)var)->GetFloat();
+}
+
+void command_execute(UEVR_IConsoleCommandHandle cmd, const wchar_t* args) {
+    if (cmd == nullptr) {
+        return;
+    }
+
+    ((sdk::IConsoleCommand*)cmd)->Execute(args);
+}
+}
+}
+
+UEVR_ConsoleFunctions g_console_functions {
+    uevr::console::get_console_objects,
+    uevr::console::find_object,
+    uevr::console::find_variable,
+    uevr::console::find_command,
+    uevr::console::as_commmand,
+    uevr::console::variable_set,
+    uevr::console::variable_set_ex,
+    uevr::console::variable_get_int,
+    uevr::console::variable_get_float,
+    uevr::console::command_execute
+};
+
+namespace uevr {
+namespace malloc {
+UEVR_FMallocHandle get() {
+    return (UEVR_FMallocHandle)sdk::FMalloc::get();
+}
+
+void* malloc(UEVR_FMallocHandle malloc, unsigned int size, uint32_t alignment) {
+    return ((sdk::FMalloc*)malloc)->malloc(size, alignment);
+}
+
+void* realloc(UEVR_FMallocHandle malloc, void* original, unsigned int size, uint32_t alignment) {
+    return ((sdk::FMalloc*)malloc)->realloc(original, size, alignment);
+}
+
+void free(UEVR_FMallocHandle malloc, void* original) {
+    return ((sdk::FMalloc*)malloc)->free(original);
+}
+}
+}
+
+UEVR_FMallocFunctions g_malloc_functions {
+    uevr::malloc::get,
+    uevr::malloc::malloc,
+    uevr::malloc::realloc,
+    uevr::malloc::free
+};
+
 UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
@@ -391,7 +774,15 @@ UEVR_SDKData g_sdk_data {
     &g_fproperty_functions,
     &g_ustruct_functions,
     &g_uclass_functions,
-    &g_ufunction_functions
+    &g_ufunction_functions,
+    &g_uobjecthook_functions,
+    &g_ffield_class_functions,
+    &g_fname_functions,
+    &g_console_functions,
+    &g_malloc_functions,
+    &uevr::render_target_pool_hook::functions,
+    &uevr::stereo_hook::functions,
+    &uevr::frhitexture2d::functions
 };
 
 namespace uevr {
@@ -582,6 +973,42 @@ unsigned int get_lowest_xinput_index() {
 void recenter_view() {
     VR::get()->recenter_view();
 }
+
+void recenter_horizon() {
+    VR::get()->recenter_horizon();
+}
+
+unsigned int get_aim_method() {
+    return (unsigned int)VR::get()->get_aim_method();
+}
+
+void set_aim_method(unsigned int method) {
+    VR::get()->set_aim_method((VR::AimMethod)method);
+}
+
+bool is_aim_allowed() {
+    return VR::get()->is_aim_allowed();
+}
+
+void set_aim_allowed(bool allowed) {
+    VR::get()->set_aim_allowed(allowed);
+}
+
+unsigned int get_hmd_width() {
+    return VR::get()->get_hmd_width();
+}
+
+unsigned int get_hmd_height() {
+    return VR::get()->get_hmd_height();
+}
+
+unsigned int get_ui_width() {
+    return (unsigned int)g_framework->get_rt_size().x;
+}
+
+unsigned int get_ui_height() {
+    return (unsigned int)g_framework->get_rt_size().y;
+}
 }
 }
 
@@ -617,6 +1044,15 @@ UEVR_VRData g_vr_data {
     uevr::vr::get_movement_orientation,
     uevr::vr::get_lowest_xinput_index,
     uevr::vr::recenter_view,
+    uevr::vr::recenter_horizon,
+    uevr::vr::get_aim_method,
+    uevr::vr::set_aim_method,
+    uevr::vr::is_aim_allowed,
+    uevr::vr::set_aim_allowed,
+    uevr::vr::get_hmd_width,
+    uevr::vr::get_hmd_height,
+    uevr::vr::get_ui_width,
+    uevr::vr::get_ui_height
 };
 
 
@@ -814,11 +1250,11 @@ void PluginLoader::early_init() try {
     namespace fs = std::filesystem;
 
     std::scoped_lock _{m_mux};
-    std::string module_path{};
+    std::wstring module_path{};
 
     module_path.resize(1024, 0);
-    module_path.resize(GetModuleFileName(nullptr, module_path.data(), module_path.size()));
-    spdlog::info("[PluginLoader] Module path {}", module_path);
+    module_path.resize(GetModuleFileNameW(nullptr, module_path.data(), module_path.size()));
+    spdlog::info("[PluginLoader] Module path {}", utility::narrow(module_path));
 
     const auto plugin_path = Framework::get_persistent_dir() / "plugins";
 
@@ -1062,6 +1498,32 @@ void PluginLoader::on_device_reset() {
     }
 }
 
+void PluginLoader::on_post_render_vr_framework_dx11(ID3D11DeviceContext* context, ID3D11Texture2D* tex, ID3D11RenderTargetView* rtv) {
+    std::shared_lock _{m_api_cb_mtx};
+
+    for (auto&& cb : m_on_post_render_vr_framework_dx11_cbs) {
+        try {
+            cb((void*)context, (void*)tex, (void*)rtv);
+        } catch(...) {
+            spdlog::error("[APIProxy] Exception occurred in on_post_render_vr_framework_dx11 callback; one of the plugins has an error.");
+            continue;
+        }
+    }
+}
+
+void PluginLoader::on_post_render_vr_framework_dx12(ID3D12GraphicsCommandList* command_list, ID3D12Resource* tex, D3D12_CPU_DESCRIPTOR_HANDLE* rtv) {
+    std::shared_lock _{m_api_cb_mtx};
+
+    for (auto&& cb : m_on_post_render_vr_framework_dx12_cbs) {
+        try {
+            cb((void*)command_list, (void*)tex, (void*)rtv);
+        } catch(...) {
+            spdlog::error("[APIProxy] Exception occurred in on_post_render_vr_framework_dx12 callback; one of the plugins has an error.");
+            continue;
+        }
+    }
+}
+
 bool PluginLoader::on_message(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     std::shared_lock _{m_api_cb_mtx};
 
@@ -1240,6 +1702,20 @@ bool PluginLoader::add_on_xinput_set_state(UEVR_OnXInputSetStateCb cb) {
     std::unique_lock _{m_api_cb_mtx};
 
     m_on_xinput_set_state_cbs.push_back(cb);
+    return true;
+}
+
+bool PluginLoader::add_on_post_render_vr_framework_dx11(UEVR_OnPostRenderVRFrameworkDX11Cb cb) {
+    std::unique_lock _{m_api_cb_mtx};
+
+    m_on_post_render_vr_framework_dx11_cbs.push_back(cb);
+    return true;
+}
+
+bool PluginLoader::add_on_post_render_vr_framework_dx12(UEVR_OnPostRenderVRFrameworkDX12Cb cb) {
+    std::unique_lock _{m_api_cb_mtx};
+
+    m_on_post_render_vr_framework_dx12_cbs.push_back(cb);
     return true;
 }
 

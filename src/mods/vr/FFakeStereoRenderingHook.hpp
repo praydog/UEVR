@@ -25,6 +25,9 @@ struct FSceneViewFamily;
 
 namespace sdk {
 struct FSceneViewStateInterface;
+class FViewport;
+class FCanvas;
+class UGameViewportClient;
 }
 
 // Injector-specific structure for VRRenderTargetManager that they will all secondarily inherit from
@@ -38,14 +41,14 @@ public:
 
     bool should_use_separate_render_target() const { return true; }
 
-    void update_viewport(bool use_separate_rt, const FViewport& vp, class SViewport* vp_widget = nullptr);
+    void update_viewport(bool use_separate_rt, const sdk::FViewport& vp, class SViewport* vp_widget = nullptr);
 
-    void calculate_render_target_size(const FViewport& viewport, uint32_t& x, uint32_t& y);
-    bool need_reallocate_view_target(const FViewport& Viewport);
+    void calculate_render_target_size(const sdk::FViewport& viewport, uint32_t& x, uint32_t& y);
+    bool need_reallocate_view_target(const sdk::FViewport& Viewport);
     bool need_reallocate_depth_texture(const void* DepthTarget);
 
 public:
-    FRHITexture2D* get_ui_target() { return ui_target; }
+    FRHITexture2D*& get_ui_target() { return ui_target; }
     FRHITexture2D* get_render_target() { return render_target; }
     void set_render_target(FRHITexture2D* rt) { render_target = rt; }
 
@@ -90,16 +93,16 @@ public:
     virtual bool ShouldUseSeparateRenderTarget() const override { return VRRenderTargetManager_Base::should_use_separate_render_target(); }
 
     virtual void UpdateViewport(
-        bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override 
+        bool bUseSeparateRenderTarget, const sdk::FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override 
     {
         VRRenderTargetManager_Base::update_viewport(bUseSeparateRenderTarget, Viewport, ViewportWidget);
     }
 
-    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override;
+    virtual void CalculateRenderTargetSize(const sdk::FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override;
     virtual bool NeedReAllocateDepthTexture(const void* DepthTarget) override; // Not actually used, we are just checking the return address
     virtual bool NeedReAllocateShadingRateTexture(const void* ShadingRateTarget) override; // Not actually used, we are just checking the return address
 
-    virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
+    virtual bool NeedReAllocateViewportRenderTarget(const sdk::FViewport& Viewport) override {
         return VRRenderTargetManager_Base::need_reallocate_view_target(Viewport);
     }
 
@@ -121,15 +124,15 @@ struct VRRenderTargetManager_418 : IStereoRenderTargetManager_418, VRRenderTarge
     uint32_t GetNumberOfBufferedFrames() const override { return VRRenderTargetManager_Base::get_number_of_buffered_frames(); }
     virtual bool ShouldUseSeparateRenderTarget() const override { return VRRenderTargetManager_Base::should_use_separate_render_target(); }
 
-    virtual void UpdateViewport(bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override {
+    virtual void UpdateViewport(bool bUseSeparateRenderTarget, const sdk::FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override {
         VRRenderTargetManager_Base::update_viewport(bUseSeparateRenderTarget, Viewport, ViewportWidget);
     }
 
-    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override {
+    virtual void CalculateRenderTargetSize(const sdk::FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override {
         VRRenderTargetManager_Base::calculate_render_target_size(Viewport, InOutSizeX, InOutSizeY);
     }
 
-    virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
+    virtual bool NeedReAllocateViewportRenderTarget(const sdk::FViewport& Viewport) override {
         return VRRenderTargetManager_Base::need_reallocate_view_target(Viewport);
     }
 
@@ -147,15 +150,15 @@ struct VRRenderTargetManager_Special : IStereoRenderTargetManager_Special, VRRen
     uint32_t GetNumberOfBufferedFrames() const override { return VRRenderTargetManager_Base::get_number_of_buffered_frames(); }
     virtual bool ShouldUseSeparateRenderTarget() const override { return VRRenderTargetManager_Base::should_use_separate_render_target(); }
 
-    virtual void UpdateViewport(bool bUseSeparateRenderTarget, const FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override {
+    virtual void UpdateViewport(bool bUseSeparateRenderTarget, const sdk::FViewport& Viewport, class SViewport* ViewportWidget = nullptr) override {
         VRRenderTargetManager_Base::update_viewport(bUseSeparateRenderTarget, Viewport, ViewportWidget);
     }
 
-    virtual void CalculateRenderTargetSize(const FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override {
+    virtual void CalculateRenderTargetSize(const sdk::FViewport& Viewport, uint32_t& InOutSizeX, uint32_t& InOutSizeY) override {
         VRRenderTargetManager_Base::calculate_render_target_size(Viewport, InOutSizeX, InOutSizeY);
     }
 
-    virtual bool NeedReAllocateViewportRenderTarget(const FViewport& Viewport) override {
+    virtual bool NeedReAllocateViewportRenderTarget(const sdk::FViewport& Viewport) override {
         return VRRenderTargetManager_Base::need_reallocate_view_target(Viewport);
     }
 
@@ -338,9 +341,10 @@ private:
 
     // FViewport
     static void viewport_draw_hook(void* viewport, bool should_present);
+    static FRHITexture2D** viewport_get_render_target_texture_hook(sdk::FViewport* viewport);
 
     // UGameViewportClient
-    static void game_viewport_client_draw_hook(void* gameviewportclient, void* viewport, void* canvas, void* a4);
+    static void game_viewport_client_draw_hook(sdk::UGameViewportClient*, sdk::FViewport*, sdk::FCanvas*, void*);
 
     // FSceneViewport
     static void update_viewport_rhi_hook(void* viewport, size_t destroyed, size_t new_size_x, size_t new_size_y, size_t new_window_mode, size_t preferred_pixel_format);
@@ -385,8 +389,18 @@ private:
     std::unique_ptr<PointerHook> m_get_desired_number_of_views_hook{};
     std::unique_ptr<PointerHook> m_get_view_pass_for_index_hook{};
     std::unique_ptr<PointerHook> m_update_viewport_rhi_hook{};
+    std::unique_ptr<PointerHook> m_viewport_get_render_target_texture_hook{};
 
     std::unique_ptr<IXRTrackingSystemHook> m_tracking_system_hook{};
+
+    struct {
+        std::unordered_set<uintptr_t> seen_retaddrs{};
+        std::unordered_set<uintptr_t> call_original_retaddrs{};
+        std::unordered_set<uintptr_t> redirected_retaddrs{};
+        std::recursive_mutex retaddr_mutex{};
+        bool has_view_family_tex{false};
+        int32_t selected_retaddr{0};
+    } m_viewport_rt_hook_data{};
 
     VRRenderTargetManager m_rtm{};
     VRRenderTargetManager_418 m_rtm_418{};
@@ -425,7 +439,9 @@ private:
     bool m_has_view_extension_hook{false};
     bool m_has_game_viewport_client_draw_hook{false};
     bool m_skip_next_adjust_view_rect{true};
+    bool m_inside_slate_draw_window{false};
     int32_t m_skip_next_adjust_view_rect_count{1};
+    uint32_t m_slate_draw_window_thread_id{0};
 
     // Synchronized AFR
     float m_ignored_engine_delta{0.0f};

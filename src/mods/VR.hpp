@@ -223,6 +223,7 @@ public:
     glm::quat get_rotation_offset();
     void set_rotation_offset(const glm::quat& offset);
     void recenter_view();
+    void recenter_horizon();
 
 
     template<typename T = VRRuntime>
@@ -280,12 +281,12 @@ public:
     }
 
     bool is_using_controllers() const {
-        return m_controller_test_mode || (m_controllers_allowed &&
+        return m_controller_test_mode || (m_controllers_allowed->value() &&
         is_hmd_active() && !m_controllers.empty() && (std::chrono::steady_clock::now() - m_last_controller_update) <= std::chrono::seconds((int32_t)m_motion_controls_inactivity_timer->value()));
     }
 
     bool is_using_controllers_within(std::chrono::seconds seconds) const {
-        return is_hmd_active() && !m_controllers.empty() && (std::chrono::steady_clock::now() - m_last_controller_update) <= seconds;
+        return m_controllers_allowed->value() && is_hmd_active() && !m_controllers.empty() && (std::chrono::steady_clock::now() - m_last_controller_update) <= seconds;
     }
 
     int get_hmd_index() const {
@@ -396,7 +397,7 @@ public:
         return m_lowest_xinput_user_index;
     }
 
-    auto& get_render_target_pool_hook() {
+    auto& get_render_target_pool_hook() const {
         return m_render_target_pool_hook;
     }
 
@@ -432,12 +433,24 @@ public:
         m_aim_temp_disabled = !value;
     }
 
+    bool is_aim_allowed() const {
+        return !m_aim_temp_disabled;
+    }
+
     AimMethod get_aim_method() const {
         if (m_aim_temp_disabled) {
             return AimMethod::GAME;
         }
 
         return (AimMethod)m_aim_method->value();
+    }
+
+    void set_aim_method(AimMethod method) {
+        if ((size_t)method >= s_aim_method_names.size()) {
+            method = AimMethod::GAME;
+        }
+
+        m_aim_method->value() = method;
     }
 
     AimMethod get_movement_orientation() const {
@@ -496,6 +509,10 @@ public:
 
     bool is_sceneview_compatibility_enabled() const {
         return m_sceneview_compatibility_mode->value();
+    }
+
+    bool is_ahud_compatibility_enabled() const {
+        return m_compatibility_ahud->value();
     }
 
     bool is_ghosting_fix_enabled() const {
@@ -558,6 +575,18 @@ public:
 
     bool is_extreme_compatibility_mode_enabled() const {
         return m_extreme_compat_mode->value();
+    }
+
+    vrmod::D3D11Component& d3d11() {
+        return m_d3d11;
+    }
+
+    vrmod::D3D12Component& d3d12() {
+        return m_d3d12;
+    }
+
+    uint32_t get_present_thread_id() const {
+        return m_present_thread_id;
     }
 
 private:
@@ -778,7 +807,7 @@ private:
     const ModToggle::Ptr m_disable_instance_culling{ ModToggle::create(generate_name("DisableInstanceCulling"), true, true) };
     const ModToggle::Ptr m_desktop_fix{ ModToggle::create(generate_name("DesktopRecordingFix_V2"), true) };
     const ModToggle::Ptr m_enable_gui{ ModToggle::create(generate_name("EnableGUI"), true) };
-    const ModToggle::Ptr m_enable_depth{ ModToggle::create(generate_name("EnableDepth"), false) };
+    const ModToggle::Ptr m_enable_depth{ ModToggle::create(generate_name("PassDepthToRuntime"), false, true) };
     const ModToggle::Ptr m_decoupled_pitch{ ModToggle::create(generate_name("DecoupledPitch"), false) };
     const ModToggle::Ptr m_decoupled_pitch_ui_adjust{ ModToggle::create(generate_name("DecoupledPitchUIAdjust"), true) };
     const ModToggle::Ptr m_load_blueprint_code{ ModToggle::create(generate_name("LoadBlueprintCode"), false, true) };
@@ -847,8 +876,11 @@ private:
     const ModToggle::Ptr m_compatibility_skip_pip{ ModToggle::create(generate_name("Compatibility_SkipPostInitProperties"), false, true) };
     const ModToggle::Ptr m_compatibility_skip_uobjectarray_init{ ModToggle::create(generate_name("Compatibility_SkipUObjectArrayInit"), false, true) };
 
+    const ModToggle::Ptr m_compatibility_ahud{ ModToggle::create(generate_name("Compatibility_AHUD"), false, true) };
+
     // Keybinds
     const ModKey::Ptr m_keybind_recenter{ ModKey::create(generate_name("RecenterViewKey")) };
+    const ModKey::Ptr m_keybind_recenter_horizon{ ModKey::create(generate_name("RecenterHorizonKey")) };
     const ModKey::Ptr m_keybind_set_standing_origin{ ModKey::create(generate_name("ResetStandingOriginKey")) };
 
     const ModKey::Ptr m_keybind_load_camera_0{ ModKey::create(generate_name("LoadCamera0Key")) };
@@ -892,7 +924,7 @@ private:
 
     bool m_stereo_emulation_mode{false}; // not a good config option, just for debugging
     bool m_wait_for_present{true};
-    bool m_controllers_allowed{true};
+    const ModToggle::Ptr m_controllers_allowed{ ModToggle::create(generate_name("ControllersAllowed"), true) };
     bool m_controller_test_mode{false};
     
     const ModToggle::Ptr m_show_fps{ ModToggle::create(generate_name("ShowFPSOverlay"), false) };
@@ -947,8 +979,10 @@ private:
         *m_splitscreen_view_index,
         *m_compatibility_skip_pip,
         *m_compatibility_skip_uobjectarray_init,
+        *m_compatibility_ahud,
         *m_sceneview_compatibility_mode,
         *m_keybind_recenter,
+        *m_keybind_recenter_horizon,
         *m_keybind_set_standing_origin,
         *m_keybind_load_camera_0,
         *m_keybind_load_camera_1,
@@ -959,6 +993,7 @@ private:
         *m_requested_runtime_name,
         *m_show_fps,
         *m_show_statistics,
+        *m_controllers_allowed,
     };
     
 
@@ -995,6 +1030,8 @@ private:
     bool m_disable_projection_matrix_override{ false };
     bool m_disable_view_matrix_override{false};
     bool m_disable_backbuffer_size_override{false};
+
+    uint32_t m_present_thread_id{};
 
     struct XInputContext {
         struct PadContext {

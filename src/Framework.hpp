@@ -41,7 +41,7 @@ public:
 
     #pragma pack(push, 1)
     struct Data {
-        char path[MAX_PATH]{}; // Path to the game exe
+        wchar_t path[MAX_PATH]{}; // Path to the game exe
         uint32_t pid{}; // Process ID of the game
         uint32_t main_thread_id{}; // Main thread ID of the game
         uint32_t command_thread_id{}; // Thread ID commands are sent to (via PostThreadMessage)

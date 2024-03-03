@@ -206,7 +206,7 @@ void SDKDumper::initialize_uobject_array() {
         return;
     }
 
-    const auto module_path_str = utility::get_module_path(*module_within);
+    const auto module_path_str = utility::get_module_pathw(*module_within);
 
     if (!module_path_str.has_value()) {
         return;
@@ -383,7 +383,7 @@ void SDKDumper::initialize_fname() {
             return;
         }
 
-        const auto module_path_str = utility::get_module_path(*module_within);
+        const auto module_path_str = utility::get_module_pathw(*module_within);
 
         if (!module_path_str.has_value()) {
             to_string->procedure("return L\"\";");

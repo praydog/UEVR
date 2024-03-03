@@ -19,6 +19,13 @@ void FrameworkConfig::draw_main() {
     ImGui::SameLine();
     m_l3_r3_long_press->draw("L3 + R3 Long Press Menu Toggle");
     m_always_show_cursor->draw("Always Show Cursor");
+
+    ImGui::Separator();
+    if (m_log_level->draw("Log Level")) {
+        if (m_log_level->value() >= 0 && m_log_level->value() <= spdlog::level::level_enum::n_levels) {
+            spdlog::set_level((spdlog::level::level_enum)m_log_level->value());   
+        }
+    }
 }
 
 void FrameworkConfig::draw_themes() {
@@ -56,6 +63,10 @@ void FrameworkConfig::on_config_load(const utility::Config& cfg, bool set_defaul
     }
     
     g_framework->set_font_size(m_font_size->value());
+
+    if (m_log_level->value() >= 0 && m_log_level->value() <= spdlog::level::level_enum::n_levels) {
+        spdlog::set_level((spdlog::level::level_enum)m_log_level->value());   
+    }
 }
 
 void FrameworkConfig::on_config_save(utility::Config& cfg) {

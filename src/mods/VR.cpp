@@ -325,7 +325,7 @@ std::optional<std::string> VR::initialize_openxr() {
         // Append the current executable name to the application base name
         {
             const auto exe = utility::get_executable();
-            const auto full_path = utility::get_module_path(exe);
+            const auto full_path = utility::get_module_pathw(exe);
 
             if (full_path) {
                 const auto fs_path = std::filesystem::path(*full_path);
@@ -1866,6 +1866,10 @@ void VR::handle_keybinds() {
         recenter_view();
     }
 
+    if (m_keybind_recenter_horizon->is_key_down_once()) {
+        recenter_horizon();
+    }
+
     if (m_keybind_load_camera_0->is_key_down_once()) {
         load_camera(0);
     }
@@ -1990,6 +1994,8 @@ void VR::on_frame() {
 
 void VR::on_present() {
     ZoneScopedN(__FUNCTION__);
+
+    m_present_thread_id = GetCurrentThreadId();
 
     utility::ScopeGuard _guard {[&]() {
         if (!is_using_afr() || (m_render_frame_count + 1) % 2 == m_left_eye_interval) {
@@ -2354,7 +2360,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         m_disable_blur_widgets->draw("Disable Blur Widgets");
         m_uncap_framerate->draw("Uncap Framerate");
         m_enable_gui->draw("Enable GUI");
-        m_enable_depth->draw("Enable Depth");
+        m_enable_depth->draw("Enable Depth-based Latency Reduction");
         m_load_blueprint_code->draw("Load Blueprint Code");
         m_ghosting_fix->draw("Ghosting Fix");
 
@@ -2490,6 +2496,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Playspace Keys")) {
             m_keybind_recenter->draw("Recenter View Key");
+            m_keybind_recenter_horizon->draw("Recenter Horizon Key");
             m_keybind_set_standing_origin->draw("Set Standing Origin Key");
 
             ImGui::TreePop();
@@ -2521,6 +2528,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
     if (selected_page == PAGE_COMPATIBILITY) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Compatibility Options")) {
+            m_compatibility_ahud->draw("AHUD UI Compatibility");
             m_compatibility_skip_uobjectarray_init->draw("Skip UObjectArray Init");
             m_compatibility_skip_pip->draw("Skip PostInitProperties");
             m_sceneview_compatibility_mode->draw("SceneView Compatibility Mode");
@@ -2551,7 +2559,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::Checkbox("Disable VR Entirely", &m_disable_vr);
         ImGui::Checkbox("Stereo Emulation Mode", &m_stereo_emulation_mode);
         ImGui::Checkbox("Wait for Present", &m_wait_for_present);
-        ImGui::Checkbox("Controllers allowed", &m_controllers_allowed);
+        m_controllers_allowed->draw("Controllers allowed");
         ImGui::Checkbox("Controller test mode", &m_controller_test_mode);
         m_show_fps->draw("Show FPS");
         m_show_statistics->draw("Show Engine Statistics");
@@ -2649,6 +2657,10 @@ void VR::on_draw_ui() {
     }
 
     ImGui::SameLine();
+
+    if (ImGui::Button("Recenter Horizon")) {
+        recenter_horizon();
+    }
 
     if (ImGui::Button("Reinitialize Runtime")) {
         get_runtime()->wants_reinitialize = true;
@@ -3126,6 +3138,14 @@ void VR::recenter_view() {
     ZoneScopedN(__FUNCTION__);
 
     const auto new_rotation_offset = glm::normalize(glm::inverse(utility::math::flatten(glm::quat{get_rotation(0)})));
+
+    set_rotation_offset(new_rotation_offset);
+}
+
+void VR::recenter_horizon() {
+    ZoneScopedN(__FUNCTION__);
+
+    const auto new_rotation_offset = glm::normalize(glm::inverse(glm::quat{get_rotation(0)}));
 
     set_rotation_offset(new_rotation_offset);
 }

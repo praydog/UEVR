@@ -31,6 +31,9 @@ SOFTWARE.
 #include <windows.h>
 #include <Xinput.h>
 
+#include <d3d11.h>
+#include <d3d12.h>
+
 #include "API.hpp"
 
 namespace uevr {
@@ -50,14 +53,16 @@ public:
     virtual void on_dllmain() {}
     virtual void on_initialize() {}
     virtual void on_present() {}
+    virtual void on_post_render_vr_framework_dx11(ID3D11DeviceContext* context, ID3D11Texture2D* texture, ID3D11RenderTargetView* rtv) {}
+    virtual void on_post_render_vr_framework_dx12(ID3D12GraphicsCommandList* command_list, ID3D12Resource* rt, D3D12_CPU_DESCRIPTOR_HANDLE* rtv) {}
     virtual void on_device_reset() {}
     virtual bool on_message(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) { return true; }
     virtual void on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {}
     virtual void on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) {}
 
     // Game/Engine callbacks
-    virtual void on_pre_engine_tick(UEVR_UGameEngineHandle engine, float delta) {}
-    virtual void on_post_engine_tick(UEVR_UGameEngineHandle engine, float delta) {}
+    virtual void on_pre_engine_tick(API::UGameEngine* engine, float delta) {}
+    virtual void on_post_engine_tick(API::UGameEngine* engine, float delta) {}
     virtual void on_pre_slate_draw_window(UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info) {}
     virtual void on_post_slate_draw_window(UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info) {}
     virtual void on_pre_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle, int view_index, float world_to_meters, 
@@ -93,6 +98,14 @@ extern "C" __declspec(dllexport) bool uevr_plugin_initialize(const UEVR_PluginIn
         uevr::detail::g_plugin->on_present();
     });
 
+    callbacks->on_post_render_vr_framework_dx11([](void* context, void* texture, void* rtv) {
+        uevr::detail::g_plugin->on_post_render_vr_framework_dx11((ID3D11DeviceContext*)context, (ID3D11Texture2D*)texture, (ID3D11RenderTargetView*)rtv);
+    });
+
+    callbacks->on_post_render_vr_framework_dx12([](void* command_list, void* rt, void* rtv) {
+        uevr::detail::g_plugin->on_post_render_vr_framework_dx12((ID3D12GraphicsCommandList*)command_list, (ID3D12Resource*)rt, (D3D12_CPU_DESCRIPTOR_HANDLE*)rtv);
+    });
+
     callbacks->on_message([](void* hwnd, unsigned int msg, unsigned long long wparam, long long lparam) {
         return uevr::detail::g_plugin->on_message((HWND)hwnd, msg, wparam, lparam);
     });
@@ -106,11 +119,11 @@ extern "C" __declspec(dllexport) bool uevr_plugin_initialize(const UEVR_PluginIn
     });
 
     sdk_callbacks->on_pre_engine_tick([](UEVR_UGameEngineHandle engine, float delta) {
-        uevr::detail::g_plugin->on_pre_engine_tick(engine, delta);
+        uevr::detail::g_plugin->on_pre_engine_tick((uevr::API::UGameEngine*)engine, delta);
     });
 
     sdk_callbacks->on_post_engine_tick([](UEVR_UGameEngineHandle engine, float delta) {
-        uevr::detail::g_plugin->on_post_engine_tick(engine, delta);
+        uevr::detail::g_plugin->on_post_engine_tick((uevr::API::UGameEngine*)engine, delta);
     });
 
     sdk_callbacks->on_pre_slate_draw_window_render_thread([](UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info) {

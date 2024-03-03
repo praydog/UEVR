@@ -6,6 +6,12 @@
 name = "uevr-proj"
 cmake-before=""" 
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
+
+# Enable PDB generation in release mode, but without the extra crap that RelWithDebInfo adds
+add_compile_options("$<$<CONFIG:Release>:/Zi>")
+add_link_options("$<$<CONFIG:Release>:/DEBUG>")
+add_link_options("$<$<CONFIG:Release>:/OPT:REF>")
+add_link_options("$<$<CONFIG:Release>:/OPT:ICF>")
 """
 cmake-after = """
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
@@ -45,11 +51,11 @@ include-directories = ["dependencies/submodules/glm"]
 
 [fetch-content.bddisasm]
 git = "https://github.com/bitdefender/bddisasm"
-tag = "v1.34.10"
+tag = "70db095765ab2066dd88dfb7bbcc42259ed167c5"
 
 [fetch-content.kananlib]
 git = "https://github.com/cursey/kananlib"
-tag = "ba66ffaeecfd201ac66310ddf0a4a98140f1441f"
+tag = "d34dd2130c9fb47b1cd5bd456ab72707e34d33bf"
 
 [fetch-content.safetyhook]
 git = "https://github.com/praydog/safetyhook"
@@ -196,6 +202,7 @@ headers = ["lua-api/**.hpp", "lua-api/**.h"]
 link-libraries = [
     "lua",
     "sol2",
+    "kananlib"
 ]
 
 [target.LuaVR.properties]
@@ -255,6 +262,12 @@ link-libraries = [
 ]
 cmake-after="""
 add_custom_command(
+    TARGET uevr PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "Generating commit hash..."
+    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/MakeCommitHash.bat
+)
+add_custom_command(
     TARGET uevr POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openvr> $<TARGET_FILE_DIR:uevr>)
+
 """

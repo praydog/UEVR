@@ -26,6 +26,7 @@
 #include "mods/VR.hpp"
 #include "mods/ImGuiThemeHelpers.hpp"
 
+#include "CommitHash.hpp"
 #include "ExceptionHandler.hpp"
 #include "LicenseStrings.hpp"
 #include "mods/FrameworkConfig.hpp"
@@ -43,8 +44,10 @@ UEVRSharedMemory::UEVRSharedMemory() {
     m_data = (Data*)MapViewOfFile(m_memory, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Data));
 
     if (m_data != nullptr) {
-        auto p = *utility::get_module_path(utility::get_executable());
-        strcpy_s(m_data->path, p.c_str());
+        const auto p = *utility::get_module_pathw(utility::get_executable());
+        std::memset(m_data->path, 0, sizeof(m_data->path));
+        std::wcsncpy(m_data->path, p.c_str(), p.length());
+        m_data->path[p.length()] = L'\0';
         m_data->pid = GetCurrentProcessId();
         spdlog::info("Mapped memory!");
     } else {
@@ -501,6 +504,10 @@ void Framework::on_frame_d3d11() {
     context->OMSetRenderTargets(1, m_d3d11.rt_rtv.GetAddressOf(), NULL);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
+    for (auto& mod : m_mods->get_mods()) {
+        mod->on_post_render_vr_framework_dx11(context.Get(), m_d3d11.rt.Get(), m_d3d11.rt_rtv.Get());
+    }
+
     // Set the back buffer to be the render target.
     context->OMSetRenderTargets(1, m_d3d11.bb_rtv.GetAddressOf(), nullptr);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -632,6 +639,11 @@ void Framework::on_frame_d3d12() {
 
         ImGui::GetIO().BackendRendererUserData = m_d3d12.imgui_backend_datas[1];
         ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmd_ctx->cmd_list.Get());
+
+        for (auto& mod : m_mods->get_mods()) {
+            rts[0] = m_d3d12.get_cpu_rtv(device, D3D12::RTV::IMGUI);
+            mod->on_post_render_vr_framework_dx12(cmd_ctx->cmd_list.Get(), m_d3d12.get_rt(D3D12::RTV::IMGUI).Get(), &rts[0]);
+        }
         
         barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -930,11 +942,11 @@ void Framework::on_direct_input_keys(const std::array<uint8_t, 256>& keys) {
 
 std::filesystem::path Framework::get_persistent_dir() {
     auto return_appdata_dir = []() -> std::filesystem::path {
-        char app_data_path[MAX_PATH]{};
-        SHGetSpecialFolderPathA(0, app_data_path, CSIDL_APPDATA, false);
+        wchar_t app_data_path[MAX_PATH]{};
+        SHGetSpecialFolderPathW(0, app_data_path, CSIDL_APPDATA, false);
 
         const auto exe_name = [&]() {
-            const auto result = std::filesystem::path(*utility::get_module_path(utility::get_executable())).stem().string();
+            const auto result = std::filesystem::path(*utility::get_module_pathw(utility::get_executable())).stem().string();
             const auto dir = std::filesystem::path(app_data_path) / "UnrealVRMod" / result;
             std::filesystem::create_directories(dir);
 
@@ -1148,9 +1160,11 @@ void Framework::draw_ui() {
     if (!m_last_draw_ui || m_cursor_state_changed) {
         m_cursor_state_changed = false;
     }
+    
+    static const auto UEVR_NAME = std::format("UEVR [rev. {:.8}][{} {}]", UEVR_COMMIT_HASH, UEVR_BUILD_DATE, UEVR_BUILD_TIME);
 
     ImGui::SetNextWindowSize(ImVec2(window_w, window_h), ImGuiCond_::ImGuiCond_Once);
-    ImGui::Begin("UEVR", &m_draw_ui);
+    ImGui::Begin(UEVR_NAME.c_str(), &m_draw_ui);
 
     ImGui::BeginGroup();
     ImGui::Columns(2);

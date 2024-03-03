@@ -23,6 +23,8 @@ public:
     void dump_commands();
     void spawn_console();
 
+    void execute_console_script(sdk::UGameEngine* engine, const std::string& filename);
+
     bool is_hzbo_frozen_and_enabled() const {
         if (m_hzbo == nullptr) {
             return false;
@@ -194,6 +196,7 @@ private:
     
     bool m_wants_display_console{false};
     bool m_native_console_spawned{false};
+    bool m_should_execute_console_script{false};
 
     static inline std::vector<std::shared_ptr<CVarStandard>> s_default_standard_cvars {
         // Bools
@@ -202,6 +205,7 @@ private:
 
         // Ints
         std::make_unique<CVarStandard>(L"Renderer", L"r.DefaultFeature.AntiAliasing", CVar::Type::INT, 0, 2),
+        std::make_unique<CVarStandard>(L"Renderer", L"r.DefaultFeature.AmbientOcclusion", CVar::Type::INT, 0, 2),
         std::make_unique<CVarStandard>(L"Renderer", L"r.TemporalAA.Algorithm", CVar::Type::INT, 0, 1),
         std::make_unique<CVarStandard>(L"Renderer", L"r.TemporalAA.Upsampling", CVar::Type::INT, 0, 1),
         std::make_unique<CVarStandard>(L"Renderer", L"r.Upscale.Quality", CVar::Type::INT, 0, 5),

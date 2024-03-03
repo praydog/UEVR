@@ -1,13 +1,20 @@
 #pragma once
 
 #include <cstdint>
+#include <array>
+
 #include <dxgi1_4.h>
 #include <d3d12.h>
 #include "shared.hpp"
 
 struct D3D12 {
-    ComPtr<ID3D12CommandAllocator> cmd_allocator{};
-    ComPtr<ID3D12GraphicsCommandList> cmd_list{};
+    struct Cmd {
+        ComPtr<ID3D12CommandAllocator> allocator{};
+        ComPtr<ID3D12GraphicsCommandList> list{};
+        ComPtr<ID3D12Fence> fence{};
+        UINT64 fence_value{};
+        HANDLE fence_event{};
+    };
 
     enum class RTV : int{
         BACKBUFFER_0,
@@ -25,6 +32,26 @@ struct D3D12 {
         BLANK,
         COUNT
     };
+
+    void reset() {
+        for (auto& cmd : cmds) {
+            if (cmd.fence != nullptr && cmd.fence->GetCompletedValue() < cmd.fence_value) {
+                WaitForSingleObject(cmd.fence_event, 2000);
+                ResetEvent(cmd.fence_event);
+            }
+
+            cmd.fence_value = 0;
+            cmd.fence_event = 0;
+            cmd.allocator.Reset();
+            cmd.list.Reset();
+            cmd.fence.Reset();
+        }
+    }
+
+    ~D3D12() { this->reset(); }
+
+    std::array<Cmd, 3> cmds{};
+    size_t frame_count{};
 
     ComPtr<ID3D12DescriptorHeap> rtv_desc_heap{};
     ComPtr<ID3D12DescriptorHeap> srv_desc_heap{};
@@ -52,6 +79,7 @@ struct D3D12 {
 
     bool initialize();
     void render_imgui();
+    void render_imgui_vr(ID3D12GraphicsCommandList* command_list, D3D12_CPU_DESCRIPTOR_HANDLE* rtv);
 };
 
 extern D3D12 g_d3d12;

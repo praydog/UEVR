@@ -1005,6 +1005,12 @@ bool D3D11Component::clear_tex(ID3D11Resource* tex, std::optional<DXGI_FORMAT> f
     return ctx.clear_rtv(color);
 }
 
+bool D3D11Component::clear_tex(ID3D11Resource* tex, float* color, std::optional<DXGI_FORMAT> format) {
+    auto ctx = TextureContext{tex, format};
+
+    return ctx.clear_rtv(color);
+}
+
 void D3D11Component::copy_tex(ID3D11Resource* src, ID3D11Resource* dst) {
     auto& hook = g_framework->get_d3d11_hook();
     auto device = hook->get_device();

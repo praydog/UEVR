@@ -75,9 +75,67 @@ protected:
     void on_post_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
                                                       const float world_to_meters, Vector3f* view_location, bool is_double) override;
 
+public:
+    struct MotionControllerStateBase {
+        nlohmann::json to_json() const;
+        void from_json(const nlohmann::json& data);
+
+        MotionControllerStateBase& operator=(const MotionControllerStateBase& other) = default;
+
+        // State that can be parsed from disk
+        glm::quat rotation_offset{glm::identity<glm::quat>()};
+        glm::vec3 location_offset{0.0f, 0.0f, 0.0f};
+        uint8_t hand{1};
+        bool permanent{false};
+    };
+
+    // Assert if MotionControllerStateBase is not trivially copyable
+    static_assert(std::is_trivially_copyable_v<MotionControllerStateBase>);
+    static_assert(std::is_trivially_destructible_v<MotionControllerStateBase>);
+    static_assert(std::is_standard_layout_v<MotionControllerStateBase>);
+
+    struct MotionControllerState final : MotionControllerStateBase {
+        ~MotionControllerState();
+
+        MotionControllerState& operator=(const MotionControllerStateBase& other) {
+            MotionControllerStateBase::operator=(other);
+            return *this;
+        }
+
+        operator MotionControllerStateBase&() {
+            return *this;
+        }
+
+        // In-memory state
+        sdk::AActor* adjustment_visualizer{nullptr};
+        bool adjusting{false};
+    };
+
+    std::shared_ptr<MotionControllerState> get_or_add_motion_controller_state(sdk::USceneComponent* component) {
+        {
+            std::shared_lock _{m_mutex};
+            if (auto it = m_motion_controller_attached_components.find(component); it != m_motion_controller_attached_components.end()) {
+                return it->second;
+            }
+        }
+
+        std::unique_lock _{m_mutex};
+        auto result = std::make_shared<MotionControllerState>();
+        return m_motion_controller_attached_components[component] = result;
+
+        return result;
+    }
+
+    std::optional<std::shared_ptr<MotionControllerState>> get_motion_controller_state(sdk::USceneComponent* component) {
+        std::shared_lock _{m_mutex};
+        if (auto it = m_motion_controller_attached_components.find(component); it != m_motion_controller_attached_components.end()) {
+            return it->second;
+        }
+
+        return {};
+    }
+
 private:
-    struct MotionControllerStateBase;
-    struct MotionControllerState;
     struct StatePath;
     struct PersistentState;
     struct PersistentCameraState;
@@ -112,7 +170,8 @@ private:
     static inline const std::vector<std::string> s_allowed_bases {
         "Acknowledged Pawn",
         "Player Controller",
-        "Camera Manager"
+        "Camera Manager",
+        "World"
     };
 
     static std::filesystem::path get_persistent_dir();
@@ -172,41 +231,6 @@ private:
     std::deque<sdk::UObject*> m_most_recent_objects{};
     std::unordered_set<sdk::UObject*> m_motion_controller_attached_objects{};
 
-    struct MotionControllerStateBase {
-        nlohmann::json to_json() const;
-        void from_json(const nlohmann::json& data);
-
-        MotionControllerStateBase& operator=(const MotionControllerStateBase& other) = default;
-
-        // State that can be parsed from disk
-        glm::quat rotation_offset{glm::identity<glm::quat>()};
-        glm::vec3 location_offset{0.0f, 0.0f, 0.0f};
-        uint8_t hand{1};
-        bool permanent{false};
-    };
-
-    // Assert if MotionControllerStateBase is not trivially copyable
-    static_assert(std::is_trivially_copyable_v<MotionControllerStateBase>);
-    static_assert(std::is_trivially_destructible_v<MotionControllerStateBase>);
-    static_assert(std::is_standard_layout_v<MotionControllerStateBase>);
-
-    struct MotionControllerState final : MotionControllerStateBase {
-        ~MotionControllerState();
-
-        MotionControllerState& operator=(const MotionControllerStateBase& other) {
-            MotionControllerStateBase::operator=(other);
-            return *this;
-        }
-
-        operator MotionControllerStateBase&() {
-            return *this;
-        }
-
-        // In-memory state
-        sdk::AActor* adjustment_visualizer{nullptr};
-        bool adjusting{false};
-    };
-
     std::unordered_map<sdk::USceneComponent*, std::shared_ptr<MotionControllerState>> m_motion_controller_attached_components{};
     sdk::AActor* m_overlap_detection_actor{nullptr};
     sdk::AActor* m_overlap_detection_actor_left{nullptr};
@@ -215,30 +239,6 @@ private:
         sdk::UObject* object{nullptr};
         glm::vec3 offset{};
     } m_camera_attach{};
-
-    std::shared_ptr<MotionControllerState> get_or_add_motion_controller_state(sdk::USceneComponent* component) {
-        {
-            std::shared_lock _{m_mutex};
-            if (auto it = m_motion_controller_attached_components.find(component); it != m_motion_controller_attached_components.end()) {
-                return it->second;
-            }
-        }
-
-        std::unique_lock _{m_mutex};
-        auto result = std::make_shared<MotionControllerState>();
-        return m_motion_controller_attached_components[component] = result;
-
-        return result;
-    }
-
-    std::optional<std::shared_ptr<MotionControllerState>> get_motion_controller_state(sdk::USceneComponent* component) {
-        std::shared_lock _{m_mutex};
-        if (auto it = m_motion_controller_attached_components.find(component); it != m_motion_controller_attached_components.end()) {
-            return it->second;
-        }
-
-        return {};
-    }
 
     void remove_motion_controller_state(sdk::USceneComponent* component) {
         std::unique_lock _{m_mutex};
@@ -426,6 +426,7 @@ private:
 
         std::vector<std::shared_ptr<PropertyState>> properties{};
         bool hide{false};
+        bool hide_legacy{false};
     };
 
     glm::vec3 m_last_camera_location{};
