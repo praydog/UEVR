@@ -87,7 +87,7 @@ void CVarManager::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
         cvar->freeze();
     }
 
-    if(m_should_execute_console_script) {
+    if (m_should_execute_console_script) {
         execute_console_script(engine, user_script_txt_name.data());
         m_should_execute_console_script = false;
     }
@@ -782,7 +782,7 @@ static inline void trim(std::string &s) {
 void CVarManager::execute_console_script(sdk::UGameEngine* engine, const std::string& filename) {
     ZoneScopedN(__FUNCTION__);
 
-    if(!engine) {
+    if (engine == nullptr) {
         spdlog::error("[execute_console_script] engine is null");
         return;
     }
@@ -806,21 +806,21 @@ void CVarManager::execute_console_script(sdk::UGameEngine* engine, const std::st
         trim(line);
 
         // handle comments
-        if(line.starts_with('#') || line.starts_with(';')) {
+        if (line.starts_with('#') || line.starts_with(';')) {
             continue;
         }
 
-        if(line.contains('#')) {
+        if (line.contains('#')) {
             line = line.substr(0, line.find_first_of('#'));
             trim(line);
         }
 
-        if(line.contains(';')) {
+        if (line.contains(';')) {
             line = line.substr(0, line.find_first_of(';'));
             trim(line);
         }
 
-        if(line.length() == 0) {
+        if (line.length() == 0) {
             continue;
         }
 
