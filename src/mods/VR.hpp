@@ -926,6 +926,14 @@ private:
     bool m_wait_for_present{true};
     const ModToggle::Ptr m_controllers_allowed{ ModToggle::create(generate_name("ControllersAllowed"), true) };
     bool m_controller_test_mode{false};
+    
+    const ModToggle::Ptr m_show_fps{ ModToggle::create(generate_name("ShowFPSOverlay"), false) };
+    bool m_show_fps_state{false};
+
+    const ModToggle::Ptr m_show_statistics{ ModToggle::create(generate_name("ShowStatsOverlay"), false) };
+    bool m_show_statistics_state{false};
+
+    void update_statistics_overlay(sdk::UGameEngine* engine);
 
     ValueList m_options{
         *m_rendering_method,
@@ -983,6 +991,8 @@ private:
         *m_keybind_disable_vr,
         *m_keybind_toggle_gui,
         *m_requested_runtime_name,
+        *m_show_fps,
+        *m_show_statistics,
         *m_controllers_allowed,
     };
     

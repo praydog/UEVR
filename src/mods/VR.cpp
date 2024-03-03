@@ -1378,6 +1378,8 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
 
     m_render_target_pool_hook->on_pre_engine_tick(engine, delta);
 
+    update_statistics_overlay(engine);
+
     // Dont update action states on AFR frames
     // TODO: fix this for actual AFR, but we dont really care about pure AFR since synced beats it most of the time
     if (m_fake_stereo_hook != nullptr && !m_fake_stereo_hook->is_ignoring_next_viewport_draw()) {
@@ -2559,6 +2561,8 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::Checkbox("Wait for Present", &m_wait_for_present);
         m_controllers_allowed->draw("Controllers allowed");
         ImGui::Checkbox("Controller test mode", &m_controller_test_mode);
+        m_show_fps->draw("Show FPS");
+        m_show_statistics->draw("Show Engine Statistics");
 
         const double min_ = 0.0;
         const double max_ = 25.0;
@@ -3204,4 +3208,18 @@ void VR::process_snapturn() {
     }
         
     m_snapturn_on_frame = false;
+}
+
+void VR::update_statistics_overlay(sdk::UGameEngine* engine) {
+    if(!engine) return;
+    
+    if(m_show_fps_state != m_show_fps->value()) {
+        engine->exec(L"stat fps");
+        m_show_fps_state = m_show_fps->value();
+    }
+    
+    if(m_show_statistics_state != m_show_statistics->value()) {
+        engine->exec(L"stat unit");
+        m_show_statistics_state = m_show_statistics->value();
+    }
 }
