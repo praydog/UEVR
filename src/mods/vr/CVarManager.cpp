@@ -176,7 +176,9 @@ void CVarManager::on_config_load(const utility::Config& cfg, bool set_defaults) 
     // TODO: Add arbitrary cvars from the other configs the user can add.
 
     // calling UEngine::exec here causes a crash, defer to on_pre_engine_tick()
-    m_should_execute_console_script = true;
+    if (!set_defaults) {
+        m_should_execute_console_script = true;
+    }
 }
 
 void CVarManager::dump_commands() {
