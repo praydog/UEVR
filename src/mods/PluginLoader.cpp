@@ -25,6 +25,7 @@
 #include "pluginloader/FFakeStereoRenderingFunctions.hpp"
 #include "pluginloader/FRenderTargetPoolHook.hpp"
 #include "pluginloader/FRHITexture2DFunctions.hpp"
+#include "pluginloader/FUObjectArrayFunctions.hpp"
 
 #include "UObjectHook.hpp"
 #include "VR.hpp"
@@ -365,13 +366,6 @@ UEVR_UObjectFunctions g_uobject_functions {
     // get_fname
     [](UEVR_UObjectHandle obj) {
         return (UEVR_FNameHandle)&UOBJECT(obj)->get_fname();
-    },
-};
-
-UEVR_UObjectArrayFunctions g_uobject_array_functions {
-    // find_uobject
-    [](const wchar_t* name) {
-        return (UEVR_UObjectHandle)sdk::find_uobject(name);
     },
 };
 
@@ -769,7 +763,7 @@ UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
     &g_uobject_functions,
-    &g_uobject_array_functions,
+    &uevr::fuobjectarray::functions,
     &g_ffield_functions,
     &g_fproperty_functions,
     &g_ustruct_functions,

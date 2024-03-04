@@ -29,7 +29,7 @@ UEVR_FRHITexture2DHandle stereo_hook::get_ui_render_target() {
 }
 
 UEVR_FFakeStereoRenderingHookFunctions stereo_hook::functions {
-    &stereo_hook::get_scene_render_target,
-    &stereo_hook::get_ui_render_target
+    .get_scene_render_target = &stereo_hook::get_scene_render_target,
+    .get_ui_render_target = &stereo_hook::get_ui_render_target
 };
 }

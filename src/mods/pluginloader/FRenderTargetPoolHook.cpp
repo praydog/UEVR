@@ -19,7 +19,7 @@ UEVR_IPooledRenderTargetHandle render_target_pool_hook::get_render_target(const 
 }
 
 UEVR_FRenderTargetPoolHookFunctions render_target_pool_hook::functions {
-    &render_target_pool_hook::activate,
-    &render_target_pool_hook::get_render_target
+    .activate = &render_target_pool_hook::activate,
+    .get_render_target = &render_target_pool_hook::get_render_target
 };
 }

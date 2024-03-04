@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 15
+#define UEVR_PLUGIN_VERSION_MINOR 16
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -257,8 +257,20 @@ typedef struct {
     void (*command_execute)(UEVR_IConsoleCommandHandle cmd, const wchar_t* args);
 } UEVR_ConsoleFunctions;
 
+DECLARE_UEVR_HANDLE(UEVR_FUObjectItemHandle);
+
 typedef struct {
     UEVR_UObjectHandle (*find_uobject)(const wchar_t* name);
+
+    bool (*is_chunked)();
+    bool (*is_inlined)();
+    unsigned int (*get_objects_offset)();
+    unsigned int (*get_item_distance)();
+
+    int (*get_object_count)(UEVR_UObjectArrayHandle array);
+    void* (*get_objects_ptr)(UEVR_UObjectArrayHandle array);
+    UEVR_UObjectHandle (*get_object)(UEVR_UObjectArrayHandle array, int index);
+    UEVR_FUObjectItemHandle (*get_item)(UEVR_UObjectArrayHandle array, int index);
 } UEVR_UObjectArrayFunctions;
 
 typedef struct {
