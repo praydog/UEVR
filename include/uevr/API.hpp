@@ -118,6 +118,8 @@ public:
     struct UStruct;
     struct UClass;
     struct UFunction;
+    struct UScriptStruct;
+    struct UStructOps;
     struct FField;
     struct FProperty;
     struct FFieldClass;
@@ -471,6 +473,43 @@ public:
         inline static const UEVR_UFunctionFunctions* initialize() {
             if (s_functions == nullptr) {
                 s_functions = API::get()->sdk()->ufunction;
+            }
+
+            return s_functions;
+        }
+    };
+
+    struct UScriptStruct : public UStruct {
+        inline UEVR_UScriptStructHandle to_handle() { return (UEVR_UScriptStructHandle)this; }
+        inline UEVR_UScriptStructHandle to_handle() const { return (UEVR_UScriptStructHandle)this; }
+
+        static UClass* static_class() {
+            static auto result = API::get()->find_uobject<UClass>(L"Class /Script/CoreUObject.ScriptStruct");
+            return result;
+        }
+
+        struct StructOps {
+            virtual ~StructOps() {};
+
+            int32_t size;
+            int32_t alignment;
+        };
+
+        StructOps* get_struct_ops() const {
+            static const auto fn = initialize()->get_struct_ops;
+            return (StructOps*)fn(to_handle());
+        }
+
+        int32_t get_struct_size() const {
+            static const auto fn = initialize()->get_struct_size;
+            return fn(to_handle());
+        }
+
+    private:
+        static inline const UEVR_UScriptStructFunctions* s_functions{nullptr};
+        inline static const UEVR_UScriptStructFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->uscriptstruct;
             }
 
             return s_functions;

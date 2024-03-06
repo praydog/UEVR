@@ -26,6 +26,7 @@
 #include "pluginloader/FRenderTargetPoolHook.hpp"
 #include "pluginloader/FRHITexture2DFunctions.hpp"
 #include "pluginloader/FUObjectArrayFunctions.hpp"
+#include "pluginloader/UScriptStructFunctions.hpp"
 
 #include "UObjectHook.hpp"
 #include "VR.hpp"
@@ -366,6 +367,14 @@ UEVR_UObjectFunctions g_uobject_functions {
     // get_fname
     [](UEVR_UObjectHandle obj) {
         return (UEVR_FNameHandle)&UOBJECT(obj)->get_fname();
+    },
+    // get_bool_property
+    [](UEVR_UObjectHandle obj, const wchar_t* name) {
+        return UOBJECT(obj)->get_bool_property(name);
+    },
+    // set_bool_property
+    [](UEVR_UObjectHandle obj, const wchar_t* name, bool value) {
+        UOBJECT(obj)->set_bool_property(name, value);
     },
 };
 
@@ -776,7 +785,8 @@ UEVR_SDKData g_sdk_data {
     &g_malloc_functions,
     &uevr::render_target_pool_hook::functions,
     &uevr::stereo_hook::functions,
-    &uevr::frhitexture2d::functions
+    &uevr::frhitexture2d::functions,
+    &uevr::uscriptstruct::functions
 };
 
 namespace uevr {
