@@ -226,7 +226,7 @@ void LuaLoader::reset_scripts() {
         m_last_script_error.clear();
     }
 
-    if (!m_states.empty()) {
+    if (m_main_state != nullptr) {
         /*auto& mods = g_framework->get_mods()->get_mods();
 
         for (auto& mod : mods) {
@@ -238,6 +238,8 @@ void LuaLoader::reset_scripts() {
 
     m_main_state.reset();
     m_states.clear();
+
+    spdlog::info("[LuaLoader] Destroyed all Lua states.");
 
     m_main_state = std::make_shared<ScriptState>(make_gc_data(), &g_plugin_initialize_param, true);
     m_states.insert(m_states.begin(), m_main_state);

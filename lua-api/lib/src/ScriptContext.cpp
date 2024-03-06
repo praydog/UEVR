@@ -11,11 +11,11 @@
 namespace uevr {
 class ScriptContexts {
 public:
-    void add(std::shared_ptr<ScriptContext> ctx) {
+    void add(ScriptContext* ctx) {
         std::scoped_lock _{mtx};
 
         // Check if the context is already in the list
-        for (auto& c : list) {
+        for (ScriptContext* c : list) {
             if (c == ctx) {
                 return;
             }
@@ -24,28 +24,35 @@ public:
         list.push_back(ctx);
     }
 
-    void remove(std::shared_ptr<ScriptContext> ctx) {
+    void remove(ScriptContext* ctx) {
         std::scoped_lock _{mtx};
-        list.erase(std::remove(list.begin(), list.end(), ctx), list.end());
+
+        ScriptContext::log("Removing context from list");
+        std::erase_if(list, [ctx](ScriptContext* c) {
+            return c == ctx;
+        });
+        ScriptContext::log(std::format("New context count: {}", list.size()));
     }
 
     template<typename T>
     void for_each(T&& fn) {
         std::scoped_lock _{mtx};
         for (auto& ctx : list) {
-            fn(ctx);
+            fn(ctx->shared_from_this());
         }
     }
 
 private:
-    std::vector<std::shared_ptr<ScriptContext>> list{};
+    std::vector<ScriptContext*> list{};
     std::mutex mtx{};
 } g_contexts{};
 
 ScriptContext::ScriptContext(lua_State* l, UEVR_PluginInitializeParam* param) 
-    : m_lua{l} 
+    : m_lua{l}
 {
     std::scoped_lock _{m_mtx};
+
+    g_contexts.add(this);
 
     if (param != nullptr) {
         m_plugin_initialize_param = param;
@@ -65,6 +72,7 @@ ScriptContext::ScriptContext(lua_State* l, UEVR_PluginInitializeParam* param)
 
 ScriptContext::~ScriptContext() {
     std::scoped_lock _{m_mtx};
+    ScriptContext::log("ScriptContext destructor called");
 
     // TODO: this probably does not support multiple states
     if (m_plugin_initialize_param != nullptr) {
@@ -75,11 +83,12 @@ ScriptContext::~ScriptContext() {
         m_callbacks_to_remove.clear();
     }
 
-    g_contexts.remove(shared_from_this());
+    g_contexts.remove(this);
 }
 
 void ScriptContext::log(const std::string& message) {
     std::cout << "[LuaVR] " << message << std::endl;
+    API::get()->log_info("[LuaVR] %s", message.c_str());
 }
 
 void ScriptContext::test_function() {
@@ -149,8 +158,6 @@ void ScriptContext::setup_callback_bindings() {
 }
 
 int ScriptContext::setup_bindings() {
-    g_contexts.add(shared_from_this());
-
     m_lua.registry()["uevr_context"] = this;
 
     m_lua.set_function("test_function", ScriptContext::test_function);

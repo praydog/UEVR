@@ -12,11 +12,10 @@ namespace uevr {
 class ScriptContext : public std::enable_shared_from_this<ScriptContext> {
 public:
     static std::shared_ptr<ScriptContext> create(lua_State* l, UEVR_PluginInitializeParam* param = nullptr) {
-        return std::make_shared<ScriptContext>(l, param);
+        return std::shared_ptr<ScriptContext>(new ScriptContext(l, param));
     }
 
-    ScriptContext(lua_State* l, UEVR_PluginInitializeParam* param = nullptr);
-
+    ScriptContext() = delete;
     virtual ~ScriptContext();
 
     int setup_bindings();
@@ -85,6 +84,9 @@ public:
     }
 
 private:
+    // Private constructor to prevent direct instantiation
+    ScriptContext(lua_State* l, UEVR_PluginInitializeParam* param = nullptr);
+
     std::vector<void*> m_callbacks_to_remove{};
 
     sol::state_view m_lua;
