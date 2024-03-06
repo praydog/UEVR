@@ -5,6 +5,8 @@
 #include "PluginLoader.hpp"
 #include "LuaLoader.hpp"
 
+#include <sdk/threading/GameThreadWorker.hpp>
+
 #include <lstate.h> // weird include order because of sol
 #include <lgc.h>
 
@@ -45,6 +47,14 @@ void LuaLoader::on_config_save(utility::Config& cfg) {
 }
 
 void LuaLoader::on_frame() {
+    // Only run on the game thread
+    // on_frame can sometimes run in the DXGI thread, this happens
+    // before tick is hooked, which is where the game thread is.
+    // once tick is hooked, on_frame will always run on the game thread.
+    if (!GameThreadWorker::get().is_same_thread()) {
+        return;
+    }
+
     std::scoped_lock _{m_access_mutex};
 
     if (m_needs_first_reset) {
