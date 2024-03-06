@@ -82,10 +82,8 @@ void LuaLoader::on_frame() {
     }
 }
 
-void LuaLoader::on_draw_ui() {
-    ImGui::SetNextItemOpen(false, ImGuiCond_::ImGuiCond_Once);
-
-    if (ImGui::CollapsingHeader(get_name().data())) {
+void LuaLoader::on_draw_sidebar_entry(std::string_view in_entry) {
+    if (in_entry == "Main") {
         if (ImGui::Button("Run script")) {
             OPENFILENAME ofn{};
             char file[260]{};
@@ -201,9 +199,12 @@ void LuaLoader::on_draw_ui() {
         } else {
             ImGui::Text("No scripts loaded.");
         }
+
+        ImGui::TreePop();
     }
 
-    if (ImGui::CollapsingHeader("Script Generated UI")) {
+
+    if (in_entry == "Script UI") {
         std::scoped_lock _{m_access_mutex};
 
         if (m_states.empty()) {
@@ -213,6 +214,8 @@ void LuaLoader::on_draw_ui() {
         for (auto& state : m_states) {
             state->on_draw_ui();
         }
+
+        ImGui::TreePop();
     }
 }
 

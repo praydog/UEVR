@@ -21,7 +21,15 @@ public:
     std::string_view get_name() const override { return "LuaLoader"; }
     bool is_advanced_mod() const override { return true; }
     std::optional<std::string> on_initialize_d3d_thread() override;
-    void on_draw_ui() override;
+
+    std::vector<SidebarEntryInfo> get_sidebar_entries() override {
+        return {
+            {"Main", true},
+            {"Script UI", true}
+        };
+    }
+
+    void on_draw_sidebar_entry(std::string_view in_entry);
     void on_frame() override;
 
     void on_config_load(const utility::Config& cfg, bool set_defaults) override;
