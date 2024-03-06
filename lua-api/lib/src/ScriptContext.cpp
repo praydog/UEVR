@@ -450,7 +450,7 @@ int ScriptContext::setup_bindings() {
         "get_player_controller", &uevr::API::get_player_controller,
         "get_local_pawn", &uevr::API::get_local_pawn,
         "spawn_object", &uevr::API::spawn_object,
-        "execute_command", &uevr::API::execute_command,
+        "execute_command", [](uevr::API* api, std::string s) { api->execute_command(utility::widen(s).data()); },
         "execute_command_ex", &uevr::API::execute_command_ex,
         "get_uobject_array", &uevr::API::get_uobject_array,
         "get_console_manager", &uevr::API::get_console_manager
