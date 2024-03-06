@@ -590,14 +590,60 @@ target_include_directories(sol2 INTERFACE
 unset(CMKR_TARGET)
 unset(CMKR_SOURCES)
 
+# Target luavrlib
+set(CMKR_TARGET luavrlib)
+set(luavrlib_SOURCES "")
+
+list(APPEND luavrlib_SOURCES
+	"lua-api/lib/src/ScriptContext.cpp"
+	"lua-api/lib/src/ScriptState.cpp"
+	"lua-api/lib/include/ScriptContext.hpp"
+	"lua-api/lib/include/ScriptState.hpp"
+)
+
+list(APPEND luavrlib_SOURCES
+	cmake.toml
+)
+
+set(CMKR_SOURCES ${luavrlib_SOURCES})
+add_library(luavrlib STATIC)
+
+if(luavrlib_SOURCES)
+	target_sources(luavrlib PRIVATE ${luavrlib_SOURCES})
+endif()
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${luavrlib_SOURCES})
+
+target_compile_features(luavrlib PUBLIC
+	cxx_std_23
+)
+
+target_compile_options(luavrlib PUBLIC
+	"/bigobj"
+	"/EHa"
+	"/MP"
+)
+
+target_include_directories(luavrlib PUBLIC
+	"include/"
+	"lua-api/lib/include"
+)
+
+target_link_libraries(luavrlib PUBLIC
+	lua
+	sol2
+	kananlib
+)
+
+unset(CMKR_TARGET)
+unset(CMKR_SOURCES)
+
 # Target LuaVR
 set(CMKR_TARGET LuaVR)
 set(LuaVR_SOURCES "")
 
 list(APPEND LuaVR_SOURCES
 	"lua-api/Main.cpp"
-	"lua-api/ScriptContext.cpp"
-	"lua-api/ScriptContext.hpp"
 )
 
 list(APPEND LuaVR_SOURCES
@@ -628,9 +674,7 @@ target_include_directories(LuaVR PUBLIC
 )
 
 target_link_libraries(LuaVR PUBLIC
-	lua
-	sol2
-	kananlib
+	luavrlib
 )
 
 set_target_properties(LuaVR PROPERTIES
@@ -669,6 +713,7 @@ list(APPEND uevr_SOURCES
 	"src/hooks/XInputHook.cpp"
 	"src/mods/FrameworkConfig.cpp"
 	"src/mods/ImGuiThemeHelpers.cpp"
+	"src/mods/LuaLoader.cpp"
 	"src/mods/PluginLoader.cpp"
 	"src/mods/UObjectHook.cpp"
 	"src/mods/VR.cpp"
@@ -788,6 +833,7 @@ target_link_libraries(uevr PUBLIC
 	DirectXTK12
 	sdkgenny
 	asmjit
+	luavrlib
 )
 
 target_link_libraries(uevr PUBLIC

@@ -1580,7 +1580,6 @@ void PluginLoader::on_xinput_set_state(uint32_t* retval, uint32_t user_index, XI
     }
 }
 
-
 void PluginLoader::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     std::shared_lock _{m_api_cb_mtx};
 

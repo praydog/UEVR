@@ -8,17 +8,39 @@
 
 #include "ScriptContext.hpp"
 
-std::shared_ptr<ScriptContext> g_script_context{};
+namespace uevr {
+class ScriptContexts {
+public:
+    void add(std::shared_ptr<ScriptContext> ctx) {
+        std::scoped_lock _{mtx};
 
-std::shared_ptr<ScriptContext> ScriptContext::get() {
-    return g_script_context;
-}
+        // Check if the context is already in the list
+        for (auto& c : list) {
+            if (c == ctx) {
+                return;
+            }
+        }
 
-std::shared_ptr<ScriptContext> ScriptContext::reinitialize(lua_State* l, UEVR_PluginInitializeParam* param) {
-    g_script_context.reset();
-    g_script_context = std::make_shared<ScriptContext>(l, param);
-    return g_script_context;
-}
+        list.push_back(ctx);
+    }
+
+    void remove(std::shared_ptr<ScriptContext> ctx) {
+        std::scoped_lock _{mtx};
+        list.erase(std::remove(list.begin(), list.end(), ctx), list.end());
+    }
+
+    template<typename T>
+    void for_each(T&& fn) {
+        std::scoped_lock _{mtx};
+        for (auto& ctx : list) {
+            fn(ctx);
+        }
+    }
+
+private:
+    std::vector<std::shared_ptr<ScriptContext>> list{};
+    std::mutex mtx{};
+} g_contexts{};
 
 ScriptContext::ScriptContext(lua_State* l, UEVR_PluginInitializeParam* param) 
     : m_lua{l} 
@@ -44,6 +66,7 @@ ScriptContext::ScriptContext(lua_State* l, UEVR_PluginInitializeParam* param)
 ScriptContext::~ScriptContext() {
     std::scoped_lock _{m_mtx};
 
+    // TODO: this probably does not support multiple states
     if (m_plugin_initialize_param != nullptr) {
         for (auto& cb : m_callbacks_to_remove) {
             m_plugin_initialize_param->functions->remove_callback(cb);
@@ -51,6 +74,8 @@ ScriptContext::~ScriptContext() {
 
         m_callbacks_to_remove.clear();
     }
+
+    g_contexts.remove(shared_from_this());
 }
 
 void ScriptContext::log(const std::string& message) {
@@ -66,52 +91,68 @@ void ScriptContext::setup_callback_bindings() {
 
     auto cbs = m_plugin_initialize_param->sdk->callbacks;
 
-    g_script_context->add_callback(cbs->on_pre_engine_tick, on_pre_engine_tick);
-    g_script_context->add_callback(cbs->on_post_engine_tick, on_post_engine_tick);
-    g_script_context->add_callback(cbs->on_pre_slate_draw_window_render_thread, on_pre_slate_draw_window_render_thread);
-    g_script_context->add_callback(cbs->on_post_slate_draw_window_render_thread, on_post_slate_draw_window_render_thread);
-    g_script_context->add_callback(cbs->on_pre_calculate_stereo_view_offset, on_pre_calculate_stereo_view_offset);
-    g_script_context->add_callback(cbs->on_post_calculate_stereo_view_offset, on_post_calculate_stereo_view_offset);
-    g_script_context->add_callback(cbs->on_pre_viewport_client_draw, on_pre_viewport_client_draw);
-    g_script_context->add_callback(cbs->on_post_viewport_client_draw, on_post_viewport_client_draw);
+    add_callback(cbs->on_pre_engine_tick, on_pre_engine_tick);
+    add_callback(cbs->on_post_engine_tick, on_post_engine_tick);
+    add_callback(cbs->on_pre_slate_draw_window_render_thread, on_pre_slate_draw_window_render_thread);
+    add_callback(cbs->on_post_slate_draw_window_render_thread, on_post_slate_draw_window_render_thread);
+    add_callback(cbs->on_pre_calculate_stereo_view_offset, on_pre_calculate_stereo_view_offset);
+    add_callback(cbs->on_post_calculate_stereo_view_offset, on_post_calculate_stereo_view_offset);
+    add_callback(cbs->on_pre_viewport_client_draw, on_pre_viewport_client_draw);
+    add_callback(cbs->on_post_viewport_client_draw, on_post_viewport_client_draw);
 
     m_lua.new_usertype<UEVR_SDKCallbacks>("UEVR_SDKCallbacks",
-        "on_pre_engine_tick", [](sol::function fn) {
-            std::scoped_lock _{ g_script_context->m_mtx };
-            g_script_context->m_on_pre_engine_tick_callbacks.push_back(fn);
+        "on_pre_engine_tick", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_pre_engine_tick_callbacks.push_back(fn);
         },
-        "on_post_engine_tick", [](sol::function fn) {
-            std::scoped_lock _{ g_script_context->m_mtx };
-            g_script_context->m_on_post_engine_tick_callbacks.push_back(fn);
+        "on_post_engine_tick", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_post_engine_tick_callbacks.push_back(fn);
         },
-        "on_pre_slate_draw_window_render_thread", [](sol::function fn) {
-            std::scoped_lock _{ g_script_context->m_mtx };
-            g_script_context->m_on_pre_slate_draw_window_render_thread_callbacks.push_back(fn);
+        "on_pre_slate_draw_window_render_thread", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_pre_slate_draw_window_render_thread_callbacks.push_back(fn);
         },
-        "on_post_slate_draw_window_render_thread", [](sol::function fn) {
-            std::scoped_lock _{ g_script_context->m_mtx };
-            g_script_context->m_on_post_slate_draw_window_render_thread_callbacks.push_back(fn);
+        "on_post_slate_draw_window_render_thread", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_post_slate_draw_window_render_thread_callbacks.push_back(fn);
         },
-        "on_pre_calculate_stereo_view_offset", [](sol::function fn) {
-            std::scoped_lock _{ g_script_context->m_mtx };
-            g_script_context->m_on_pre_calculate_stereo_view_offset_callbacks.push_back(fn);
+        "on_pre_calculate_stereo_view_offset", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_pre_calculate_stereo_view_offset_callbacks.push_back(fn);
         },
-        "on_post_calculate_stereo_view_offset", [](sol::function fn) {
-            std::scoped_lock _{ g_script_context->m_mtx };
-            g_script_context->m_on_post_calculate_stereo_view_offset_callbacks.push_back(fn);
+        "on_post_calculate_stereo_view_offset", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_post_calculate_stereo_view_offset_callbacks.push_back(fn);
         },
-        "on_pre_viewport_client_draw", [](sol::function fn) {
-            std::scoped_lock _{ g_script_context->m_mtx };
-            g_script_context->m_on_pre_viewport_client_draw_callbacks.push_back(fn);
+        "on_pre_viewport_client_draw", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_pre_viewport_client_draw_callbacks.push_back(fn);
         },
-        "on_post_viewport_client_draw", [](sol::function fn) {
-            std::scoped_lock _{ g_script_context->m_mtx };
-            g_script_context->m_on_post_viewport_client_draw_callbacks.push_back(fn);
+        "on_post_viewport_client_draw", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_post_viewport_client_draw_callbacks.push_back(fn);
+        },
+        "on_frame", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_frame_callbacks.push_back(fn);
+        },
+        "on_draw_ui", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_draw_ui_callbacks.push_back(fn);
+        },
+        "on_script_reset", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_script_reset_callbacks.push_back(fn);
         }
     );
 }
 
 int ScriptContext::setup_bindings() {
+    g_contexts.add(shared_from_this());
+
+    m_lua.registry()["uevr_context"] = this;
+
     m_lua.set_function("test_function", ScriptContext::test_function);
 
     m_lua.new_usertype<UEVR_PluginInitializeParam>("UEVR_PluginInitializeParam",
@@ -347,19 +388,6 @@ int ScriptContext::setup_bindings() {
         "find_command", &uevr::API::FConsoleManager::find_command
     );
 
-    m_lua.new_usertype<uevr::API>("UEVR_API",
-        "sdk", &uevr::API::sdk,
-        "find_uobject", &uevr::API::find_uobject<uevr::API::UObject>,
-        "get_engine", &uevr::API::get_engine,
-        "get_player_controller", &uevr::API::get_player_controller,
-        "get_local_pawn", &uevr::API::get_local_pawn,
-        "spawn_object", &uevr::API::spawn_object,
-        "execute_command", &uevr::API::execute_command,
-        "execute_command_ex", &uevr::API::execute_command_ex,
-        "get_uobject_array", &uevr::API::get_uobject_array,
-        "get_console_manager", &uevr::API::get_console_manager
-    );
-
     m_lua.new_usertype<uevr::API::IConsoleObject>("UEVR_IConsoleObject",
         "as_command", &uevr::API::IConsoleObject::as_command
     );
@@ -396,106 +424,208 @@ int ScriptContext::setup_bindings() {
         "execute", &uevr::API::IConsoleCommand::execute
     );
 
+    m_lua.new_usertype<uevr::API::FUObjectArray>("UEVR_FUObjectArray",
+        "get", &uevr::API::FUObjectArray::get,
+        "is_chunked", &uevr::API::FUObjectArray::is_chunked,
+        "is_inlined", &uevr::API::FUObjectArray::is_inlined,
+        "get_objects_offset", &uevr::API::FUObjectArray::get_objects_offset,
+        "get_item_distance", &uevr::API::FUObjectArray::get_item_distance,
+        "get_object_count", &uevr::API::FUObjectArray::get_object_count,
+        "get_objects_ptr", &uevr::API::FUObjectArray::get_objects_ptr,
+        "get_object", &uevr::API::FUObjectArray::get_object,
+        "get_item", &uevr::API::FUObjectArray::get_item
+    );
+
+    m_lua.new_usertype<uevr::API>("UEVR_API",
+        "sdk", &uevr::API::sdk,
+        "find_uobject", &uevr::API::find_uobject<uevr::API::UObject>,
+        "get_engine", &uevr::API::get_engine,
+        "get_player_controller", &uevr::API::get_player_controller,
+        "get_local_pawn", &uevr::API::get_local_pawn,
+        "spawn_object", &uevr::API::spawn_object,
+        "execute_command", &uevr::API::execute_command,
+        "execute_command_ex", &uevr::API::execute_command_ex,
+        "get_uobject_array", &uevr::API::get_uobject_array,
+        "get_console_manager", &uevr::API::get_console_manager
+    );
+
     setup_callback_bindings();
 
     auto out = m_lua.create_table();
     out["params"] = m_plugin_initialize_param;
     out["api"] = uevr::API::get().get();
+    out["types"] = m_lua.create_table_with(
+        "UObject", m_lua["UEVR_UObject"],
+        "UStruct", m_lua["UEVR_UStruct"],
+        "UClass", m_lua["UEVR_UClass"],
+        "UFunction", m_lua["UEVR_UFunction"],
+        "FField", m_lua["UEVR_FField"],
+        "FFieldClass", m_lua["UEVR_FFieldClass"],
+        "FConsoleManager", m_lua["UEVR_FConsoleManager"],
+        "IConsoleObject", m_lua["UEVR_IConsoleObject"],
+        "IConsoleVariable", m_lua["UEVR_IConsoleVariable"],
+        "IConsoleCommand", m_lua["UEVR_IConsoleCommand"],
+        "FName", m_lua["UEVR_FName"],
+        "FUObjectArray", m_lua["UEVR_FUObjectArray"]
+    );
+    
+    out["plugin_callbacks"] = m_plugin_initialize_param->callbacks;
+    out["sdk"] = m_plugin_initialize_param->sdk;
 
     return out.push(m_lua.lua_state());
 }
 
 void ScriptContext::on_pre_engine_tick(UEVR_UGameEngineHandle engine, float delta_seconds) {
-    std::scoped_lock _{ g_script_context->m_mtx };
-    for (auto& fn : g_script_context->m_on_pre_engine_tick_callbacks) try {
-        g_script_context->handle_protected_result(fn(engine, delta_seconds));
-    } catch (const std::exception& e) {
-        ScriptContext::log("Exception in on_pre_engine_tick: " + std::string(e.what()));
-    } catch (...) {
-        ScriptContext::log("Unknown exception in on_pre_engine_tick");
-    }
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
+
+        for (auto& fn : ctx->m_on_pre_engine_tick_callbacks) try {
+            ctx->handle_protected_result(fn(engine, delta_seconds));
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_pre_engine_tick: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_pre_engine_tick");
+        }
+    });
 }
 
 void ScriptContext::on_post_engine_tick(UEVR_UGameEngineHandle engine, float delta_seconds) {
-    std::scoped_lock _{ g_script_context->m_mtx };
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
 
-    for (auto& fn : g_script_context->m_on_post_engine_tick_callbacks) try {
-        g_script_context->handle_protected_result(fn(engine, delta_seconds));
-    } catch (const std::exception& e) {
-        ScriptContext::log("Exception in on_post_engine_tick: " + std::string(e.what()));
-    } catch (...) {
-        ScriptContext::log("Unknown exception in on_post_engine_tick");
-    }
+        for (auto& fn : ctx->m_on_post_engine_tick_callbacks) try {
+            ctx->handle_protected_result(fn(engine, delta_seconds));
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_post_engine_tick: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_post_engine_tick");
+        }
+    });
 }
 
 void ScriptContext::on_pre_slate_draw_window_render_thread(UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info) {
-    std::scoped_lock _{ g_script_context->m_mtx };
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
 
-    for (auto& fn : g_script_context->m_on_pre_slate_draw_window_render_thread_callbacks) try {
-        g_script_context->handle_protected_result(fn(renderer, viewport_info));
-    } catch (const std::exception& e) {
-        ScriptContext::log("Exception in on_pre_slate_draw_window_render_thread: " + std::string(e.what()));
-    } catch (...) {
-        ScriptContext::log("Unknown exception in on_pre_slate_draw_window_render_thread");
-    }
+        for (auto& fn : ctx->m_on_pre_slate_draw_window_render_thread_callbacks) try {
+            ctx->handle_protected_result(fn(renderer, viewport_info));
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_pre_slate_draw_window_render_thread: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_pre_slate_draw_window_render_thread");
+        }
+    });
 }
 
 void ScriptContext::on_post_slate_draw_window_render_thread(UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info) {
-    std::scoped_lock _{ g_script_context->m_mtx };
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
 
-    for (auto& fn : g_script_context->m_on_post_slate_draw_window_render_thread_callbacks) try {
-        g_script_context->handle_protected_result(fn(renderer, viewport_info));
-    } catch (const std::exception& e) {
-        ScriptContext::log("Exception in on_post_slate_draw_window_render_thread: " + std::string(e.what()));
-    } catch (...) {
-        ScriptContext::log("Unknown exception in on_post_slate_draw_window_render_thread");
-    }
+        for (auto& fn : ctx->m_on_post_slate_draw_window_render_thread_callbacks) try {
+            ctx->handle_protected_result(fn(renderer, viewport_info));
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_post_slate_draw_window_render_thread: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_post_slate_draw_window_render_thread");
+        }
+    });
 }
 
 void ScriptContext::on_pre_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle device, int view_index, float world_to_meters, UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double) {
-    std::scoped_lock _{ g_script_context->m_mtx };
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
 
-    for (auto& fn : g_script_context->m_on_pre_calculate_stereo_view_offset_callbacks) try {
-        g_script_context->handle_protected_result(fn(device, view_index, world_to_meters, position, rotation, is_double));
-    } catch (const std::exception& e) {
-        ScriptContext::log("Exception in on_pre_calculate_stereo_view_offset: " + std::string(e.what()));
-    } catch (...) {
-        ScriptContext::log("Unknown exception in on_pre_calculate_stereo_view_offset");
-    }
+        for (auto& fn : ctx->m_on_pre_calculate_stereo_view_offset_callbacks) try {
+            ctx->handle_protected_result(fn(device, view_index, world_to_meters, position, rotation, is_double));
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_pre_calculate_stereo_view_offset: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_pre_calculate_stereo_view_offset");
+        }
+    });
 }
 
 void ScriptContext::on_post_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle device, int view_index, float world_to_meters, UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double) {
-    std::scoped_lock _{ g_script_context->m_mtx };
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
 
-    for (auto& fn : g_script_context->m_on_post_calculate_stereo_view_offset_callbacks) try {
-        g_script_context->handle_protected_result(fn(device, view_index, world_to_meters, position, rotation, is_double));
-    } catch (const std::exception& e) {
-        ScriptContext::log("Exception in on_post_calculate_stereo_view_offset: " + std::string(e.what()));
-    } catch (...) {
-        ScriptContext::log("Unknown exception in on_post_calculate_stereo_view_offset");
-    }
+        for (auto& fn : ctx->m_on_post_calculate_stereo_view_offset_callbacks) try {
+            ctx->handle_protected_result(fn(device, view_index, world_to_meters, position, rotation, is_double));
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_post_calculate_stereo_view_offset: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_post_calculate_stereo_view_offset");
+        }
+    });
 }
 
 void ScriptContext::on_pre_viewport_client_draw(UEVR_UGameViewportClientHandle viewport_client, UEVR_FViewportHandle viewport, UEVR_FCanvasHandle canvas) {
-    std::scoped_lock _{ g_script_context->m_mtx };
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
 
-    for (auto& fn : g_script_context->m_on_pre_viewport_client_draw_callbacks) try {
-        g_script_context->handle_protected_result(fn(viewport_client, viewport, canvas));
-    } catch (const std::exception& e) {
-        ScriptContext::log("Exception in on_pre_viewport_client_draw: " + std::string(e.what()));
-    } catch (...) {
-        ScriptContext::log("Unknown exception in on_pre_viewport_client_draw");
-    }
+        for (auto& fn : ctx->m_on_pre_viewport_client_draw_callbacks) try {
+            ctx->handle_protected_result(fn(viewport_client, viewport, canvas));
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_pre_viewport_client_draw: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_pre_viewport_client_draw");
+        }
+    });
 }
 
 void ScriptContext::on_post_viewport_client_draw(UEVR_UGameViewportClientHandle viewport_client, UEVR_FViewportHandle viewport, UEVR_FCanvasHandle canvas) {
-    std::scoped_lock _{ g_script_context->m_mtx };
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
 
-    for (auto& fn : g_script_context->m_on_post_viewport_client_draw_callbacks) try {
-        g_script_context->handle_protected_result(fn(viewport_client, viewport, canvas));
-    } catch (const std::exception& e) {
-        ScriptContext::log("Exception in on_post_viewport_client_draw: " + std::string(e.what()));
-    } catch (...) {
-        ScriptContext::log("Unknown exception in on_post_viewport_client_draw");
-    }
+        for (auto& fn : ctx->m_on_post_viewport_client_draw_callbacks) try {
+            ctx->handle_protected_result(fn(viewport_client, viewport, canvas));
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_post_viewport_client_draw: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_post_viewport_client_draw");
+        }
+    });
+}
+
+void ScriptContext::on_frame() {
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
+
+        for (auto& fn : ctx->m_on_frame_callbacks) try {
+            ctx->handle_protected_result(fn());
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_frame: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_frame");
+        }
+    });
+}
+
+void ScriptContext::on_draw_ui() {
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
+
+        for (auto& fn : ctx->m_on_draw_ui_callbacks) try {
+            ctx->handle_protected_result(fn());
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_draw_ui: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_draw_ui");
+        }
+    });
+}
+
+void ScriptContext::on_script_reset() {
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
+
+        for (auto& fn : ctx->m_on_script_reset_callbacks) try {
+            ctx->handle_protected_result(fn());
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_script_reset: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_script_reset");
+        }
+    });
+}
 }

@@ -192,17 +192,27 @@ include-directories = ["dependencies/lua/src"]
 type = "interface"
 include-directories = ["dependencies/sol2/single/single/include"]
 
+[target.luavrlib]
+type = "static"
+compile-features = ["cxx_std_23"]
+compile-options = ["/bigobj", "/EHa", "/MP"]
+include-directories = ["include/", "lua-api/lib/include"]
+sources = ["lua-api/lib/**.cpp", "lua-api/lib/**.c"]
+headers = ["lua-api/lib/**.hpp", "lua-api/lib/**.h"]
+link-libraries = [
+    "lua",
+    "sol2",
+    "kananlib"
+]
+
 [target.LuaVR]
 type = "shared"
 compile-features = ["cxx_std_23"]
 compile-options = ["/bigobj", "/EHa", "/MP"]
 include-directories = ["include/"]
-sources = ["lua-api/**.cpp", "lua-api/**.c"]
-headers = ["lua-api/**.hpp", "lua-api/**.h"]
+sources = ["lua-api/Main.cpp"]
 link-libraries = [
-    "lua",
-    "sol2",
-    "kananlib"
+    "luavrlib"
 ]
 
 [target.LuaVR.properties]
@@ -241,7 +251,8 @@ link-libraries = [
     "DirectXTK",
     "DirectXTK12",
     "sdkgenny",
-    "asmjit"
+    "asmjit",
+    "luavrlib"
 ]
 
 [template.ue4template.properties]

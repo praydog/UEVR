@@ -5,6 +5,7 @@
 #include "mods/FrameworkConfig.hpp"
 #include "mods/VR.hpp"
 #include "mods/PluginLoader.hpp"
+#include "mods/LuaLoader.hpp"
 #include "mods/UObjectHook.hpp"
 #include "Mods.hpp"
 
@@ -14,6 +15,7 @@ Mods::Mods() {
     m_mods.emplace_back(UObjectHook::get());
 
     m_mods.emplace_back(PluginLoader::get());
+    m_mods.emplace_back(LuaLoader::get());
 }
 
 std::optional<std::string> Mods::on_initialize() const {

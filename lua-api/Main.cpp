@@ -1,24 +1,26 @@
 // Lua API to expose UEVR functionality to Lua scripts via UE4SS
 
 #include <windows.h>
-#include "ScriptContext.hpp"
+#include "lib/include/ScriptContext.hpp"
+
+std::shared_ptr<uevr::ScriptContext> g_script_context{};
 
 // Main exported function that takes in the lua_State*
 extern "C" __declspec(dllexport) int luaopen_LuaVR(lua_State* L) {
     luaL_checkversion(L);
 
-    ScriptContext::log("Initializing LuaVR...");
+    uevr::ScriptContext::log("Initializing LuaVR...");
 
-    auto script_context = ScriptContext::reinitialize(L);
+    g_script_context = uevr::ScriptContext::create(L);
 
-    if (!script_context->valid()) {
-        ScriptContext::log("LuaVR failed to initialize! Make sure to inject VR first!");
+    if (!g_script_context->valid()) {
+        uevr::ScriptContext::log("LuaVR failed to initialize! Make sure to inject VR first!");
         return 0;
     }
 
-    ScriptContext::log("LuaVR initialized!");
+    uevr::ScriptContext::log("LuaVR initialized!");
 
-    return script_context->setup_bindings();
+    return g_script_context->setup_bindings();
 }
 
 BOOL APIENTRY DllMain(HMODULE module, DWORD ul_reason_for_call, LPVOID reserved) {

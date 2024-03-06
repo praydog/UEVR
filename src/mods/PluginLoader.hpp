@@ -13,6 +13,8 @@ namespace uevr {
 extern UEVR_RendererData g_renderer_data;
 }
 
+extern "C" __declspec(dllexport) UEVR_PluginInitializeParam g_plugin_initialize_param;
+
 class PluginLoader : public Mod {
 public:
     static std::shared_ptr<PluginLoader>& get();
