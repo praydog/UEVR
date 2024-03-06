@@ -86,13 +86,13 @@ public:
     bool add_on_post_viewport_client_draw(UEVR_ViewportClient_DrawCb cb);
 
     bool remove_callback(void* cb) {
-        std::scoped_lock lock{m_api_cb_mtx};
+        std::unique_lock lock{m_api_cb_mtx};
 
         for (auto& pcb_list : m_plugin_callback_lists) {
             auto& cb_list = *pcb_list;
-            cb_list.erase(std::remove_if(cb_list.begin(), cb_list.end(), [cb](auto& cb_func) {
-                return cb_func == cb;
-            }));
+            std::erase_if(cb_list, [cb](auto& cb_func) {
+                return cb_func.target<void*>() == cb;
+            });
         }
 
         return true;
@@ -117,29 +117,31 @@ private:
     std::vector<PluginLoader::UEVR_ViewportClient_DrawCb> m_on_pre_viewport_client_draw_cbs{};
     std::vector<PluginLoader::UEVR_ViewportClient_DrawCb> m_on_post_viewport_client_draw_cbs{};
 
-    std::vector<std::vector<void*>*> m_plugin_callback_lists{
+    using generic_std_function = std::function<void()>;
+
+    std::vector<std::vector<generic_std_function>*> m_plugin_callback_lists{
         // Plugin
-        (std::vector<void*>*)&m_on_present_cbs,
-        (std::vector<void*>*)&m_on_device_reset_cbs,
+        (std::vector<generic_std_function>*)&m_on_present_cbs,
+        (std::vector<generic_std_function>*)&m_on_device_reset_cbs,
 
         // VR Renderer
-        (std::vector<void*>*)&m_on_post_render_vr_framework_dx11_cbs,
-        (std::vector<void*>*)&m_on_post_render_vr_framework_dx12_cbs,
+        (std::vector<generic_std_function>*)&m_on_post_render_vr_framework_dx11_cbs,
+        (std::vector<generic_std_function>*)&m_on_post_render_vr_framework_dx12_cbs,
 
         // Windows CBs
-        (std::vector<void*>*)&m_on_message_cbs,
-        (std::vector<void*>*)&m_on_xinput_get_state_cbs,
-        (std::vector<void*>*)&m_on_xinput_set_state_cbs,
+        (std::vector<generic_std_function>*)&m_on_message_cbs,
+        (std::vector<generic_std_function>*)&m_on_xinput_get_state_cbs,
+        (std::vector<generic_std_function>*)&m_on_xinput_set_state_cbs,
 
         // SDK
-        (std::vector<void*>*)&m_on_pre_engine_tick_cbs,
-        (std::vector<void*>*)&m_on_post_engine_tick_cbs,
-        (std::vector<void*>*)&m_on_pre_slate_draw_window_render_thread_cbs,
-        (std::vector<void*>*)&m_on_post_slate_draw_window_render_thread_cbs,
-        (std::vector<void*>*)&m_on_pre_calculate_stereo_view_offset_cbs,
-        (std::vector<void*>*)&m_on_post_calculate_stereo_view_offset_cbs,
-        (std::vector<void*>*)&m_on_pre_viewport_client_draw_cbs,
-        (std::vector<void*>*)&m_on_post_viewport_client_draw_cbs
+        (std::vector<generic_std_function>*)&m_on_pre_engine_tick_cbs,
+        (std::vector<generic_std_function>*)&m_on_post_engine_tick_cbs,
+        (std::vector<generic_std_function>*)&m_on_pre_slate_draw_window_render_thread_cbs,
+        (std::vector<generic_std_function>*)&m_on_post_slate_draw_window_render_thread_cbs,
+        (std::vector<generic_std_function>*)&m_on_pre_calculate_stereo_view_offset_cbs,
+        (std::vector<generic_std_function>*)&m_on_post_calculate_stereo_view_offset_cbs,
+        (std::vector<generic_std_function>*)&m_on_pre_viewport_client_draw_cbs,
+        (std::vector<generic_std_function>*)&m_on_post_viewport_client_draw_cbs
     };
 
 private:
