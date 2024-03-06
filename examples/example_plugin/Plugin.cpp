@@ -285,6 +285,17 @@ public:
 
         API::get()->log_info("Engine name: %s", uengine_name_narrow.c_str());
 
+        // Test if we can dcast to UObject.
+        {
+            const auto engine_as_object = engine->dcast<API::UObject>();
+
+            if (engine != nullptr) {
+                API::get()->log_info("Engine successfully dcast to UObject");
+            } else {
+                API::get()->log_error("Failed to dcast Engine to UObject");
+            }
+        }
+
         // Go through all of engine's fields and log their names.
         const auto engine_class_ours = (API::UStruct*)engine->get_class();
         for (auto super = engine_class_ours; super != nullptr; super = super->get_super()) {

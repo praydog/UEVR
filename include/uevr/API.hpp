@@ -137,6 +137,20 @@ public:
     template<typename T>
     struct TArray;
 
+    // dynamic_cast variant
+    template<typename T>
+    static T* dcast(UObject* obj) {
+        if (obj == nullptr) {
+            return nullptr;
+        }
+
+        if (obj->is_a(T::static_class())) {
+            return static_cast<T*>(obj);
+        }
+
+        return nullptr;
+    }
+
     template<typename T = UObject>
     T* find_uobject(std::wstring_view name) {
         static const auto fn = sdk()->uobject_array->find_uobject;
@@ -333,6 +347,16 @@ public:
             }
 
             return c->get_fname()->to_string() + L' ' + obj_name;
+        }
+
+        // dynamic_cast variant
+        template<typename T>
+        T* dcast() {
+            if (this->is_a(T::static_class())) {
+                return static_cast<T*>(this);
+            }
+
+            return nullptr;
         }
 
     private:
