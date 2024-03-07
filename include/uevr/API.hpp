@@ -328,6 +328,16 @@ public:
             return *get_property_data<T>(name);
         }
 
+        bool get_bool_property(std::wstring_view name) const {
+            static const auto fn = initialize()->get_bool_property;
+            return fn(to_handle(), name.data());
+        }
+
+        void set_bool_property(std::wstring_view name, bool value) {
+            static const auto fn = initialize()->set_bool_property;
+            fn(to_handle(), name.data(), value);
+        }
+
         FName* get_fname() const {
             static const auto fn = initialize()->get_fname;
             return (FName*)fn(to_handle());
