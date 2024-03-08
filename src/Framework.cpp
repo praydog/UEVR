@@ -1996,6 +1996,14 @@ bool Framework::init_d3d12() {
 }
 
 void Framework::deinit_d3d12() {
+    for (auto& ctx : m_d3d12.cmd_ctxs) {
+        if (ctx != nullptr) {
+            ctx->reset();
+        }
+    }
+
+    m_d3d12.cmd_ctxs.clear();
+
     for (auto userdata : m_d3d12.imgui_backend_datas) {
         if (userdata != nullptr) {
             ImGui::GetIO().BackendRendererUserData = userdata;
