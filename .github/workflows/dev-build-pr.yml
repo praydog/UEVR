@@ -25,9 +25,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
+          ref: "refs/pull/${{ github.event.number }}/merge"
           token: ${{ secrets.UESDK_PULLER || github.token }}
           submodules: recursive
+          persist-credentials: false
 
+      # Important security check: https://github.com/actions/checkout/issues/518
+      - name: Sanity check
+        run: |
+          [[ "$(git rev-parse 'HEAD^')" == "${{ github.event.pull_request.head.sha }}" ]]
+      
       - name: Configure CMake
         run: cmake -S ${{github.workspace}} -B ${{github.workspace}}/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 

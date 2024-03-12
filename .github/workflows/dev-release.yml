@@ -14,6 +14,7 @@ jobs:
         with:
           token: ${{ secrets.UESDK_PULLER }}
           submodules: recursive
+          persist-credentials: false
 
       - name: Configure CMake
         run: cmake -S ${{github.workspace}} -B ${{github.workspace}}/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
@@ -29,6 +30,7 @@ jobs:
         with:
           repository: praydog/uevr-frontend
           path: frontend
+          persist-credentials: false
 
       - name: Set up dotnet
         uses: actions/setup-dotnet@v1
