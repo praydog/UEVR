@@ -32,9 +32,14 @@ jobs:
 
       # Important security check: https://github.com/actions/checkout/issues/518
       - name: Sanity check
+        if : ${{ github.event_name == 'pull_request_target' }}
+        shell: pwsh
         run: |
-          [[ "$(git rev-parse 'HEAD^')" == "${{ github.event.pull_request.head.sha }}" ]]
-      
+          $previous_commit = git rev-parse 'HEAD^'
+          if ($previous_commit -ne "${{ github.event.pull_request.head.sha }}") {
+            throw "The pull request head commit has changed since the event was triggered."
+          }
+
       - name: Configure CMake
         run: cmake -S ${{github.workspace}} -B ${{github.workspace}}/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
