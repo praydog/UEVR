@@ -35,8 +35,9 @@ jobs:
         if : ${{ github.event_name == 'pull_request_target' }}
         shell: pwsh
         run: |
-          $commits = git log -n 2 --pretty=format:%H
+          $commits = git log -n 4 --pretty=format:%H
           $previous_commit = $commits[1]
+          echo $commits
           if ($previous_commit -ne "${{ github.event.pull_request.head.sha }}") {
             throw "The pull request head commit has changed since the event was triggered."
           }
