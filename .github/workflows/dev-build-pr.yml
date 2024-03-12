@@ -1,10 +1,23 @@
 name: Dev Build PR
-on: [pull_request, workflow_dispatch]
+on: [pull_request_target, workflow_dispatch]
 env:
   BUILD_TYPE: Release
+permissions:
+  contents: read
+  pull-requests: read
 jobs:
   dev-release:
     runs-on: windows-latest
+
+    # Minimal permissions for this pull_request_target action
+    # Because we only need to read the repository contents
+    # By default, pull_request_target grants read/write permissions (not good)
+    # But it also passes along repository secrets, which we need
+    # unlike pull_request, which does not pass secrets
+    permissions:
+      contents: read
+      pull-requests: read
+
     strategy:
       matrix:
         target: [uevr]
