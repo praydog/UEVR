@@ -1274,20 +1274,22 @@ void PluginLoader::early_init() try {
     spdlog::info("[PluginLoader] Loading plugins...");
 
     // Load all dlls in the global UEVR\plugins directory
-    for (auto&& entry : fs::directory_iterator{global_plugins_path}) {
-        auto&& path = entry.path();
+    if (fs::exists(global_plugins_path) && fs::is_directory(global_plugins_path)) {
+        for (auto&& entry : fs::directory_iterator{global_plugins_path}) {
+            auto&& path = entry.path();
 
-        if (path.has_extension() && path.extension() == ".dll") {
-            auto module = LoadLibrary(path.string().c_str());
+            if (path.has_extension() && path.extension() == ".dll") {
+                auto module = LoadLibrary(path.string().c_str());
 
-            if (module == nullptr) {
-                spdlog::error("[PluginLoader] Failed to load {}", path.string());
-                m_plugin_load_errors.emplace(path.stem().string(), "Failed to load");
-                continue;
+                if (module == nullptr) {
+                    spdlog::error("[PluginLoader] Failed to load {}", path.string());
+                    m_plugin_load_errors.emplace(path.stem().string(), "Failed to load");
+                    continue;
+                }
+
+                spdlog::info("[PluginLoader] Loaded {}", path.string());
+                m_plugins.emplace(path.stem().string(), module);
             }
-
-            spdlog::info("[PluginLoader] Loaded {}", path.string());
-            m_plugins.emplace(path.stem().string(), module);
         }
     }
     
