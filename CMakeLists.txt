@@ -695,7 +695,6 @@ list(APPEND uevr_SOURCES
 	"src/uevr-imgui/imgui_impl_dx12.cpp"
 	"src/uevr-imgui/imgui_impl_win32.cpp"
 	"src/utility/ImGui.cpp"
-	"src/CommitHash.hpp"
 	"src/ExceptionHandler.hpp"
 	"src/Framework.hpp"
 	"src/LicenseStrings.hpp"
