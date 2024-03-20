@@ -118,7 +118,13 @@ bool D3D12::initialize() {
     return true;
 }
 
-void D3D12::render_imgui() {        
+void D3D12::render_imgui() {
+    auto draw_data = ImGui::GetDrawData();
+
+    if (draw_data == nullptr) {
+        return;
+    }
+
     auto& cmd = this->cmds[this->frame_count++ % this->cmds.size()];
 
     if (cmd.fence_event != nullptr && cmd.fence != nullptr && cmd.fence->GetCompletedValue() < cmd.fence_value) {
@@ -166,7 +172,7 @@ void D3D12::render_imgui() {
     rts[0] = this->get_cpu_rtv(device, (D3D12::RTV)bb_index);
     cmd.list->OMSetRenderTargets(1, rts, FALSE, NULL);
     cmd.list->SetDescriptorHeaps(1, this->srv_desc_heap.GetAddressOf());
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmd.list.Get());
+    ImGui_ImplDX12_RenderDrawData(draw_data, cmd.list.Get());
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
     cmd.list->ResourceBarrier(1, &barrier);

@@ -118,6 +118,8 @@ public:
     struct UStruct;
     struct UClass;
     struct UFunction;
+    struct UScriptStruct;
+    struct UStructOps;
     struct FField;
     struct FProperty;
     struct FFieldClass;
@@ -134,6 +136,20 @@ public:
 
     template<typename T>
     struct TArray;
+
+    // dynamic_cast variant
+    template<typename T>
+    static T* dcast(UObject* obj) {
+        if (obj == nullptr) {
+            return nullptr;
+        }
+
+        if (obj->is_a(T::static_class())) {
+            return static_cast<T*>(obj);
+        }
+
+        return nullptr;
+    }
 
     template<typename T = UObject>
     T* find_uobject(std::wstring_view name) {
@@ -258,7 +274,7 @@ public:
             return s_functions;
         }
     };
-
+    
     struct UObject {
         inline UEVR_UObjectHandle to_handle() { return (UEVR_UObjectHandle)this; }
         inline UEVR_UObjectHandle to_handle() const { return (UEVR_UObjectHandle)this; }
@@ -312,6 +328,16 @@ public:
             return *get_property_data<T>(name);
         }
 
+        bool get_bool_property(std::wstring_view name) const {
+            static const auto fn = initialize()->get_bool_property;
+            return fn(to_handle(), name.data());
+        }
+
+        void set_bool_property(std::wstring_view name, bool value) {
+            static const auto fn = initialize()->set_bool_property;
+            fn(to_handle(), name.data(), value);
+        }
+
         FName* get_fname() const {
             static const auto fn = initialize()->get_fname;
             return (FName*)fn(to_handle());
@@ -331,6 +357,16 @@ public:
             }
 
             return c->get_fname()->to_string() + L' ' + obj_name;
+        }
+
+        // dynamic_cast variant
+        template<typename T>
+        T* dcast() {
+            if (this->is_a(T::static_class())) {
+                return static_cast<T*>(this);
+            }
+
+            return nullptr;
         }
 
     private:
@@ -471,6 +507,43 @@ public:
         inline static const UEVR_UFunctionFunctions* initialize() {
             if (s_functions == nullptr) {
                 s_functions = API::get()->sdk()->ufunction;
+            }
+
+            return s_functions;
+        }
+    };
+
+    struct UScriptStruct : public UStruct {
+        inline UEVR_UScriptStructHandle to_handle() { return (UEVR_UScriptStructHandle)this; }
+        inline UEVR_UScriptStructHandle to_handle() const { return (UEVR_UScriptStructHandle)this; }
+
+        static UClass* static_class() {
+            static auto result = API::get()->find_uobject<UClass>(L"Class /Script/CoreUObject.ScriptStruct");
+            return result;
+        }
+
+        struct StructOps {
+            virtual ~StructOps() {};
+
+            int32_t size;
+            int32_t alignment;
+        };
+
+        StructOps* get_struct_ops() const {
+            static const auto fn = initialize()->get_struct_ops;
+            return (StructOps*)fn(to_handle());
+        }
+
+        int32_t get_struct_size() const {
+            static const auto fn = initialize()->get_struct_size;
+            return fn(to_handle());
+        }
+
+    private:
+        static inline const UEVR_UScriptStructFunctions* s_functions{nullptr};
+        inline static const UEVR_UScriptStructFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->uscriptstruct;
             }
 
             return s_functions;
@@ -694,8 +767,70 @@ public:
     };
 
     struct FUObjectArray {
+        inline UEVR_UObjectArrayHandle to_handle() { return (UEVR_UObjectArrayHandle)this; }
+        inline UEVR_UObjectArrayHandle to_handle() const { return (UEVR_UObjectArrayHandle)this; }
+
         static FUObjectArray* get() {
             return API::get()->get_uobject_array();
+        }
+
+        static bool is_chunked() {
+            static const auto fn = initialize()->is_chunked;
+            return fn();
+        }
+
+        static bool is_inlined() {
+            static const auto fn = initialize()->is_inlined;
+            return fn();
+        }
+
+        static size_t get_objects_offset() {
+            static const auto fn = initialize()->get_objects_offset;
+            return (size_t)fn();
+        }
+
+        static size_t get_item_distance() {
+            static const auto fn = initialize()->get_item_distance;
+            return (size_t)fn();
+        }
+
+        int32_t get_object_count() const {
+            static const auto fn = initialize()->get_object_count;
+            return fn(to_handle());
+        }
+
+        void* get_objects_ptr() const {
+            static const auto fn = initialize()->get_objects_ptr;
+            return fn(to_handle());
+        }
+
+        UObject* get_object(int32_t index) const {
+            static const auto fn = initialize()->get_object;
+            return (UObject*)fn(to_handle(), index);
+        }
+
+        // Generally the same structure most of the time, not too much to worry about
+        // Not that this would generally be used raw - instead prefer get_object
+        struct FUObjectItem {
+            API::UObject* object;
+            int32_t flags;
+            int32_t cluster_index;
+            int32_t serial_number;
+        };
+
+        FUObjectItem* get_item(int32_t index) const {
+            static const auto fn = initialize()->get_item;
+            return (FUObjectItem*)fn(to_handle(), index);
+        }
+
+    private:
+        static inline const UEVR_UObjectArrayFunctions* s_functions{nullptr};
+        static inline const UEVR_UObjectArrayFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->uobject_array;
+            }
+
+            return s_functions;
         }
     };
 

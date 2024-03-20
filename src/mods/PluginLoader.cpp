@@ -25,6 +25,8 @@
 #include "pluginloader/FFakeStereoRenderingFunctions.hpp"
 #include "pluginloader/FRenderTargetPoolHook.hpp"
 #include "pluginloader/FRHITexture2DFunctions.hpp"
+#include "pluginloader/FUObjectArrayFunctions.hpp"
+#include "pluginloader/UScriptStructFunctions.hpp"
 
 #include "UObjectHook.hpp"
 #include "VR.hpp"
@@ -366,12 +368,13 @@ UEVR_UObjectFunctions g_uobject_functions {
     [](UEVR_UObjectHandle obj) {
         return (UEVR_FNameHandle)&UOBJECT(obj)->get_fname();
     },
-};
-
-UEVR_UObjectArrayFunctions g_uobject_array_functions {
-    // find_uobject
-    [](const wchar_t* name) {
-        return (UEVR_UObjectHandle)sdk::find_uobject(name);
+    // get_bool_property
+    [](UEVR_UObjectHandle obj, const wchar_t* name) {
+        return UOBJECT(obj)->get_bool_property(name);
+    },
+    // set_bool_property
+    [](UEVR_UObjectHandle obj, const wchar_t* name, bool value) {
+        UOBJECT(obj)->set_bool_property(name, value);
     },
 };
 
@@ -769,7 +772,7 @@ UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
     &g_uobject_functions,
-    &g_uobject_array_functions,
+    &uevr::fuobjectarray::functions,
     &g_ffield_functions,
     &g_fproperty_functions,
     &g_ustruct_functions,
@@ -782,7 +785,8 @@ UEVR_SDKData g_sdk_data {
     &g_malloc_functions,
     &uevr::render_target_pool_hook::functions,
     &uevr::stereo_hook::functions,
-    &uevr::frhitexture2d::functions
+    &uevr::frhitexture2d::functions,
+    &uevr::uscriptstruct::functions
 };
 
 namespace uevr {
@@ -1257,7 +1261,8 @@ void PluginLoader::early_init() try {
     spdlog::info("[PluginLoader] Module path {}", utility::narrow(module_path));
 
     const auto plugin_path = Framework::get_persistent_dir() / "plugins";
-
+    const auto global_plugins_path = Framework::get_persistent_dir() / ".." / "UEVR" / "plugins";
+    
     spdlog::info("[PluginLoader] Creating directories {}", plugin_path.string());
 
     if (!fs::create_directories(plugin_path) && !fs::exists(plugin_path)) {
@@ -1268,23 +1273,31 @@ void PluginLoader::early_init() try {
 
     spdlog::info("[PluginLoader] Loading plugins...");
 
-    // Load all dlls in the plugins directory.
-    for (auto&& entry : fs::directory_iterator{plugin_path}) {
-        auto&& path = entry.path();
-
-        if (path.has_extension() && path.extension() == ".dll") {
-            auto module = LoadLibrary(path.string().c_str());
-
-            if (module == nullptr) {
-                spdlog::error("[PluginLoader] Failed to load {}", path.string());
-                m_plugin_load_errors.emplace(path.stem().string(), "Failed to load");
-                continue;
-            }
-
-            spdlog::info("[PluginLoader] Loaded {}", path.string());
-            m_plugins.emplace(path.stem().string(), module);
+    auto load_plugins_from_dir = [this](std::filesystem::path path) {
+        if (!fs::exists(path) || !fs::is_directory(path)) {
+            return;
         }
-    }
+
+        for (auto&& entry : fs::directory_iterator{path}) {
+            auto&& path = entry.path();
+
+            if (path.has_extension() && path.extension() == ".dll") {
+                auto module = LoadLibrary(path.string().c_str());
+
+                if (module == nullptr) {
+                    spdlog::error("[PluginLoader] Failed to load {}", path.string());
+                    m_plugin_load_errors.emplace(path.stem().string(), "Failed to load");
+                    continue;
+                }
+
+                spdlog::info("[PluginLoader] Loaded {}", path.string());
+                m_plugins.emplace(path.stem().string(), module);
+            }
+        }
+    };
+
+    load_plugins_from_dir(global_plugins_path);
+    load_plugins_from_dir(plugin_path);
 } catch(const std::exception& e) {
     spdlog::error("[PluginLoader] Exception during early init {}", e.what());
 } catch(...) {

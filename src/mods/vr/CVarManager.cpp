@@ -20,6 +20,7 @@
 
 constexpr std::string_view cvars_standard_txt_name = "cvars_standard.txt";
 constexpr std::string_view cvars_data_txt_name = "cvars_data.txt";
+constexpr std::string_view user_script_txt_name = "user_script.txt";
 
 CVarManager::CVarManager() {
     ZoneScopedN(__FUNCTION__);
@@ -84,6 +85,11 @@ void CVarManager::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     for (auto& cvar : m_all_cvars) {
         cvar->update();
         cvar->freeze();
+    }
+
+    if (m_should_execute_console_script) {
+        execute_console_script(engine, user_script_txt_name.data());
+        m_should_execute_console_script = false;
     }
 }
 
@@ -168,6 +174,11 @@ void CVarManager::on_config_load(const utility::Config& cfg, bool set_defaults) 
     }
 
     // TODO: Add arbitrary cvars from the other configs the user can add.
+
+    // calling UEngine::exec here causes a crash, defer to on_pre_engine_tick()
+    if (!set_defaults) {
+        m_should_execute_console_script = true;
+    }
 }
 
 void CVarManager::dump_commands() {
@@ -356,6 +367,15 @@ void CVarManager::display_console() {
 
                         GameThreadWorker::get().enqueue([command, widened_args]() {
                             command->Execute(widened_args);
+                        });
+                    } else if (object == nullptr) {
+                        // Try UEngine::Exec
+                        std::string entire_command_str{entire_command.data()};
+                        GameThreadWorker::get().enqueue([entire_command_str]() {
+                            auto engine = sdk::UGameEngine::get();
+                            if (engine != nullptr) {
+                                engine->exec(utility::widen(entire_command_str).data());
+                            }
                         });
                     }
                 }
@@ -758,4 +778,66 @@ void CVarManager::CVarData::draw_ui() try {
     }
 } catch (...) {
     ImGui::TextWrapped("Failed to read cvar data: %s", utility::narrow(m_name).c_str());
+}
+
+static inline void trim(std::string &s) {
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
+        return !std::isspace(ch);
+    }));
+
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
+        return !std::isspace(ch);
+    }).base(), s.end());
+}
+
+void CVarManager::execute_console_script(sdk::UGameEngine* engine, const std::string& filename) {
+    ZoneScopedN(__FUNCTION__);
+
+    if (engine == nullptr) {
+        spdlog::error("[execute_console_script] engine is null");
+        return;
+    }
+
+    spdlog::info("[execute_console_script] Loading {}...", filename);
+
+    const auto cscript_txt = Framework::get_persistent_dir(filename);
+
+    if (!std::filesystem::exists(cscript_txt)) {
+        return;
+    }
+
+    std::ifstream cscript_file(utility::widen(cscript_txt.string()));
+
+    if (!cscript_file) {
+        spdlog::error("[execute_console_script] Failed to open file {}...", filename);
+        return;
+    }
+
+    for (std::string line{}; getline(cscript_file, line); ) {
+        trim(line);
+
+        // handle comments
+        if (line.starts_with('#') || line.starts_with(';')) {
+            continue;
+        }
+
+        if (line.contains('#')) {
+            line = line.substr(0, line.find_first_of('#'));
+            trim(line);
+        }
+
+        if (line.contains(';')) {
+            line = line.substr(0, line.find_first_of(';'));
+            trim(line);
+        }
+
+        if (line.length() == 0) {
+            continue;
+        }
+
+        spdlog::debug("[execute_console_script] Attempting to execute \"{}\"", line);
+        engine->exec(utility::widen(line));
+    }
+
+    spdlog::debug("[execute_console_script] done");
 }

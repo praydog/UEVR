@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 15
+#define UEVR_PLUGIN_VERSION_MINOR 17
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -75,6 +75,7 @@ DECLARE_UEVR_HANDLE(UEVR_IConsoleVariableHandle);
 DECLARE_UEVR_HANDLE(UEVR_TArrayHandle);
 DECLARE_UEVR_HANDLE(UEVR_FMallocHandle);
 DECLARE_UEVR_HANDLE(UEVR_FRHITexture2DHandle);
+DECLARE_UEVR_HANDLE(UEVR_UScriptStructHandle);
 
 /* OpenXR stuff */
 DECLARE_UEVR_HANDLE(UEVR_XrInstance);
@@ -257,8 +258,20 @@ typedef struct {
     void (*command_execute)(UEVR_IConsoleCommandHandle cmd, const wchar_t* args);
 } UEVR_ConsoleFunctions;
 
+DECLARE_UEVR_HANDLE(UEVR_FUObjectItemHandle);
+
 typedef struct {
     UEVR_UObjectHandle (*find_uobject)(const wchar_t* name);
+
+    bool (*is_chunked)();
+    bool (*is_inlined)();
+    unsigned int (*get_objects_offset)();
+    unsigned int (*get_item_distance)();
+
+    int (*get_object_count)(UEVR_UObjectArrayHandle array);
+    void* (*get_objects_ptr)(UEVR_UObjectArrayHandle array);
+    UEVR_UObjectHandle (*get_object)(UEVR_UObjectArrayHandle array, int index);
+    UEVR_FUObjectItemHandle (*get_item)(UEVR_UObjectArrayHandle array, int index);
 } UEVR_UObjectArrayFunctions;
 
 typedef struct {
@@ -297,6 +310,9 @@ typedef struct {
     void (*call_function)(UEVR_UObjectHandle object, const wchar_t* name, void* params);
 
     UEVR_FNameHandle (*get_fname)(UEVR_UObjectHandle object);
+
+    bool (*get_bool_property)(UEVR_UObjectHandle object, const wchar_t* name);
+    void (*set_bool_property)(UEVR_UObjectHandle object, const wchar_t* name, bool value);
 } UEVR_UObjectFunctions;
 
 DECLARE_UEVR_HANDLE(UEVR_UObjectHookMotionControllerStateHandle);
@@ -359,6 +375,13 @@ typedef struct {
     void* (*get_native_resource)(UEVR_FRHITexture2DHandle texture);
 } UEVR_FRHITexture2DFunctions;
 
+DECLARE_UEVR_HANDLE(UEVR_StructOpsHandle);
+
+typedef struct {
+    UEVR_StructOpsHandle (*get_struct_ops)(UEVR_UScriptStructHandle script_struct);
+    int (*get_struct_size)(UEVR_UScriptStructHandle script_struct);
+} UEVR_UScriptStructFunctions;
+
 typedef struct {
     const UEVR_SDKFunctions* functions;
     const UEVR_SDKCallbacks* callbacks;
@@ -377,6 +400,7 @@ typedef struct {
     const UEVR_FRenderTargetPoolHookFunctions* render_target_pool_hook;
     const UEVR_FFakeStereoRenderingHookFunctions* stereo_hook;
     const UEVR_FRHITexture2DFunctions* frhitexture2d;
+    const UEVR_UScriptStructFunctions* uscriptstruct;
 } UEVR_SDKData;
 
 DECLARE_UEVR_HANDLE(UEVR_IVRSystem);

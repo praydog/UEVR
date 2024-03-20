@@ -1,10 +1,23 @@
 name: Dev Build PR
-on: [pull_request, workflow_dispatch]
+on: [pull_request_target, workflow_dispatch]
 env:
   BUILD_TYPE: Release
+permissions:
+  contents: read
+  pull-requests: read
 jobs:
   dev-release:
     runs-on: windows-latest
+
+    # Minimal permissions for this pull_request_target action
+    # Because we only need to read the repository contents
+    # By default, pull_request_target grants read/write permissions (not good)
+    # But it also passes along repository secrets, which we need
+    # unlike pull_request, which does not pass secrets
+    permissions:
+      contents: read
+      pull-requests: read
+
     strategy:
       matrix:
         target: [uevr]
@@ -12,8 +25,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
-          token: ${{ secrets.UESDK_PULLER }}
+          ref: "refs/pull/${{ github.event.number }}/merge"
+          token: ${{ secrets.UESDK_PULLER || github.token }}
           submodules: recursive
+          persist-credentials: false
+          fetch-depth: 4
+
+      # Important security check: https://github.com/actions/checkout/issues/518
+      - name: Sanity check
+        if : ${{ github.event_name == 'pull_request_target' }}
+        shell: pwsh
+        run: |
+          $commits = git log -n 4 --pretty=format:%H
+          $previous_commit = $commits[1]
+          echo $commits
+          if ($previous_commit -ne "${{ github.event.pull_request.head.sha }}") {
+            throw "The pull request head commit has changed since the event was triggered."
+          }
 
       - name: Configure CMake
         run: cmake -S ${{github.workspace}} -B ${{github.workspace}}/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}

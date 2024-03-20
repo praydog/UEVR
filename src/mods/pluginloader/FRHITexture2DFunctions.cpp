@@ -15,7 +15,7 @@ void* get_native_resource(UEVR_FRHITexture2DHandle handle) {
 }
 
 UEVR_FRHITexture2DFunctions functions {
-    &uevr::frhitexture2d::get_native_resource
+    .get_native_resource = &uevr::frhitexture2d::get_native_resource
 };
 }
 }

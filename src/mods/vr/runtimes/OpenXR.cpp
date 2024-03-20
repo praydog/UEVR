@@ -1053,12 +1053,19 @@ std::optional<std::string> OpenXR::initialize_actions(const std::string& json_st
             }
         }
 
-        auto filename = controller + ".json";
+        auto profile_file = controller + ".json";
 
         // replace the slashes with underscores
-        std::replace(filename.begin(), filename.end(), '/', '_');
+        std::replace(profile_file.begin(), profile_file.end(), '/', '_');
 
-        filename = (Framework::get_persistent_dir() / filename).string();
+        // If the json exists in the game's profile dir, use that.    
+        auto filename = (Framework::get_persistent_dir() / profile_file).string();
+
+        // If not, check for global profile in UEVR\Profiles dir
+        if (!std::filesystem::exists(filename)) {
+            filename = (Framework::get_persistent_dir() / ".." / "UEVR" / "Profiles" / profile_file).string();
+            spdlog::info("[VR] Setting bindings file to {}", filename);
+        }
 
         // check if the file exists
         if (std::filesystem::exists(filename)) {

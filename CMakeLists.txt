@@ -30,6 +30,12 @@ endif()
  
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
 
+# Enable PDB generation in release mode, but without the extra crap that RelWithDebInfo adds
+add_compile_options("$<$<CONFIG:Release>:/Zi>")
+add_link_options("$<$<CONFIG:Release>:/DEBUG>")
+add_link_options("$<$<CONFIG:Release>:/OPT:REF>")
+add_link_options("$<$<CONFIG:Release>:/OPT:ICF>")
+
 project(uevr-proj)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
@@ -65,12 +71,12 @@ FetchContent_Declare(bddisasm
 )
 FetchContent_MakeAvailable(bddisasm)
 
-message(STATUS "Fetching kananlib (7aa1816f416d605189d9e3bb6a3c8819eb80ef01)...")
+message(STATUS "Fetching kananlib (d34dd2130c9fb47b1cd5bd456ab72707e34d33bf)...")
 FetchContent_Declare(kananlib
 	GIT_REPOSITORY
 		"https://github.com/cursey/kananlib"
 	GIT_TAG
-		7aa1816f416d605189d9e3bb6a3c8819eb80ef01
+		d34dd2130c9fb47b1cd5bd456ab72707e34d33bf
 )
 FetchContent_MakeAvailable(kananlib)
 
@@ -669,6 +675,8 @@ list(APPEND uevr_SOURCES
 	"src/mods/pluginloader/FFakeStereoRenderingFunctions.cpp"
 	"src/mods/pluginloader/FRHITexture2DFunctions.cpp"
 	"src/mods/pluginloader/FRenderTargetPoolHook.cpp"
+	"src/mods/pluginloader/FUObjectArrayFunctions.cpp"
+	"src/mods/pluginloader/UScriptStructFunctions.cpp"
 	"src/mods/uobjecthook/SDKDumper.cpp"
 	"src/mods/vr/Bindings.cpp"
 	"src/mods/vr/CVarManager.cpp"
@@ -687,7 +695,6 @@ list(APPEND uevr_SOURCES
 	"src/uevr-imgui/imgui_impl_dx12.cpp"
 	"src/uevr-imgui/imgui_impl_win32.cpp"
 	"src/utility/ImGui.cpp"
-	"src/CommitHash.hpp"
 	"src/ExceptionHandler.hpp"
 	"src/Framework.hpp"
 	"src/LicenseStrings.hpp"
@@ -707,6 +714,8 @@ list(APPEND uevr_SOURCES
 	"src/mods/pluginloader/FFakeStereoRenderingFunctions.hpp"
 	"src/mods/pluginloader/FRHITexture2DFunctions.hpp"
 	"src/mods/pluginloader/FRenderTargetPoolHook.hpp"
+	"src/mods/pluginloader/FUObjectArrayFunctions.hpp"
+	"src/mods/pluginloader/UScriptStructFunctions.hpp"
 	"src/mods/uobjecthook/SDKDumper.hpp"
 	"src/mods/vr/CVarManager.hpp"
 	"src/mods/vr/D3D11Component.hpp"

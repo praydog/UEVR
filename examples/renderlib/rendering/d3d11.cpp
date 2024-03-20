@@ -59,6 +59,12 @@ bool D3D11::initialize() {
 }
 
 void D3D11::render_imgui() {
+    auto draw_data = ImGui::GetDrawData();
+
+    if (draw_data == nullptr) {
+        return;
+    }
+
     ComPtr<ID3D11DeviceContext> context{};
     float clear_color[]{0.0f, 0.0f, 0.0f, 0.0f};
 
@@ -67,14 +73,23 @@ void D3D11::render_imgui() {
     device->GetImmediateContext(&context);
     context->ClearRenderTargetView(this->rt_rtv.Get(), clear_color);
     context->OMSetRenderTargets(1, this->rt_rtv.GetAddressOf(), NULL);
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+    ImGui_ImplDX11_RenderDrawData(draw_data);
 
     // Set the back buffer to be the render target.
     context->OMSetRenderTargets(1, this->bb_rtv.GetAddressOf(), nullptr);
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+    ImGui_ImplDX11_RenderDrawData(draw_data);
 }
 
 void D3D11::render_imgui_vr(ID3D11DeviceContext* context, ID3D11RenderTargetView* rtv) {
+    if (context == nullptr || rtv == nullptr) {
+        return;
+    }
+
+    auto draw_data = ImGui::GetDrawData();
+    if (draw_data == nullptr) {
+        return;
+    }
+
     context->OMSetRenderTargets(1, &rtv, NULL);
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+    ImGui_ImplDX11_RenderDrawData(draw_data);
 }
