@@ -170,7 +170,7 @@ VRRuntime::Error OpenVR::consume_events(std::function<void(void*)> callback) {
             } break;
 
             default:
-                spdlog::info("VR: Unknown event: {}", (uint32_t)event.eventType);
+                // don't spam logs with SVR events that we won't handle here
                 break;
         }
     }
@@ -225,8 +225,9 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz) {
         }
         view_bounds[eye][0] = 0.5f + 0.5f * this->raw_projections[eye][0] / tan_half_fov[0];
         view_bounds[eye][1] = 0.5f - 0.5f * this->raw_projections[eye][1] / tan_half_fov[1];
-        view_bounds[eye][2] = 0.5f + 0.5f * this->raw_projections[eye][2] / tan_half_fov[2];
-        view_bounds[eye][3] = 0.5f - 0.5f * this->raw_projections[eye][3] / tan_half_fov[3];
+        // note the swapped up / down indices from the raw projection values:
+        view_bounds[eye][2] = 0.5f + 0.5f * this->raw_projections[eye][3] / tan_half_fov[3];
+        view_bounds[eye][3] = 0.5f - 0.5f * this->raw_projections[eye][2] / tan_half_fov[2];
 
         // if we've derived the right eye, we have up to date view bounds for both so adjust the render target if necessary
         if (eye == 1) {
