@@ -2384,7 +2384,9 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Controller")) {
             m_joystick_deadzone->draw("VR Joystick Deadzone");
-            m_controller_pitch_offset->draw("Controller Pitch Offset");
+
+            // JB: pitch offset is settable in the separate 'offsets' submenu
+            // m_controller_pitch_offset->draw("Controller Pitch Offset");
 
             m_dpad_shifting->draw("DPad Shifting");
             ImGui::SameLine();
@@ -2410,6 +2412,59 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
 
             m_aim_multiplayer_support->draw("Multiplayer Support");
 
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("Motion Controller Aim Offsets")) {
+            float left_controller_rotation_offset[] = {m_left_controller_rotation_offset_x->value(),
+                m_left_controller_rotation_offset_y->value(), m_left_controller_rotation_offset_z->value()};
+            if (ImGui::SliderFloat3("Left Rotation", left_controller_rotation_offset, -180.0f, 180.0f)) {
+                m_left_controller_rotation_offset_x->value() = left_controller_rotation_offset[0];
+                m_left_controller_rotation_offset_y->value() = left_controller_rotation_offset[1];
+                m_left_controller_rotation_offset_z->value() = left_controller_rotation_offset[2];
+            }
+            if (ImGui::Button("Reset Left Rotation")) {
+                m_left_controller_rotation_offset_x->value() = 0.0f;
+                m_left_controller_rotation_offset_y->value() = 0.0f;
+                m_left_controller_rotation_offset_z->value() = 0.0f;
+            }
+            float right_controller_rotation_offset[] = {m_right_controller_rotation_offset_x->value(),
+                m_right_controller_rotation_offset_y->value(), m_right_controller_rotation_offset_z->value()};
+            if (ImGui::SliderFloat3("Right Rotation", right_controller_rotation_offset, -180.0f, 180.0f)) {
+                m_right_controller_rotation_offset_x->value() = right_controller_rotation_offset[0];
+                m_right_controller_rotation_offset_y->value() = right_controller_rotation_offset[1];
+                m_right_controller_rotation_offset_z->value() = right_controller_rotation_offset[2];
+            }
+            if (ImGui::Button("Reset Right Rotation")) {
+                m_right_controller_rotation_offset_x->value() = 0.0f;
+                m_right_controller_rotation_offset_y->value() = 0.0f;
+                m_right_controller_rotation_offset_z->value() = 0.0f;
+            }
+            ImGui::NewLine();
+            float left_controller_position_offset[] = {m_left_controller_position_offset_x->value(),
+                m_left_controller_position_offset_y->value(), m_left_controller_position_offset_z->value()};
+            if (ImGui::SliderFloat3("Left Position", left_controller_position_offset, -1.0f, 1.0f)) {
+                m_left_controller_position_offset_x->value() = left_controller_position_offset[0];
+                m_left_controller_position_offset_y->value() = left_controller_position_offset[1];
+                m_left_controller_position_offset_z->value() = left_controller_position_offset[2];
+            }
+            if (ImGui::Button("Reset Left Position")) {
+                m_left_controller_position_offset_x->value() = 0.0f;
+                m_left_controller_position_offset_y->value() = 0.0f;
+                m_left_controller_position_offset_z->value() = 0.0f;
+            }
+            float right_controller_position_offset[] = {m_right_controller_position_offset_x->value(),
+                m_right_controller_position_offset_y->value(), m_right_controller_position_offset_z->value()};
+            if (ImGui::SliderFloat3("Right Position", right_controller_position_offset, -1.0f, 1.0f)) {
+                m_right_controller_position_offset_x->value() = right_controller_position_offset[0];
+                m_right_controller_position_offset_y->value() = right_controller_position_offset[1];
+                m_right_controller_position_offset_z->value() = right_controller_position_offset[2];
+            }
+            if (ImGui::Button("Reset Right Position")) {
+                m_right_controller_position_offset_x->value() = 0.0f;
+                m_right_controller_position_offset_y->value() = 0.0f;
+                m_right_controller_position_offset_z->value() = 0.0f;
+            }
             ImGui::TreePop();
         }
 
