@@ -570,6 +570,10 @@ public:
         return m_snapturn->value();
     }
 
+    void set_snapturn_enabled(bool value) {
+        m_snapturn->value() = value;
+    }
+
     float get_snapturn_js_deadzone() const {
         return m_snapturn_joystick_deadzone->value();
     }

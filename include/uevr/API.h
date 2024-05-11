@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 17
+#define UEVR_PLUGIN_VERSION_MINOR 18
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -517,6 +517,10 @@ typedef struct {
     unsigned int (*get_hmd_height)();
     unsigned int (*get_ui_width)();
     unsigned int (*get_ui_height)();
+
+    bool (*is_snap_turn_enabled)();
+    void (*set_snap_turn_enabled)(bool enabled);
+    void (*set_decoupled_pitch_enabled)(bool enabled);
 } UEVR_VRData;
 
 typedef struct {

@@ -1013,50 +1013,66 @@ unsigned int get_ui_width() {
 unsigned int get_ui_height() {
     return (unsigned int)g_framework->get_rt_size().y;
 }
+
+bool is_snap_turn_enabled() {
+    return VR::get()->is_snapturn_enabled();
+}
+
+void set_snap_turn_enabled(bool enabled) {
+    VR::get()->set_snapturn_enabled(enabled);
+}
+
+void set_decoupled_pitch_enabled(bool enabled) {
+    VR::get()->set_decoupled_pitch(enabled);
+}
 }
 }
 
 UEVR_VRData g_vr_data {
-    uevr::vr::is_runtime_ready,
-    uevr::vr::is_openvr,
-    uevr::vr::is_openxr,
-    uevr::vr::is_hmd_active,
-    uevr::vr::get_standing_origin,
-    uevr::vr::get_rotation_offset,
-    uevr::vr::set_standing_origin,
-    uevr::vr::set_rotation_offset,
-    uevr::vr::get_hmd_index,
-    uevr::vr::get_left_controller_index,
-    uevr::vr::get_right_controller_index,
-    uevr::vr::get_pose,
-    uevr::vr::get_transform,
-    uevr::vr::get_grip_pose,
-    uevr::vr::get_aim_pose,
-    uevr::vr::get_grip_transform,
-    uevr::vr::get_aim_transform,
-    uevr::vr::get_eye_offset,
-    uevr::vr::get_ue_projection_matrix,
-    uevr::vr::get_left_joystick_source,
-    uevr::vr::get_right_joystick_source,
-    uevr::vr::get_action_handle,
-    uevr::vr::is_action_active,
-    uevr::vr::is_action_active_any_joystick,
-    uevr::vr::get_joystick_axis,
-    uevr::vr::trigger_haptic_vibration,
-    uevr::vr::is_using_controllers,
-    uevr::vr::is_decoupled_pitch_enabled,
-    uevr::vr::get_movement_orientation,
-    uevr::vr::get_lowest_xinput_index,
-    uevr::vr::recenter_view,
-    uevr::vr::recenter_horizon,
-    uevr::vr::get_aim_method,
-    uevr::vr::set_aim_method,
-    uevr::vr::is_aim_allowed,
-    uevr::vr::set_aim_allowed,
-    uevr::vr::get_hmd_width,
-    uevr::vr::get_hmd_height,
-    uevr::vr::get_ui_width,
-    uevr::vr::get_ui_height
+    .is_runtime_ready =     uevr::vr::is_runtime_ready,
+    .is_openvr =     uevr::vr::is_openvr,
+    .is_openxr =     uevr::vr::is_openxr,
+    .is_hmd_active =     uevr::vr::is_hmd_active,
+    .get_standing_origin =     uevr::vr::get_standing_origin,
+    .get_rotation_offset =     uevr::vr::get_rotation_offset,
+    .set_standing_origin =     uevr::vr::set_standing_origin,
+    .set_rotation_offset =     uevr::vr::set_rotation_offset,
+    .get_hmd_index =     uevr::vr::get_hmd_index,
+    .get_left_controller_index =     uevr::vr::get_left_controller_index,
+    .get_right_controller_index =     uevr::vr::get_right_controller_index,
+    .get_pose =     uevr::vr::get_pose,
+    .get_transform =     uevr::vr::get_transform,
+    .get_grip_pose =     uevr::vr::get_grip_pose,
+    .get_aim_pose =     uevr::vr::get_aim_pose,
+    .get_grip_transform =     uevr::vr::get_grip_transform,
+    .get_aim_transform =     uevr::vr::get_aim_transform,
+    .get_eye_offset =     uevr::vr::get_eye_offset,
+    .get_ue_projection_matrix =     uevr::vr::get_ue_projection_matrix,
+    .get_left_joystick_source =     uevr::vr::get_left_joystick_source,
+    .get_right_joystick_source =     uevr::vr::get_right_joystick_source,
+    .get_action_handle =     uevr::vr::get_action_handle,
+    .is_action_active =     uevr::vr::is_action_active,
+    .is_action_active_any_joystick =     uevr::vr::is_action_active_any_joystick,
+    .get_joystick_axis =     uevr::vr::get_joystick_axis,
+    .trigger_haptic_vibration = uevr::vr::trigger_haptic_vibration,
+    .is_using_controllers = uevr::vr::is_using_controllers,
+    .is_decoupled_pitch_enabled = uevr::vr::is_decoupled_pitch_enabled,
+    .get_movement_orientation =     uevr::vr::get_movement_orientation,
+    .get_lowest_xinput_index =     uevr::vr::get_lowest_xinput_index,
+    .recenter_view =     uevr::vr::recenter_view,
+    .recenter_horizon =     uevr::vr::recenter_horizon,
+    .get_aim_method =     uevr::vr::get_aim_method,
+    .set_aim_method =     uevr::vr::set_aim_method,
+    .is_aim_allowed =     uevr::vr::is_aim_allowed,
+    .set_aim_allowed =     uevr::vr::set_aim_allowed,
+    .get_hmd_width =     uevr::vr::get_hmd_width,
+    .get_hmd_height =     uevr::vr::get_hmd_height,
+    .get_ui_width =     uevr::vr::get_ui_width,
+    .get_ui_height =     uevr::vr::get_ui_height,
+
+    .is_snap_turn_enabled = uevr::vr::is_snap_turn_enabled,
+    .set_snap_turn_enabled = uevr::vr::set_snap_turn_enabled,
+    .set_decoupled_pitch_enabled = uevr::vr::set_decoupled_pitch_enabled,
 };
 
 

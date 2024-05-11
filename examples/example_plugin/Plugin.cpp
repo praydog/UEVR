@@ -498,6 +498,15 @@ private:
     void internal_frame() {
         if (ImGui::Begin("Super Cool Plugin")) {
             ImGui::Text("Hello from the super cool plugin!");
+            ImGui::Text("Snap turn: %i", API::get()->param()->vr->is_snap_turn_enabled());
+            ImGui::Text("Decoupled pitch: %i", API::get()->param()->vr->is_decoupled_pitch_enabled());
+            if (ImGui::Button("Toggle snap turn")) {
+                API::get()->param()->vr->set_snap_turn_enabled(!API::get()->param()->vr->is_snap_turn_enabled());
+            }
+
+            if (ImGui::Button("Toggle decoupled pitch")) {
+                API::get()->param()->vr->set_decoupled_pitch_enabled(!API::get()->param()->vr->is_decoupled_pitch_enabled());
+            }
     #if defined(__clang__)
             ImGui::Text("Plugin Compiler: Clang");
     #elif defined(_MSC_VER)
