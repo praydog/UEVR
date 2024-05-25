@@ -178,20 +178,42 @@ public:
     Matrix4x4f get_transform(uint32_t index, bool grip = true) const;
     vr::HmdMatrix34_t get_raw_transform(uint32_t index) const;
 
-    Vector4f get_grip_position(uint32_t index) const {
-        return get_position(index, true);
-    }
-
     Vector4f get_aim_position(uint32_t index) const {
         return get_position(index, false);
     }
 
-    Matrix4x4f get_grip_rotation(uint32_t index) const {
-        return get_rotation(index, true);
+    glm::vec3 get_controller_position_with_offset(VRRuntime::Hand hand) {
+        float x_offset = (hand == VRRuntime::Hand::LEFT) ? get_left_controller_position_offset_x() : get_right_controller_position_offset_x();
+        float y_offset = (hand == VRRuntime::Hand::LEFT) ? get_left_controller_position_offset_y() : get_right_controller_position_offset_y();
+        float z_offset = (hand == VRRuntime::Hand::LEFT) ? get_left_controller_position_offset_z() : get_right_controller_position_offset_z();
+        // if there's no offsets defined, return the original:
+        auto const position = get_position((hand == VRRuntime::Hand::LEFT) ? get_left_controller_index() : get_right_controller_index(), false);
+        if (x_offset == 0 && y_offset == 0 && z_offset == 0) {
+            return position;
+        } else {
+            // if we offset the controller by some specified distance we need a frame of reference - what direction is "x"?. If we use
+            // the HMD direction then turning your head will make the gun move in the world independently of your hand position. If
+            // we use the controller's direction then the gun will move around when you rotate it (i.e. it will be on the end of an
+            // invisible 'stick' that's attached to the rotating controller). As there's no other frame of reference that makes any sense here,
+            // a stick it is. Whether the stick orientation is the offset or raw orientation is another complication
+            auto const actual_controller_rotation = get_rotation((hand == VRRuntime::Hand::LEFT) ? get_left_controller_index() : get_right_controller_index(), false);
+            return position - actual_controller_rotation * glm::vec4{-x_offset, -y_offset, z_offset, 0};            
+        }
     }
 
-    Matrix4x4f get_aim_rotation(uint32_t index) const {
-        return get_rotation(index, false);
+    Matrix4x4f get_controller_rotation_with_offset(VRRuntime::Hand hand) {
+        float x_offset_degrees = (hand == VRRuntime::Hand::LEFT) ? get_left_controller_rotation_offset_x() : get_right_controller_rotation_offset_x();
+        float y_offset_degrees = (hand == VRRuntime::Hand::LEFT) ? get_left_controller_rotation_offset_y() : get_right_controller_rotation_offset_y();
+        float z_offset_degrees = (hand == VRRuntime::Hand::LEFT) ? get_left_controller_rotation_offset_z() : get_right_controller_rotation_offset_z();
+        // if there's no offsets defined, return the original:
+        auto const rotation = get_rotation((hand == VRRuntime::Hand::LEFT) ? get_left_controller_index() : get_right_controller_index(), false);
+        if (x_offset_degrees == 0 && y_offset_degrees == 0 && z_offset_degrees == 0) {
+            return rotation;
+        } else {
+            auto const requested_rotation_offset =
+                utility::math::ue_rotation_matrix(glm::vec3{y_offset_degrees, z_offset_degrees, -x_offset_degrees});
+            return rotation * requested_rotation_offset;
+        }
     }
 
     Matrix4x4f get_grip_transform(uint32_t hand_index) const;
@@ -477,7 +499,55 @@ public:
     float get_aim_speed() const {
         return m_aim_speed->value();
     }
+
+    float get_left_controller_rotation_offset_x() const {
+        return m_left_controller_rotation_offset_x->value();
+    }
+
+    float get_left_controller_rotation_offset_y() const {
+        return m_left_controller_rotation_offset_y->value();
+    }
+
+    float get_left_controller_rotation_offset_z() const {
+        return m_left_controller_rotation_offset_z->value();
+    }
     
+    float get_right_controller_rotation_offset_x() const {
+        return m_right_controller_rotation_offset_x->value();
+    }
+
+    float get_right_controller_rotation_offset_y() const {
+        return m_right_controller_rotation_offset_y->value();
+    }
+
+    float get_right_controller_rotation_offset_z() const {
+        return m_right_controller_rotation_offset_z->value();
+    }
+    
+    float get_left_controller_position_offset_x() const {
+        return m_left_controller_position_offset_x->value();
+    }
+
+    float get_left_controller_position_offset_y() const {
+        return m_left_controller_position_offset_y->value();
+    }
+
+    float get_left_controller_position_offset_z() const {
+        return m_left_controller_position_offset_z->value();
+    }
+
+    float get_right_controller_position_offset_x() const {
+        return m_right_controller_position_offset_x->value();
+    }
+
+    float get_right_controller_position_offset_y() const {
+        return m_right_controller_position_offset_y->value();
+    }
+
+    float get_right_controller_position_offset_z() const {
+        return m_right_controller_position_offset_z->value();
+    }
+
     bool is_aim_multiplayer_support_enabled() const {
         return m_aim_multiplayer_support->value();
     }
@@ -884,6 +954,18 @@ private:
     const ModSlider::Ptr m_aim_speed{ ModSlider::create(generate_name("AimSpeed"), 0.01f, 25.0f, 15.0f) };
     const ModToggle::Ptr m_dpad_shifting{ ModToggle::create(generate_name("DPadShifting"), true) };
     const ModCombo::Ptr m_dpad_shifting_method{ ModCombo::create(generate_name("DPadShiftingMethod"), s_dpad_method_names, DPadMethod::RIGHT_TOUCH) };
+    const ModSlider::Ptr m_left_controller_rotation_offset_x{ModSlider::create(generate_name("LeftControllerRotationOffsetX"), -180.0f, 180.0f, 0.0f)};
+    const ModSlider::Ptr m_left_controller_rotation_offset_y{ModSlider::create(generate_name("LeftControllerRotationOffsetY"), -180.0f, 180.0f, 0.0f)};
+    const ModSlider::Ptr m_left_controller_rotation_offset_z{ModSlider::create(generate_name("LeftControllerRotationOffsetZ"), -180.0f, 180.0f, 0.0f)};
+    const ModSlider::Ptr m_right_controller_rotation_offset_x{ModSlider::create(generate_name("RightControllerRotationOffsetX"), -180.0f, 180.0f, 0.0f)};
+    const ModSlider::Ptr m_right_controller_rotation_offset_y{ModSlider::create(generate_name("RightControllerRotationOffsetY"), -180.0f, 180.0f, 0.0f)};
+    const ModSlider::Ptr m_right_controller_rotation_offset_z{ModSlider::create(generate_name("RightControllerRotationOffsetZ"), -180.0f, 180.0f, 0.0f)};
+    const ModSlider::Ptr m_left_controller_position_offset_x{ModSlider::create(generate_name("LeftControllerPositionOffsetX"), -1.0f, 1.0f, 0.0f)};
+    const ModSlider::Ptr m_left_controller_position_offset_y{ModSlider::create(generate_name("LeftControllerPositionOffsetY"), -1.0f, 1.0f, 0.0f)};
+    const ModSlider::Ptr m_left_controller_position_offset_z{ModSlider::create(generate_name("LeftControllerPositionOffsetZ"), -1.0f, 1.0f, 0.0f)};
+    const ModSlider::Ptr m_right_controller_position_offset_x{ModSlider::create(generate_name("RightControllerPositionOffsetX"), -1.0f, 1.0f, 0.0f)};
+    const ModSlider::Ptr m_right_controller_position_offset_y{ModSlider::create(generate_name("RightControllerPositionOffsetY"), -1.0f, 1.0f, 0.0f)};
+    const ModSlider::Ptr m_right_controller_position_offset_z{ModSlider::create(generate_name("RightControllerPositionOffsetZ"), -1.0f, 1.0f, 0.0f)};
     
     struct DPadGestureState {
         std::recursive_mutex mtx{};
@@ -1010,6 +1092,18 @@ private:
         *m_aim_modify_player_control_rotation,
         *m_aim_multiplayer_support,
         *m_aim_speed,
+        *m_left_controller_rotation_offset_x,
+        *m_left_controller_rotation_offset_y,
+        *m_left_controller_rotation_offset_z,
+        *m_right_controller_rotation_offset_x,
+        *m_right_controller_rotation_offset_y,
+        *m_right_controller_rotation_offset_z,
+        *m_left_controller_position_offset_x,
+        *m_left_controller_position_offset_y,
+        *m_left_controller_position_offset_z,
+        *m_right_controller_position_offset_x,
+        *m_right_controller_position_offset_y,
+        *m_right_controller_position_offset_z,
         *m_aim_interp,
         *m_dpad_shifting,
         *m_dpad_shifting_method,
