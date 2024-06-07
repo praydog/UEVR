@@ -3227,6 +3227,17 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
             }
 
             break;
+        case "NameProperty"_fnv:
+            {
+                const auto& value = *(sdk::FName*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                const auto wstr = value.to_string();
+                const auto str = utility::narrow(wstr);
+
+                ImGui::Text("%s: ", utility::narrow(prop->get_field_name().to_string()).data());
+                ImGui::SameLine(0.0f, 0.0f);
+                ImGui::TextColored(ImVec4{3.0f / 255.0f, 232.0f / 255.0f, 252.0f / 255.0f, 1.0f}, "%s", str.data());
+            }
+            break;
         default:
             {
                 const auto name = utility::narrow(propc->get_name().to_string());
