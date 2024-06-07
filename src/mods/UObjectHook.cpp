@@ -2523,7 +2523,21 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
         const auto socket_names = comp->get_all_socket_names();
 
         for (auto& name : socket_names) {
-            ImGui::Text("%s", utility::narrow(name.to_string()).data());
+            //ImGui::Text("%s", utility::narrow(name.to_string()).data());
+            if (ImGui::TreeNode(utility::narrow(name.to_string()).data())) {
+                auto location = comp->get_socket_location(name.to_string());
+                auto rotation = comp->get_socket_rotation(name.to_string());
+
+                if (ImGui::DragFloat3("Location", &location.x, 0.1f)) {
+                    //comp->set_socket_location(name, location);
+                }
+
+                if (ImGui::DragFloat3("Rotation", &rotation.x, 0.1f)) {
+                    //comp->set_socket_rotation(name, rotation);
+                }
+
+                ImGui::TreePop();
+            }
         }
 
         ImGui::TreePop();
