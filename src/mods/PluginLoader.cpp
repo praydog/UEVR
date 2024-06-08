@@ -31,6 +31,7 @@
 #include "UObjectHook.hpp"
 #include "VR.hpp"
 
+#include "Mods.hpp"
 #include "PluginLoader.hpp"
 
 UEVR_PluginVersion g_plugin_version{
@@ -1025,8 +1026,56 @@ void set_snap_turn_enabled(bool enabled) {
 void set_decoupled_pitch_enabled(bool enabled) {
     VR::get()->set_decoupled_pitch(enabled);
 }
+
+// TODO: Optimize this with a map
+void set_mod_value(const char* key, const char* value) {
+    if (key == nullptr || value == nullptr) {
+        return;
+    }
+
+    auto& mods = g_framework->get_mods()->get_mods();
+
+    for (auto& mod : mods) {
+        auto value_entry = mod->get_value(key);
+
+        if (value_entry != nullptr) {
+            value_entry->set(value);
+            break;
+        }
+    }
+}
+
+void get_mod_value(const char* key, char* out_value, unsigned int max_size) {
+    if (key == nullptr || out_value == nullptr || max_size == 0) {
+        return;
+    }
+
+    auto& mods = g_framework->get_mods()->get_mods();
+
+    for (auto& mod : mods) {
+        auto value_entry = mod->get_value(key);
+
+        if (value_entry != nullptr) {
+            const auto value = value_entry->get();
+
+            const auto size = std::min<size_t>(value.size(), (size_t)max_size - 1);
+            memcpy(out_value, value.c_str(), size * sizeof(char));
+            out_value[size] = '\0';
+            break;
+        }
+    }
+}
+
+void save_config() {
+    g_framework->deferred_save_config();
+}
+
+void reload_config() {
+    g_framework->deferred_reload_config();
 }
 }
+
+} // namespace uevr::vr
 
 UEVR_VRData g_vr_data {
     .is_runtime_ready =     uevr::vr::is_runtime_ready,
@@ -1073,6 +1122,11 @@ UEVR_VRData g_vr_data {
     .is_snap_turn_enabled = uevr::vr::is_snap_turn_enabled,
     .set_snap_turn_enabled = uevr::vr::set_snap_turn_enabled,
     .set_decoupled_pitch_enabled = uevr::vr::set_decoupled_pitch_enabled,
+
+    .set_mod_value = uevr::vr::set_mod_value,
+    .get_mod_value = uevr::vr::get_mod_value,
+    .save_config = uevr::vr::save_config,
+    .reload_config = uevr::vr::reload_config,
 };
 
 

@@ -101,6 +101,21 @@ public:
         }
     }
 
+    void reset_height() {
+        auto& api = API::get();
+        auto vr = api->param()->vr;
+        UEVR_Vector3f origin{};
+        vr->get_standing_origin(&origin);
+
+        UEVR_Vector3f hmd_pos{};
+        UEVR_Quaternionf hmd_rot{};
+        vr->get_pose(vr->get_hmd_index(), &hmd_pos, &hmd_rot);
+
+        origin.y = hmd_pos.y;
+
+        vr->set_standing_origin(&origin);
+    }
+
     void on_device_reset() override {
         PLUGIN_LOG_ONCE("Example Device Reset");
 
@@ -506,6 +521,36 @@ private:
 
             if (ImGui::Button("Toggle decoupled pitch")) {
                 API::get()->param()->vr->set_decoupled_pitch_enabled(!API::get()->param()->vr->is_decoupled_pitch_enabled());
+            }
+
+            if (ImGui::Button("Screw up world scale")) {
+                API::get()->param()->vr->set_mod_value("VR_WorldScale", "1.337");
+            }
+
+            if (ImGui::Button("Toggle GUI")) {
+                char buffer[256]{};
+                API::get()->param()->vr->get_mod_value("VR_EnableGUI", buffer, sizeof(buffer));
+
+                const auto enabled = std::string_view{buffer} == "true";
+
+                API::get()->param()->vr->set_mod_value("VR_EnableGUI", enabled ? "false" : "true");
+            }
+
+            static char input[256]{};
+            if (ImGui::InputText("Get mod value", input, sizeof(input))) {
+
+            }
+
+            char buffer[256]{};
+            API::get()->param()->vr->get_mod_value(input, buffer, sizeof(buffer));
+            ImGui::Text("Mod value: %s", buffer);
+
+            if (ImGui::Button("Save Config")) {
+                API::get()->param()->vr->save_config();
+            }
+
+            if (ImGui::Button("Reload Config")) {
+                API::get()->param()->vr->reload_config();
             }
     #if defined(__clang__)
             ImGui::Text("Plugin Compiler: Clang");
