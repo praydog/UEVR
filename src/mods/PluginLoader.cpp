@@ -543,6 +543,14 @@ namespace uobjecthook {
         return (UEVR_UObjectHookMotionControllerStateHandle)result->get();
     }
 
+    bool disabled() {
+        return UObjectHook::get()->is_disabled();
+    }
+
+    void set_disabled(bool disabled) {
+        UObjectHook::get()->set_disabled(disabled);
+    }
+
 namespace mc_state {
     void set_rotation_offset(UEVR_UObjectHookMotionControllerStateHandle state, const UEVR_Quaternionf* rotation) {
         if (state == nullptr) {
@@ -608,7 +616,9 @@ UEVR_UObjectHookFunctions g_uobjecthook_functions {
     uevr::uobjecthook::get_first_object_by_class_name,
     uevr::uobjecthook::get_or_add_motion_controller_state,
     uevr::uobjecthook::get_motion_controller_state,
-    &g_mc_functions
+    &g_mc_functions,
+    uevr::uobjecthook::disabled,
+    uevr::uobjecthook::set_disabled
 };
 
 #define FFIELDCLASS(x) ((sdk::FFieldClass*)x)

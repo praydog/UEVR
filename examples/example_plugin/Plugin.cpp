@@ -552,6 +552,12 @@ private:
             if (ImGui::Button("Reload Config")) {
                 API::get()->param()->vr->reload_config();
             }
+
+            if (ImGui::Button("Toggle UObjectHook disabled")) {
+                const auto value = API::UObjectHook::is_disabled();
+
+                API::UObjectHook::set_disabled(!value);
+            }
     #if defined(__clang__)
             ImGui::Text("Plugin Compiler: Clang");
     #elif defined(_MSC_VER)

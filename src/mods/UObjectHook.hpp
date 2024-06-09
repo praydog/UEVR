@@ -46,6 +46,14 @@ public:
 
     void activate();
 
+    bool is_disabled() const {
+        return m_uobject_hook_disabled;
+    }
+
+    void set_disabled(bool disabled) {
+        m_uobject_hook_disabled = disabled;
+    }
+
 protected:
     std::string_view get_name() const override { return "UObjectHook"; };
     bool is_advanced_mod() const override { return true; }
@@ -468,6 +476,6 @@ public:
             *m_keybind_toggle_uobject_hook
         };
     }
-    
+
 private:
 };

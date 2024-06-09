@@ -913,6 +913,16 @@ public:
             return fn(obj->to_handle());
         }
 
+        static bool is_disabled() {
+            static const auto fn = initialize()->is_disabled;
+            return fn();
+        }
+
+        static void set_disabled(bool disabled) {
+            static const auto fn = initialize()->set_disabled;
+            fn(disabled);
+        }
+
         static std::vector<UObject*> get_objects_by_class(UClass* c, bool allow_default = false) {
             if (c == nullptr) {
                 return {};
