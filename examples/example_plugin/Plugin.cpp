@@ -513,27 +513,23 @@ private:
     void internal_frame() {
         if (ImGui::Begin("Super Cool Plugin")) {
             ImGui::Text("Hello from the super cool plugin!");
-            ImGui::Text("Snap turn: %i", API::get()->param()->vr->is_snap_turn_enabled());
-            ImGui::Text("Decoupled pitch: %i", API::get()->param()->vr->is_decoupled_pitch_enabled());
+            ImGui::Text("Snap turn: %i", API::VR::is_snap_turn_enabled());
+            ImGui::Text("Decoupled pitch: %i", API::VR::is_decoupled_pitch_enabled());
             if (ImGui::Button("Toggle snap turn")) {
-                API::get()->param()->vr->set_snap_turn_enabled(!API::get()->param()->vr->is_snap_turn_enabled());
+                API::VR::set_snap_turn_enabled(!API::VR::is_snap_turn_enabled());
             }
 
             if (ImGui::Button("Toggle decoupled pitch")) {
-                API::get()->param()->vr->set_decoupled_pitch_enabled(!API::get()->param()->vr->is_decoupled_pitch_enabled());
+                API::VR::set_decoupled_pitch_enabled(!API::VR::is_decoupled_pitch_enabled());
             }
 
             if (ImGui::Button("Screw up world scale")) {
-                API::get()->param()->vr->set_mod_value("VR_WorldScale", "1.337");
+                API::VR::set_mod_value("VR_WorldScale", 1.337f);
             }
 
             if (ImGui::Button("Toggle GUI")) {
-                char buffer[256]{};
-                API::get()->param()->vr->get_mod_value("VR_EnableGUI", buffer, sizeof(buffer));
-
-                const auto enabled = std::string_view{buffer} == "true";
-
-                API::get()->param()->vr->set_mod_value("VR_EnableGUI", enabled ? "false" : "true");
+                const bool enabled = API::VR::get_mod_value<bool>("VR_EnableGUI");
+                API::VR::set_mod_value("VR_EnableGUI", !enabled);
             }
 
             static char input[256]{};
@@ -541,16 +537,15 @@ private:
 
             }
 
-            char buffer[256]{};
-            API::get()->param()->vr->get_mod_value(input, buffer, sizeof(buffer));
-            ImGui::Text("Mod value: %s", buffer);
+            std::string mod_value = API::VR::get_mod_value<std::string>(input);
+            ImGui::Text("Mod value: %s", mod_value.c_str());
 
             if (ImGui::Button("Save Config")) {
-                API::get()->param()->vr->save_config();
+                API::VR::save_config();
             }
 
             if (ImGui::Button("Reload Config")) {
-                API::get()->param()->vr->reload_config();
+                API::VR::reload_config();
             }
 
             if (ImGui::Button("Toggle UObjectHook disabled")) {
