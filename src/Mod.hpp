@@ -624,25 +624,8 @@ public:
     virtual void on_post_render_vr_framework_dx11(ID3D11DeviceContext* context, ID3D11Texture2D* tex, ID3D11RenderTargetView* rtv) {};
     virtual void on_post_render_vr_framework_dx12(ID3D12GraphicsCommandList* command_list, ID3D12Resource* tex, D3D12_CPU_DESCRIPTOR_HANDLE* rtv) {};
     
-    virtual void on_config_load(const utility::Config& cfg, bool set_defaults) {
-        for (auto& value : m_options) {
-            value.get().config_load(cfg, set_defaults);
-        }
-
-        for (auto& component : m_components) {
-            component->on_config_load(cfg, set_defaults);
-        }
-    }
-
-    virtual void on_config_save(utility::Config& cfg) {
-        for (const auto& value : m_options) {
-            value.get().config_save(cfg);
-        }
-
-        for (auto& component : m_components) {
-            component->on_config_save(cfg);
-        }
-    }
+    virtual void on_config_load(const utility::Config& cfg, bool set_defaults);
+    virtual void on_config_save(utility::Config& cfg);
 
     virtual IModValue* get_value(std::string_view name) const;
 
@@ -667,6 +650,26 @@ class ModComponent : public Mod {
 public:
     // todo?
 };
+
+inline void Mod::on_config_load(const utility::Config& cfg, bool set_defaults) {
+    for (auto& value : m_options) {
+        value.get().config_load(cfg, set_defaults);
+    }
+
+    for (auto& component : m_components) {
+        component->on_config_load(cfg, set_defaults);
+    }
+}
+
+inline void Mod::on_config_save(utility::Config& cfg) {
+    for (const auto& value : m_options) {
+        value.get().config_save(cfg);
+    }
+
+    for (auto& component : m_components) {
+        component->on_config_save(cfg);
+    }
+}
 
 inline IModValue* Mod::get_value(std::string_view name) const {
     auto it = std::find_if(m_options.begin(), m_options.end(), [&name](const auto& v) {
