@@ -89,6 +89,7 @@ bool is_using_double_precision(uintptr_t addr) {
 
 FFakeStereoRenderingHook::FFakeStereoRenderingHook() {
     g_hook = this;
+    setup_options();
 }
 
 void FFakeStereoRenderingHook::on_frame() {
@@ -3265,6 +3266,7 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
     }
 
     m_tracking_system_hook = std::make_unique<IXRTrackingSystemHook>(this, potential_hmd_device_offset);
+    m_components.push_back(m_tracking_system_hook.get());
 
     // Add a vectored exception handler that catches attempted dereferences of a null XRSystem or HMDDevice
     // The exception handler will then patch out the instructions causing the crash and continue execution

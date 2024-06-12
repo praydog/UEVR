@@ -692,6 +692,15 @@ private:
     std::unique_ptr<RenderTargetPoolHook> m_render_target_pool_hook{ std::make_unique<RenderTargetPoolHook>() };
     std::unique_ptr<CVarManager> m_cvar_manager{ std::make_unique<CVarManager>() };
 
+    void add_components_vr() {
+        m_components = {
+            m_fake_stereo_hook.get(),
+            m_render_target_pool_hook.get(),
+            m_cvar_manager.get(),
+            &m_overlay_component
+        };
+    }
+
     std::shared_ptr<VRRuntime> m_runtime{std::make_shared<VRRuntime>()}; // will point to the real runtime if it exists
     std::shared_ptr<runtimes::OpenVR> m_openvr{std::make_shared<runtimes::OpenVR>()};
     std::shared_ptr<runtimes::OpenXR> m_openxr{std::make_shared<runtimes::OpenXR>()};
@@ -1032,6 +1041,8 @@ public:
             *m_show_statistics,
             *m_controllers_allowed,
         };
+
+        add_components_vr();
     }
 
 private:

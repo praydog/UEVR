@@ -26,9 +26,9 @@ public:
     virtual void config_load(const utility::Config& cfg, bool set_defaults) = 0;
     virtual void config_save(utility::Config& cfg) = 0;
     virtual void set(const std::string& value) = 0;
-    virtual std::string get() = 0;
-    virtual std::string get_config_name() = 0;
-    virtual std::string_view get_config_name_view() = 0;
+    virtual std::string get() const = 0;
+    virtual std::string get_config_name() const = 0;
+    virtual std::string_view get_config_name_view() const = 0;
 };
 
 // Convenience classes for imgui
@@ -80,7 +80,7 @@ public:
         }
     };
 
-    virtual std::string get() override {
+    virtual std::string get() const override {
         if constexpr (std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view>) {
             return m_value;
         } else if constexpr (std::is_same_v<T, bool>) {
@@ -130,11 +130,11 @@ public:
         return m_default_value;
     }
 
-    std::string get_config_name() override {
+    std::string get_config_name() const override {
         return m_config_name;
     }
 
-    std::string_view get_config_name_view() override {
+    std::string_view get_config_name_view() const override {
         return m_config_name;
     }
 
@@ -588,6 +588,8 @@ public:
     };
 };
 
+class ModComponent;
+
 class Mod {
 public:
     using ValueList = std::vector<std::reference_wrapper<IModValue>>;
@@ -626,13 +628,24 @@ public:
         for (auto& value : m_options) {
             value.get().config_load(cfg, set_defaults);
         }
+
+        for (auto& component : m_components) {
+            component->on_config_load(cfg, set_defaults);
+        }
     }
 
     virtual void on_config_save(utility::Config& cfg) {
         for (const auto& value : m_options) {
             value.get().config_save(cfg);
         }
+
+        for (auto& component : m_components) {
+            component->on_config_save(cfg);
+        }
     }
+
+    virtual IModValue* get_value(std::string_view name) const;
+
     // game specific
     virtual void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {};
     virtual void on_post_engine_tick(sdk::UGameEngine* engine, float delta) {};
@@ -645,23 +658,32 @@ public:
     virtual void on_pre_viewport_client_draw(void* viewport_client, void* viewport, void* canvas) {};
     virtual void on_post_viewport_client_draw(void* viewport_client, void* viewport, void* canvas) {};
 
-    IModValue* get_value(std::string_view name) {
-        auto it = std::find_if(m_options.begin(), m_options.end(), [&name](const auto& v) {
-            return v.get().get_config_name_view() == name;
-        });
-
-        if (it == m_options.end()) {
-            return nullptr;
-        }
-
-        return &it->get();
-    }
-
 protected:
     ValueList m_options{};
+    std::vector<ModComponent*> m_components{};
 };
 
 class ModComponent : public Mod {
 public:
     // todo?
 };
+
+inline IModValue* Mod::get_value(std::string_view name) const {
+    auto it = std::find_if(m_options.begin(), m_options.end(), [&name](const auto& v) {
+        return v.get().get_config_name_view() == name;
+    });
+
+    if (it == m_options.end()) {
+        for (auto& component : m_components) {
+            auto value = component->get_value(name);
+
+            if (value != nullptr) {
+                return value;
+            }
+        }
+
+        return nullptr;
+    }
+
+    return &it->get();
+}

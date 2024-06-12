@@ -485,11 +485,13 @@ private:
     const ModInt32::Ptr m_frame_delay_compensation{ ModInt32::create("VR_FrameDelayCompensation", 0) };
     const ModToggle::Ptr m_asynchronous_scan{ ModToggle::create("VR_AsynchronousScan", true) };
 
-    ValueList m_options{
-        *m_recreate_textures_on_reset,
-        *m_frame_delay_compensation,
-        *m_asynchronous_scan
-    };
+    void setup_options() {
+        m_options = {
+            *m_recreate_textures_on_reset,
+            *m_frame_delay_compensation,
+            *m_asynchronous_scan
+        };
+    }
 
     friend class IXRTrackingSystemHook;
 };
