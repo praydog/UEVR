@@ -396,7 +396,7 @@ int ScriptContext::setup_bindings() {
 
             switch (name_hash) {
             case L"BoolProperty"_fnv:
-                return sol::make_object(s, self.get_property<bool>(name));
+                return sol::make_object(s, self.get_bool_property(name));
             case L"FloatProperty"_fnv:
                 return sol::make_object(s, self.get_property<float>(name));
             case L"DoubleProperty"_fnv:
@@ -404,11 +404,50 @@ int ScriptContext::setup_bindings() {
             case L"IntProperty"_fnv:
                 return sol::make_object(s, self.get_property<int32_t>(name));
             case L"UIntProperty"_fnv:
+            case L"UInt32Property"_fnv:
                 return sol::make_object(s, self.get_property<uint32_t>(name));
             case L"NameProperty"_fnv:
                 return sol::make_object(s, self.get_property<uevr::API::FName>(name));
             case L"ObjectProperty"_fnv:
                 return sol::make_object(s, self.get_property<uevr::API::UObject*>(name));
+            case L"ArrayProperty"_fnv:
+            {
+                const auto inner_prop = ((uevr::API::FArrayProperty*)desc)->get_inner();
+
+                if (inner_prop == nullptr) {
+                    return sol::make_object(s, sol::lua_nil);
+                }
+
+                const auto inner_c = inner_prop->get_class();
+
+                if (inner_c == nullptr) {
+                    return sol::make_object(s, sol::lua_nil);
+                }
+
+                const auto inner_name_hash = utility::hash(inner_c->get_fname()->to_string());
+
+                switch (inner_name_hash) {
+                case "ObjectProperty"_fnv:
+                {
+                    const auto& arr = self.get_property<uevr::API::TArray<uevr::API::UObject*>>(name);
+
+                    if (arr.data == nullptr || arr.count == 0) {
+                        return sol::make_object(s, sol::lua_nil);
+                    }
+
+                    auto lua_arr = std::vector<uevr::API::UObject*>{};
+
+                    for (size_t i = 0; i < arr.count; ++i) {
+                        lua_arr.push_back(arr.data[i]);
+                    }
+
+                    return sol::make_object(s, lua_arr);
+                }
+                // TODO: Add support for other types
+                };
+
+                return sol::make_object(s, sol::lua_nil);
+            }
             };
 
             return sol::make_object(s, sol::lua_nil);
