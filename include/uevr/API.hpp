@@ -591,6 +591,36 @@ public:
             return fn(to_handle());
         }
 
+        uint64_t get_property_flags() const {
+            static const auto fn = initialize()->get_property_flags;
+            return fn(to_handle());
+        }
+
+        bool is_param() const {
+            static const auto fn = initialize()->is_param;
+            return fn(to_handle());
+        }
+
+        bool is_out_param() const {
+            static const auto fn = initialize()->is_out_param;
+            return fn(to_handle());
+        }
+
+        bool is_return_param() const {
+            static const auto fn = initialize()->is_return_param;
+            return fn(to_handle());
+        }
+
+        bool is_reference_param() const {
+            static const auto fn = initialize()->is_reference_param;
+            return fn(to_handle());
+        }
+
+        bool is_pod() const {
+            static const auto fn = initialize()->is_pod;
+            return fn(to_handle());
+        }
+
     private:
         static inline const UEVR_FPropertyFunctions* s_functions{nullptr};
         static inline const UEVR_FPropertyFunctions* initialize() {

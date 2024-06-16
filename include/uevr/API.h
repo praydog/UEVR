@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 20
+#define UEVR_PLUGIN_VERSION_MINOR 21
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -282,12 +282,19 @@ typedef struct {
 
 typedef struct {
     int (*get_offset)(UEVR_FPropertyHandle prop);
+    unsigned long long (*get_property_flags)(UEVR_FPropertyHandle prop);
+    bool (*is_param)(UEVR_FPropertyHandle prop);
+    bool (*is_out_param)(UEVR_FPropertyHandle prop);
+    bool (*is_return_param)(UEVR_FPropertyHandle prop);
+    bool (*is_reference_param)(UEVR_FPropertyHandle prop);
+    bool (*is_pod)(UEVR_FPropertyHandle prop);
 } UEVR_FPropertyFunctions;
 
 typedef struct {
     UEVR_UStructHandle (*get_super_struct)(UEVR_UStructHandle klass);
     UEVR_FFieldHandle (*get_child_properties)(UEVR_UStructHandle klass);
     UEVR_UFunctionHandle (*find_function)(UEVR_UStructHandle klass, const wchar_t* name);
+    UEVR_FPropertyHandle (*find_property)(UEVR_UStructHandle klass, const wchar_t* name);
 } UEVR_UStructFunctions;
 
 typedef struct {
