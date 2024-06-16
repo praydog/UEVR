@@ -345,12 +345,34 @@ int ScriptContext::setup_bindings() {
     );
 
     m_lua.new_usertype<uevr::API::UObject>("UEVR_UObject",
+        "get_address", [](uevr::API::UObject& self) {
+            return (uintptr_t)&self;
+        },
         "static_class", &uevr::API::UObject::static_class,
         "get_fname", &uevr::API::UObject::get_fname,
         "get_full_name", &uevr::API::UObject::get_full_name,
         "is_a", &uevr::API::UObject::is_a,
         "get_class", &uevr::API::UObject::get_class,
-        "get_outer", &uevr::API::UObject::get_outer
+        "get_outer", &uevr::API::UObject::get_outer,
+        "get_bool_property", &uevr::API::UObject::get_bool_property,
+        "get_float_property", [](uevr::API::UObject& self, const std::wstring& name) {
+            return self.get_property<float>(name);
+        },
+        "get_double_property", [](uevr::API::UObject& self, const std::wstring& name) {
+            return self.get_property<double>(name);
+        },
+        "get_int_property", [](uevr::API::UObject& self, const std::wstring& name) {
+            return self.get_property<int32_t>(name);
+        },
+        "get_uint_property", [](uevr::API::UObject& self, const std::wstring& name) {
+            return self.get_property<uint32_t>(name);
+        },
+        "get_fname_property", [](uevr::API::UObject& self, const std::wstring& name) {
+            return self.get_property<uevr::API::FName>(name);
+        },
+        "get_uobject_property", [](uevr::API::UObject& self, const std::wstring& name) {
+            return self.get_property<uevr::API::UObject*>(name);
+        }
     );
 
     m_lua.new_usertype<uevr::API::UStruct>("UEVR_UStruct",
@@ -443,14 +465,40 @@ int ScriptContext::setup_bindings() {
         "get_item", &uevr::API::FUObjectArray::get_item
     );
 
+    m_lua.new_usertype<uevr::API::UObjectHook>("UEVR_UObjectHook",
+        "activate", &uevr::API::UObjectHook::activate,
+        "exists", &uevr::API::UObjectHook::exists,
+        "is_disabled", &uevr::API::UObjectHook::is_disabled,
+        "set_disabled", &uevr::API::UObjectHook::set_disabled,
+        "get_first_object_by_class", [](uevr::API::UClass* c, sol::object allow_default_obj) {
+            bool allow_default = false;
+            if (allow_default_obj.is<bool>()) {
+                allow_default = allow_default_obj.as<bool>();
+            }
+            return uevr::API::UObjectHook::get_first_object_by_class(c, allow_default);
+        },
+        "get_objects_by_class", [](uevr::API::UClass* c, sol::object allow_default_obj) {
+            bool allow_default = false;
+            if (allow_default_obj.is<bool>()) {
+                allow_default = allow_default_obj.as<bool>();
+            }
+            return uevr::API::UObjectHook::get_objects_by_class(c, allow_default);
+        },
+        "get_or_add_motion_controller_state", &uevr::API::UObjectHook::get_or_add_motion_controller_state,
+        "get_motion_controller_state", &uevr::API::UObjectHook::get_motion_controller_state
+    );
+
     m_lua.new_usertype<uevr::API>("UEVR_API",
         "sdk", &uevr::API::sdk,
-        "find_uobject", &uevr::API::find_uobject<uevr::API::UObject>,
+        //"find_uobject", &uevr::API::find_uobject<uevr::API::UObject>,
+        "find_uobject", [](uevr::API* api, const std::string& name) {
+            return api->find_uobject<uevr::API::UObject>(utility::widen(name));
+        },
         "get_engine", &uevr::API::get_engine,
         "get_player_controller", &uevr::API::get_player_controller,
         "get_local_pawn", &uevr::API::get_local_pawn,
         "spawn_object", &uevr::API::spawn_object,
-        "execute_command", [](uevr::API* api, std::string s) { api->execute_command(utility::widen(s).data()); },
+        "execute_command", [](uevr::API* api, const std::string& s) { api->execute_command(utility::widen(s).data()); },
         "execute_command_ex", &uevr::API::execute_command_ex,
         "get_uobject_array", &uevr::API::get_uobject_array,
         "get_console_manager", &uevr::API::get_console_manager
@@ -473,7 +521,8 @@ int ScriptContext::setup_bindings() {
         "IConsoleVariable", m_lua["UEVR_IConsoleVariable"],
         "IConsoleCommand", m_lua["UEVR_IConsoleCommand"],
         "FName", m_lua["UEVR_FName"],
-        "FUObjectArray", m_lua["UEVR_FUObjectArray"]
+        "FUObjectArray", m_lua["UEVR_FUObjectArray"],
+        "UObjectHook", m_lua["UEVR_UObjectHook"]
     );
     
     out["plugin_callbacks"] = m_plugin_initialize_param->callbacks;
