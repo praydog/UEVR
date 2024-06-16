@@ -403,6 +403,11 @@ public:
             return (UFunction*)fn(to_handle(), name.data());
         }
 
+        FProperty* find_property(std::wstring_view name) const {
+            static const auto fn = initialize()->find_property;
+            return (FProperty*)fn(to_handle(), name.data());
+        }
+
         // Not an array, it's a linked list. Meant to call ->get_next() until nullptr
         FField* get_child_properties() const {
             static const auto fn = initialize()->get_child_properties;
