@@ -372,6 +372,46 @@ int ScriptContext::setup_bindings() {
         },
         "get_uobject_property", [](uevr::API::UObject& self, const std::wstring& name) {
             return self.get_property<uevr::API::UObject*>(name);
+        },
+        "get_property", [](sol::this_state s, uevr::API::UObject& self, const std::wstring& name) -> sol::object {
+            const auto c = self.get_class();
+
+            if (c == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            const auto desc = c->find_property(name.c_str());
+
+            if (desc == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            const auto propc = desc->get_class();
+
+            if (propc == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            const auto name_hash = utility::hash(propc->get_fname()->to_string());
+
+            switch (name_hash) {
+            case L"BoolProperty"_fnv:
+                return sol::make_object(s, self.get_property<bool>(name));
+            case L"FloatProperty"_fnv:
+                return sol::make_object(s, self.get_property<float>(name));
+            case L"DoubleProperty"_fnv:
+                return sol::make_object(s, self.get_property<double>(name));
+            case L"IntProperty"_fnv:
+                return sol::make_object(s, self.get_property<int32_t>(name));
+            case L"UIntProperty"_fnv:
+                return sol::make_object(s, self.get_property<uint32_t>(name));
+            case L"NameProperty"_fnv:
+                return sol::make_object(s, self.get_property<uevr::API::FName>(name));
+            case L"ObjectProperty"_fnv:
+                return sol::make_object(s, self.get_property<uevr::API::UObject*>(name));
+            };
+
+            return sol::make_object(s, sol::lua_nil);
         }
     );
 
@@ -490,7 +530,6 @@ int ScriptContext::setup_bindings() {
 
     m_lua.new_usertype<uevr::API>("UEVR_API",
         "sdk", &uevr::API::sdk,
-        //"find_uobject", &uevr::API::find_uobject<uevr::API::UObject>,
         "find_uobject", [](uevr::API* api, const std::string& name) {
             return api->find_uobject<uevr::API::UObject>(utility::widen(name));
         },
@@ -499,7 +538,6 @@ int ScriptContext::setup_bindings() {
         "get_local_pawn", &uevr::API::get_local_pawn,
         "spawn_object", &uevr::API::spawn_object,
         "execute_command", [](uevr::API* api, const std::string& s) { api->execute_command(utility::widen(s).data()); },
-        "execute_command_ex", &uevr::API::execute_command_ex,
         "get_uobject_array", &uevr::API::get_uobject_array,
         "get_console_manager", &uevr::API::get_console_manager
     );
