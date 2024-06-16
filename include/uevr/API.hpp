@@ -637,6 +637,26 @@ public:
         }
     };
 
+    struct FArrayProperty : public FProperty {
+        inline UEVR_FArrayPropertyHandle to_handle() { return (UEVR_FArrayPropertyHandle)this; }
+        inline UEVR_FArrayPropertyHandle to_handle() const { return (UEVR_FArrayPropertyHandle)this; }
+
+        FProperty* get_inner() const {
+            static const auto fn = initialize()->get_inner;
+            return (FProperty*)fn(to_handle());
+        }
+
+    private:
+        static inline const UEVR_FArrayPropertyFunctions* s_functions{nullptr};
+        static inline const UEVR_FArrayPropertyFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->farrayproperty;
+            }
+
+            return s_functions;
+        }
+    };
+
     struct FFieldClass {
         inline UEVR_FFieldClassHandle to_handle() { return (UEVR_FFieldClassHandle)this; }
         inline UEVR_FFieldClassHandle to_handle() const { return (UEVR_FFieldClassHandle)this; }
