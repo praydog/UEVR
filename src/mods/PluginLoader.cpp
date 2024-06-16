@@ -21,6 +21,7 @@
 #include <sdk/UGameplayStatics.hpp>
 #include <sdk/APlayerController.hpp>
 #include <sdk/USceneComponent.hpp>
+#include <sdk/FArrayProperty.hpp>
 
 #include "pluginloader/FFakeStereoRenderingFunctions.hpp"
 #include "pluginloader/FRenderTargetPoolHook.hpp"
