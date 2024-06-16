@@ -237,6 +237,57 @@ sol::object prop_to_object(sol::this_state s, uevr::API::UObject& self, const st
     return sol::make_object(s, sol::lua_nil);
 }
 
+void set_property(sol::this_state s, uevr::API::UObject& self, const std::wstring& name, sol::object value) {
+    const auto c = self.get_class();
+
+    if (c == nullptr) {
+        return;
+    }
+
+    const auto desc = c->find_property(name.c_str());
+
+    if (desc == nullptr) {
+        return;
+    }
+
+    const auto propc = desc->get_class();
+
+    if (propc == nullptr) {
+        return;
+    }
+
+    const auto name_hash = utility::hash(propc->get_fname()->to_string());
+
+    switch (name_hash) {
+    case L"BoolProperty"_fnv:
+        self.set_bool_property(name, value.as<bool>());
+        return;
+    case L"FloatProperty"_fnv:
+        self.get_property<float>(name) = value.as<float>();
+        return;
+    case L"DoubleProperty"_fnv:
+        self.get_property<double>(name) = value.as<double>();
+        return;
+    case L"IntProperty"_fnv:
+        self.get_property<int32_t>(name) = value.as<int32_t>();
+        return;
+    case L"UIntProperty"_fnv:
+    case L"UInt32Property"_fnv:
+        self.get_property<uint32_t>(name) = value.as<uint32_t>();
+        return;
+    case L"NameProperty"_fnv:
+        //return sol::make_object(s, self.get_property<uevr::API::FName>(name));
+        throw sol::error("Setting FName properties is not supported (yet)");
+    case L"ObjectProperty"_fnv:
+        self.get_property<uevr::API::UObject*>(name) = value.as<uevr::API::UObject*>();
+        return;
+    case L"ArrayProperty"_fnv:
+        throw sol::error("Setting array properties is not supported (yet)");
+    };
+
+    // NONE
+}
+
 int ScriptContext::setup_bindings() {
     m_lua.registry()["uevr_context"] = this;
 
@@ -456,6 +507,7 @@ int ScriptContext::setup_bindings() {
         "get_property", [](sol::this_state s, uevr::API::UObject& self, const std::wstring& name) -> sol::object {
             return prop_to_object(s, self, name);
         },
+        "set_property", &set_property,
         sol::meta_function::index, [](sol::this_state s, uevr::API::UObject& self, sol::object index_obj) -> sol::object {
             if (!index_obj.is<std::string>()) {
                 return sol::make_object(s, sol::lua_nil);
@@ -463,6 +515,14 @@ int ScriptContext::setup_bindings() {
 
             const auto name = utility::widen(index_obj.as<std::string>());
             return prop_to_object(s, self, name);
+        },
+        sol::meta_function::new_index, [](sol::this_state s, uevr::API::UObject& self, sol::object index_obj, sol::object value) {
+            if (!index_obj.is<std::string>()) {
+                return;
+            }
+
+            const auto name = utility::widen(index_obj.as<std::string>());
+            set_property(s, self, name, value);
         }
     );
 
