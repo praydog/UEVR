@@ -801,6 +801,12 @@ UEVR_FMallocFunctions g_malloc_functions {
     uevr::malloc::free
 };
 
+UEVR_FArrayPropertyFunctions g_farray_property_functions {
+    .get_inner = [](UEVR_FArrayPropertyHandle prop) -> UEVR_FPropertyHandle {
+        return (UEVR_FPropertyHandle)((sdk::FArrayProperty*)prop)->get_inner();
+    }
+};
+
 UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
@@ -819,7 +825,8 @@ UEVR_SDKData g_sdk_data {
     &uevr::render_target_pool_hook::functions,
     &uevr::stereo_hook::functions,
     &uevr::frhitexture2d::functions,
-    &uevr::uscriptstruct::functions
+    &uevr::uscriptstruct::functions,
+    &g_farray_property_functions
 };
 
 namespace uevr {

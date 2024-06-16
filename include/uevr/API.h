@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 21
+#define UEVR_PLUGIN_VERSION_MINOR 22
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -76,6 +76,7 @@ DECLARE_UEVR_HANDLE(UEVR_TArrayHandle);
 DECLARE_UEVR_HANDLE(UEVR_FMallocHandle);
 DECLARE_UEVR_HANDLE(UEVR_FRHITexture2DHandle);
 DECLARE_UEVR_HANDLE(UEVR_UScriptStructHandle);
+DECLARE_UEVR_HANDLE(UEVR_FArrayPropertyHandle);
 
 /* OpenXR stuff */
 DECLARE_UEVR_HANDLE(UEVR_XrInstance);
@@ -393,6 +394,10 @@ typedef struct {
 } UEVR_UScriptStructFunctions;
 
 typedef struct {
+    UEVR_FPropertyHandle (*get_inner)(UEVR_FArrayPropertyHandle prop);
+} UEVR_FArrayPropertyFunctions;
+
+typedef struct {
     const UEVR_SDKFunctions* functions;
     const UEVR_SDKCallbacks* callbacks;
     const UEVR_UObjectFunctions* uobject;
@@ -411,6 +416,7 @@ typedef struct {
     const UEVR_FFakeStereoRenderingHookFunctions* stereo_hook;
     const UEVR_FRHITexture2DFunctions* frhitexture2d;
     const UEVR_UScriptStructFunctions* uscriptstruct;
+    const UEVR_FArrayPropertyFunctions* farrayproperty;
 } UEVR_SDKData;
 
 DECLARE_UEVR_HANDLE(UEVR_IVRSystem);
