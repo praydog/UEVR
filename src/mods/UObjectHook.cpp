@@ -2523,7 +2523,21 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
         const auto socket_names = comp->get_all_socket_names();
 
         for (auto& name : socket_names) {
-            ImGui::Text("%s", utility::narrow(name.to_string()).data());
+            //ImGui::Text("%s", utility::narrow(name.to_string()).data());
+            if (ImGui::TreeNode(utility::narrow(name.to_string()).data())) {
+                auto location = comp->get_socket_location(name.to_string());
+                auto rotation = comp->get_socket_rotation(name.to_string());
+
+                if (ImGui::DragFloat3("Location", &location.x, 0.1f)) {
+                    //comp->set_socket_location(name, location);
+                }
+
+                if (ImGui::DragFloat3("Rotation", &rotation.x, 0.1f)) {
+                    //comp->set_socket_rotation(name, rotation);
+                }
+
+                ImGui::TreePop();
+            }
         }
 
         ImGui::TreePop();
@@ -3212,6 +3226,17 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 ImGui::TreePop();
             }
 
+            break;
+        case "NameProperty"_fnv:
+            {
+                const auto& value = *(sdk::FName*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                const auto wstr = value.to_string();
+                const auto str = utility::narrow(wstr);
+
+                ImGui::Text("%s: ", utility::narrow(prop->get_field_name().to_string()).data());
+                ImGui::SameLine(0.0f, 0.0f);
+                ImGui::TextColored(ImVec4{3.0f / 255.0f, 232.0f / 255.0f, 252.0f / 255.0f, 1.0f}, "%s", str.data());
+            }
             break;
         default:
             {

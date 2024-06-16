@@ -458,6 +458,27 @@ sdkgenny::Struct* SDKDumper::get_or_generate_struct(sdk::UStruct* ustruct) {
     generate_properties(s, ustruct);
     generate_functions(s, ustruct);
 
+    static const auto uscriptstruct_c = sdk::UScriptStruct::static_class();
+
+    if (auto c = ustruct->get_class(); c != nullptr && c->is_a(uscriptstruct_c)) {
+        auto uscriptstruct = (sdk::UScriptStruct*)ustruct;
+
+        if (uscriptstruct->get_struct_size() > 0) {
+            s->size(uscriptstruct->get_struct_size());
+        }
+    }
+
+    if (ustruct->get_properties_size() > s->size() && ustruct->get_properties_size() > 0) {
+        const auto ps = ustruct->get_properties_size();
+        const auto ma = ustruct->get_min_alignment();
+
+        if (ma > 1) {
+            s->size(((ps + ma - 1) / ma) * ma);
+        } else {
+            s->size(ps);
+        }
+    }
+
     return s;
 }
 

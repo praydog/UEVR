@@ -9,6 +9,22 @@ public:
     static std::shared_ptr<FrameworkConfig>& get();
 
 public:
+    FrameworkConfig() {
+        m_options = {
+            *m_menu_key,
+            *m_show_cursor_key,
+            *m_menu_open,
+            *m_remember_menu_state,
+            *m_enable_l3_r3_toggle,
+            *m_l3_r3_long_press,
+            *m_advanced_mode,
+            *m_imgui_theme,
+            *m_log_level,
+            *m_always_show_cursor,
+            *m_font_size,
+        };
+    }
+
     std::string_view get_name() const {
         return "FrameworkConfig";
     }
@@ -111,18 +127,4 @@ private:
     
     ModKey::Ptr m_show_cursor_key{ ModKey::create(generate_name("ShowCursorKey")) };
     ModInt32::Ptr m_font_size{ModInt32::create(generate_name("FontSize"), 16)};
-
-    ValueList m_options {
-        *m_menu_key,
-        *m_show_cursor_key,
-        *m_menu_open,
-        *m_remember_menu_state,
-        *m_enable_l3_r3_toggle,
-        *m_l3_r3_long_press,
-        *m_advanced_mode,
-        *m_imgui_theme,
-        *m_log_level,
-        *m_always_show_cursor,
-        *m_font_size,
-    };
 };

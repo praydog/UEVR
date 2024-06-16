@@ -54,6 +54,18 @@ public:
         GESTURE_HEAD_RIGHT,
     };
 
+    enum HORIZONTAL_PROJECTION_OVERRIDE : int32_t {
+        HORIZONTAL_DEFAULT,
+        HORIZONTAL_SYMMETRIC,
+        HORIZONTAL_MIRROR
+    };
+
+    enum VERTICAL_PROJECTION_OVERRIDE : int32_t {
+        VERTICAL_DEFAULT,
+        VERTICAL_SYMMETRIC,
+        VERTICAL_MATCHED
+    };
+
     static const inline std::string s_action_pose = "/actions/default/in/Pose";
     static const inline std::string s_action_grip_pose = "/actions/default/in/GripPose";
     static const inline std::string s_action_trigger = "/actions/default/in/Trigger";
@@ -101,6 +113,11 @@ public:
             {"Debug", true},
         };
     }
+
+    // texture bounds to tell OpenVR which parts of the submitted texture to render (default - use the whole texture).
+    // Will be modified to accommodate forced symmetrical eye projection
+    vr::VRTextureBounds_t m_right_bounds{0.0f, 0.0f, 1.0f, 1.0f};
+    vr::VRTextureBounds_t m_left_bounds{0.0f, 0.0f, 1.0f, 1.0f};
 
     void on_config_load(const utility::Config& cfg, bool set_defaults) override;
     void on_config_save(utility::Config& cfg) override;
@@ -553,6 +570,10 @@ public:
         return m_snapturn->value();
     }
 
+    void set_snapturn_enabled(bool value) {
+        m_snapturn->value() = value;
+    }
+
     float get_snapturn_js_deadzone() const {
         return m_snapturn_joystick_deadzone->value();
     }
@@ -575,6 +596,18 @@ public:
 
     bool is_extreme_compatibility_mode_enabled() const {
         return m_extreme_compat_mode->value();
+    }
+
+    auto get_horizontal_projection_override() const {
+        return m_horizontal_projection_override->value();
+    }
+
+    auto get_vertical_projection_override() const {
+        return m_vertical_projection_override->value();
+    }
+
+    bool should_grow_rectangle_for_projection_cropping() const {
+        return m_grow_rectangle_for_projection_cropping->value();
     }
 
     vrmod::D3D11Component& d3d11() {
@@ -659,6 +692,15 @@ private:
     std::unique_ptr<RenderTargetPoolHook> m_render_target_pool_hook{ std::make_unique<RenderTargetPoolHook>() };
     std::unique_ptr<CVarManager> m_cvar_manager{ std::make_unique<CVarManager>() };
 
+    void add_components_vr() {
+        m_components = {
+            m_fake_stereo_hook.get(),
+            m_render_target_pool_hook.get(),
+            m_cvar_manager.get(),
+            &m_overlay_component
+        };
+    }
+
     std::shared_ptr<VRRuntime> m_runtime{std::make_shared<VRRuntime>()}; // will point to the real runtime if it exists
     std::shared_ptr<runtimes::OpenVR> m_openvr{std::make_shared<runtimes::OpenVR>()};
     std::shared_ptr<runtimes::OpenXR> m_openxr{std::make_shared<runtimes::OpenXR>()};
@@ -670,9 +712,6 @@ private:
 
     std::vector<int32_t> m_controllers{};
     std::unordered_set<int32_t> m_controllers_set{};
-
-    vr::VRTextureBounds_t m_right_bounds{ 0.0f, 0.0f, 1.0f, 1.0f };
-    vr::VRTextureBounds_t m_left_bounds{ 0.0f, 0.0f, 1.0f, 1.0f };
 
     glm::vec3 m_overlay_rotation{-1.550f, 0.0f, -1.330f};
     glm::vec4 m_overlay_position{0.0f, 0.06f, -0.07f, 1.0f};
@@ -797,6 +836,18 @@ private:
         "Gesture (Head) + Right Joystick",
     };
 
+    static const inline std::vector<std::string> s_horizontal_projection_override_names{
+        "Raw / default",
+        "Symmetrical",
+        "Mirrored",
+    };
+
+    static const inline std::vector<std::string> s_vertical_projection_override_names{
+        "Raw / default",
+        "Symmetrical",
+        "Matched",
+    };
+
     const ModCombo::Ptr m_rendering_method{ ModCombo::create(generate_name("RenderingMethod"), s_rendering_method_names) };
     const ModCombo::Ptr m_synced_afr_method{ ModCombo::create(generate_name("SyncedSequentialMethod"), s_synced_afr_method_names, 1) };
     const ModToggle::Ptr m_extreme_compat_mode{ ModToggle::create(generate_name("ExtremeCompatibilityMode"), false, true) };
@@ -814,6 +865,9 @@ private:
     const ModToggle::Ptr m_2d_screen_mode{ ModToggle::create(generate_name("2DScreenMode"), false) };
     const ModToggle::Ptr m_roomscale_movement{ ModToggle::create(generate_name("RoomscaleMovement"), false) };
     const ModToggle::Ptr m_swap_controllers{ ModToggle::create(generate_name("SwapControllerInputs"), false) };
+    const ModCombo::Ptr m_horizontal_projection_override{ModCombo::create(generate_name("HorizontalProjectionOverride"), s_horizontal_projection_override_names)};
+    const ModCombo::Ptr m_vertical_projection_override{ModCombo::create(generate_name("VerticalProjectionOverride"), s_vertical_projection_override_names)};
+    const ModToggle::Ptr m_grow_rectangle_for_projection_cropping{ModToggle::create(generate_name("GrowRectangleForProjectionCropping"), false)};
 
     // Snap turn settings and globals
     void gamepad_snapturn(XINPUT_STATE& state);
@@ -922,6 +976,76 @@ private:
     void load_camera(int index);
     void save_camera(int index);
 
+public:
+    VR() {
+        m_options = {
+            *m_rendering_method,
+            *m_synced_afr_method,
+            *m_extreme_compat_mode,
+            *m_uncap_framerate,
+            *m_disable_hdr_compositing,
+            *m_disable_hzbocclusion,
+            *m_disable_instance_culling,
+            *m_desktop_fix,
+            *m_enable_gui,
+            *m_enable_depth,
+            *m_decoupled_pitch,
+            *m_decoupled_pitch_ui_adjust,
+            *m_load_blueprint_code,
+            *m_2d_screen_mode,
+            *m_roomscale_movement,
+            *m_swap_controllers,
+            *m_horizontal_projection_override,
+            *m_vertical_projection_override,
+            *m_grow_rectangle_for_projection_cropping,
+            *m_snapturn,
+            *m_snapturn_joystick_deadzone,
+            *m_snapturn_angle,
+            *m_controller_pitch_offset,
+            *m_aim_method,
+            *m_movement_orientation,
+            *m_aim_use_pawn_control_rotation,
+            *m_aim_modify_player_control_rotation,
+            *m_aim_multiplayer_support,
+            *m_aim_speed,
+            *m_aim_interp,
+            *m_dpad_shifting,
+            *m_dpad_shifting_method,
+            *m_motion_controls_inactivity_timer,
+            *m_joystick_deadzone,
+            *m_camera_forward_offset,
+            *m_camera_right_offset,
+            *m_camera_up_offset,
+            *m_world_scale,
+            *m_depth_scale,
+            *m_custom_z_near,
+            *m_custom_z_near_enabled,
+            *m_ghosting_fix,
+            *m_splitscreen_compatibility_mode,
+            *m_splitscreen_view_index,
+            *m_compatibility_skip_pip,
+            *m_compatibility_skip_uobjectarray_init,
+            *m_compatibility_ahud,
+            *m_sceneview_compatibility_mode,
+            *m_keybind_recenter,
+            *m_keybind_recenter_horizon,
+            *m_keybind_set_standing_origin,
+            *m_keybind_load_camera_0,
+            *m_keybind_load_camera_1,
+            *m_keybind_load_camera_2,
+            *m_keybind_toggle_2d_screen,
+            *m_keybind_disable_vr,
+            *m_keybind_toggle_gui,
+            *m_requested_runtime_name,
+            *m_show_fps,
+            *m_show_statistics,
+            *m_controllers_allowed,
+        };
+
+        add_components_vr();
+    }
+
+private:
     bool m_stereo_emulation_mode{false}; // not a good config option, just for debugging
     bool m_wait_for_present{true};
     const ModToggle::Ptr m_controllers_allowed{ ModToggle::create(generate_name("ControllersAllowed"), true) };
@@ -934,68 +1058,6 @@ private:
     bool m_show_statistics_state{false};
 
     void update_statistics_overlay(sdk::UGameEngine* engine);
-
-    ValueList m_options{
-        *m_rendering_method,
-        *m_synced_afr_method,
-        *m_extreme_compat_mode,
-        *m_uncap_framerate,
-        *m_disable_hdr_compositing,
-        *m_disable_hzbocclusion,
-        *m_disable_instance_culling,
-        *m_desktop_fix,
-        *m_enable_gui,
-        *m_enable_depth,
-        *m_decoupled_pitch,
-        *m_decoupled_pitch_ui_adjust,
-        *m_load_blueprint_code,
-        *m_2d_screen_mode,
-        *m_roomscale_movement,
-        *m_swap_controllers,
-        *m_snapturn,
-        *m_snapturn_joystick_deadzone,
-        *m_snapturn_angle,
-        *m_controller_pitch_offset,
-        *m_aim_method,
-        *m_movement_orientation,
-        *m_aim_use_pawn_control_rotation,
-        *m_aim_modify_player_control_rotation,
-        *m_aim_multiplayer_support,
-        *m_aim_speed,
-        *m_aim_interp,
-        *m_dpad_shifting,
-        *m_dpad_shifting_method,
-        *m_motion_controls_inactivity_timer,
-        *m_joystick_deadzone,
-        *m_camera_forward_offset,
-        *m_camera_right_offset,
-        *m_camera_up_offset,
-        *m_world_scale,
-        *m_depth_scale,
-        *m_custom_z_near,
-        *m_custom_z_near_enabled,
-        *m_ghosting_fix,
-        *m_splitscreen_compatibility_mode,
-        *m_splitscreen_view_index,
-        *m_compatibility_skip_pip,
-        *m_compatibility_skip_uobjectarray_init,
-        *m_compatibility_ahud,
-        *m_sceneview_compatibility_mode,
-        *m_keybind_recenter,
-        *m_keybind_recenter_horizon,
-        *m_keybind_set_standing_origin,
-        *m_keybind_load_camera_0,
-        *m_keybind_load_camera_1,
-        *m_keybind_load_camera_2,
-        *m_keybind_toggle_2d_screen,
-        *m_keybind_disable_vr,
-        *m_keybind_toggle_gui,
-        *m_requested_runtime_name,
-        *m_show_fps,
-        *m_show_statistics,
-        *m_controllers_allowed,
-    };
-    
 
     int m_game_frame_count{};
     int m_frame_count{};

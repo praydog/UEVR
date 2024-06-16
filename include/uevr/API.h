@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 17
+#define UEVR_PLUGIN_VERSION_MINOR 20
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -340,6 +340,9 @@ typedef struct {
     UEVR_UObjectHookMotionControllerStateHandle (*get_motion_controller_state)(UEVR_UObjectHandle object);
 
     UEVR_UObjectHookMotionControllerStateFunctions* mc_state;
+
+    bool (*is_disabled)();
+    void (*set_disabled)(bool disabled);
 } UEVR_UObjectHookFunctions;
 
 typedef struct {
@@ -517,6 +520,15 @@ typedef struct {
     unsigned int (*get_hmd_height)();
     unsigned int (*get_ui_width)();
     unsigned int (*get_ui_height)();
+
+    bool (*is_snap_turn_enabled)();
+    void (*set_snap_turn_enabled)(bool enabled);
+    void (*set_decoupled_pitch_enabled)(bool enabled);
+
+    void (*set_mod_value)(const char* key, const char* value);
+    void (*get_mod_value)(const char* key, char* value, unsigned int value_size);
+    void (*save_config)();
+    void (*reload_config)();
 } UEVR_VRData;
 
 typedef struct {

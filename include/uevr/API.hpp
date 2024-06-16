@@ -900,6 +900,352 @@ public:
 
 public:
     // UEVR specific stuff
+    struct VR {
+        static bool is_runtime_ready() {
+            static const auto fn = initialize()->is_runtime_ready;
+            return fn();
+        }
+
+        static bool is_openvr() {
+            static const auto fn = initialize()->is_openvr;
+            return fn();
+        }
+
+        static bool is_openxr() {
+            static const auto fn = initialize()->is_openxr;
+            return fn();
+        }
+
+        static bool is_hmd_active() {
+            static const auto fn = initialize()->is_hmd_active;
+            return fn();
+        }
+
+        static UEVR_Vector3f get_standing_origin() {
+            static const auto fn = initialize()->get_standing_origin;
+            UEVR_Vector3f result{};
+
+            fn(&result);
+            return result;
+        }
+
+        static UEVR_Quaternionf get_rotation_offset() {
+            static const auto fn = initialize()->get_rotation_offset;
+            UEVR_Quaternionf result{};
+
+            fn(&result);
+            return result;
+        }
+
+        static void set_standing_origin(const UEVR_Vector3f& origin) {
+            static const auto fn = initialize()->set_standing_origin;
+            fn(&origin);
+        }
+        
+        static void set_rotation_offset(const UEVR_Quaternionf& offset) {
+            static const auto fn = initialize()->set_rotation_offset;
+            fn(&offset);
+        }
+
+        static void set_rotation_offset(const UEVR_Quaternionf* offset) {
+            static const auto fn = initialize()->set_rotation_offset;
+            fn(offset);
+        }
+
+        static UEVR_TrackedDeviceIndex get_hmd_index() {
+            static const auto fn = initialize()->get_hmd_index;
+            return fn();
+        }
+
+        static UEVR_TrackedDeviceIndex get_left_controller_index() {
+            static const auto fn = initialize()->get_left_controller_index;
+            return fn();
+        }
+
+        static UEVR_TrackedDeviceIndex get_right_controller_index() {
+            static const auto fn = initialize()->get_right_controller_index;
+            return fn();
+        }
+
+        struct Pose {
+            UEVR_Vector3f position;
+            UEVR_Quaternionf rotation;
+        };
+
+        static Pose get_pose(UEVR_TrackedDeviceIndex index) {
+            static const auto fn = initialize()->get_pose;
+            Pose result{};
+
+            fn(index, &result.position, &result.rotation);
+            return result;
+        }
+
+        UEVR_Matrix4x4f get_transform(UEVR_TrackedDeviceIndex index) {
+            static const auto fn = initialize()->get_transform;
+            UEVR_Matrix4x4f result{};
+
+            fn(index, &result);
+            return result;
+        }
+
+        static Pose get_grip_pose(UEVR_TrackedDeviceIndex index) {
+            static const auto fn = initialize()->get_grip_pose;
+            Pose result{};
+
+            fn(index, &result.position, &result.rotation);
+            return result;
+        }
+
+        static Pose get_aim_pose(UEVR_TrackedDeviceIndex index) {
+            static const auto fn = initialize()->get_aim_pose;
+            Pose result{};
+
+            fn(index, &result.position, &result.rotation);
+            return result;
+        }
+
+        static UEVR_Matrix4x4f get_grip_transform(UEVR_TrackedDeviceIndex index) {
+            static const auto fn = initialize()->get_grip_transform;
+            UEVR_Matrix4x4f result{};
+
+            fn(index, &result);
+            return result;
+        }
+
+        static UEVR_Matrix4x4f get_aim_transform(UEVR_TrackedDeviceIndex index) {
+            static const auto fn = initialize()->get_aim_transform;
+            UEVR_Matrix4x4f result{};
+
+            fn(index, &result);
+            return result;
+        }
+
+        enum class Eye : int32_t {
+            LEFT,
+            RIGHT
+        };
+
+        static UEVR_Vector3f get_eye_offset(Eye eye) {
+            static const auto fn = initialize()->get_eye_offset;
+            UEVR_Vector3f result{};
+
+            fn((int32_t)eye, &result);
+            return result;
+        }
+
+        static UEVR_Matrix4x4f get_ue_projection_matrix(Eye eye) {
+            static const auto fn = initialize()->get_ue_projection_matrix;
+            UEVR_Matrix4x4f result{};
+
+            fn((int32_t)eye, &result);
+            return result;
+        }
+
+        static UEVR_InputSourceHandle get_left_joystick_source() {
+            static const auto fn = initialize()->get_left_joystick_source;
+            return fn();
+        }
+
+        static UEVR_InputSourceHandle get_right_joystick_source() {
+            static const auto fn = initialize()->get_right_joystick_source;
+            return fn();
+        }
+
+        static UEVR_ActionHandle get_action_handle(std::string_view name) {
+            static const auto fn = initialize()->get_action_handle;
+            return fn(name.data());
+        }
+
+        static bool is_action_active(UEVR_ActionHandle handle, UEVR_InputSourceHandle source) {
+            static const auto fn = initialize()->is_action_active;
+            return fn(handle, source);
+        }
+
+        static bool is_action_active_any_joystick(UEVR_ActionHandle handle) {
+            static const auto fn = initialize()->is_action_active_any_joystick;
+            return fn(handle);
+        }
+
+        static UEVR_Vector2f get_joystick_axis(UEVR_InputSourceHandle source) {
+            static const auto fn = initialize()->get_joystick_axis;
+            UEVR_Vector2f result{};
+
+            fn(source, &result);
+            return result;
+        }
+
+        static void trigger_haptic_vibration(UEVR_TrackedDeviceIndex index, float amplitude, float frequency, float duration, UEVR_InputSourceHandle source) {
+            static const auto fn = initialize()->trigger_haptic_vibration;
+            fn(index, amplitude, frequency, duration, source);
+        }
+
+        static bool is_using_contriollers() {
+            static const auto fn = initialize()->is_using_controllers;
+            return fn();
+        }
+
+        static bool is_decoupled_pitch_enabled() {
+            static const auto fn = initialize()->is_decoupled_pitch_enabled;
+            return fn();
+        }
+
+        enum class AimMethod : int32_t {
+            GAME,
+            HEAD,
+            RIGHT_CONTROLLER,
+            LEFT_CONTROLLER,
+            TWO_HANDED_RIGHT,
+            TWO_HANDED_LEFT,
+        };
+
+        static AimMethod get_movement_orientation() {
+            static const auto fn = initialize()->get_movement_orientation;
+            return (AimMethod)fn();
+        }
+
+        static uint32_t get_lowest_xinput_index() {
+            static const auto fn = initialize()->get_lowest_xinput_index;
+            return fn();
+        }
+
+        static void recenter_view() {
+            static const auto fn = initialize()->recenter_view;
+            fn();
+        }
+
+        static void recenter_horizon() {
+            static const auto fn = initialize()->recenter_horizon;
+            fn();
+        }
+
+        static AimMethod get_aim_method() {
+            static const auto fn = initialize()->get_aim_method;
+            return (AimMethod)fn();
+        }
+
+        static void set_aim_method(AimMethod method) {
+            static const auto fn = initialize()->set_aim_method;
+            fn((uint32_t)method);
+        }
+
+        static bool is_aim_allowed() {
+            static const auto fn = initialize()->is_aim_allowed;
+            return fn();
+        }
+
+        static void set_aim_allowed(bool allowed) {
+            static const auto fn = initialize()->set_aim_allowed;
+            fn(allowed);
+        }
+
+        static uint32_t get_hmd_width() {
+            static const auto fn = initialize()->get_hmd_width;
+            return fn();
+        }
+
+        static uint32_t get_hmd_height() {
+            static const auto fn = initialize()->get_hmd_height;
+            return fn();
+        }
+
+        static uint32_t get_ui_width() {
+            static const auto fn = initialize()->get_ui_width;
+            return fn();
+        }
+
+        static uint32_t get_ui_height() {
+            static const auto fn = initialize()->get_ui_height;
+            return fn();
+        }
+
+        static bool is_snap_turn_enabled() {
+            static const auto fn = initialize()->is_snap_turn_enabled;
+            return fn();
+        }
+
+        static void set_snap_turn_enabled(bool enabled) {
+            static const auto fn = initialize()->set_snap_turn_enabled;
+            fn(enabled);
+        }
+
+        static void set_decoupled_pitch_enabled(bool enabled) {
+            static const auto fn = initialize()->set_decoupled_pitch_enabled;
+            fn(enabled);
+        }
+
+        template<typename T>
+        static void set_mod_value(std::string_view key, const T& value) {
+            static const auto fn = initialize()->set_mod_value;
+
+            if constexpr (std::is_same_v<T, const char*> || std::is_same_v<T, const char* const> || std::is_same_v<T, char*>) {
+                fn(key.data(), value);
+                return;
+            } else if constexpr (std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view>) {
+                fn(key.data(), value.data());
+                return;
+            } else if constexpr (std::is_same_v<T, bool>) {
+                if (value) {
+                    fn(key.data(), "true");
+                } else {
+                    fn(key.data(), "false");
+                }
+
+                return;
+            }
+
+
+            fn(key.data(), std::to_string(value).c_str());
+        }
+
+        template<typename T>
+        static T get_mod_value(std::string_view key) {
+            static const auto fn = initialize()->get_mod_value;
+            char result[256]{};
+            fn(key.data(), result, sizeof(result));
+
+            static_assert(!std::is_same_v<T, void>, "Cannot get a void value");
+            static_assert(!std::is_same_v<T, const char*>, "Cannot get a const char* value");
+            static_assert(!std::is_same_v<T, const char* const>, "Cannot get a const char* value");
+            static_assert(!std::is_same_v<T, char*>, "Cannot get a char* value");
+
+            if constexpr (std::is_same_v<T, std::string>) {
+                return std::string{result};
+            } else if constexpr (std::is_same_v<T, bool>) {
+                return std::string_view{result} == "true";
+            } else if constexpr (std::is_integral_v<T>) {
+                if constexpr (std::is_unsigned_v<T>) {
+                    return (T)std::stoul(result);
+                }
+
+                return (T)std::stoi(result);
+            } else if constexpr (std::is_floating_point_v<T>) {
+                return (T)std::stod(result);
+            }
+
+            return T{};
+        }
+
+        static void save_config() {
+            static const auto fn = initialize()->save_config;
+            fn();
+        }
+
+        static void reload_config() {
+            static const auto fn = initialize()->reload_config;
+            fn();
+        }
+
+    private:
+        static inline const UEVR_VRData* s_functions{nullptr};
+        static inline const UEVR_VRData* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->param()->vr;
+            }
+
+            return s_functions;
+        }
+    };
+
     struct UObjectHook {
         struct MotionControllerState;
 
@@ -911,6 +1257,16 @@ public:
         static bool exists(UObject* obj) {
             static const auto fn = initialize()->exists;
             return fn(obj->to_handle());
+        }
+
+        static bool is_disabled() {
+            static const auto fn = initialize()->is_disabled;
+            return fn();
+        }
+
+        static void set_disabled(bool disabled) {
+            static const auto fn = initialize()->set_disabled;
+            fn(disabled);
         }
 
         static std::vector<UObject*> get_objects_by_class(UClass* c, bool allow_default = false) {

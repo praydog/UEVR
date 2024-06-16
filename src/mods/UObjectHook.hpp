@@ -29,6 +29,7 @@ class FArrayProperty;
 class UObjectHook : public Mod {
 public:
     static std::shared_ptr<UObjectHook>& get();
+
     std::unordered_set<sdk::UObjectBase*> get_objects_by_class(sdk::UClass* uclass) const {
         std::shared_lock _{m_mutex};
         if (auto it = m_objects_by_class.find(uclass); it != m_objects_by_class.end()) {
@@ -44,6 +45,14 @@ public:
     }
 
     void activate();
+
+    bool is_disabled() const {
+        return m_uobject_hook_disabled;
+    }
+
+    void set_disabled(bool disabled) {
+        m_uobject_hook_disabled = disabled;
+    }
 
 protected:
     std::string_view get_name() const override { return "UObjectHook"; };
@@ -458,10 +467,15 @@ private:
     bool m_uobject_hook_disabled{false};
     bool m_fixed_visibilities{false};
 
-    ValueList m_options{
-        *m_enabled_at_startup,
-        *m_attach_lerp_enabled,
-        *m_attach_lerp_speed,
-        *m_keybind_toggle_uobject_hook
-    };
+public:
+    UObjectHook() {
+        m_options = {
+            *m_enabled_at_startup,
+            *m_attach_lerp_enabled,
+            *m_attach_lerp_speed,
+            *m_keybind_toggle_uobject_hook
+        };
+    }
+
+private:
 };

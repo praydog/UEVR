@@ -117,8 +117,21 @@ public:
         return get_persistent_dir() / dir;
     }
 
+    void deferred_save_config() {
+        m_frame_worker->enqueue([this]() {
+            save_config();
+        });
+    }
+
+    void deferred_reload_config() {
+        m_frame_worker->enqueue([this]() {
+            reload_config();
+        });
+    }
+
     void save_config();
     void reset_config();
+    void reload_config();
 
     enum class RendererType : uint8_t {
         D3D11,

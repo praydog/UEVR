@@ -20,8 +20,8 @@ VRRuntime::Error OpenVR::synchronize_frame(std::optional<uint32_t> frame_count) 
         this->got_first_valid_poses = true;
         this->got_first_sync = true;
         this->frame_synced = true;
+        this->should_update_eye_matrices = true;
     }
-
     return (VRRuntime::Error)ret;
 }
 
@@ -136,11 +136,11 @@ VRRuntime::Error OpenVR::update_render_target_size() {
 }
 
 uint32_t OpenVR::get_width() const {
-    return this->w;
+    return this->w * eye_width_adjustment;
 }
 
 uint32_t OpenVR::get_height() const {
-    return this->h;
+    return this->h * eye_height_adjustment;
 }
 
 VRRuntime::Error OpenVR::consume_events(std::function<void(void*)> callback) {
@@ -170,7 +170,7 @@ VRRuntime::Error OpenVR::consume_events(std::function<void(void*)> callback) {
             } break;
 
             default:
-                spdlog::info("VR: Unknown event: {}", (uint32_t)event.eventType);
+                // don't spam logs with SVR events that we won't handle here
                 break;
         }
     }
@@ -178,7 +178,14 @@ VRRuntime::Error OpenVR::consume_events(std::function<void(void*)> callback) {
     return VRRuntime::Error::SUCCESS;
 }
 
-VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
+VRRuntime::Error OpenVR::update_matrices(float nearz, float farz) {
+    // exit immediately if we've updated the eye matrices since the last frame sync, so we only do this
+    // operation once per sync
+    if (!this->should_update_eye_matrices) {
+        return VRRuntime::Error::SUCCESS;
+    }
+
+    // always update the pose:
     std::unique_lock __{ this->eyes_mtx };
     const auto local_left = this->hmd->GetEyeToHeadTransform(vr::Eye_Left);
     const auto local_right = this->hmd->GetEyeToHeadTransform(vr::Eye_Right);
@@ -186,20 +193,64 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
     this->eyes[vr::Eye_Left] = glm::rowMajor4(Matrix4x4f{ *(Matrix3x4f*)&local_left } );
     this->eyes[vr::Eye_Right] = glm::rowMajor4(Matrix4x4f{ *(Matrix3x4f*)&local_right } );
 
-    //auto pleft = this->hmd->GetProjectionMatrix(vr::Eye_Left, nearz, farz);
-    //auto pright = this->hmd->GetProjectionMatrix(vr::Eye_Right, nearz, farz);
-
-    //this->projections[vr::Eye_Left] = glm::rowMajor4(Matrix4x4f{ *(Matrix4x4f*)&pleft } );
-    //this->projections[vr::Eye_Right] = glm::rowMajor4(Matrix4x4f{ *(Matrix4x4f*)&pright } );
-
-    this->hmd->GetProjectionRaw(vr::Eye_Left, &this->raw_projections[vr::Eye_Left][0], &this->raw_projections[vr::Eye_Left][1], &this->raw_projections[vr::Eye_Left][2], &this->raw_projections[vr::Eye_Left][3]);
-    this->hmd->GetProjectionRaw(vr::Eye_Right, &this->raw_projections[vr::Eye_Right][0], &this->raw_projections[vr::Eye_Right][1], &this->raw_projections[vr::Eye_Right][2], &this->raw_projections[vr::Eye_Right][3]);
-
     auto get_mat = [&](vr::EVREye eye) {
-        const auto left =   this->raw_projections[eye][0] * -1.0f;
-        const auto right =  this->raw_projections[eye][1] * -1.0f;
-        const auto top =    this->raw_projections[eye][2] * -1.0f;
-        const auto bottom = this->raw_projections[eye][3] * -1.0f;
+        const auto& vr = VR::get();
+        std::array<float, 4> tan_half_fov{};
+
+        if (vr->get_horizontal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_SYMMETRIC) {
+            tan_half_fov[0] = std::max(std::max(-this->raw_projections[0][0], this->raw_projections[0][1]),
+                                       std::max(-this->raw_projections[1][0], this->raw_projections[1][1]));
+            tan_half_fov[1] = -tan_half_fov[0];
+        } else if (vr->get_horizontal_projection_override() == VR::HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_MIRROR) {
+            const auto max_outer = std::max(-this->raw_projections[0][0], this->raw_projections[1][1]);
+            const auto max_inner = std::max(this->raw_projections[0][1], -this->raw_projections[1][0]);
+            tan_half_fov[0] = eye == 0 ? max_outer : max_inner;
+            tan_half_fov[1] = eye == 0 ? -max_inner : -max_outer;
+        } else {
+            tan_half_fov[0] = -this->raw_projections[eye][0];
+            tan_half_fov[1] = -this->raw_projections[eye][1];
+        }
+
+        if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::VERTICAL_SYMMETRIC) {
+            tan_half_fov[2] = std::max(std::max(-this->raw_projections[0][2], this->raw_projections[0][3]),
+                                       std::max(-this->raw_projections[1][2], this->raw_projections[1][3]));
+            tan_half_fov[3] = -tan_half_fov[2];
+        } else if (vr->get_vertical_projection_override() == VR::VERTICAL_PROJECTION_OVERRIDE::VERTICAL_MATCHED) {
+
+            tan_half_fov[2] = std::max(-this->raw_projections[0][2], -this->raw_projections[1][2]);
+            tan_half_fov[3] = -std::max(this->raw_projections[0][3], this->raw_projections[1][3]);
+        } else {
+            tan_half_fov[2] = -this->raw_projections[eye][2];
+            tan_half_fov[3] = -this->raw_projections[eye][3];
+        }
+        view_bounds[eye][0] = 0.5f + 0.5f * this->raw_projections[eye][0] / tan_half_fov[0];
+        view_bounds[eye][1] = 0.5f - 0.5f * this->raw_projections[eye][1] / tan_half_fov[1];
+        // note the swapped up / down indices from the raw projection values:
+        view_bounds[eye][2] = 0.5f + 0.5f * this->raw_projections[eye][3] / tan_half_fov[3];
+        view_bounds[eye][3] = 0.5f - 0.5f * this->raw_projections[eye][2] / tan_half_fov[2];
+
+        // if we've derived the right eye, we have up to date view bounds for both so adjust the render target if necessary
+        if (eye == 1) {
+            if (vr->should_grow_rectangle_for_projection_cropping()) {
+                eye_width_adjustment = 1 / std::max(view_bounds[0][1] - view_bounds[0][0], view_bounds[1][1] - view_bounds[1][0]);
+                eye_height_adjustment = 1 / std::max(view_bounds[0][3] - view_bounds[0][2], view_bounds[1][3] - view_bounds[1][2]);
+            } else {
+                eye_width_adjustment = 1;
+                eye_height_adjustment = 1;
+            }
+            SPDLOG_INFO("Eye texture proportion scale: {} by {}", eye_width_adjustment, eye_height_adjustment);
+        }
+
+        const auto left =   tan_half_fov[0];
+        const auto right =  tan_half_fov[1];
+        const auto top =    tan_half_fov[2];
+        const auto bottom = tan_half_fov[3];
+
+        // signs : at this point we expect right [1] and bottom [3] to be negative
+        SPDLOG_INFO("Original FOV for {} eye: {}, {}, {}, {}", eye == 0 ? "left" : "right", -this->raw_projections[eye][0], -this->raw_projections[eye][1],
+                                                                                            -this->raw_projections[eye][2], -this->raw_projections[eye][3]);
+        SPDLOG_INFO("Derived FOV for {} eye:  {}, {}, {}, {}",  eye == 0 ? "left" : "right", left, right, top, bottom);
+        SPDLOG_INFO("Derived texture bounds {} eye: {}, {}, {}, {}", eye == 0 ? "left" : "right", view_bounds[eye][0], view_bounds[eye][1], view_bounds[eye][2], view_bounds[eye][3]);
         float sum_rl = (left + right);
         float sum_tb = (top + bottom);
         float inv_rl = (1.0f / (left - right));
@@ -212,10 +263,18 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
             0.0f, 0.0f, nearz, 0.0f
         };
     };
-
-    this->projections[vr::Eye_Left] = get_mat(vr::Eye_Left);
-    this->projections[vr::Eye_Right] = get_mat(vr::Eye_Right);
-
+    // if we've not yet derived an eye projection matrix, or we've changed the projection, derive it here
+    // Hacky way to check for an uninitialised eye matrix - is there something better, is this necessary?
+    if (this->should_recalculate_eye_projections || this->last_eye_matrix_nearz != nearz || this->projections[vr::Eye_Left][2][3] == 0) {
+        this->hmd->GetProjectionRaw(vr::Eye_Left, &this->raw_projections[vr::Eye_Left][0], &this->raw_projections[vr::Eye_Left][1], &this->raw_projections[vr::Eye_Left][2], &this->raw_projections[vr::Eye_Left][3]);
+        this->hmd->GetProjectionRaw(vr::Eye_Right, &this->raw_projections[vr::Eye_Right][0], &this->raw_projections[vr::Eye_Right][1], &this->raw_projections[vr::Eye_Right][2], &this->raw_projections[vr::Eye_Right][3]);
+        this->projections[vr::Eye_Left] = get_mat(vr::Eye_Left);
+        this->projections[vr::Eye_Right] = get_mat(vr::Eye_Right);
+        this->should_recalculate_eye_projections = false;
+        this->last_eye_matrix_nearz = nearz;
+    }
+    // don't allow the eye matrices to be derived again until after the next frame sync
+    this->should_update_eye_matrices = false;
     return VRRuntime::Error::SUCCESS;
 }
 

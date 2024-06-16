@@ -995,6 +995,16 @@ void Framework::reset_config() try {
     spdlog::error("Failed to reset config: {}", e.what());
 }
 
+void Framework::reload_config() try {
+    std::scoped_lock _{m_config_mtx};
+
+    m_mods->reload_config(false);
+
+    spdlog::info("Reloaded config");
+} catch (const std::exception& e) {
+    spdlog::error("Failed to reload config: {}", e.what());
+}
+
 bool Framework::is_drawing_anything() const {
     return m_draw_ui || FrameworkConfig::get()->is_always_show_cursor();
 }

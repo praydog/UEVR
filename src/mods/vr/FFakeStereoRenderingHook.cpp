@@ -89,6 +89,7 @@ bool is_using_double_precision(uintptr_t addr) {
 
 FFakeStereoRenderingHook::FFakeStereoRenderingHook() {
     g_hook = this;
+    setup_options();
 }
 
 void FFakeStereoRenderingHook::on_frame() {
@@ -3265,6 +3266,7 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
     }
 
     m_tracking_system_hook = std::make_unique<IXRTrackingSystemHook>(this, potential_hmd_device_offset);
+    m_components.push_back(m_tracking_system_hook.get());
 
     // Add a vectored exception handler that catches attempted dereferences of a null XRSystem or HMDDevice
     // The exception handler will then patch out the instructions causing the crash and continue execution
@@ -5813,28 +5815,85 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         if (ctx.rcx != 0 && std::abs((int64_t)ctx.rcx - (int64_t)ctx.rsp) <= 0x300) {
             SPDLOG_INFO("Weird form of E8 call detected...");
 
-            // Format
-            ctx.r9 = 2; // PF_B8G8R8A8
+            // RDX check is to make sure RDX is a pointer and not something like the width which would be a relatively small integer
+            if (rtm->is_using_texture_desc && rtm->is_version_greq_5_1 && ctx.rdx >= 65535) {
+                SPDLOG_INFO("Calling UE5 texture desc version of texture create");
 
-            void (*func)(
-                FTexture2DRHIRef* out,
-                uint32_t w,
-                uint32_t h,
-                uint8_t format,
-                uintptr_t mips,
-                uintptr_t samples,
-                uintptr_t flags,
-                uintptr_t a7,
-                uintptr_t a8,
-                uintptr_t a9,
-                uintptr_t additional,
-                uintptr_t additional2) = (decltype(func))func_ptr;
+                void (*func)(
+                    FTexture2DRHIRef* out,
+                    uintptr_t desc,
+                    uintptr_t r8,
+                    uintptr_t r9
+                ) = (decltype(func))func_ptr;
 
-            func(&out, (uint32_t)size.x, (uint32_t)size.y, 2,
-                stack_args[0], stack_args[1], 
-                stack_args[2], stack_args[3],
-                stack_args[4],
-                stack_args[7], stack_args[8], stack_args[9]);
+                // Scan for the render target width and height in the desc
+                // and replace it with the desktop resolution (This is for the UI texture)
+                const auto scan_x = VR::get()->get_hmd_width() * 2;
+                const auto scan_y = VR::get()->get_hmd_height();
+
+                std::optional<int32_t> width_offset{};
+                std::optional<int32_t> height_offset{};
+
+                int32_t old_width{};
+                int32_t old_height{};
+
+                for (auto i = 0; i < 0x100; ++i) {
+                    auto& x = *(int32_t*)(ctx.rdx + i);
+                    auto& y = *(int32_t*)(ctx.rdx + i + 4);
+
+                    if (x == scan_x && y == scan_y) {
+                        SPDLOG_INFO("UE5: Found render target width and height at offset: {:x}", i);
+
+                        width_offset = i;
+                        height_offset = i + 4;
+
+                        old_width = x;
+                        old_height = y;
+
+                        x = size.x;
+                        y = size.y;
+                        break;
+                    }
+                }
+
+                func(&out, ctx.rdx, ctx.r8, ctx.r9);
+
+                if (width_offset && height_offset) {
+                    auto& x = *(int32_t*)(ctx.rdx + *width_offset);
+                    auto& y = *(int32_t*)(ctx.rdx + *height_offset);
+
+                    x = old_width;
+                    y = old_height;
+                }
+
+                if (rtm->texture_hook_ref == nullptr || rtm->texture_hook_ref->texture == nullptr) {
+                    SPDLOG_INFO("Had to set texture hook ref in pre texture hook!");
+                    rtm->texture_hook_ref = (FTexture2DRHIRef*)ctx.rcx;
+                }
+            } else {
+                // Format
+                ctx.r9 = 2; // PF_B8G8R8A8
+
+                void (*func)(
+                    FTexture2DRHIRef* out,
+                    uint32_t w,
+                    uint32_t h,
+                    uint8_t format,
+                    uintptr_t mips,
+                    uintptr_t samples,
+                    uintptr_t flags,
+                    uintptr_t a7,
+                    uintptr_t a8,
+                    uintptr_t a9,
+                    uintptr_t additional,
+                    uintptr_t additional2) = (decltype(func))func_ptr;
+
+                func(&out, (uint32_t)size.x, (uint32_t)size.y, 2,
+                    stack_args[0], stack_args[1], 
+                    stack_args[2], stack_args[3],
+                    stack_args[4],
+                    stack_args[7], stack_args[8], stack_args[9]);
+            }
         } else {
             ctx.r8 = 2; // PF_B8G8R8A8
 

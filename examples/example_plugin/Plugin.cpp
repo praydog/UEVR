@@ -101,6 +101,21 @@ public:
         }
     }
 
+    void reset_height() {
+        auto& api = API::get();
+        auto vr = api->param()->vr;
+        UEVR_Vector3f origin{};
+        vr->get_standing_origin(&origin);
+
+        UEVR_Vector3f hmd_pos{};
+        UEVR_Quaternionf hmd_rot{};
+        vr->get_pose(vr->get_hmd_index(), &hmd_pos, &hmd_rot);
+
+        origin.y = hmd_pos.y;
+
+        vr->set_standing_origin(&origin);
+    }
+
     void on_device_reset() override {
         PLUGIN_LOG_ONCE("Example Device Reset");
 
@@ -498,6 +513,46 @@ private:
     void internal_frame() {
         if (ImGui::Begin("Super Cool Plugin")) {
             ImGui::Text("Hello from the super cool plugin!");
+            ImGui::Text("Snap turn: %i", API::VR::is_snap_turn_enabled());
+            ImGui::Text("Decoupled pitch: %i", API::VR::is_decoupled_pitch_enabled());
+            if (ImGui::Button("Toggle snap turn")) {
+                API::VR::set_snap_turn_enabled(!API::VR::is_snap_turn_enabled());
+            }
+
+            if (ImGui::Button("Toggle decoupled pitch")) {
+                API::VR::set_decoupled_pitch_enabled(!API::VR::is_decoupled_pitch_enabled());
+            }
+
+            if (ImGui::Button("Screw up world scale")) {
+                API::VR::set_mod_value("VR_WorldScale", 1.337f);
+            }
+
+            if (ImGui::Button("Toggle GUI")) {
+                const bool enabled = API::VR::get_mod_value<bool>("VR_EnableGUI");
+                API::VR::set_mod_value("VR_EnableGUI", !enabled);
+            }
+
+            static char input[256]{};
+            if (ImGui::InputText("Get mod value", input, sizeof(input))) {
+
+            }
+
+            std::string mod_value = API::VR::get_mod_value<std::string>(input);
+            ImGui::Text("Mod value: %s", mod_value.c_str());
+
+            if (ImGui::Button("Save Config")) {
+                API::VR::save_config();
+            }
+
+            if (ImGui::Button("Reload Config")) {
+                API::VR::reload_config();
+            }
+
+            if (ImGui::Button("Toggle UObjectHook disabled")) {
+                const auto value = API::UObjectHook::is_disabled();
+
+                API::UObjectHook::set_disabled(!value);
+            }
     #if defined(__clang__)
             ImGui::Text("Plugin Compiler: Clang");
     #elif defined(_MSC_VER)

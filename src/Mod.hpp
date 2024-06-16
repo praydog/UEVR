@@ -25,6 +25,10 @@ public:
     virtual void draw_value(std::string_view name) = 0;
     virtual void config_load(const utility::Config& cfg, bool set_defaults) = 0;
     virtual void config_save(utility::Config& cfg) = 0;
+    virtual void set(const std::string& value) = 0;
+    virtual std::string get() const = 0;
+    virtual std::string get_config_name() const = 0;
+    virtual std::string_view get_config_name_view() const = 0;
 };
 
 // Convenience classes for imgui
@@ -76,6 +80,44 @@ public:
         }
     };
 
+    virtual std::string get() const override {
+        if constexpr (std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view>) {
+            return m_value;
+        } else if constexpr (std::is_same_v<T, bool>) {
+            return m_value ? "true" : "false";
+        } else {
+            return std::to_string(m_value);
+        }
+    }
+
+    virtual void set(const std::string& value) override {
+        if constexpr (std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view>) {
+            m_value = value;
+            return;
+        }
+
+        else if constexpr (std::is_same_v<T, bool>) {
+            m_value = value == "true" || value == "1";
+            return;
+        }
+
+        // Use the correct conversion function based on the type.
+        else if constexpr (std::is_integral_v<T>) {
+            if constexpr (std::is_unsigned_v<T>) {
+                m_value = (T)std::stoul(value);
+                return;
+            }
+
+            m_value = (T)std::stol(value);
+            return;
+        } else if constexpr (std::is_floating_point_v<T>) {
+            m_value = (T)std::stod(value);
+            return;
+        }
+
+        static_assert(std::is_same_v<T, void> == false, "Unsupported type for ModValue::set");
+    }
+
     operator T&() {
         return m_value;
     }
@@ -88,7 +130,11 @@ public:
         return m_default_value;
     }
 
-    const auto& get_config_name() const {
+    std::string get_config_name() const override {
+        return m_config_name;
+    }
+
+    std::string_view get_config_name_view() const override {
         return m_config_name;
     }
 
@@ -542,6 +588,8 @@ public:
     };
 };
 
+class ModComponent;
+
 class Mod {
 public:
     using ValueList = std::vector<std::reference_wrapper<IModValue>>;
@@ -575,9 +623,11 @@ public:
 
     virtual void on_post_render_vr_framework_dx11(ID3D11DeviceContext* context, ID3D11Texture2D* tex, ID3D11RenderTargetView* rtv) {};
     virtual void on_post_render_vr_framework_dx12(ID3D12GraphicsCommandList* command_list, ID3D12Resource* tex, D3D12_CPU_DESCRIPTOR_HANDLE* rtv) {};
+    
+    virtual void on_config_load(const utility::Config& cfg, bool set_defaults);
+    virtual void on_config_save(utility::Config& cfg);
 
-    virtual void on_config_load(const utility::Config& cfg, bool set_defaults) {};
-    virtual void on_config_save(utility::Config& cfg) {};
+    virtual IModValue* get_value(std::string_view name) const;
 
     // game specific
     virtual void on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {};
@@ -590,9 +640,53 @@ public:
                                                       const float world_to_meters, Vector3f* view_location, bool is_double) {};
     virtual void on_pre_viewport_client_draw(void* viewport_client, void* viewport, void* canvas) {};
     virtual void on_post_viewport_client_draw(void* viewport_client, void* viewport, void* canvas) {};
+
+protected:
+    ValueList m_options{};
+    std::vector<ModComponent*> m_components{};
 };
 
 class ModComponent : public Mod {
 public:
     // todo?
 };
+
+inline void Mod::on_config_load(const utility::Config& cfg, bool set_defaults) {
+    for (auto& value : m_options) {
+        value.get().config_load(cfg, set_defaults);
+    }
+
+    for (auto& component : m_components) {
+        component->on_config_load(cfg, set_defaults);
+    }
+}
+
+inline void Mod::on_config_save(utility::Config& cfg) {
+    for (const auto& value : m_options) {
+        value.get().config_save(cfg);
+    }
+
+    for (auto& component : m_components) {
+        component->on_config_save(cfg);
+    }
+}
+
+inline IModValue* Mod::get_value(std::string_view name) const {
+    auto it = std::find_if(m_options.begin(), m_options.end(), [&name](const auto& v) {
+        return v.get().get_config_name_view() == name;
+    });
+
+    if (it == m_options.end()) {
+        for (auto& component : m_components) {
+            auto value = component->get_value(name);
+
+            if (value != nullptr) {
+                return value;
+            }
+        }
+
+        return nullptr;
+    }
+
+    return &it->get();
+}

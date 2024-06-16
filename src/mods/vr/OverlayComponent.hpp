@@ -14,12 +14,6 @@ class D3D12Component;
 
 class OverlayComponent : public ModComponent {
 public:
-    OverlayComponent() 
-        : m_openxr{this}
-    {
-
-    }
-
     void on_reset();
     std::optional<std::string> on_initialize_openvr();
 
@@ -115,20 +109,25 @@ private:
     const ModToggle::Ptr m_framework_wrist_ui{ ModToggle::create("UI_Framework_WristUI", false) };
     const ModToggle::Ptr m_framework_mouse_emulation{ ModToggle::create("UI_Framework_MouseEmulation", true) };
 
-    Mod::ValueList m_options{
-        *m_slate_overlay_type,
-        *m_slate_x_offset,
-        *m_slate_y_offset,
-        *m_slate_distance,
-        *m_slate_size,
-        *m_slate_cylinder_angle,
-        *m_ui_follows_view,
-        *m_framework_distance,
-        *m_framework_size,
-        *m_framework_ui_follows_view,
-        *m_framework_wrist_ui,
-        *m_framework_mouse_emulation
-    };
+public:
+    OverlayComponent() 
+        : m_openxr{this}
+    {
+        m_options = { 
+            *m_slate_overlay_type,
+            *m_slate_x_offset,
+            *m_slate_y_offset,
+            *m_slate_distance,
+            *m_slate_size,
+            *m_slate_cylinder_angle,
+            *m_ui_follows_view,
+            *m_framework_distance,
+            *m_framework_size,
+            *m_framework_ui_follows_view,
+            *m_framework_wrist_ui,
+            *m_framework_mouse_emulation
+        };
+    }
 
     // OpenXR
 private:
