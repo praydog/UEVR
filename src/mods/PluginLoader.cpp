@@ -400,8 +400,26 @@ UEVR_FFieldFunctions g_ffield_functions {
 
 UEVR_FPropertyFunctions g_fproperty_functions {
     // get_offset
-    [](UEVR_FPropertyHandle prop) -> int {
+    .get_offset = [](UEVR_FPropertyHandle prop) -> int {
         return FPROPERTY(prop)->get_offset();
+    },
+    .get_property_flags = [](UEVR_FPropertyHandle prop) -> uint64_t {
+        return FPROPERTY(prop)->get_property_flags();
+    },
+    .is_param = [](UEVR_FPropertyHandle prop) -> bool {
+        return FPROPERTY(prop)->is_param();
+    },
+    .is_out_param = [](UEVR_FPropertyHandle prop) -> bool {
+        return FPROPERTY(prop)->is_out_param();
+    },
+    .is_return_param = [](UEVR_FPropertyHandle prop) -> bool {
+        return FPROPERTY(prop)->is_return_param();
+    },
+    .is_reference_param = [](UEVR_FPropertyHandle prop) -> bool {
+        return FPROPERTY(prop)->is_reference_param();
+    },
+    .is_pod = [](UEVR_FPropertyHandle prop) -> bool {
+        return FPROPERTY(prop)->is_pod();
     },
 };
 
@@ -419,6 +437,10 @@ UEVR_UStructFunctions g_ustruct_functions {
     // find_function
     [](UEVR_UStructHandle strct, const wchar_t* name) {
         return (UEVR_UFunctionHandle)USTRUCT(strct)->find_function(name);
+    },
+    // find_property
+    [](UEVR_UStructHandle strct, const wchar_t* name) {
+        return (UEVR_FPropertyHandle)USTRUCT(strct)->find_property(name);
     },
 };
 
