@@ -20,12 +20,12 @@ uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
     local game_engine_class = api:find_uobject("Class /Script/Engine.GameEngine")
     local game_engine = UEVR_UObjectHook.get_first_object_by_class(game_engine_class)
 
-    local viewport = game_engine:get_property("GameViewport")
+    local viewport = game_engine.GameViewport
     if viewport == nil then
         print("Viewport is nil")
         return
     end
-    local world = viewport:get_property("World")
+    local world = viewport.World
 
     if world == nil then
         print("World is nil")
@@ -38,7 +38,7 @@ uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
 
     last_world = world
 
-    local level = world:get_property("PersistentLevel")
+    local level = world.PersistentLevel
 
     if level == nil then
         print("Level is nil")
@@ -48,34 +48,34 @@ uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
     if level ~= last_level then
         print("Level changed")
         print("Level name: " .. level:get_full_name())
+
+        local game_instance = game_engine.GameInstance
+
+        if game_instance == nil then
+            print("GameInstance is nil")
+            return
+        end
+
+        local local_players = game_instance.LocalPlayers
+
+        for i in ipairs(local_players) do
+            local player = local_players[i]
+            local player_controller = player.PlayerController
+            local pawn = player_controller.Pawn
+    
+            if pawn ~= nil then
+                print("Pawn: " .. pawn:get_full_name())
+            end
+    
+            if player_controller ~= nil then
+                print("PlayerController: " .. player_controller:get_full_name())
+            end
+        end
+
+        print("Local players: " .. tostring(local_players))
     end
 
     last_level = level
-
-    local game_instance = game_engine:get_property("GameInstance")
-
-    if game_instance == nil then
-        print("GameInstance is nil")
-        return
-    end
-
-    local local_players = game_instance:get_property("LocalPlayers")
-
-    for i in ipairs(local_players) do
-        local player = local_players[i]
-        local player_controller = player:get_property("PlayerController")
-        local pawn = player_controller:get_property("Pawn")
-
-        if pawn ~= nil then
-            print("Pawn: " .. pawn:get_full_name())
-        end
-
-        if player_controller ~= nil then
-            print("PlayerController: " .. player_controller:get_full_name())
-        end
-    end
-
-    print("Local players: " .. tostring(local_players))
 
     if once then
         print("executing stat fps")

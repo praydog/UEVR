@@ -157,6 +157,86 @@ void ScriptContext::setup_callback_bindings() {
     );
 }
 
+sol::object prop_to_object(sol::this_state s, uevr::API::UObject& self, const std::wstring& name) {
+    const auto c = self.get_class();
+
+    if (c == nullptr) {
+        return sol::make_object(s, sol::lua_nil);
+    }
+
+    const auto desc = c->find_property(name.c_str());
+
+    if (desc == nullptr) {
+        return sol::make_object(s, sol::lua_nil);
+    }
+
+    const auto propc = desc->get_class();
+
+    if (propc == nullptr) {
+        return sol::make_object(s, sol::lua_nil);
+    }
+
+    const auto name_hash = utility::hash(propc->get_fname()->to_string());
+
+    switch (name_hash) {
+    case L"BoolProperty"_fnv:
+        return sol::make_object(s, self.get_bool_property(name));
+    case L"FloatProperty"_fnv:
+        return sol::make_object(s, self.get_property<float>(name));
+    case L"DoubleProperty"_fnv:
+        return sol::make_object(s, self.get_property<double>(name));
+    case L"IntProperty"_fnv:
+        return sol::make_object(s, self.get_property<int32_t>(name));
+    case L"UIntProperty"_fnv:
+    case L"UInt32Property"_fnv:
+        return sol::make_object(s, self.get_property<uint32_t>(name));
+    case L"NameProperty"_fnv:
+        return sol::make_object(s, self.get_property<uevr::API::FName>(name));
+    case L"ObjectProperty"_fnv:
+        return sol::make_object(s, self.get_property<uevr::API::UObject*>(name));
+    case L"ArrayProperty"_fnv:
+    {
+        const auto inner_prop = ((uevr::API::FArrayProperty*)desc)->get_inner();
+
+        if (inner_prop == nullptr) {
+            return sol::make_object(s, sol::lua_nil);
+        }
+
+        const auto inner_c = inner_prop->get_class();
+
+        if (inner_c == nullptr) {
+            return sol::make_object(s, sol::lua_nil);
+        }
+
+        const auto inner_name_hash = utility::hash(inner_c->get_fname()->to_string());
+
+        switch (inner_name_hash) {
+        case "ObjectProperty"_fnv:
+        {
+            const auto& arr = self.get_property<uevr::API::TArray<uevr::API::UObject*>>(name);
+
+            if (arr.data == nullptr || arr.count == 0) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            auto lua_arr = std::vector<uevr::API::UObject*>{};
+
+            for (size_t i = 0; i < arr.count; ++i) {
+                lua_arr.push_back(arr.data[i]);
+            }
+
+            return sol::make_object(s, lua_arr);
+        }
+        // TODO: Add support for other types
+        };
+
+        return sol::make_object(s, sol::lua_nil);
+    }
+    };
+
+    return sol::make_object(s, sol::lua_nil);
+}
+
 int ScriptContext::setup_bindings() {
     m_lua.registry()["uevr_context"] = this;
 
@@ -374,83 +454,15 @@ int ScriptContext::setup_bindings() {
             return self.get_property<uevr::API::UObject*>(name);
         },
         "get_property", [](sol::this_state s, uevr::API::UObject& self, const std::wstring& name) -> sol::object {
-            const auto c = self.get_class();
-
-            if (c == nullptr) {
+            return prop_to_object(s, self, name);
+        },
+        sol::meta_function::index, [](sol::this_state s, uevr::API::UObject& self, sol::object index_obj) -> sol::object {
+            if (!index_obj.is<std::string>()) {
                 return sol::make_object(s, sol::lua_nil);
             }
 
-            const auto desc = c->find_property(name.c_str());
-
-            if (desc == nullptr) {
-                return sol::make_object(s, sol::lua_nil);
-            }
-
-            const auto propc = desc->get_class();
-
-            if (propc == nullptr) {
-                return sol::make_object(s, sol::lua_nil);
-            }
-
-            const auto name_hash = utility::hash(propc->get_fname()->to_string());
-
-            switch (name_hash) {
-            case L"BoolProperty"_fnv:
-                return sol::make_object(s, self.get_bool_property(name));
-            case L"FloatProperty"_fnv:
-                return sol::make_object(s, self.get_property<float>(name));
-            case L"DoubleProperty"_fnv:
-                return sol::make_object(s, self.get_property<double>(name));
-            case L"IntProperty"_fnv:
-                return sol::make_object(s, self.get_property<int32_t>(name));
-            case L"UIntProperty"_fnv:
-            case L"UInt32Property"_fnv:
-                return sol::make_object(s, self.get_property<uint32_t>(name));
-            case L"NameProperty"_fnv:
-                return sol::make_object(s, self.get_property<uevr::API::FName>(name));
-            case L"ObjectProperty"_fnv:
-                return sol::make_object(s, self.get_property<uevr::API::UObject*>(name));
-            case L"ArrayProperty"_fnv:
-            {
-                const auto inner_prop = ((uevr::API::FArrayProperty*)desc)->get_inner();
-
-                if (inner_prop == nullptr) {
-                    return sol::make_object(s, sol::lua_nil);
-                }
-
-                const auto inner_c = inner_prop->get_class();
-
-                if (inner_c == nullptr) {
-                    return sol::make_object(s, sol::lua_nil);
-                }
-
-                const auto inner_name_hash = utility::hash(inner_c->get_fname()->to_string());
-
-                switch (inner_name_hash) {
-                case "ObjectProperty"_fnv:
-                {
-                    const auto& arr = self.get_property<uevr::API::TArray<uevr::API::UObject*>>(name);
-
-                    if (arr.data == nullptr || arr.count == 0) {
-                        return sol::make_object(s, sol::lua_nil);
-                    }
-
-                    auto lua_arr = std::vector<uevr::API::UObject*>{};
-
-                    for (size_t i = 0; i < arr.count; ++i) {
-                        lua_arr.push_back(arr.data[i]);
-                    }
-
-                    return sol::make_object(s, lua_arr);
-                }
-                // TODO: Add support for other types
-                };
-
-                return sol::make_object(s, sol::lua_nil);
-            }
-            };
-
-            return sol::make_object(s, sol::lua_nil);
+            const auto name = utility::widen(index_obj.as<std::string>());
+            return prop_to_object(s, self, name);
         }
     );
 
