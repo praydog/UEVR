@@ -157,19 +157,9 @@ void ScriptContext::setup_callback_bindings() {
     );
 }
 
-sol::object prop_to_object(sol::this_state s, uevr::API::UObject& self, const std::wstring& name) {
-    const auto c = self.get_class();
+sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API::UFunction* fn, sol::variadic_args args);
 
-    if (c == nullptr) {
-        return sol::make_object(s, sol::lua_nil);
-    }
-
-    const auto desc = c->find_property(name.c_str());
-
-    if (desc == nullptr) {
-        return sol::make_object(s, sol::lua_nil);
-    }
-
+sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* desc) {
     const auto propc = desc->get_class();
 
     if (propc == nullptr) {
@@ -177,23 +167,27 @@ sol::object prop_to_object(sol::this_state s, uevr::API::UObject& self, const st
     }
 
     const auto name_hash = utility::hash(propc->get_fname()->to_string());
+    const auto offset = desc->get_offset();
 
     switch (name_hash) {
     case L"BoolProperty"_fnv:
-        return sol::make_object(s, self.get_bool_property(name));
+    {
+        const auto fbp = (uevr::API::FBoolProperty*)desc;
+        return sol::make_object(s, fbp->get_value_from_object(self));
+    }
     case L"FloatProperty"_fnv:
-        return sol::make_object(s, self.get_property<float>(name));
+        return sol::make_object(s, *(float*)((uintptr_t)self + offset));
     case L"DoubleProperty"_fnv:
-        return sol::make_object(s, self.get_property<double>(name));
+        return sol::make_object(s, *(double*)((uintptr_t)self + offset));
     case L"IntProperty"_fnv:
-        return sol::make_object(s, self.get_property<int32_t>(name));
+        return sol::make_object(s, *(int32_t*)((uintptr_t)self + offset));
     case L"UIntProperty"_fnv:
     case L"UInt32Property"_fnv:
-        return sol::make_object(s, self.get_property<uint32_t>(name));
+        return sol::make_object(s, *(uint32_t*)((uintptr_t)self + offset));
     case L"NameProperty"_fnv:
-        return sol::make_object(s, self.get_property<uevr::API::FName>(name));
+        return sol::make_object(s, *(uevr::API::FName*)((uintptr_t)self + offset));
     case L"ObjectProperty"_fnv:
-        return sol::make_object(s, self.get_property<uevr::API::UObject*>(name));
+        return sol::make_object(s, *(uevr::API::UObject**)((uintptr_t)self + offset));
     case L"ArrayProperty"_fnv:
     {
         const auto inner_prop = ((uevr::API::FArrayProperty*)desc)->get_inner();
@@ -213,7 +207,7 @@ sol::object prop_to_object(sol::this_state s, uevr::API::UObject& self, const st
         switch (inner_name_hash) {
         case "ObjectProperty"_fnv:
         {
-            const auto& arr = self.get_property<uevr::API::TArray<uevr::API::UObject*>>(name);
+            const auto& arr = *(uevr::API::TArray<uevr::API::UObject*>*)((uintptr_t)self + offset);
 
             if (arr.data == nullptr || arr.count == 0) {
                 return sol::make_object(s, sol::lua_nil);
@@ -237,8 +231,31 @@ sol::object prop_to_object(sol::this_state s, uevr::API::UObject& self, const st
     return sol::make_object(s, sol::lua_nil);
 }
 
-void set_property(sol::this_state s, uevr::API::UObject& self, const std::wstring& name, sol::object value) {
-    const auto c = self.get_class();
+sol::object prop_to_object(sol::this_state s, uevr::API::UObject* self, const std::wstring& name) {
+    const auto c = self->get_class();
+
+    if (c == nullptr) {
+        return sol::make_object(s, sol::lua_nil);
+    }
+
+    const auto desc = c->find_property(name.c_str());
+
+    if (desc == nullptr) {
+        if (auto fn = c->find_function(name.c_str()); fn != nullptr) {
+            /*return sol::make_object(s, [self, s, fn](sol::variadic_args args) {
+                return call_function(s, self, fn, args);
+            });*/
+            return sol::make_object(s, fn);
+        }
+
+        return sol::make_object(s, sol::lua_nil);
+    }
+
+    return prop_to_object(s, self, desc);
+}
+
+void set_property(sol::this_state s, uevr::API::UObject* self, const std::wstring& name, sol::object value) {
+    const auto c = self->get_class();
 
     if (c == nullptr) {
         return;
@@ -257,35 +274,186 @@ void set_property(sol::this_state s, uevr::API::UObject& self, const std::wstrin
     }
 
     const auto name_hash = utility::hash(propc->get_fname()->to_string());
+    const auto offset = desc->get_offset();
 
     switch (name_hash) {
     case L"BoolProperty"_fnv:
-        self.set_bool_property(name, value.as<bool>());
+    {
+        const auto fbp = (uevr::API::FBoolProperty*)desc;
+        fbp->set_value_in_object(self, value.as<bool>());
         return;
+    }
     case L"FloatProperty"_fnv:
-        self.get_property<float>(name) = value.as<float>();
+        //self.get_property<float>(name) = value.as<float>();
+        *(float*)((uintptr_t)self + offset) = value.as<float>();
         return;
     case L"DoubleProperty"_fnv:
-        self.get_property<double>(name) = value.as<double>();
+        *(double*)((uintptr_t)self + offset) = value.as<double>();
         return;
     case L"IntProperty"_fnv:
-        self.get_property<int32_t>(name) = value.as<int32_t>();
-        return;
+        *(int32_t*)((uintptr_t)self + offset) = value.as<int32_t>();
+        return;      
     case L"UIntProperty"_fnv:
     case L"UInt32Property"_fnv:
-        self.get_property<uint32_t>(name) = value.as<uint32_t>();
+        *(uint32_t*)((uintptr_t)self + offset) = value.as<uint32_t>();
         return;
     case L"NameProperty"_fnv:
         //return sol::make_object(s, self.get_property<uevr::API::FName>(name));
         throw sol::error("Setting FName properties is not supported (yet)");
     case L"ObjectProperty"_fnv:
-        self.get_property<uevr::API::UObject*>(name) = value.as<uevr::API::UObject*>();
+        *(uevr::API::UObject**)((uintptr_t)self + offset) = value.as<uevr::API::UObject*>();
         return;
     case L"ArrayProperty"_fnv:
         throw sol::error("Setting array properties is not supported (yet)");
     };
 
     // NONE
+}
+
+sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API::UFunction* fn, sol::variadic_args args) {
+    const auto fn_args = fn->get_child_properties();
+
+    if (fn_args == nullptr) {
+        fn->call(self, nullptr);
+        return sol::make_object(s, sol::lua_nil);
+    }
+
+    std::vector<uint8_t> params{};
+    size_t args_index{0};
+
+    const auto ps = fn->get_properties_size();
+    const auto ma = fn->get_min_alignment();
+
+    if (ma > 1) {
+        params.resize(((ps + ma - 1) / ma) * ma);
+    } else {
+        params.resize(ps);
+    }
+
+    params.resize(fn->get_properties_size());
+
+    uevr::API::FProperty* return_prop{nullptr};
+    bool ret_is_bool{false};
+
+    for (auto arg_desc = fn_args; arg_desc != nullptr; arg_desc = arg_desc->get_next()) {
+        const auto arg_c = arg_desc->get_class();
+
+        if (arg_c == nullptr) {
+            continue;
+        }
+
+        const auto arg_c_name = arg_c->get_fname()->to_string();
+
+        if (!arg_c_name.contains(L"Property")) {
+            continue;
+        }
+
+        const auto prop_desc = (uevr::API::FProperty*)arg_desc;
+
+        if (!prop_desc->is_param()) {
+            continue;
+        }
+
+        if (prop_desc->is_return_param()) {
+            return_prop = prop_desc;
+
+            if (arg_c_name == L"BoolProperty") {
+                ret_is_bool = true;
+            }
+
+            continue;
+        }
+
+        const auto arg_hash = utility::hash(arg_c_name);
+        const auto offset = prop_desc->get_offset();
+
+        switch (arg_hash) {
+        case L"BoolProperty"_fnv:
+        {
+            const bool arg = args[args_index++].as<bool>();
+            const auto fbp = (uevr::API::FBoolProperty*)prop_desc;
+            fbp->set_value_in_object(params.data(), arg);
+            continue;
+        }
+        case L"FloatProperty"_fnv:
+        {
+            const float arg = args[args_index++].as<float>();
+            *(float*)&params[offset] = arg;
+            continue;
+        }
+        case L"DoubleProperty"_fnv:
+        {
+            const double arg = args[args_index++].as<double>();
+            *(double*)&params[offset] = arg;
+            continue;
+        }
+        case L"IntProperty"_fnv:
+        case L"UIntProperty"_fnv:
+        case L"UInt32Property"_fnv:
+        {
+            const int32_t arg = args[args_index++].as<int32_t>();
+            *(int32_t*)&params[offset] = arg;
+            continue;
+        }
+        case L"NameProperty"_fnv:
+        {
+            const auto arg_obj = args[args_index++];
+
+            if (arg_obj.is<std::string>()) {
+                const auto arg = utility::widen(arg_obj.as<std::string>());
+                *(uevr::API::FName*)&params[offset] = uevr::API::FName{arg};
+            } else if (arg_obj.is<std::wstring>()) {
+                const auto arg = arg_obj.as<std::wstring>();
+                *(uevr::API::FName*)&params[offset] = uevr::API::FName{arg};
+            } else if (arg_obj.is<uevr::API::FName>()) {
+                const auto arg = arg_obj.as<uevr::API::FName>();
+                *(uevr::API::FName*)&params[offset] = arg;
+            } else {
+                throw sol::error("Invalid argument type for FName");
+            }
+
+            continue;
+        }
+        case L"ObjectProperty"_fnv:
+        {
+            const auto arg = args[args_index++].as<uevr::API::UObject*>();
+            *(uevr::API::UObject**)&params[offset] = arg;
+            continue;
+        }
+        case L"ArrayProperty"_fnv:
+            // TODO
+            throw sol::error("Array properties are not supported (yet)");
+            continue;
+        };
+    }
+
+    fn->call(self, params.data());
+
+    if (return_prop != nullptr) {
+        if (ret_is_bool) {
+            return sol::make_object(s, ((uevr::API::FBoolProperty*)return_prop)->get_value_from_propbase(params.data()));
+        }
+
+        return prop_to_object(s, params.data(), return_prop);
+    }
+
+    return sol::make_object(s, sol::lua_nil);
+}
+
+sol::object call_function(sol::this_state s, uevr::API::UObject* self, const std::wstring& name, sol::variadic_args args) {
+    const auto c = self->get_class();
+
+    if (c == nullptr) {
+        return sol::make_object(s, sol::lua_nil);
+    }
+
+    const auto fn = c->find_function(name.c_str());
+
+    if (fn == nullptr) {
+        return sol::make_object(s, sol::lua_nil);
+    }
+
+    return call_function(s, self, fn, args);
 }
 
 int ScriptContext::setup_bindings() {
@@ -504,19 +672,23 @@ int ScriptContext::setup_bindings() {
         "get_uobject_property", [](uevr::API::UObject& self, const std::wstring& name) {
             return self.get_property<uevr::API::UObject*>(name);
         },
-        "get_property", [](sol::this_state s, uevr::API::UObject& self, const std::wstring& name) -> sol::object {
+        "get_property", [](sol::this_state s, uevr::API::UObject* self, const std::wstring& name) -> sol::object {
             return prop_to_object(s, self, name);
         },
         "set_property", &set_property,
-        sol::meta_function::index, [](sol::this_state s, uevr::API::UObject& self, sol::object index_obj) -> sol::object {
+        "call", [](sol::this_state s, uevr::API::UObject* self, const std::wstring& name, sol::variadic_args args) -> sol::object {
+            return call_function(s, self, name, args);
+        },
+        sol::meta_function::index, [](sol::this_state s, uevr::API::UObject* self, sol::object index_obj) -> sol::object {
             if (!index_obj.is<std::string>()) {
                 return sol::make_object(s, sol::lua_nil);
             }
 
             const auto name = utility::widen(index_obj.as<std::string>());
+
             return prop_to_object(s, self, name);
         },
-        sol::meta_function::new_index, [](sol::this_state s, uevr::API::UObject& self, sol::object index_obj, sol::object value) {
+        sol::meta_function::new_index, [](sol::this_state s, uevr::API::UObject* self, sol::object index_obj, sol::object value) {
             if (!index_obj.is<std::string>()) {
                 return;
             }
@@ -544,6 +716,9 @@ int ScriptContext::setup_bindings() {
     );
 
     m_lua.new_usertype<uevr::API::UFunction>("UEVR_UFunction",
+        sol::meta_function::call, [](sol::this_state s, uevr::API::UFunction* fn, uevr::API::UObject* obj, sol::variadic_args args) -> sol::object {
+            return call_function(s, obj, fn, args);
+        },
         sol::base_classes, sol::bases<uevr::API::UStruct, uevr::API::UObject>(),
         "static_class", &uevr::API::UFunction::static_class,
         "call", &uevr::API::UFunction::call,

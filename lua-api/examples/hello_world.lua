@@ -65,6 +65,31 @@ uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
     
             if pawn ~= nil then
                 print("Pawn: " .. pawn:get_full_name())
+                --pawn.BaseEyeHeight = 0.0
+                --pawn.bActorEnableCollision = not pawn.bActorEnableCollision
+
+                local pawn_level = pawn:GetLevel()
+
+                print("Pawn level: " .. pawn_level:get_full_name())
+
+                local is_actor_tick_enabled = pawn:IsActorTickEnabled()
+                print("IsActorTickEnabled: " .. tostring(is_actor_tick_enabled))
+
+                pawn:SetActorTickEnabled(not is_actor_tick_enabled)
+                is_actor_tick_enabled = pawn:IsActorTickEnabled()
+                print("New IsActorTickEnabled: " .. tostring(is_actor_tick_enabled))
+
+                pawn:SetActorTickEnabled(not is_actor_tick_enabled) -- resets it back to default
+
+                local life_span = pawn:GetLifeSpan()
+                local og_life_span = life_span
+                print("LifeSpan: " .. tostring(life_span))
+
+                pawn:SetLifeSpan(10.0)
+                life_span = pawn:GetLifeSpan()
+
+                print("New LifeSpan: " .. tostring(life_span))
+                pawn:SetLifeSpan(og_life_span) -- resets it back to default
             end
     
             if player_controller ~= nil then
