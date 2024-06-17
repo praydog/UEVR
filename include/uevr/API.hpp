@@ -414,6 +414,16 @@ public:
             return (FField*)fn(to_handle());
         }
 
+        int32_t get_properties_size() const {
+            static const auto fn = initialize()->get_properties_size;
+            return fn(to_handle());
+        }
+
+        int32_t get_min_alignment() const {
+            static const auto fn = initialize()->get_min_alignment;
+            return fn(to_handle());
+        }
+
     private:
         static inline const UEVR_UStructFunctions* s_functions{nullptr};
         inline static const UEVR_UStructFunctions* initialize() {
