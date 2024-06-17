@@ -22,6 +22,7 @@
 #include <sdk/APlayerController.hpp>
 #include <sdk/USceneComponent.hpp>
 #include <sdk/FArrayProperty.hpp>
+#include <sdk/FBoolProperty.hpp>
 
 #include "pluginloader/FFakeStereoRenderingFunctions.hpp"
 #include "pluginloader/FRenderTargetPoolHook.hpp"
@@ -810,6 +811,33 @@ UEVR_FArrayPropertyFunctions g_farray_property_functions {
     }
 };
 
+UEVR_FBoolPropertyFunctions g_fbool_property_functions {
+    .get_field_size = [](UEVR_FBoolPropertyHandle prop) -> uint32_t {
+        return ((sdk::FBoolProperty*)prop)->get_field_size();
+    },
+    .get_byte_offset = [](UEVR_FBoolPropertyHandle prop) -> uint32_t {
+        return ((sdk::FBoolProperty*)prop)->get_byte_offset();
+    },
+    .get_byte_mask = [](UEVR_FBoolPropertyHandle prop) -> uint32_t {
+        return ((sdk::FBoolProperty*)prop)->get_byte_mask();
+    },
+    .get_field_mask = [](UEVR_FBoolPropertyHandle prop) -> uint32_t {
+        return ((sdk::FBoolProperty*)prop)->get_field_mask();
+    },
+    .get_value_from_object = [](UEVR_FBoolPropertyHandle prop, void* obj) -> bool {
+        return ((sdk::FBoolProperty*)prop)->get_value_from_object((sdk::UObject*)obj);
+    },
+    .get_value_from_propbase = [](UEVR_FBoolPropertyHandle prop, void* propbase) -> bool {
+        return ((sdk::FBoolProperty*)prop)->get_value_from_propbase(propbase);
+    },
+    .set_value_in_object = [](UEVR_FBoolPropertyHandle prop, void* obj, bool value) {
+        ((sdk::FBoolProperty*)prop)->set_value_in_object((sdk::UObject*)obj, value);
+    },
+    .set_value_in_propbase = [](UEVR_FBoolPropertyHandle prop, void* propbase, bool value) {
+        ((sdk::FBoolProperty*)prop)->set_value_in_propbase(propbase, value);
+    }
+};
+
 UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
@@ -829,7 +857,8 @@ UEVR_SDKData g_sdk_data {
     &uevr::stereo_hook::functions,
     &uevr::frhitexture2d::functions,
     &uevr::uscriptstruct::functions,
-    &g_farray_property_functions
+    &g_farray_property_functions,
+    &g_fbool_property_functions
 };
 
 namespace uevr {
