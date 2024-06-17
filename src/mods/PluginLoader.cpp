@@ -427,22 +427,24 @@ UEVR_FPropertyFunctions g_fproperty_functions {
 #define USTRUCT(x) ((sdk::UStruct*)x)
 
 UEVR_UStructFunctions g_ustruct_functions {
-    // get_super_struct
-    [](UEVR_UStructHandle strct) {
+    .get_super_struct = [](UEVR_UStructHandle strct) {
         return (UEVR_UStructHandle)USTRUCT(strct)->get_super_struct();
     },
-    // get_child_properties
-    [](UEVR_UStructHandle strct) {
+    .get_child_properties = [](UEVR_UStructHandle strct) {
         return (UEVR_FFieldHandle)USTRUCT(strct)->get_child_properties();
     },
-    // find_function
-    [](UEVR_UStructHandle strct, const wchar_t* name) {
+    .find_function = [](UEVR_UStructHandle strct, const wchar_t* name) {
         return (UEVR_UFunctionHandle)USTRUCT(strct)->find_function(name);
     },
-    // find_property
-    [](UEVR_UStructHandle strct, const wchar_t* name) {
+    .find_property = [](UEVR_UStructHandle strct, const wchar_t* name) {
         return (UEVR_FPropertyHandle)USTRUCT(strct)->find_property(name);
     },
+    .get_properties_size = [](UEVR_UStructHandle strct) {
+        return USTRUCT(strct)->get_properties_size();
+    },
+    .get_min_alignment = [](UEVR_UStructHandle strct) {
+        return USTRUCT(strct)->get_min_alignment();
+    }
 };
 
 #define UCLASS(x) ((sdk::UClass*)x)

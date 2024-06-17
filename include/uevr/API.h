@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 22
+#define UEVR_PLUGIN_VERSION_MINOR 23
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -296,6 +296,8 @@ typedef struct {
     UEVR_FFieldHandle (*get_child_properties)(UEVR_UStructHandle klass);
     UEVR_UFunctionHandle (*find_function)(UEVR_UStructHandle klass, const wchar_t* name);
     UEVR_FPropertyHandle (*find_property)(UEVR_UStructHandle klass, const wchar_t* name);
+    int (*get_properties_size)(UEVR_UStructHandle klass); /* size in bytes */
+    int (*get_min_alignment)(UEVR_UStructHandle klass);
 } UEVR_UStructFunctions;
 
 typedef struct {
