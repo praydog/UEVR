@@ -431,7 +431,7 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
 
     if (return_prop != nullptr) {
         if (ret_is_bool) {
-            return sol::make_object(s, ((uevr::API::FBoolProperty*)return_prop)->get_value_from_propbase(params.data()));
+            return sol::make_object(s, ((uevr::API::FBoolProperty*)return_prop)->get_value_from_object(params.data()));
         }
 
         return prop_to_object(s, params.data(), return_prop);
