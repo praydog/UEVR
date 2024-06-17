@@ -258,19 +258,19 @@ void set_property(sol::this_state s, uevr::API::UObject* self, const std::wstrin
     const auto c = self->get_class();
 
     if (c == nullptr) {
-        return;
+        throw sol::error("[set_property] Object has no class");
     }
 
     const auto desc = c->find_property(name.c_str());
 
     if (desc == nullptr) {
-        return;
+        throw sol::error(std::format("[set_property] Property '{}' not found", utility::narrow(name)));
     }
 
     const auto propc = desc->get_class();
 
     if (propc == nullptr) {
-        return;
+        throw sol::error(std::format("[set_property] Property '{}' has no class", utility::narrow(name)));
     }
 
     const auto name_hash = utility::hash(propc->get_fname()->to_string());
