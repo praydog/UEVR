@@ -702,6 +702,27 @@ int ScriptContext::setup_bindings() {
         "get_fname", &uevr::API::UObject::get_fname,
         "get_full_name", &uevr::API::UObject::get_full_name,
         "is_a", &uevr::API::UObject::is_a,
+        "as_class", [](uevr::API::UObject& self) -> uevr::API::UClass* {
+            if (auto c = self.dcast<uevr::API::UClass>()) {
+                return c;
+            }
+
+            return nullptr;
+        },
+        "as_struct", [](uevr::API::UObject& self) -> uevr::API::UStruct* {
+            if (auto c = self.dcast<uevr::API::UStruct>()) {
+                return c;
+            }
+
+            return nullptr;
+        },
+        "as_function", [](uevr::API::UObject& self) -> uevr::API::UFunction* {
+            if (auto c = self.dcast<uevr::API::UFunction>()) {
+                return c;
+            }
+
+            return nullptr;
+        },
         "get_class", &uevr::API::UObject::get_class,
         "get_outer", &uevr::API::UObject::get_outer,
         "get_bool_property", &uevr::API::UObject::get_bool_property,
@@ -854,12 +875,23 @@ int ScriptContext::setup_bindings() {
         "exists", &uevr::API::UObjectHook::exists,
         "is_disabled", &uevr::API::UObjectHook::is_disabled,
         "set_disabled", &uevr::API::UObjectHook::set_disabled,
-        "get_first_object_by_class", [](uevr::API::UClass* c, sol::object allow_default_obj) {
+        "get_first_object_by_class", [](sol::this_state s, uevr::API::UClass* c, sol::object allow_default_obj) -> sol::object {
             bool allow_default = false;
             if (allow_default_obj.is<bool>()) {
                 allow_default = allow_default_obj.as<bool>();
             }
-            return uevr::API::UObjectHook::get_first_object_by_class(c, allow_default);
+
+            auto result = uevr::API::UObjectHook::get_first_object_by_class(c, allow_default);
+
+            if (result == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            if (result->is_a(uevr::API::UClass::static_class())) {
+                return sol::make_object(s, (uevr::API::UClass*)result);
+            }
+
+            return sol::make_object(s, result);
         },
         "get_objects_by_class", [](uevr::API::UClass* c, sol::object allow_default_obj) {
             bool allow_default = false;
@@ -874,8 +906,18 @@ int ScriptContext::setup_bindings() {
 
     m_lua.new_usertype<uevr::API>("UEVR_API",
         "sdk", &uevr::API::sdk,
-        "find_uobject", [](uevr::API* api, const std::wstring& name) {
-            return api->find_uobject<uevr::API::UObject>(name);
+        "find_uobject", [](sol::this_state s, uevr::API* api, const std::wstring& name) -> sol::object {
+            auto result = api->find_uobject<uevr::API::UObject>(name);
+
+            if (result == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            if (result->is_a(uevr::API::UClass::static_class())) {
+                return sol::make_object(s, (uevr::API::UClass*)result);
+            }
+
+            return sol::make_object(s, result);
         },
         "get_engine", &uevr::API::get_engine,
         "get_player_controller", &uevr::API::get_player_controller,
