@@ -187,7 +187,17 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
     case L"NameProperty"_fnv:
         return sol::make_object(s, *(uevr::API::FName*)((uintptr_t)self + offset));
     case L"ObjectProperty"_fnv:
+        if (*(uevr::API::UObject**)((uintptr_t)self + offset) == nullptr) {
+            return sol::make_object(s, sol::lua_nil);
+        }
+
         return sol::make_object(s, *(uevr::API::UObject**)((uintptr_t)self + offset));
+    case L"ClassProperty"_fnv:
+        if (*(uevr::API::UClass**)((uintptr_t)self + offset) == nullptr) {
+            return sol::make_object(s, sol::lua_nil);
+        }
+
+        return sol::make_object(s, *(uevr::API::UClass**)((uintptr_t)self + offset));
     case L"ArrayProperty"_fnv:
     {
         const auto inner_prop = ((uevr::API::FArrayProperty*)desc)->get_inner();
@@ -303,6 +313,9 @@ void set_property(sol::this_state s, uevr::API::UObject* self, const std::wstrin
     case L"ObjectProperty"_fnv:
         *(uevr::API::UObject**)((uintptr_t)self + offset) = value.as<uevr::API::UObject*>();
         return;
+    case L"ClassProperty"_fnv:
+        *(uevr::API::UClass**)((uintptr_t)self + offset) = value.as<uevr::API::UClass*>();
+        return;
     case L"ArrayProperty"_fnv:
         throw sol::error("Setting array properties is not supported (yet)");
     };
@@ -334,6 +347,9 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
 
     uevr::API::FProperty* return_prop{nullptr};
     bool ret_is_bool{false};
+
+    //std::vector<uint8_t> dynamic_data{};
+    std::vector<std::wstring> dynamic_strings{};
 
     for (auto arg_desc = fn_args; arg_desc != nullptr; arg_desc = arg_desc->get_next()) {
         const auto arg_c = arg_desc->get_class();
@@ -420,10 +436,45 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
             *(uevr::API::UObject**)&params[offset] = arg;
             continue;
         }
+        case L"ClassProperty"_fnv:
+        {
+            const auto arg = args[args_index++].as<uevr::API::UClass*>();
+            *(uevr::API::UClass**)&params[offset] = arg;
+            continue;
+        }
         case L"ArrayProperty"_fnv:
             // TODO
             throw sol::error("Array properties are not supported (yet)");
             continue;
+        case L"StrProperty"_fnv:
+        {
+            const auto arg_obj = args[args_index++];
+            using FString = API::TArray<wchar_t>;
+
+            auto& fstr = *(FString*)&params[offset];
+
+            if (arg_obj.is<std::wstring>()) {
+                dynamic_strings.push_back(arg_obj.as<std::wstring>());
+
+                fstr.count = dynamic_strings.back().size() + 1;
+                fstr.data = (wchar_t*)dynamic_strings.back().c_str();
+            } else if (arg_obj.is<std::string>()) {
+                dynamic_strings.push_back(utility::widen(arg_obj.as<std::string>()));
+
+                fstr.count = dynamic_strings.back().size() + 1;
+                fstr.data = (wchar_t*)dynamic_strings.back().c_str();
+            } else if (arg_obj.is<wchar_t*>()) {
+                dynamic_strings.push_back(arg_obj.as<wchar_t*>());
+
+                fstr.count = dynamic_strings.back().size() + 1;
+            } else {
+                throw sol::error("Invalid argument type for FString");
+            }
+            continue;
+        }
+        default:
+            //spdlog::warn("Unknown property type when calling '{}': {}", utility::narrow(fn->get_fname()->to_string()), utility::narrow(arg_c_name));
+            API::get()->log_warn(std::format("Unknown property type when calling '{}': {}", utility::narrow(fn->get_fname()->to_string()), utility::narrow(arg_c_name)).c_str());
         };
     }
 
@@ -704,7 +755,8 @@ int ScriptContext::setup_bindings() {
         "get_super_struct", &uevr::API::UStruct::get_super_struct,
         "get_super", &uevr::API::UStruct::get_super,
         "find_function", &uevr::API::UStruct::find_function,
-        "get_child_properties", &uevr::API::UStruct::get_child_properties
+        "get_child_properties", &uevr::API::UStruct::get_child_properties,
+        "get_properties_size", &uevr::API::UStruct::get_properties_size
     );
 
     m_lua.new_usertype<uevr::API::UClass>("UEVR_UClass",
@@ -738,9 +790,15 @@ int ScriptContext::setup_bindings() {
 
     m_lua.new_usertype<uevr::API::FConsoleManager>("UEVR_FConsoleManager",
         "get_console_objects", &uevr::API::FConsoleManager::get_console_objects,
-        "find_object", &uevr::API::FConsoleManager::find_object,
-        "find_variable", &uevr::API::FConsoleManager::find_variable,
-        "find_command", &uevr::API::FConsoleManager::find_command
+        "find_object", [](uevr::API::FConsoleManager& self, const std::wstring& name) {
+            return self.find_object(name);
+        },
+        "find_variable", [](uevr::API::FConsoleManager& self, const std::wstring& name) {
+            return self.find_variable(name);
+        },
+        "find_command", [](uevr::API::FConsoleManager& self, const std::wstring& name) {
+            return self.find_command(name);
+        }
     );
 
     m_lua.new_usertype<uevr::API::IConsoleObject>("UEVR_IConsoleObject",
@@ -816,14 +874,14 @@ int ScriptContext::setup_bindings() {
 
     m_lua.new_usertype<uevr::API>("UEVR_API",
         "sdk", &uevr::API::sdk,
-        "find_uobject", [](uevr::API* api, const std::string& name) {
-            return api->find_uobject<uevr::API::UObject>(utility::widen(name));
+        "find_uobject", [](uevr::API* api, const std::wstring& name) {
+            return api->find_uobject<uevr::API::UObject>(name);
         },
         "get_engine", &uevr::API::get_engine,
         "get_player_controller", &uevr::API::get_player_controller,
         "get_local_pawn", &uevr::API::get_local_pawn,
         "spawn_object", &uevr::API::spawn_object,
-        "execute_command", [](uevr::API* api, const std::string& s) { api->execute_command(utility::widen(s).data()); },
+        "execute_command", [](uevr::API* api, const std::wstring& s) { api->execute_command(s.data()); },
         "get_uobject_array", &uevr::API::get_uobject_array,
         "get_console_manager", &uevr::API::get_console_manager
     );
