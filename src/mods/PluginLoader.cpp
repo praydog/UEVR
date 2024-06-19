@@ -483,12 +483,14 @@ namespace uobjecthook {
             return 0;
         }
 
-        const auto default_object = ((sdk::UClass*)klass)->get_class_default_object();
-
         unsigned int i = 0;
         for (auto&& obj : objects) {
-            if (!allow_default && obj == default_object) {
-                continue;
+            if (!allow_default) {
+                const auto c = obj->get_class();
+
+                if (c == nullptr || c->get_class_default_object() == obj) {
+                    continue;
+                }
             }
 
             if (i < max_objects && out_objects != nullptr) {
@@ -522,12 +524,14 @@ namespace uobjecthook {
             return (UEVR_UObjectHandle)*objects.begin();
         }
 
-        const auto default_object = ((sdk::UClass*)klass)->get_class_default_object();
-
         for (auto&& obj : objects) {
-            if (obj != default_object) {
-                return (UEVR_UObjectHandle)obj;
+            const auto c = obj->get_class();
+
+            if (c == nullptr || c->get_class_default_object() == obj) {
+                continue;
             }
+
+            return (UEVR_UObjectHandle)obj;
         }
 
         return (UEVR_UObjectHandle)nullptr;
