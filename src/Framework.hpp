@@ -29,6 +29,7 @@ public:
     enum Command {
         RELOAD_CONFIG = 0,
         CONFIG_SETUP_ACKNOWLEDGED = 1,
+        QUIT = 2,
     };
 
 public:
