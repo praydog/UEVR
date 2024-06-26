@@ -504,6 +504,39 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
             *(uevr::API::UClass**)&params[offset] = arg;
             continue;
         }
+        case L"StructProperty"_fnv:
+        {
+            const auto arg_obj = args[args_index++];
+            const auto struct_desc = ((uevr::API::FStructProperty*)prop_desc)->get_struct();
+
+            if (struct_desc == nullptr) {
+                throw sol::error("Struct property has no struct");
+            }
+
+            if (struct_desc == get_vector_struct()) {
+                if (arg_obj.is<lua::datatypes::Vector3f>()) {
+                    const auto arg = arg_obj.as<lua::datatypes::Vector3f>();
+
+                    if (is_ue5()) {
+                        *(lua::datatypes::Vector3d*)&params[offset] = arg;
+                    } else {
+                        *(lua::datatypes::Vector3f*)&params[offset] = arg;
+                    }
+                } else if (arg_obj.is<lua::datatypes::Vector3d>()) {
+                    const auto arg = arg_obj.as<lua::datatypes::Vector3d>();
+
+                    if (is_ue5()) {
+                        *(lua::datatypes::Vector3d*)&params[offset] = arg;
+                    } else {
+                        *(lua::datatypes::Vector3f*)&params[offset] = arg;
+                    }
+                } else {
+                    throw sol::error("Invalid argument type for FVector");
+                }
+            }
+
+            continue;
+        }
         case L"ArrayProperty"_fnv:
             // TODO
             throw sol::error("Array properties are not supported (yet)");
