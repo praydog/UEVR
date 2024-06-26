@@ -182,7 +182,7 @@ bool is_ue5() {
     return cached_result;
 }
 
-sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* desc) {
+sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* desc, bool is_self_temporary = false) {
     const auto propc = desc->get_class();
 
     if (propc == nullptr) {
@@ -243,10 +243,18 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
 
         if (struct_desc == get_vector_struct()) {
             if (is_ue5()) {
-                return sol::make_object(s, (lua::datatypes::Vector3d*)struct_data);
+                if (is_self_temporary) {
+                    return sol::make_object(s, *(lua::datatypes::Vector3d*)struct_data);
+                } else {
+                    return sol::make_object(s, (lua::datatypes::Vector3d*)struct_data);
+                }
             }
 
-            return sol::make_object(s, (lua::datatypes::Vector3f*)struct_data);
+            if (is_self_temporary) {
+                return sol::make_object(s, *(lua::datatypes::Vector3f*)struct_data);
+            } else {
+                return sol::make_object(s, (lua::datatypes::Vector3f*)struct_data);
+            }
         }
 
         // TODO: Return a reflected struct
@@ -539,7 +547,7 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
             return sol::make_object(s, ((uevr::API::FBoolProperty*)return_prop)->get_value_from_object(params.data()));
         }
 
-        return prop_to_object(s, params.data(), return_prop);
+        return prop_to_object(s, params.data(), return_prop, true);
     }
 
     return sol::make_object(s, sol::lua_nil);
