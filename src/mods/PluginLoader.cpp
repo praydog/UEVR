@@ -23,6 +23,7 @@
 #include <sdk/USceneComponent.hpp>
 #include <sdk/FArrayProperty.hpp>
 #include <sdk/FBoolProperty.hpp>
+#include <sdk/FStructProperty.hpp>
 
 #include "pluginloader/FFakeStereoRenderingFunctions.hpp"
 #include "pluginloader/FRenderTargetPoolHook.hpp"
@@ -842,6 +843,12 @@ UEVR_FBoolPropertyFunctions g_fbool_property_functions {
     }
 };
 
+UEVR_FStructPropertyFunctions g_fstruct_property_functions {
+    .get_struct = [](UEVR_FStructPropertyHandle prop) -> UEVR_UScriptStructHandle {
+        return (UEVR_UScriptStructHandle)((sdk::FStructProperty*)prop)->get_struct();
+    }
+};
+
 UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
@@ -862,7 +869,8 @@ UEVR_SDKData g_sdk_data {
     &uevr::frhitexture2d::functions,
     &uevr::uscriptstruct::functions,
     &g_farray_property_functions,
-    &g_fbool_property_functions
+    &g_fbool_property_functions,
+    &g_fstruct_property_functions
 };
 
 namespace uevr {
