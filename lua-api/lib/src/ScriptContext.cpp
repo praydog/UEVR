@@ -7,6 +7,7 @@
 #include <windows.h>
 
 #include "datatypes/Vector.hpp"
+#include "datatypes/StructObject.hpp"
 
 #include "ScriptUtility.hpp"
 #include "ScriptContext.hpp"
@@ -160,6 +161,7 @@ int ScriptContext::setup_bindings() {
     m_lua.registry()["uevr_context"] = this;
 
     lua::datatypes::bind_vectors(m_lua);
+    lua::datatypes::bind_struct_object(m_lua);
 
     m_lua.new_usertype<UEVR_PluginInitializeParam>("UEVR_PluginInitializeParam",
         "uevr_module", &UEVR_PluginInitializeParam::uevr_module,
@@ -396,7 +398,9 @@ int ScriptContext::setup_bindings() {
         "get_property", [](sol::this_state s, uevr::API::UObject* self, const std::wstring& name) -> sol::object {
             return lua::utility::prop_to_object(s, self, name);
         },
-        "set_property", &lua::utility::set_property,
+        "set_property", [](sol::this_state s, uevr::API::UObject* self, const std::wstring& name, sol::object value) {
+            lua::utility::set_property(s, self, name, value);
+        },
         "call", [](sol::this_state s, uevr::API::UObject* self, const std::wstring& name, sol::variadic_args args) -> sol::object {
             return lua::utility::call_function(s, self, name, args);
         },

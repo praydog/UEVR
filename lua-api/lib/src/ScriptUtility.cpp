@@ -5,6 +5,7 @@
 #include <utility/String.hpp>
 
 #include <datatypes/Vector.hpp>
+#include <datatypes/StructObject.hpp>
 #include <ScriptUtility.hpp>
 
 namespace lua::utility {
@@ -110,8 +111,9 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
             }
         }
 
-        // TODO: Return a reflected struct
-        return sol::make_object(s, sol::lua_nil);
+        auto struct_object = lua::datatypes::StructObject{struct_data, struct_desc};
+
+        return sol::make_object(s, struct_object);
     }
     case L"ArrayProperty"_fnv:
     {
@@ -156,13 +158,7 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
     return sol::make_object(s, sol::lua_nil);
 }
 
-sol::object prop_to_object(sol::this_state s, uevr::API::UObject* self, const std::wstring& name) {
-    const auto c = self->get_class();
-
-    if (c == nullptr) {
-        return sol::make_object(s, sol::lua_nil);
-    }
-
+sol::object prop_to_object(sol::this_state s, void* self, uevr::API::UStruct* c, const std::wstring& name) {
     const auto desc = c->find_property(name.c_str());
 
     if (desc == nullptr) {
@@ -179,13 +175,17 @@ sol::object prop_to_object(sol::this_state s, uevr::API::UObject* self, const st
     return prop_to_object(s, self, desc);
 }
 
-void set_property(sol::this_state s, uevr::API::UObject* self, const std::wstring& name, sol::object value) {
+sol::object prop_to_object(sol::this_state s, uevr::API::UObject* self, const std::wstring& name) {
     const auto c = self->get_class();
 
     if (c == nullptr) {
-        throw sol::error("[set_property] Object has no class");
+        return sol::make_object(s, sol::lua_nil);
     }
 
+    return prop_to_object(s, self, c, name);
+}
+
+void set_property(sol::this_state s, void* self, uevr::API::UStruct* c, const std::wstring& name, sol::object value) {
     const auto desc = c->find_property(name.c_str());
 
     if (desc == nullptr) {
@@ -236,6 +236,16 @@ void set_property(sol::this_state s, uevr::API::UObject* self, const std::wstrin
     };
 
     // NONE
+}
+
+void set_property(sol::this_state s, uevr::API::UObject* self, const std::wstring& name, sol::object value) {
+    const auto c = self->get_class();
+
+    if (c == nullptr) {
+        throw sol::error("[set_property] Object has no class");
+    }
+
+    set_property(s, self, c, name, value);
 }
 
 sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API::UFunction* fn, sol::variadic_args args) {
