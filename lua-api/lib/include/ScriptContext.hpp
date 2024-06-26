@@ -43,7 +43,6 @@ public:
     }
 
     static void log(const std::string& message);
-    static void test_function();
 
     template<typename T1, typename T2>
     void add_callback(T1&& adder, T2&& cb) {

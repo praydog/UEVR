@@ -597,8 +597,10 @@ set(luavrlib_SOURCES "")
 list(APPEND luavrlib_SOURCES
 	"lua-api/lib/src/ScriptContext.cpp"
 	"lua-api/lib/src/ScriptState.cpp"
+	"lua-api/lib/src/datatypes/Vector.cpp"
 	"lua-api/lib/include/ScriptContext.hpp"
 	"lua-api/lib/include/ScriptState.hpp"
+	"lua-api/lib/include/datatypes/Vector.hpp"
 )
 
 list(APPEND luavrlib_SOURCES
@@ -633,6 +635,7 @@ target_link_libraries(luavrlib PUBLIC
 	lua
 	sol2
 	kananlib
+	glm
 )
 
 unset(CMKR_TARGET)

@@ -202,7 +202,8 @@ headers = ["lua-api/lib/**.hpp", "lua-api/lib/**.h"]
 link-libraries = [
     "lua",
     "sol2",
-    "kananlib"
+    "kananlib",
+    "glm"
 ]
 
 [target.LuaVR]

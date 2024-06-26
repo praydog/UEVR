@@ -6,6 +6,8 @@
 
 #include <windows.h>
 
+#include "datatypes/Vector.hpp"
+
 #include "ScriptContext.hpp"
 
 namespace uevr {
@@ -91,10 +93,6 @@ void ScriptContext::log(const std::string& message) {
     API::get()->log_info("[LuaVR] %s", message.c_str());
 }
 
-void ScriptContext::test_function() {
-    log("Test function called!");
-}
-
 void ScriptContext::setup_callback_bindings() {
     std::scoped_lock _{ m_mtx };
 
@@ -159,6 +157,31 @@ void ScriptContext::setup_callback_bindings() {
 
 sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API::UFunction* fn, sol::variadic_args args);
 
+uevr::API::UScriptStruct* get_vector_struct() {
+    static auto vector_struct = []() {
+        const auto modern_class = uevr::API::get()->find_uobject<uevr::API::UScriptStruct>(L"ScriptStruct /Script/CoreUObject.Vector");
+        const auto old_class = modern_class == nullptr ? uevr::API::get()->find_uobject<uevr::API::UScriptStruct>(L"ScriptStruct /Script/CoreUObject.Object.Vector") : nullptr;
+
+        return modern_class != nullptr ? modern_class : old_class;
+    }();
+
+    return vector_struct;
+}
+
+bool is_ue5() {
+    static auto cached_result = []() {
+        const auto c = get_vector_struct();
+
+        if (c == nullptr) {
+            return false;
+        }
+
+        return c->get_struct_size() == sizeof(glm::dvec3);
+    }();
+    
+    return cached_result;
+}
+
 sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* desc) {
     const auto propc = desc->get_class();
 
@@ -198,6 +221,37 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
         }
 
         return sol::make_object(s, *(uevr::API::UClass**)((uintptr_t)self + offset));
+    case L"StructProperty"_fnv:
+    {
+        const auto struct_data = (void*)((uintptr_t)self + offset);
+        const auto struct_desc = ((uevr::API::FStructProperty*)desc)->get_struct();
+
+        if (struct_desc == nullptr) {
+            return sol::make_object(s, sol::lua_nil);
+        }
+
+        /*const auto struct_name_hash = utility::hash(struct_desc->get_fname()->to_string());
+
+        switch (struct_name_hash) {
+        case L"Vector"_fnv:
+            if (is_ue5()) {
+                return sol::make_object(s, (lua::datatypes::Vector3f*)struct_data);
+            }
+
+            return sol::make_object(s, (lua::datatypes::Vector3f*)struct_data);
+        };*/
+
+        if (struct_desc == get_vector_struct()) {
+            if (is_ue5()) {
+                return sol::make_object(s, (lua::datatypes::Vector3d*)struct_data);
+            }
+
+            return sol::make_object(s, (lua::datatypes::Vector3f*)struct_data);
+        }
+
+        // TODO: Return a reflected struct
+        return sol::make_object(s, sol::lua_nil);
+    }
     case L"ArrayProperty"_fnv:
     {
         const auto inner_prop = ((uevr::API::FArrayProperty*)desc)->get_inner();
@@ -510,7 +564,7 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, const std
 int ScriptContext::setup_bindings() {
     m_lua.registry()["uevr_context"] = this;
 
-    m_lua.set_function("test_function", ScriptContext::test_function);
+    lua::datatypes::bind_vectors(m_lua);
 
     m_lua.new_usertype<UEVR_PluginInitializeParam>("UEVR_PluginInitializeParam",
         "uevr_module", &UEVR_PluginInitializeParam::uevr_module,
