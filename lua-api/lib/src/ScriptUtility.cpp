@@ -376,7 +376,19 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
                 throw sol::error("Struct property has no struct");
             }
 
-            if (struct_desc == get_vector_struct()) {
+            if (arg_obj.is<lua::datatypes::StructObject>()) {
+                const auto arg = arg_obj.as<lua::datatypes::StructObject>();
+
+                if (arg.desc != struct_desc) {
+                    if (arg.desc != nullptr) {
+                        throw sol::error(std::format("Invalid argument type for function '{}', expected '{}', got '{}'", ::utility::narrow(fn->get_fname()->to_string()), ::utility::narrow(struct_desc->get_fname()->to_string()), ::utility::narrow(arg.desc->get_fname()->to_string())));
+                    } else {
+                        throw sol::error(std::format("Invalid argument type for function '{}', expected '{}', got 'nil'", ::utility::narrow(fn->get_fname()->to_string()), ::utility::narrow(struct_desc->get_fname()->to_string())));
+                    }
+                }
+
+                memcpy(&params[offset], arg.object, struct_desc->get_struct_size());
+            } else if (struct_desc == get_vector_struct()) {
                 if (arg_obj.is<lua::datatypes::Vector3f>()) {
                     const auto arg = arg_obj.as<lua::datatypes::Vector3f>();
 
@@ -396,6 +408,8 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
                 } else {
                     throw sol::error("Invalid argument type for FVector");
                 }
+            } else {
+                throw sol::error("Invalid argument type for struct property");
             }
 
             continue;
