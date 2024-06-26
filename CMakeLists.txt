@@ -597,9 +597,13 @@ set(luavrlib_SOURCES "")
 list(APPEND luavrlib_SOURCES
 	"lua-api/lib/src/ScriptContext.cpp"
 	"lua-api/lib/src/ScriptState.cpp"
+	"lua-api/lib/src/ScriptUtility.cpp"
+	"lua-api/lib/src/datatypes/StructObject.cpp"
 	"lua-api/lib/src/datatypes/Vector.cpp"
 	"lua-api/lib/include/ScriptContext.hpp"
 	"lua-api/lib/include/ScriptState.hpp"
+	"lua-api/lib/include/ScriptUtility.hpp"
+	"lua-api/lib/include/datatypes/StructObject.hpp"
 	"lua-api/lib/include/datatypes/Vector.hpp"
 )
 

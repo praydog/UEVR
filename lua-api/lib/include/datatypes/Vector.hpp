@@ -1,8 +1,13 @@
 #pragma once
 
+#define GLM_ENABLE_EXPERIMENTAL
+
 #include <glm/vec3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
+#include <glm/gtx/euler_angles.hpp>
+#include <glm/gtx/vector_angle.hpp>
+
 #include <sol/sol.hpp>
 #include <uevr/API.hpp>
 

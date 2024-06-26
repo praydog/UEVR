@@ -1,7 +1,3 @@
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/euler_angles.hpp>
-#include <glm/gtx/vector_angle.hpp>
-
 #include <datatypes/Vector.hpp>
 
 namespace lua::datatypes {
