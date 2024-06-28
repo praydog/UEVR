@@ -8,6 +8,9 @@ namespace lua::datatypes {
                 "x", &name::x, \
                 "y", &name::y, \
                 "z", &name::z, \
+                "X", &name::x, \
+                "Y", &name::y, \
+                "Z", &name::z, \
                 "dot", [](name& v1, name& v2) { return glm::dot(v1, v2); }, \
                 "cross", [](name& v1, name& v2) { return glm::cross(v1, v2); }, \
                 "length", [](name& v) { return glm::length(v); }, \
