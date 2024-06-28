@@ -459,6 +459,7 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
 
     uevr::API::FProperty* return_prop{nullptr};
     bool ret_is_bool{false};
+    bool ret_is_array{false};
 
     //std::vector<uint8_t> dynamic_data{};
     std::vector<std::wstring> dynamic_strings{};
@@ -487,6 +488,8 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
 
             if (arg_c_name == L"BoolProperty") {
                 ret_is_bool = true;
+            } else if (arg_c_name == L"ArrayProperty") {
+                ret_is_array = true;
             }
 
             continue;
@@ -530,7 +533,43 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
             return sol::make_object(s, ((uevr::API::FBoolProperty*)return_prop)->get_value_from_object(params.data()));
         }
 
-        return prop_to_object(s, params.data(), return_prop, true);
+        auto result = prop_to_object(s, params.data(), return_prop, true);
+
+        if (ret_is_array) {
+            const auto inner_prop = ((uevr::API::FArrayProperty*)return_prop)->get_inner();
+
+            if (inner_prop == nullptr) {
+                return result;
+            }
+
+            const auto inner_c = inner_prop->get_class();
+
+            if (inner_c == nullptr) {
+                return result;
+            }
+
+            const auto inner_name_hash = ::utility::hash(inner_c->get_fname()->to_string());
+
+            switch (inner_name_hash) {
+            case L"ObjectProperty"_fnv:
+            {
+                //printf("ArrayProperty<ObjectProperty> cleanup\n");
+                auto& arr = *(uevr::API::TArray<uevr::API::UObject*>*)&params[return_prop->get_offset()];
+                arr.~TArray();
+                break;
+            }
+            default:
+            {
+                //printf("ArrayProperty cleanup\n");
+                // This will not work correctly on non-trivial types, but... we'll deal with that later
+                auto& arr = *(uevr::API::TArray<void*>*)&params[return_prop->get_offset()];
+                arr.~TArray();
+                break;
+            }
+            }
+        }
+
+        return result;
     }
 
     return sol::make_object(s, sol::lua_nil);
