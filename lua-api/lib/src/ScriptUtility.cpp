@@ -56,11 +56,66 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
         return sol::make_object(s, *(float*)((uintptr_t)self + offset));
     case L"DoubleProperty"_fnv:
         return sol::make_object(s, *(double*)((uintptr_t)self + offset));
+    case L"ByteProperty"_fnv:
+        return sol::make_object(s, *(uint8_t*)((uintptr_t)self + offset));
+    case L"Int8Property"_fnv:
+        return sol::make_object(s, *(int8_t*)((uintptr_t)self + offset));
+    case L"Int16Property"_fnv:
+        return sol::make_object(s, *(int16_t*)((uintptr_t)self + offset));
+    case L"UInt16Property"_fnv:
+        return sol::make_object(s, *(uint16_t*)((uintptr_t)self + offset));
     case L"IntProperty"_fnv:
         return sol::make_object(s, *(int32_t*)((uintptr_t)self + offset));
     case L"UIntProperty"_fnv:
     case L"UInt32Property"_fnv:
         return sol::make_object(s, *(uint32_t*)((uintptr_t)self + offset));
+    case L"UInt64Property"_fnv:
+        return sol::make_object(s, *(uint64_t*)((uintptr_t)self + offset));
+    case L"Int64Property"_fnv:
+        return sol::make_object(s, *(int64_t*)((uintptr_t)self + offset));
+    case L"EnumProperty"_fnv:
+    {
+        const auto ep = (uevr::API::FEnumProperty*)desc;
+        const auto np = ep->get_underlying_prop();
+
+        if (np == nullptr) {
+            return sol::make_object(s, sol::lua_nil);
+        }
+
+        const auto np_c = np->get_class();
+
+        if (np_c == nullptr) {
+            return sol::make_object(s, sol::lua_nil);
+        }
+
+        const auto np_name_hash = ::utility::hash(np_c->get_fname()->to_string());
+
+        switch (np_name_hash) {
+        case L"FloatProperty"_fnv:
+            return sol::make_object(s, *(float*)((uintptr_t)self + offset));
+        case L"DoubleProperty"_fnv:
+            return sol::make_object(s, *(double*)((uintptr_t)self + offset));
+        case L"ByteProperty"_fnv:
+            return sol::make_object(s, *(uint8_t*)((uintptr_t)self + offset));
+        case L"Int8Property"_fnv:
+            return sol::make_object(s, *(int8_t*)((uintptr_t)self + offset));
+        case L"Int16Property"_fnv:
+            return sol::make_object(s, *(int16_t*)((uintptr_t)self + offset));
+        case L"UInt16Property"_fnv:
+            return sol::make_object(s, *(uint16_t*)((uintptr_t)self + offset));
+        case L"IntProperty"_fnv:
+            return sol::make_object(s, *(int32_t*)((uintptr_t)self + offset));
+        case L"UIntProperty"_fnv:
+        case L"UInt32Property"_fnv:
+            return sol::make_object(s, *(uint32_t*)((uintptr_t)self + offset));
+        case L"UInt64Property"_fnv:
+            return sol::make_object(s, *(uint64_t*)((uintptr_t)self + offset));
+        case L"Int64Property"_fnv:
+            return sol::make_object(s, *(int64_t*)((uintptr_t)self + offset));
+        };
+
+        return sol::make_object(s, sol::lua_nil);
+    }
     case L"NameProperty"_fnv:
         return sol::make_object(s, *(uevr::API::FName*)((uintptr_t)self + offset));
     case L"ObjectProperty"_fnv:
@@ -209,19 +264,89 @@ void set_property(sol::this_state s, void* self, uevr::API::UStruct* c, const st
         return;
     }
     case L"FloatProperty"_fnv:
-        //self.get_property<float>(name) = value.as<float>();
         *(float*)((uintptr_t)self + offset) = value.as<float>();
         return;
     case L"DoubleProperty"_fnv:
         *(double*)((uintptr_t)self + offset) = value.as<double>();
         return;
+    case L"ByteProperty"_fnv:
+        *(uint8_t*)((uintptr_t)self + offset) = value.as<uint8_t>();
+        return;
+    case L"Int8Property"_fnv:
+        *(int8_t*)((uintptr_t)self + offset) = value.as<int8_t>();
+        return;
+    case L"Int16Property"_fnv:
+        *(int16_t*)((uintptr_t)self + offset) = value.as<int16_t>();
+        return;
+    case L"UInt16Property"_fnv:
+        *(uint16_t*)((uintptr_t)self + offset) = value.as<uint16_t>();
+        return;
     case L"IntProperty"_fnv:
         *(int32_t*)((uintptr_t)self + offset) = value.as<int32_t>();
-        return;      
+        return;
     case L"UIntProperty"_fnv:
     case L"UInt32Property"_fnv:
         *(uint32_t*)((uintptr_t)self + offset) = value.as<uint32_t>();
         return;
+    case L"UInt64Property"_fnv:
+        *(uint64_t*)((uintptr_t)self + offset) = value.as<uint64_t>();
+        return;
+    case L"Int64Property"_fnv:
+        *(int64_t*)((uintptr_t)self + offset) = value.as<int64_t>();
+        return;
+    case L"EnumProperty"_fnv:
+    {
+        const auto ep = (uevr::API::FEnumProperty*)desc;
+        const auto np = ep->get_underlying_prop();
+
+        if (np == nullptr) {
+            throw sol::error("Enum property has no underlying property");
+        }
+
+        const auto np_c = np->get_class();
+
+        if (np_c == nullptr) {
+            throw sol::error("Enum property's underlying property has no class");
+        }
+
+        const auto np_name_hash = ::utility::hash(np_c->get_fname()->to_string());
+
+        switch (np_name_hash) {
+        case L"FloatProperty"_fnv:
+            *(float*)((uintptr_t)self + offset) = value.as<float>();
+            return;
+        case L"DoubleProperty"_fnv:
+            *(double*)((uintptr_t)self + offset) = value.as<double>();
+            return;
+        case L"ByteProperty"_fnv:
+            *(uint8_t*)((uintptr_t)self + offset) = value.as<uint8_t>();
+            return;
+        case L"Int8Property"_fnv:
+            *(int8_t*)((uintptr_t)self + offset) = value.as<int8_t>();
+            return;
+        case L"Int16Property"_fnv:
+            *(int16_t*)((uintptr_t)self + offset) = value.as<int16_t>();
+            return;
+        case L"UInt16Property"_fnv:
+            *(uint16_t*)((uintptr_t)self + offset) = value.as<uint16_t>();
+            return;
+        case L"IntProperty"_fnv:
+            *(int32_t*)((uintptr_t)self + offset) = value.as<int32_t>();
+            return;
+        case L"UIntProperty"_fnv:
+        case L"UInt32Property"_fnv:
+            *(uint32_t*)((uintptr_t)self + offset) = value.as<uint32_t>();
+            return;
+        case L"UInt64Property"_fnv:
+            *(uint64_t*)((uintptr_t)self + offset) = value.as<uint64_t>();
+            return;
+        case L"Int64Property"_fnv:
+            *(int64_t*)((uintptr_t)self + offset) = value.as<int64_t>();
+            return;
+        };
+
+        throw sol::error("Could not set enum property");
+    }
     case L"NameProperty"_fnv:
         //return sol::make_object(s, self.get_property<uevr::API::FName>(name));
         throw sol::error("Setting FName properties is not supported (yet)");

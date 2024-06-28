@@ -428,7 +428,9 @@ int ScriptContext::setup_bindings() {
         "static_class", &uevr::API::UStruct::static_class,
         "get_super_struct", &uevr::API::UStruct::get_super_struct,
         "get_super", &uevr::API::UStruct::get_super,
-        "find_function", &uevr::API::UStruct::find_function,
+        "find_function", [](uevr::API::UStruct& self, const std::wstring& name) {
+            return self.find_function(name);
+        },
         "get_child_properties", &uevr::API::UStruct::get_child_properties,
         "get_properties_size", &uevr::API::UStruct::get_properties_size
     );
