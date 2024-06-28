@@ -455,8 +455,6 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
         params.resize(ps);
     }
 
-    params.resize(fn->get_properties_size());
-
     uevr::API::FProperty* return_prop{nullptr};
     bool ret_is_bool{false};
     bool ret_is_array{false};
