@@ -474,11 +474,17 @@ namespace uobjecthook {
     }
 
     bool exists(UEVR_UObjectHandle obj) {
-        return UObjectHook::get()->exists((sdk::UObject*)obj);
+        auto& instance = UObjectHook::get();
+        instance->activate();
+
+        return instance->exists((sdk::UObject*)obj);
     }
 
     int get_objects_by_class(UEVR_UClassHandle klass, UEVR_UObjectHandle* out_objects, unsigned int max_objects, bool allow_default) {
-        const auto objects = UObjectHook::get()->get_objects_by_class((sdk::UClass*)klass);
+        auto& instance = UObjectHook::get();
+        instance->activate();
+
+        const auto objects = instance->get_objects_by_class((sdk::UClass*)klass);
 
         if (objects.empty()) {
             return 0;
@@ -515,7 +521,10 @@ namespace uobjecthook {
     }
 
     UEVR_UObjectHandle get_first_object_by_class(UEVR_UClassHandle klass, bool allow_default) {
-        const auto objects = UObjectHook::get()->get_objects_by_class((sdk::UClass*)klass);
+        auto& instance = UObjectHook::get();
+        instance->activate();
+
+        const auto objects = instance->get_objects_by_class((sdk::UClass*)klass);
 
         if (objects.empty()) {
             return nullptr;
