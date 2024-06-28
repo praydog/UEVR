@@ -247,10 +247,14 @@ void set_property(sol::this_state s, void* self, uevr::API::UStruct* c, const st
         throw sol::error(std::format("[set_property] Property '{}' not found", ::utility::narrow(name)));
     }
 
+    set_property(s, self, c, desc, value);
+}
+
+void set_property(sol::this_state s, void* self, uevr::API::UStruct* owner_c, uevr::API::FProperty* desc, sol::object value) {
     const auto propc = desc->get_class();
 
     if (propc == nullptr) {
-        throw sol::error(std::format("[set_property] Property '{}' has no class", ::utility::narrow(name)));
+        throw sol::error(std::format("[set_property] Property '{}' has no class", ::utility::narrow(desc->get_fname()->to_string())));
     }
 
     const auto name_hash = ::utility::hash(propc->get_fname()->to_string());
@@ -348,8 +352,20 @@ void set_property(sol::this_state s, void* self, uevr::API::UStruct* c, const st
         throw sol::error("Could not set enum property");
     }
     case L"NameProperty"_fnv:
-        //return sol::make_object(s, self.get_property<uevr::API::FName>(name));
-        throw sol::error("Setting FName properties is not supported (yet)");
+        if (value.is<std::string>()) {
+            const auto arg = ::utility::widen(value.as<std::string>());
+            *(uevr::API::FName*)((uintptr_t)self + offset) = uevr::API::FName{arg};
+        } else if (value.is<std::wstring>()) {
+            const auto arg = value.as<std::wstring>();
+            *(uevr::API::FName*)((uintptr_t)self + offset) = uevr::API::FName{arg};
+        } else if (value.is<uevr::API::FName>()) {
+            const auto arg = value.as<uevr::API::FName>();
+            *(uevr::API::FName*)((uintptr_t)self + offset) = arg;
+        } else {
+            throw sol::error("Invalid argument type for FName");
+        }
+
+        return;
     case L"ObjectProperty"_fnv:
         *(uevr::API::UObject**)((uintptr_t)self + offset) = value.as<uevr::API::UObject*>();
         return;
@@ -358,6 +374,52 @@ void set_property(sol::this_state s, void* self, uevr::API::UStruct* c, const st
         return;
     case L"ArrayProperty"_fnv:
         throw sol::error("Setting array properties is not supported (yet)");
+    case L"StructProperty"_fnv:
+    {
+        const auto struct_desc = ((uevr::API::FStructProperty*)desc)->get_struct();
+
+        if (struct_desc == nullptr) {
+            throw sol::error("Struct property has no struct");
+        }
+
+        if (value.is<lua::datatypes::StructObject>()) {
+            const auto arg = value.as<lua::datatypes::StructObject>();
+
+            if (arg.desc != struct_desc) {
+                if (arg.desc != nullptr) {
+                    throw sol::error(std::format("Invalid struct type for struct property (expected {}, got {})", ::utility::narrow(struct_desc->get_fname()->to_string()), ::utility::narrow(arg.desc->get_fname()->to_string())));
+                } else {
+                    throw sol::error(std::format("Invalid struct type for struct property (expected {})", ::utility::narrow(struct_desc->get_fname()->to_string())));
+                }
+            }
+
+            memcpy((void*)((uintptr_t)self + offset), arg.object, struct_desc->get_struct_size());
+        } else if (struct_desc == get_vector_struct()) {
+            if (value.is<lua::datatypes::Vector3f>()) {
+                const auto arg = value.as<lua::datatypes::Vector3f>();
+
+                if (is_ue5()) {
+                    *(lua::datatypes::Vector3d*)((uintptr_t)self + offset) = arg;
+                } else {
+                    *(lua::datatypes::Vector3f*)((uintptr_t)self + offset) = arg;
+                }
+            } else if (value.is<lua::datatypes::Vector3d>()) {
+                const auto arg = value.as<lua::datatypes::Vector3d>();
+
+                if (is_ue5()) {
+                    *(lua::datatypes::Vector3d*)((uintptr_t)self + offset) = arg;
+                } else {
+                    *(lua::datatypes::Vector3f*)((uintptr_t)self + offset) = arg;
+                }
+            } else {
+                throw sol::error("Invalid argument type for FVector");
+            }
+        } else {
+            throw sol::error("Invalid argument type for struct property");
+        }
+
+        return;
+    }
     };
 
     // NONE
@@ -433,118 +495,7 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
         const auto arg_hash = ::utility::hash(arg_c_name);
         const auto offset = prop_desc->get_offset();
 
-        switch (arg_hash) {
-        case L"BoolProperty"_fnv:
-        {
-            const bool arg = args[args_index++].as<bool>();
-            const auto fbp = (uevr::API::FBoolProperty*)prop_desc;
-            fbp->set_value_in_object(params.data(), arg);
-            continue;
-        }
-        case L"FloatProperty"_fnv:
-        {
-            const float arg = args[args_index++].as<float>();
-            *(float*)&params[offset] = arg;
-            continue;
-        }
-        case L"DoubleProperty"_fnv:
-        {
-            const double arg = args[args_index++].as<double>();
-            *(double*)&params[offset] = arg;
-            continue;
-        }
-        case L"IntProperty"_fnv:
-        case L"UIntProperty"_fnv:
-        case L"UInt32Property"_fnv:
-        {
-            const int32_t arg = args[args_index++].as<int32_t>();
-            *(int32_t*)&params[offset] = arg;
-            continue;
-        }
-        case L"NameProperty"_fnv:
-        {
-            const auto arg_obj = args[args_index++];
-
-            if (arg_obj.is<std::string>()) {
-                const auto arg = ::utility::widen(arg_obj.as<std::string>());
-                *(uevr::API::FName*)&params[offset] = uevr::API::FName{arg};
-            } else if (arg_obj.is<std::wstring>()) {
-                const auto arg = arg_obj.as<std::wstring>();
-                *(uevr::API::FName*)&params[offset] = uevr::API::FName{arg};
-            } else if (arg_obj.is<uevr::API::FName>()) {
-                const auto arg = arg_obj.as<uevr::API::FName>();
-                *(uevr::API::FName*)&params[offset] = arg;
-            } else {
-                throw sol::error("Invalid argument type for FName");
-            }
-
-            continue;
-        }
-        case L"ObjectProperty"_fnv:
-        {
-            const auto arg = args[args_index++].as<uevr::API::UObject*>();
-            *(uevr::API::UObject**)&params[offset] = arg;
-            continue;
-        }
-        case L"ClassProperty"_fnv:
-        {
-            const auto arg = args[args_index++].as<uevr::API::UClass*>();
-            *(uevr::API::UClass**)&params[offset] = arg;
-            continue;
-        }
-        case L"StructProperty"_fnv:
-        {
-            const auto arg_obj = args[args_index++];
-            const auto struct_desc = ((uevr::API::FStructProperty*)prop_desc)->get_struct();
-
-            if (struct_desc == nullptr) {
-                throw sol::error("Struct property has no struct");
-            }
-
-            if (arg_obj.is<lua::datatypes::StructObject>()) {
-                const auto arg = arg_obj.as<lua::datatypes::StructObject>();
-
-                if (arg.desc != struct_desc) {
-                    if (arg.desc != nullptr) {
-                        throw sol::error(std::format("Invalid argument type for function '{}', expected '{}', got '{}'", ::utility::narrow(fn->get_fname()->to_string()), ::utility::narrow(struct_desc->get_fname()->to_string()), ::utility::narrow(arg.desc->get_fname()->to_string())));
-                    } else {
-                        throw sol::error(std::format("Invalid argument type for function '{}', expected '{}', got 'nil'", ::utility::narrow(fn->get_fname()->to_string()), ::utility::narrow(struct_desc->get_fname()->to_string())));
-                    }
-                }
-
-                memcpy(&params[offset], arg.object, struct_desc->get_struct_size());
-            } else if (struct_desc == get_vector_struct()) {
-                if (arg_obj.is<lua::datatypes::Vector3f>()) {
-                    const auto arg = arg_obj.as<lua::datatypes::Vector3f>();
-
-                    if (is_ue5()) {
-                        *(lua::datatypes::Vector3d*)&params[offset] = arg;
-                    } else {
-                        *(lua::datatypes::Vector3f*)&params[offset] = arg;
-                    }
-                } else if (arg_obj.is<lua::datatypes::Vector3d>()) {
-                    const auto arg = arg_obj.as<lua::datatypes::Vector3d>();
-
-                    if (is_ue5()) {
-                        *(lua::datatypes::Vector3d*)&params[offset] = arg;
-                    } else {
-                        *(lua::datatypes::Vector3f*)&params[offset] = arg;
-                    }
-                } else {
-                    throw sol::error("Invalid argument type for FVector");
-                }
-            } else {
-                throw sol::error("Invalid argument type for struct property");
-            }
-
-            continue;
-        }
-        case L"ArrayProperty"_fnv:
-            // TODO
-            throw sol::error("Array properties are not supported (yet)");
-            continue;
-        case L"StrProperty"_fnv:
-        {
+        if (arg_hash == L"StrProperty"_fnv) {
             const auto arg_obj = args[args_index++];
             using FString = uevr::API::TArray<wchar_t>;
 
@@ -567,12 +518,9 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
             } else {
                 throw sol::error("Invalid argument type for FString");
             }
-            continue;
+        } else {
+            set_property(s, params.data(), fn, prop_desc, args[args_index++]);
         }
-        default:
-            //spdlog::warn("Unknown property type when calling '{}': {}", utility::narrow(fn->get_fname()->to_string()), utility::narrow(arg_c_name));
-            uevr::API::get()->log_warn(std::format("Unknown property type when calling '{}': {}", ::utility::narrow(fn->get_fname()->to_string()), ::utility::narrow(arg_c_name)).c_str());
-        };
     }
 
     fn->call(self, params.data());
