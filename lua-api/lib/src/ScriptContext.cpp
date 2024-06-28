@@ -665,11 +665,21 @@ void ScriptContext::on_post_slate_draw_window_render_thread(UEVR_FSlateRHIRender
 }
 
 void ScriptContext::on_pre_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle device, int view_index, float world_to_meters, UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double) {
+    const auto ue5_position = (lua::datatypes::Vector3d*)position;
+    const auto ue4_position = (lua::datatypes::Vector3f*)position;
+    const auto ue5_rotation = (lua::datatypes::Vector3d*)rotation;
+    const auto ue4_rotation = (lua::datatypes::Vector3f*)rotation;
+    const auto is_ue5 = lua::utility::is_ue5();
+
     g_contexts.for_each([=](auto ctx) {
         std::scoped_lock _{ ctx->m_mtx };
 
         for (auto& fn : ctx->m_on_pre_calculate_stereo_view_offset_callbacks) try {
-            ctx->handle_protected_result(fn(device, view_index, world_to_meters, position, rotation, is_double));
+            if (is_ue5) {
+                ctx->handle_protected_result(fn(device, view_index, world_to_meters, ue5_position, ue5_rotation, is_double));
+            } else {
+                ctx->handle_protected_result(fn(device, view_index, world_to_meters, ue4_position, ue4_rotation, is_double));
+            }
         } catch (const std::exception& e) {
             ScriptContext::log("Exception in on_pre_calculate_stereo_view_offset: " + std::string(e.what()));
         } catch (...) {
@@ -679,11 +689,21 @@ void ScriptContext::on_pre_calculate_stereo_view_offset(UEVR_StereoRenderingDevi
 }
 
 void ScriptContext::on_post_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle device, int view_index, float world_to_meters, UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double) {
+    const auto ue5_position = (lua::datatypes::Vector3d*)position;
+    const auto ue4_position = (lua::datatypes::Vector3f*)position;
+    const auto ue5_rotation = (lua::datatypes::Vector3d*)rotation;
+    const auto ue4_rotation = (lua::datatypes::Vector3f*)rotation;
+    const auto is_ue5 = lua::utility::is_ue5();
+    
     g_contexts.for_each([=](auto ctx) {
         std::scoped_lock _{ ctx->m_mtx };
 
         for (auto& fn : ctx->m_on_post_calculate_stereo_view_offset_callbacks) try {
-            ctx->handle_protected_result(fn(device, view_index, world_to_meters, position, rotation, is_double));
+            if (is_ue5) {
+                ctx->handle_protected_result(fn(device, view_index, world_to_meters, ue5_position, ue5_rotation, is_double));
+            } else {
+                ctx->handle_protected_result(fn(device, view_index, world_to_meters, ue4_position, ue4_rotation, is_double));
+            }
         } catch (const std::exception& e) {
             ScriptContext::log("Exception in on_post_calculate_stereo_view_offset: " + std::string(e.what()));
         } catch (...) {
