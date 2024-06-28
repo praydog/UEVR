@@ -742,6 +742,39 @@ public:
         }
     };
 
+    struct UEnum : public UObject {
+
+    };
+
+    struct FNumericProperty : public FProperty {
+
+    };
+
+    struct FEnumProperty : public FProperty {
+        inline UEVR_FEnumPropertyHandle to_handle() { return (UEVR_FEnumPropertyHandle)this; }
+        inline UEVR_FEnumPropertyHandle to_handle() const { return (UEVR_FEnumPropertyHandle)this; }
+
+        FNumericProperty* get_underlying_prop() const {
+            static const auto fn = initialize()->get_underlying_prop;
+            return (FNumericProperty*)fn(to_handle());
+        }
+
+        UEnum* get_enum() const {
+            static const auto fn = initialize()->get_enum;
+            return (UEnum*)fn(to_handle());
+        }
+
+    private:
+        static inline const UEVR_FEnumPropertyFunctions* s_functions{nullptr};
+        static inline const UEVR_FEnumPropertyFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->fenumproperty;
+            }
+
+            return s_functions;
+        }
+    };
+
     struct FFieldClass {
         inline UEVR_FFieldClassHandle to_handle() { return (UEVR_FFieldClassHandle)this; }
         inline UEVR_FFieldClassHandle to_handle() const { return (UEVR_FFieldClassHandle)this; }

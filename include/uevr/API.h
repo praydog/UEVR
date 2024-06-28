@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 25
+#define UEVR_PLUGIN_VERSION_MINOR 26
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -79,6 +79,9 @@ DECLARE_UEVR_HANDLE(UEVR_UScriptStructHandle);
 DECLARE_UEVR_HANDLE(UEVR_FArrayPropertyHandle);
 DECLARE_UEVR_HANDLE(UEVR_FBoolPropertyHandle);
 DECLARE_UEVR_HANDLE(UEVR_FStructPropertyHandle);
+DECLARE_UEVR_HANDLE(UEVR_FEnumPropertyHandle);
+DECLARE_UEVR_HANDLE(UEVR_UEnumHandle);
+DECLARE_UEVR_HANDLE(UEVR_FNumericPropertyHandle);
 
 /* OpenXR stuff */
 DECLARE_UEVR_HANDLE(UEVR_XrInstance);
@@ -417,6 +420,11 @@ typedef struct {
 } UEVR_FStructPropertyFunctions;
 
 typedef struct {
+    UEVR_FNumericPropertyHandle (*get_underlying_prop)(UEVR_FEnumPropertyHandle prop);
+    UEVR_UEnumHandle (*get_enum)(UEVR_FEnumPropertyHandle prop);
+} UEVR_FEnumPropertyFunctions;
+
+typedef struct {
     const UEVR_SDKFunctions* functions;
     const UEVR_SDKCallbacks* callbacks;
     const UEVR_UObjectFunctions* uobject;
@@ -438,6 +446,7 @@ typedef struct {
     const UEVR_FArrayPropertyFunctions* farrayproperty;
     const UEVR_FBoolPropertyFunctions* fboolproperty;
     const UEVR_FStructPropertyFunctions* fstructproperty;
+    const UEVR_FEnumPropertyFunctions* fenumproperty;
 } UEVR_SDKData;
 
 DECLARE_UEVR_HANDLE(UEVR_IVRSystem);

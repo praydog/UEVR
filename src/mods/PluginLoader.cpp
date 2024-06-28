@@ -24,6 +24,7 @@
 #include <sdk/FArrayProperty.hpp>
 #include <sdk/FBoolProperty.hpp>
 #include <sdk/FStructProperty.hpp>
+#include <sdk/FEnumProperty.hpp>
 
 #include "pluginloader/FFakeStereoRenderingFunctions.hpp"
 #include "pluginloader/FRenderTargetPoolHook.hpp"
@@ -858,6 +859,15 @@ UEVR_FStructPropertyFunctions g_fstruct_property_functions {
     }
 };
 
+UEVR_FEnumPropertyFunctions g_fenum_property_functions {
+    .get_underlying_prop = [](UEVR_FEnumPropertyHandle prop) -> UEVR_FNumericPropertyHandle {
+        return (UEVR_FNumericPropertyHandle)((sdk::FEnumProperty*)prop)->get_underlying_prop();
+    },
+    .get_enum = [](UEVR_FEnumPropertyHandle prop) -> UEVR_UEnumHandle {
+        return (UEVR_UEnumHandle)((sdk::FEnumProperty*)prop)->get_enum();
+    }
+};
+
 UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
@@ -879,7 +889,8 @@ UEVR_SDKData g_sdk_data {
     &uevr::uscriptstruct::functions,
     &g_farray_property_functions,
     &g_fbool_property_functions,
-    &g_fstruct_property_functions
+    &g_fstruct_property_functions,
+    &g_fenum_property_functions
 };
 
 namespace uevr {
