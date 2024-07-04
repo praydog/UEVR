@@ -9,8 +9,6 @@ std::shared_ptr<uevr::ScriptContext> g_script_context{};
 extern "C" __declspec(dllexport) int luaopen_LuaVR(lua_State* L) {
     luaL_checkversion(L);
 
-    uevr::ScriptContext::log("Initializing LuaVR...");
-
     g_script_context = uevr::ScriptContext::create(L);
 
     if (!g_script_context->valid()) {
