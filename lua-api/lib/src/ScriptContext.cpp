@@ -262,7 +262,24 @@ int ScriptContext::setup_bindings() {
         "get_aim_method", &UEVR_VRData::get_aim_method,
         "set_aim_method", &UEVR_VRData::set_aim_method,
         "is_aim_allowed", &UEVR_VRData::is_aim_allowed,
-        "set_aim_allowed", &UEVR_VRData::set_aim_allowed
+        "set_aim_allowed", &UEVR_VRData::set_aim_allowed,
+        "get_hmd_width", &UEVR_VRData::get_hmd_width,
+        "get_hmd_height", &UEVR_VRData::get_hmd_height,
+        "get_ui_width", &UEVR_VRData::get_ui_width,
+        "get_ui_height", &UEVR_VRData::get_ui_height,
+        "is_snap_turn_enabled", &UEVR_VRData::is_snap_turn_enabled,
+        "set_snap_turn_enabled", &UEVR_VRData::set_snap_turn_enabled,
+        "set_decoupled_pitch_enabled", &UEVR_VRData::set_decoupled_pitch_enabled,
+        "set_mod_value", &UEVR_VRData::set_mod_value,
+        "get_mod_value", [](UEVR_VRData& self, const char* name) {
+            std::string out{};
+            out.resize(256);
+
+            self.get_mod_value(name, out.data(), out.size());
+            return out;
+        },
+        "save_config", &UEVR_VRData::save_config,
+        "reload_config", &UEVR_VRData::reload_config
     );
 
     // TODO: Add operators to these types
