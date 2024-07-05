@@ -921,6 +921,15 @@ void Framework::on_frontend_command(UEVRSharedMemory::Command command) {
     case UEVRSharedMemory::Command::CONFIG_SETUP_ACKNOWLEDGED:
         m_uevr_shared_memory->data().signal_frontend_config_setup = false;
         break;
+    case UEVRSharedMemory::Command::QUIT:
+        if (m_wnd != nullptr) {
+            PostMessageA(m_wnd, WM_CLOSE, 0, 0);
+            PostMessageA(m_wnd, WM_DESTROY, 0, 0);
+            PostMessageA(m_wnd, WM_QUIT, 0, 0);
+            m_terminating = true;
+        }
+        
+        break;
     default:
         spdlog::error("Unknown frontend command received: {}", (int)command);
         break;
