@@ -527,7 +527,9 @@ int ScriptContext::setup_bindings() {
 
     m_lua.new_usertype<uevr::API::IConsoleCommand>("UEVR_IConsoleCommand",
         sol::base_classes, sol::bases<uevr::API::IConsoleObject>(),
-        "execute", &uevr::API::IConsoleCommand::execute
+        "execute", [](uevr::API::IConsoleCommand& self, const std::wstring& args) {
+            self.execute(args);
+        }
     );
 
     m_lua.new_usertype<uevr::API::FUObjectArray>("UEVR_FUObjectArray",
