@@ -6,6 +6,8 @@
 
 #include <Windows.h>
 
+#include <safetyhook.hpp>
+
 #include "Mod.hpp"
 #include "uevr/API.h"
 
@@ -96,6 +98,30 @@ public:
         return true;
     }
 
+    size_t add_inline_hook(safetyhook::InlineHook&& hook) {
+        std::scoped_lock lock{m_mux};
+
+        auto state = std::make_unique<InlineHookState>(std::move(hook));
+        m_inline_hooks[++m_inline_hook_idx] = std::move(state);
+
+        return m_inline_hook_idx;
+    }
+
+    void remove_inline_hook(size_t idx) {
+        std::scoped_lock lock{m_mux};
+
+        if (!m_inline_hooks.contains(idx)) {
+            return;
+        }
+
+        {
+            std::scoped_lock _{m_inline_hooks[idx]->mux};
+            m_inline_hooks[idx]->hook.reset();
+        }
+
+        m_inline_hooks.erase(idx);
+    }
+
 private:
     std::shared_mutex m_api_cb_mtx;
     std::vector<PluginLoader::UEVR_OnPresentCb> m_on_present_cbs{};
@@ -145,4 +171,18 @@ private:
     std::map<std::string, HMODULE> m_plugins{};
     std::map<std::string, std::string> m_plugin_load_errors{};
     std::map<std::string, std::string> m_plugin_load_warnings{};
+
+    struct InlineHookState {
+        InlineHookState(safetyhook::InlineHook&& hook)
+            : hook{std::move(hook)}
+        {
+        }
+
+        safetyhook::InlineHook hook{};
+        std::mutex mux{};
+    };
+
+    //std::vector<InlineHookState> m_inline_hooks{};
+    std::unordered_map<size_t, std::unique_ptr<InlineHookState>> m_inline_hooks{};
+    size_t m_inline_hook_idx{0};
 };

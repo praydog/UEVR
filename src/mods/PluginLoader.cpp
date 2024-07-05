@@ -86,6 +86,27 @@ unsigned int get_persistent_dir(wchar_t* buffer, unsigned int buffer_size) {
 
     return (unsigned int)size;
 }
+
+int register_inline_hook(void* target, void* dst, void** original) {
+    if (target == nullptr || dst == nullptr || original == nullptr) {
+        return -1;
+    }
+
+    auto hook = safetyhook::create_inline(target, dst);
+
+    if (!hook) {
+        spdlog::error("Failed to create inline hook at {:x}", (uintptr_t)target);
+        return -1;
+    }
+
+    *original = hook.original<void*>();
+
+    return PluginLoader::get()->add_inline_hook(std::move(hook));
+}
+
+void unregister_inline_hook(int id) {
+    PluginLoader::get()->remove_inline_hook(id);
+}
 }
 
 namespace uevr {
@@ -162,7 +183,9 @@ UEVR_PluginFunctions g_plugin_functions {
     uevr::log_info,
     uevr::is_drawing_ui,
     uevr::remove_callback,
-    uevr::get_persistent_dir
+    uevr::get_persistent_dir,
+    uevr::register_inline_hook,
+    uevr::unregister_inline_hook
 };
 
 #define GET_ENGINE_WORLD_RETNULL() \
@@ -1566,6 +1589,7 @@ void PluginLoader::attempt_unload_plugins() {
         FreeLibrary(pair.second);
     }
 
+    m_inline_hooks.clear();
     m_plugins.clear();
 }
 

@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 24
+#define UEVR_PLUGIN_VERSION_MINOR 27
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -207,6 +207,8 @@ typedef struct {
     bool (*is_drawing_ui)();
     bool (*remove_callback)(void* cb);
     unsigned int (*get_persistent_dir)(wchar_t* buffer, unsigned int buffer_size);
+    int (*register_inline_hook)(void* target, void* dst, void** original);
+    void (*unregister_inline_hook)(int hook_id);
 } UEVR_PluginFunctions;
 
 typedef struct {
