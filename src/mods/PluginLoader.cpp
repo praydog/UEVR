@@ -23,6 +23,8 @@
 #include <sdk/USceneComponent.hpp>
 #include <sdk/FArrayProperty.hpp>
 #include <sdk/FBoolProperty.hpp>
+#include <sdk/FStructProperty.hpp>
+#include <sdk/FEnumProperty.hpp>
 
 #include "pluginloader/FFakeStereoRenderingFunctions.hpp"
 #include "pluginloader/FRenderTargetPoolHook.hpp"
@@ -496,22 +498,30 @@ namespace uobjecthook {
     }
 
     bool exists(UEVR_UObjectHandle obj) {
-        return UObjectHook::get()->exists((sdk::UObject*)obj);
+        auto& instance = UObjectHook::get();
+        instance->activate();
+
+        return instance->exists((sdk::UObject*)obj);
     }
 
     int get_objects_by_class(UEVR_UClassHandle klass, UEVR_UObjectHandle* out_objects, unsigned int max_objects, bool allow_default) {
-        const auto objects = UObjectHook::get()->get_objects_by_class((sdk::UClass*)klass);
+        auto& instance = UObjectHook::get();
+        instance->activate();
+
+        const auto objects = instance->get_objects_by_class((sdk::UClass*)klass);
 
         if (objects.empty()) {
             return 0;
         }
 
-        const auto default_object = ((sdk::UClass*)klass)->get_class_default_object();
-
         unsigned int i = 0;
         for (auto&& obj : objects) {
-            if (!allow_default && obj == default_object) {
-                continue;
+            if (!allow_default) {
+                const auto c = obj->get_class();
+
+                if (c == nullptr || c->get_class_default_object() == obj) {
+                    continue;
+                }
             }
 
             if (i < max_objects && out_objects != nullptr) {
@@ -535,7 +545,10 @@ namespace uobjecthook {
     }
 
     UEVR_UObjectHandle get_first_object_by_class(UEVR_UClassHandle klass, bool allow_default) {
-        const auto objects = UObjectHook::get()->get_objects_by_class((sdk::UClass*)klass);
+        auto& instance = UObjectHook::get();
+        instance->activate();
+
+        const auto objects = instance->get_objects_by_class((sdk::UClass*)klass);
 
         if (objects.empty()) {
             return nullptr;
@@ -545,12 +558,14 @@ namespace uobjecthook {
             return (UEVR_UObjectHandle)*objects.begin();
         }
 
-        const auto default_object = ((sdk::UClass*)klass)->get_class_default_object();
-
         for (auto&& obj : objects) {
-            if (obj != default_object) {
-                return (UEVR_UObjectHandle)obj;
+            const auto c = obj->get_class();
+
+            if (c == nullptr || c->get_class_default_object() == obj) {
+                continue;
             }
+
+            return (UEVR_UObjectHandle)obj;
         }
 
         return (UEVR_UObjectHandle)nullptr;
@@ -861,6 +876,21 @@ UEVR_FBoolPropertyFunctions g_fbool_property_functions {
     }
 };
 
+UEVR_FStructPropertyFunctions g_fstruct_property_functions {
+    .get_struct = [](UEVR_FStructPropertyHandle prop) -> UEVR_UScriptStructHandle {
+        return (UEVR_UScriptStructHandle)((sdk::FStructProperty*)prop)->get_struct();
+    }
+};
+
+UEVR_FEnumPropertyFunctions g_fenum_property_functions {
+    .get_underlying_prop = [](UEVR_FEnumPropertyHandle prop) -> UEVR_FNumericPropertyHandle {
+        return (UEVR_FNumericPropertyHandle)((sdk::FEnumProperty*)prop)->get_underlying_prop();
+    },
+    .get_enum = [](UEVR_FEnumPropertyHandle prop) -> UEVR_UEnumHandle {
+        return (UEVR_UEnumHandle)((sdk::FEnumProperty*)prop)->get_enum();
+    }
+};
+
 UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
@@ -881,7 +911,9 @@ UEVR_SDKData g_sdk_data {
     &uevr::frhitexture2d::functions,
     &uevr::uscriptstruct::functions,
     &g_farray_property_functions,
-    &g_fbool_property_functions
+    &g_fbool_property_functions,
+    &g_fstruct_property_functions,
+    &g_fenum_property_functions
 };
 
 namespace uevr {
@@ -1744,7 +1776,6 @@ void PluginLoader::on_xinput_set_state(uint32_t* retval, uint32_t user_index, XI
         }
     }
 }
-
 
 void PluginLoader::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
     std::shared_lock _{m_api_cb_mtx};
