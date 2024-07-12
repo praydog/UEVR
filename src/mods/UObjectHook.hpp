@@ -10,6 +10,7 @@
 #include <nlohmann/json.hpp>
 
 #include <safetyhook.hpp>
+#include <utility/PointerHook.hpp>
 
 #include "Mod.hpp"
 
@@ -466,6 +467,18 @@ private:
     ModKey::Ptr m_keybind_toggle_uobject_hook{ModKey::create(generate_name("ToggleUObjectHookKey"))};
     bool m_uobject_hook_disabled{false};
     bool m_fixed_visibilities{false};
+
+    safetyhook::InlineHook m_process_event_hook{};
+    bool m_process_event_listening{true};
+    bool m_attempted_hook_process_event{false};
+    bool m_hooked_process_event{false};
+    void hook_process_event();
+    static void* process_event_hook(sdk::UObject* obj, sdk::UFunction* func, void* params, void* r9);
+
+    std::shared_mutex m_function_mutex{};
+    std::unordered_set<sdk::UFunction*> m_called_functions{};
+    std::deque<sdk::UFunction*> m_most_recent_functions{};
+    std::unordered_set<sdk::UFunction*> m_ignored_recent_functions{};
 
 public:
     UObjectHook() {
