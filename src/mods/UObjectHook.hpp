@@ -467,6 +467,7 @@ private:
     ModKey::Ptr m_keybind_toggle_uobject_hook{ModKey::create(generate_name("ToggleUObjectHookKey"))};
     bool m_uobject_hook_disabled{false};
     bool m_fixed_visibilities{false};
+    bool m_hide_default_classes{false};
 
     safetyhook::InlineHook m_process_event_hook{};
     bool m_process_event_listening{true};

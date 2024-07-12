@@ -2088,6 +2088,8 @@ void UObjectHook::draw_main() {
     }
 
     if (ImGui::TreeNode("Objects by class")) {
+        ImGui::Checkbox("Hide Default Classes", &m_hide_default_classes);
+
         static char filter[256]{};
         ImGui::InputText("Filter", filter, sizeof(filter));
 
@@ -2156,6 +2158,18 @@ void UObjectHook::draw_main() {
                 continue;
             }
 
+            if (objects_ref.size() == 1 && m_hide_default_classes) {
+                auto first = *objects_ref.begin();
+
+                if (m_meta_objects.contains(first)) {
+                    auto fc = first != nullptr ? m_meta_objects[first]->uclass : nullptr;
+
+                    if (fc != nullptr && m_meta_objects.contains(fc) && fc->get_class_default_object() == first) {
+                        continue;
+                    }
+                }
+            }
+
             const auto uclass_name = utility::narrow(m_meta_objects[uclass]->full_name);
             bool valid = true;
 
@@ -2180,7 +2194,13 @@ void UObjectHook::draw_main() {
                 std::vector<sdk::UObjectBase*> objects{};
 
                 for (auto object : objects_ref) {
-                    objects.push_back(object);
+                    if (m_hide_default_classes) {
+                        if (auto c = m_meta_objects[object]->uclass; c != nullptr && m_meta_objects.contains(c) && c->get_class_default_object() != object) {
+                            objects.push_back(object);
+                        }
+                    } else {
+                        objects.push_back(object);   
+                    }
                 }
 
                 std::sort(objects.begin(), objects.end(), [this](sdk::UObjectBase* a, sdk::UObjectBase* b) {
