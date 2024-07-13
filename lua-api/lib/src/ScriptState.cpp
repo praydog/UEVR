@@ -12,7 +12,8 @@ void msg(const char* text) {
 }
 
 namespace uevr {
-ScriptState::ScriptState(const ScriptState::GarbageCollectionData& gc_data, UEVR_PluginInitializeParam* param, bool is_main_state) {
+ScriptState::ScriptState(const ScriptState::GarbageCollectionData& gc_data, UEVR_PluginInitializeParam* param, bool is_main_state)
+{
     if (param != nullptr) {
         uevr::API::initialize(param);
     }
@@ -40,7 +41,8 @@ ScriptState::ScriptState(const ScriptState::GarbageCollectionData& gc_data, UEVR
 
     // TODO: Make this actually support multiple states
     // This stores a global reference to itself, meaning it doesn't support multiple states
-    m_context = ScriptContext::create(m_lua.lua_state(), param);
+    // We pass along the shared_ptr (impl) so the context can keep it alive if for some reason the state is destroyed before the context
+    m_context = ScriptContext::create(m_lua_impl, param);
 
     if (!m_context->valid()) {
         if (param != nullptr && param->functions != nullptr) {

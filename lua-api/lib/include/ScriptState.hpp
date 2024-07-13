@@ -60,7 +60,8 @@ public:
     auto& lua() { return m_lua; }
 
 private:
-    sol::state m_lua{};
+    std::shared_ptr<sol::state> m_lua_impl{std::make_shared<sol::state>()};
+    sol::state& m_lua{*m_lua_impl.get()};
     std::shared_ptr<ScriptContext> m_context{nullptr};
 
     GarbageCollectionData m_gc_data{};

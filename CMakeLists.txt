@@ -760,6 +760,7 @@ list(APPEND uevr_SOURCES
 	"src/hooks/XInputHook.hpp"
 	"src/mods/FrameworkConfig.hpp"
 	"src/mods/ImGuiThemeHelpers.hpp"
+	"src/mods/LuaLoader.hpp"
 	"src/mods/PluginLoader.hpp"
 	"src/mods/UObjectHook.hpp"
 	"src/mods/VR.hpp"

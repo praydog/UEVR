@@ -12,7 +12,17 @@ namespace uevr {
 class ScriptContext : public std::enable_shared_from_this<ScriptContext> {
 public:
     static std::shared_ptr<ScriptContext> create(lua_State* l, UEVR_PluginInitializeParam* param = nullptr) {
-        return std::shared_ptr<ScriptContext>(new ScriptContext(l, param));
+        auto ctx = std::shared_ptr<ScriptContext>(new ScriptContext(l, param));
+        ctx->initialize();
+
+        return ctx;
+    }
+
+    static std::shared_ptr<ScriptContext> create(std::shared_ptr<sol::state> l, UEVR_PluginInitializeParam* param = nullptr) {
+        auto ctx = std::shared_ptr<ScriptContext>(new ScriptContext(l->lua_state(), param));
+        ctx->initialize(l);
+
+        return ctx;
     }
 
     ScriptContext() = delete;
@@ -85,10 +95,12 @@ public:
 private:
     // Private constructor to prevent direct instantiation
     ScriptContext(lua_State* l, UEVR_PluginInitializeParam* param = nullptr);
+    void initialize(std::shared_ptr<sol::state> l = nullptr);
 
     std::vector<void*> m_callbacks_to_remove{};
 
     sol::state_view m_lua;
+    std::shared_ptr<sol::state> m_lua_shared{}; // This allows us to keep the state alive (if it was created by ScriptState)
     std::recursive_mutex m_mtx{};
     UEVR_PluginInitializeParam* m_plugin_initialize_param{nullptr};
     std::vector<sol::protected_function> m_on_pre_engine_tick_callbacks{};

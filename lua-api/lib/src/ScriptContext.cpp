@@ -15,39 +15,26 @@
 namespace uevr {
 class ScriptContexts {
 public:
-    void add(ScriptContext* ctx) {
+    void add(std::shared_ptr<ScriptContext> ctx) {
         std::scoped_lock _{mtx};
-
-        // Check if the context is already in the list
-        for (ScriptContext* c : list) {
-            if (c == ctx) {
-                return;
-            }
-        }
-
         list.push_back(ctx);
-    }
-
-    void remove(ScriptContext* ctx) {
-        std::scoped_lock _{mtx};
-
-        ScriptContext::log("Removing context from list");
-        std::erase_if(list, [ctx](ScriptContext* c) {
-            return c == ctx;
-        });
-        ScriptContext::log(std::format("New context count: {}", list.size()));
     }
 
     template<typename T>
     void for_each(T&& fn) {
         std::scoped_lock _{mtx};
-        for (auto& ctx : list) {
-            fn(ctx->shared_from_this());
+        for (auto it = list.begin(); it != list.end();) {
+            if (auto ctx = it->lock()) {
+                fn(ctx);
+                ++it;
+            } else {
+                it = list.erase(it); // Naturally removes the weak_ptr from the list
+            }
         }
     }
 
 private:
-    std::vector<ScriptContext*> list{};
+    std::vector<std::weak_ptr<ScriptContext>> list;
     std::mutex mtx{};
 } g_contexts{};
 
@@ -55,8 +42,6 @@ ScriptContext::ScriptContext(lua_State* l, UEVR_PluginInitializeParam* param)
     : m_lua{l}
 {
     std::scoped_lock _{m_mtx};
-
-    g_contexts.add(this);
 
     if (param != nullptr) {
         m_plugin_initialize_param = param;
@@ -74,20 +59,26 @@ ScriptContext::ScriptContext(lua_State* l, UEVR_PluginInitializeParam* param)
     uevr::API::initialize(m_plugin_initialize_param);
 }
 
+void ScriptContext::initialize(std::shared_ptr<sol::state> l) {
+    m_lua_shared = l;
+    g_contexts.add(shared_from_this());
+}
+
 ScriptContext::~ScriptContext() {
     std::scoped_lock _{m_mtx};
     ScriptContext::log("ScriptContext destructor called");
 
     // TODO: this probably does not support multiple states
-    if (m_plugin_initialize_param != nullptr) {
+    // Addendum: I decided this is not necessary, for now...
+    // because all of the functions are static
+    // and this sometimes introduces a deadlock
+    /*if (m_plugin_initialize_param != nullptr) {
         for (auto& cb : m_callbacks_to_remove) {
             m_plugin_initialize_param->functions->remove_callback(cb);
         }
 
         m_callbacks_to_remove.clear();
-    }
-
-    g_contexts.remove(this);
+    }*/
 }
 
 void ScriptContext::log(const std::string& message) {
@@ -100,14 +91,18 @@ void ScriptContext::setup_callback_bindings() {
 
     auto cbs = m_plugin_initialize_param->sdk->callbacks;
 
-    add_callback(cbs->on_pre_engine_tick, on_pre_engine_tick);
-    add_callback(cbs->on_post_engine_tick, on_post_engine_tick);
-    add_callback(cbs->on_pre_slate_draw_window_render_thread, on_pre_slate_draw_window_render_thread);
-    add_callback(cbs->on_post_slate_draw_window_render_thread, on_post_slate_draw_window_render_thread);
-    add_callback(cbs->on_pre_calculate_stereo_view_offset, on_pre_calculate_stereo_view_offset);
-    add_callback(cbs->on_post_calculate_stereo_view_offset, on_post_calculate_stereo_view_offset);
-    add_callback(cbs->on_pre_viewport_client_draw, on_pre_viewport_client_draw);
-    add_callback(cbs->on_post_viewport_client_draw, on_post_viewport_client_draw);
+    // Static callbacks, so we only need to initialize them once
+    static bool init_callbacks_once = [&]() {
+        add_callback(cbs->on_pre_engine_tick, on_pre_engine_tick);
+        add_callback(cbs->on_post_engine_tick, on_post_engine_tick);
+        add_callback(cbs->on_pre_slate_draw_window_render_thread, on_pre_slate_draw_window_render_thread);
+        add_callback(cbs->on_post_slate_draw_window_render_thread, on_post_slate_draw_window_render_thread);
+        add_callback(cbs->on_pre_calculate_stereo_view_offset, on_pre_calculate_stereo_view_offset);
+        add_callback(cbs->on_post_calculate_stereo_view_offset, on_post_calculate_stereo_view_offset);
+        add_callback(cbs->on_pre_viewport_client_draw, on_pre_viewport_client_draw);
+        add_callback(cbs->on_post_viewport_client_draw, on_post_viewport_client_draw);
+        return true;
+    }();
 
     m_lua.new_usertype<UEVR_SDKCallbacks>("UEVR_SDKCallbacks",
         "on_pre_engine_tick", [this](sol::function fn) {
