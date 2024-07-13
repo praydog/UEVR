@@ -461,6 +461,8 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
 
     //std::vector<uint8_t> dynamic_data{};
     std::vector<std::wstring> dynamic_strings{};
+    std::vector<std::vector<uevr::API::UObject*>> dynamic_object_arrays{};
+    std::unordered_map<uevr::API::FProperty*, size_t> prop_to_arg_index{}; // For out parameters
 
     for (auto arg_desc = fn_args; arg_desc != nullptr; arg_desc = arg_desc->get_next()) {
         const auto arg_c = arg_desc->get_class();
@@ -491,6 +493,8 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
             }
 
             continue;
+        } else if (prop_desc->is_out_param()) {
+            prop_to_arg_index[prop_desc] = args_index;
         }
 
         const auto arg_hash = ::utility::hash(arg_c_name);
@@ -519,6 +523,61 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
             } else {
                 throw sol::error("Invalid argument type for FString");
             }
+        } else if (arg_hash == L"ArrayProperty"_fnv) {
+            const auto inner_prop = ((uevr::API::FArrayProperty*)prop_desc)->get_inner();
+
+            if (inner_prop == nullptr) {
+                continue;
+            }
+
+            const auto inner_c = inner_prop->get_class();
+
+            if (inner_c == nullptr) {
+                continue;
+            }
+
+            const auto inner_name_hash = ::utility::hash(inner_c->get_fname()->to_string());
+
+            switch (inner_name_hash) {
+            case L"ObjectProperty"_fnv:
+            {
+                const auto arg_obj = args[args_index++];
+
+                if (arg_obj.is<std::vector<uevr::API::UObject*>>()) {
+                    auto arg_arr = arg_obj.as<std::vector<uevr::API::UObject*>>();
+                    auto& arr = *(uevr::API::TArray<uevr::API::UObject*>*)&params[offset];
+
+                    //if (!prop_desc->is_out_param()) {
+                        arr.count = arg_arr.size();
+                        arr.data = arg_arr.data();
+                    //} else {
+                        //throw sol::error("Cannot set an out parameter with an array (yet)");
+                    //}
+                } else if (arg_obj.is<sol::table>()) {
+                    const auto arg_table = arg_obj.as<sol::table>();
+
+                    auto& arr = *(uevr::API::TArray<uevr::API::UObject*>*)&params[offset];
+
+                    //if (!prop_desc->is_out_param()) {
+                        auto& dynamic_arr = dynamic_object_arrays.emplace_back();
+                        dynamic_arr.resize(arg_table.size());
+
+                        for (size_t i = 0; i < arg_table.size(); ++i) {
+                            dynamic_arr[i] = arg_table[i + 1];
+                        }
+
+                        arr.count = dynamic_arr.size();
+                        arr.data = dynamic_arr.data();
+                    //} else {
+                       //throw sol::error("Cannot set an out parameter with an array (yet)");
+                    //}
+                } else {
+                    throw sol::error("Invalid argument type for ArrayProperty<ObjectProperty>");
+                }
+            }
+            default:
+                continue;
+            }
         } else {
             set_property(s, params.data(), fn, prop_desc, args[args_index++]);
         }
@@ -526,6 +585,37 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
 
     fn->call(self, params.data());
 
+    // Handle out parameters
+    for (const auto& [prop, arg_index] : prop_to_arg_index) {
+        const auto prop_c = prop->get_class();
+        const auto prop_name_hash = ::utility::hash(prop_c->get_fname()->to_string());
+        
+        if (args[arg_index].is<lua::datatypes::StructObject>()) {
+            if (prop_name_hash != L"StructProperty"_fnv) {
+                throw sol::error("Invalid struct type for out parameter");
+            }
+
+            const auto structprop = (uevr::API::FStructProperty*)prop;
+
+            auto& arg = args[arg_index].as<lua::datatypes::StructObject>();
+
+            if (structprop->get_struct() != arg.desc) {
+                if (arg.desc != nullptr) {
+                    throw sol::error(std::format("Invalid struct type for out parameter (expected {}, got {})", ::utility::narrow(prop_c->get_fname()->to_string()), ::utility::narrow(arg.desc->get_fname()->to_string())));
+                } else {
+                    throw sol::error(std::format("Invalid struct type for out parameter (expected {})", ::utility::narrow(prop_c->get_fname()->to_string())));
+                }
+            }
+
+            memcpy(arg.object, (void*)((uintptr_t)params.data() + prop->get_offset()), structprop->get_struct()->get_struct_size());
+        } else if (args[arg_index].is<sol::table>()) {
+            // TODO
+        } else {
+            throw sol::error(std::format("Invalid argument type for argument {} ({})", arg_index, ::utility::narrow(prop_c->get_fname()->to_string())));
+        }
+    }
+
+    // Handle return value
     if (return_prop != nullptr) {
         if (ret_is_bool) {
             return sol::make_object(s, ((uevr::API::FBoolProperty*)return_prop)->get_value_from_object(params.data()));
