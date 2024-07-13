@@ -54,21 +54,21 @@ public:
     void attempt_unload_plugins();
     void reload_plugins();
 
-    using UEVR_OnPresentCb = std::function<std::remove_pointer<::UEVR_OnPresentCb>::type>;
+    /*using UEVR_OnPresentCb = std::function<std::remove_pointer<::UEVR_OnPresentCb>::type>;
     using UEVR_OnDeviceResetCb = std::function<std::remove_pointer<::UEVR_OnDeviceResetCb>::type>;
     using UEVR_OnMessageCb = std::function<std::remove_pointer<::UEVR_OnMessageCb>::type>;
     using UEVR_OnXInputGetStateCb = std::function<std::remove_pointer<::UEVR_OnXInputGetStateCb>::type>;
-    using UEVR_OnXInputSetStateCb = std::function<std::remove_pointer<::UEVR_OnXInputSetStateCb>::type>;
+    using UEVR_OnXInputSetStateCb = std::function<std::remove_pointer<::UEVR_OnXInputSetStateCb>::type>;*/
 
     /* VR Renderer */
-    using UEVR_OnPostRenderVRFrameworkDX11Cb = std::function<std::remove_pointer<::UEVR_OnPostRenderVRFrameworkDX11Cb>::type>;
-    using UEVR_OnPostRenderVRFrameworkDX12Cb = std::function<std::remove_pointer<::UEVR_OnPostRenderVRFrameworkDX12Cb>::type>;
+    //using UEVR_OnPostRenderVRFrameworkDX11Cb = std::function<std::remove_pointer<::UEVR_OnPostRenderVRFrameworkDX11Cb>::type>;
+    //using UEVR_OnPostRenderVRFrameworkDX12Cb = std::function<std::remove_pointer<::UEVR_OnPostRenderVRFrameworkDX12Cb>::type>;
 
     /* Engine specific callbacks */
-    using UEVR_Engine_TickCb = std::function<std::remove_pointer<::UEVR_Engine_TickCb>::type>;
-    using UEVR_Slate_DrawWindow_RenderThreadCb = std::function<std::remove_pointer<::UEVR_Slate_DrawWindow_RenderThreadCb>::type>;
-    using UEVR_Stereo_CalculateStereoViewOffsetCb = std::function<std::remove_pointer<::UEVR_Stereo_CalculateStereoViewOffsetCb>::type>;
-    using UEVR_ViewportClient_DrawCb = std::function<std::remove_pointer<::UEVR_ViewportClient_DrawCb>::type>;
+    //using UEVR_Engine_TickCb = std::function<std::remove_pointer<::UEVR_Engine_TickCb>::type>;
+    //using UEVR_Slate_DrawWindow_RenderThreadCb = std::function<std::remove_pointer<::UEVR_Slate_DrawWindow_RenderThreadCb>::type>;
+    //using UEVR_Stereo_CalculateStereoViewOffsetCb = std::function<std::remove_pointer<::UEVR_Stereo_CalculateStereoViewOffsetCb>::type>;
+    //using UEVR_ViewportClient_DrawCb = std::function<std::remove_pointer<::UEVR_ViewportClient_DrawCb>::type>;
 
     bool add_on_present(UEVR_OnPresentCb cb);
     bool add_on_device_reset(UEVR_OnDeviceResetCb cb);
@@ -93,7 +93,7 @@ public:
         for (auto& pcb_list : m_plugin_callback_lists) {
             auto& cb_list = *pcb_list;
             std::erase_if(cb_list, [cb](auto& cb_func) {
-                return cb_func.target<void*>() == cb;
+                return cb_func == cb;
             });
         }
 
@@ -126,24 +126,24 @@ public:
 
 private:
     std::shared_mutex m_api_cb_mtx;
-    std::vector<PluginLoader::UEVR_OnPresentCb> m_on_present_cbs{};
-    std::vector<PluginLoader::UEVR_OnDeviceResetCb> m_on_device_reset_cbs{};
-    std::vector<PluginLoader::UEVR_OnPostRenderVRFrameworkDX11Cb> m_on_post_render_vr_framework_dx11_cbs{};
-    std::vector<PluginLoader::UEVR_OnPostRenderVRFrameworkDX12Cb> m_on_post_render_vr_framework_dx12_cbs{};
-    std::vector<PluginLoader::UEVR_OnMessageCb> m_on_message_cbs{};
-    std::vector<PluginLoader::UEVR_OnXInputGetStateCb> m_on_xinput_get_state_cbs{};
-    std::vector<PluginLoader::UEVR_OnXInputSetStateCb> m_on_xinput_set_state_cbs{};
+    std::vector<UEVR_OnPresentCb> m_on_present_cbs{};
+    std::vector<UEVR_OnDeviceResetCb> m_on_device_reset_cbs{};
+    std::vector<UEVR_OnPostRenderVRFrameworkDX11Cb> m_on_post_render_vr_framework_dx11_cbs{};
+    std::vector<UEVR_OnPostRenderVRFrameworkDX12Cb> m_on_post_render_vr_framework_dx12_cbs{};
+    std::vector<UEVR_OnMessageCb> m_on_message_cbs{};
+    std::vector<UEVR_OnXInputGetStateCb> m_on_xinput_get_state_cbs{};
+    std::vector<UEVR_OnXInputSetStateCb> m_on_xinput_set_state_cbs{};
 
-    std::vector<PluginLoader::UEVR_Engine_TickCb> m_on_pre_engine_tick_cbs{};
-    std::vector<PluginLoader::UEVR_Engine_TickCb> m_on_post_engine_tick_cbs{};
-    std::vector<PluginLoader::UEVR_Slate_DrawWindow_RenderThreadCb> m_on_pre_slate_draw_window_render_thread_cbs{};
-    std::vector<PluginLoader::UEVR_Slate_DrawWindow_RenderThreadCb> m_on_post_slate_draw_window_render_thread_cbs{};
-    std::vector<PluginLoader::UEVR_Stereo_CalculateStereoViewOffsetCb> m_on_pre_calculate_stereo_view_offset_cbs{};
-    std::vector<PluginLoader::UEVR_Stereo_CalculateStereoViewOffsetCb> m_on_post_calculate_stereo_view_offset_cbs{};
-    std::vector<PluginLoader::UEVR_ViewportClient_DrawCb> m_on_pre_viewport_client_draw_cbs{};
-    std::vector<PluginLoader::UEVR_ViewportClient_DrawCb> m_on_post_viewport_client_draw_cbs{};
+    std::vector<UEVR_Engine_TickCb> m_on_pre_engine_tick_cbs{};
+    std::vector<UEVR_Engine_TickCb> m_on_post_engine_tick_cbs{};
+    std::vector<UEVR_Slate_DrawWindow_RenderThreadCb> m_on_pre_slate_draw_window_render_thread_cbs{};
+    std::vector<UEVR_Slate_DrawWindow_RenderThreadCb> m_on_post_slate_draw_window_render_thread_cbs{};
+    std::vector<UEVR_Stereo_CalculateStereoViewOffsetCb> m_on_pre_calculate_stereo_view_offset_cbs{};
+    std::vector<UEVR_Stereo_CalculateStereoViewOffsetCb> m_on_post_calculate_stereo_view_offset_cbs{};
+    std::vector<UEVR_ViewportClient_DrawCb> m_on_pre_viewport_client_draw_cbs{};
+    std::vector<UEVR_ViewportClient_DrawCb> m_on_post_viewport_client_draw_cbs{};
 
-    using generic_std_function = std::function<void()>;
+    using generic_std_function = void*;
 
     std::vector<std::vector<generic_std_function>*> m_plugin_callback_lists{
         // Plugin
