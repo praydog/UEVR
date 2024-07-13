@@ -91,8 +91,15 @@ void ScriptContext::setup_callback_bindings() {
 
     auto cbs = m_plugin_initialize_param->sdk->callbacks;
 
-    // Static callbacks, so we only need to initialize them once
-    static bool init_callbacks_once = [&]() {
+    {
+        std::scoped_lock __{ s_callbacks_to_remove_mtx };
+
+        for (auto& cb : s_callbacks_to_remove) {
+            m_plugin_initialize_param->functions->remove_callback(cb);
+        }
+
+        s_callbacks_to_remove.clear();
+
         add_callback(cbs->on_pre_engine_tick, on_pre_engine_tick);
         add_callback(cbs->on_post_engine_tick, on_post_engine_tick);
         add_callback(cbs->on_pre_slate_draw_window_render_thread, on_pre_slate_draw_window_render_thread);
@@ -101,8 +108,7 @@ void ScriptContext::setup_callback_bindings() {
         add_callback(cbs->on_post_calculate_stereo_view_offset, on_post_calculate_stereo_view_offset);
         add_callback(cbs->on_pre_viewport_client_draw, on_pre_viewport_client_draw);
         add_callback(cbs->on_post_viewport_client_draw, on_post_viewport_client_draw);
-        return true;
-    }();
+    }
 
     m_lua.new_usertype<UEVR_SDKCallbacks>("UEVR_SDKCallbacks",
         "on_pre_engine_tick", [this](sol::function fn) {

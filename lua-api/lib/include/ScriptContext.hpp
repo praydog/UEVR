@@ -60,7 +60,7 @@ public:
 
         if (m_plugin_initialize_param != nullptr) {
             adder(cb);
-            m_callbacks_to_remove.push_back((void*)cb);
+            s_callbacks_to_remove.push_back((void*)cb);
         }
     }
 
@@ -97,7 +97,8 @@ private:
     ScriptContext(lua_State* l, UEVR_PluginInitializeParam* param = nullptr);
     void initialize(std::shared_ptr<sol::state> l = nullptr);
 
-    std::vector<void*> m_callbacks_to_remove{};
+    static inline std::vector<void*> s_callbacks_to_remove{};
+    static inline std::mutex s_callbacks_to_remove_mtx{};
 
     sol::state_view m_lua;
     std::shared_ptr<sol::state> m_lua_shared{}; // This allows us to keep the state alive (if it was created by ScriptState)
