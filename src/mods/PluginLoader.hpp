@@ -7,6 +7,7 @@
 #include <Windows.h>
 
 #include <safetyhook.hpp>
+#include <asmjit/asmjit.h>
 
 #include "Mod.hpp"
 #include "uevr/API.h"
@@ -88,13 +89,29 @@ public:
     bool add_on_post_viewport_client_draw(UEVR_ViewportClient_DrawCb cb);
 
     bool remove_callback(void* cb) {
-        std::unique_lock lock{m_api_cb_mtx};
+        {
+            std::unique_lock lock{m_api_cb_mtx};
 
-        for (auto& pcb_list : m_plugin_callback_lists) {
-            auto& cb_list = *pcb_list;
-            std::erase_if(cb_list, [cb](auto& cb_func) {
-                return cb_func == cb;
-            });
+            for (auto& pcb_list : m_plugin_callback_lists) {
+                auto& cb_list = *pcb_list;
+                std::erase_if(cb_list, [cb](auto& cb_func) {
+                    return cb_func == cb;
+                });
+            }
+        }
+
+        {
+            std::unique_lock lock{ m_ufunction_hooks_mtx };
+
+            for (auto& [_, hook] : m_ufunction_hooks) {
+                std::scoped_lock _{hook->mux};
+                std::erase_if(hook->pre_callbacks, [cb](auto& cb_func) {
+                    return (void*)cb_func == cb;
+                });
+                std::erase_if(hook->post_callbacks, [cb](auto& cb_func) {
+                    return (void*)cb_func == cb;
+                });
+            }
         }
 
         return true;
@@ -123,6 +140,8 @@ public:
 
         m_inline_hooks.erase(idx);
     }
+
+    bool hook_ufunction_ptr(UEVR_UFunctionHandle func, UEVR_UFunction_NativePreFn pre, UEVR_UFunction_NativePostFn post);
 
 private:
     std::shared_mutex m_api_cb_mtx;
@@ -189,4 +208,26 @@ private:
     //std::vector<InlineHookState> m_inline_hooks{};
     std::unordered_map<size_t, std::unique_ptr<InlineHookState>> m_inline_hooks{};
     size_t m_inline_hook_idx{0};
+
+    asmjit::JitRuntime m_jit_runtime{};
+
+    struct UFunctionHookState {
+        using Intermediary = void(*)(UEVR_UObjectHandle, void*, void*, sdk::UFunction*);
+        Intermediary jitted_pre{};
+
+        std::unique_ptr<PointerHook> hook{};
+        std::vector<UEVR_UFunction_NativePreFn> pre_callbacks{};
+        std::vector<UEVR_UFunction_NativePostFn> post_callbacks{};
+        std::recursive_mutex mux{};
+
+        void remove_callbacks() {
+            std::scoped_lock _{mux};
+
+            pre_callbacks.clear();
+            post_callbacks.clear();
+        }
+    };
+    std::shared_mutex m_ufunction_hooks_mtx{};
+    std::unordered_map<sdk::UFunction*, std::unique_ptr<UFunctionHookState>> m_ufunction_hooks{};
+    static void ufunction_hook_intermediary(UEVR_UObjectHandle obj, void* frame, void* result, sdk::UFunction* func);
 };

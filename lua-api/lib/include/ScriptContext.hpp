@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <memory>
+#include <shared_mutex>
 
 #include <sol/sol.hpp>
 #include <uevr/API.hpp>
@@ -117,6 +118,16 @@ private:
     std::vector<sol::protected_function> m_on_frame_callbacks{};
     std::vector<sol::protected_function> m_on_draw_ui_callbacks{};
     std::vector<sol::protected_function> m_on_script_reset_callbacks{};
+
+    struct UFunctionHookState {
+        std::vector<sol::protected_function> pre_hooks{};
+        std::vector<sol::protected_function> post_hooks{};
+    };
+
+    static inline std::shared_mutex m_ufunction_hooks_mtx{};
+    static inline std::unordered_map<uevr::API::UFunction*, std::unique_ptr<UFunctionHookState>> m_ufunction_hooks{};
+    static bool global_ufunction_pre_handler(uevr::API::UFunction* fn, uevr::API::UObject* obj, void* params, void* result);
+    static void global_ufunction_post_handler(uevr::API::UFunction* fn, uevr::API::UObject* obj, void* params, void* result);
 
     static void on_pre_engine_tick(UEVR_UGameEngineHandle engine, float delta_seconds);
     static void on_post_engine_tick(UEVR_UGameEngineHandle engine, float delta_seconds);

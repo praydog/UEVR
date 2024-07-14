@@ -468,7 +468,39 @@ int ScriptContext::setup_bindings() {
         sol::base_classes, sol::bases<uevr::API::UStruct, uevr::API::UObject>(),
         "static_class", &uevr::API::UFunction::static_class,
         "call", &uevr::API::UFunction::call,
-        "get_native_function", &uevr::API::UFunction::get_native_function
+        "get_native_function", &uevr::API::UFunction::get_native_function,
+        "hook_ptr", [this](sol::this_state s, uevr::API::UFunction* fn, sol::function pre, sol::function post) {
+            if (fn == nullptr) {
+                return;
+            }
+
+            std::unique_lock _{ m_ufunction_hooks_mtx };
+
+            if (auto it = m_ufunction_hooks.find(fn); it != m_ufunction_hooks.end()) {
+                if (pre != sol::nil) {
+                    it->second->pre_hooks.push_back(pre);
+                }
+
+                if (post != sol::nil) {
+                    it->second->post_hooks.push_back(post);
+                }
+
+                return;
+            }
+
+            auto& hook = m_ufunction_hooks[fn];
+            hook = std::make_unique<UFunctionHookState>();
+
+            fn->hook_ptr(global_ufunction_pre_handler, global_ufunction_post_handler);
+
+            if (pre != sol::nil) {
+                hook->pre_hooks.push_back(pre);
+            }
+
+            if (post != sol::nil) {
+                hook->post_hooks.push_back(post);
+            }
+        }
     );
 
     m_lua.new_usertype<uevr::API::FField>("UEVR_FField",
@@ -628,6 +660,44 @@ int ScriptContext::setup_bindings() {
     out["sdk"] = m_plugin_initialize_param->sdk;
 
     return out.push(m_lua.lua_state());
+}
+
+bool ScriptContext::global_ufunction_pre_handler(uevr::API::UFunction* fn, uevr::API::UObject* obj, void* params, void* out_result) {
+    bool any_false = false;
+
+    g_contexts.for_each([=, &any_false](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
+        std::scoped_lock __{ ctx->m_ufunction_hooks_mtx };
+
+        auto it = ctx->m_ufunction_hooks.find(fn);
+
+        if (it != ctx->m_ufunction_hooks.end()) {
+            for (auto& cb : it->second->pre_hooks) {
+                bool result = cb(fn, obj, params, out_result);
+
+                if (!result) {
+                    any_false = true;
+                }
+            }
+        }
+    });
+
+    return !any_false;
+}
+
+void ScriptContext::global_ufunction_post_handler(uevr::API::UFunction* fn, uevr::API::UObject* obj, void* params, void* result) {
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
+        std::scoped_lock __{ ctx->m_ufunction_hooks_mtx };
+
+        auto it = ctx->m_ufunction_hooks.find(fn);
+
+        if (it != ctx->m_ufunction_hooks.end()) {
+            for (auto& cb : it->second->post_hooks) {
+                cb(fn, obj, params, result);
+            }
+        }
+    });
 }
 
 void ScriptContext::on_pre_engine_tick(UEVR_UGameEngineHandle engine, float delta_seconds) {

@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 27
+#define UEVR_PLUGIN_VERSION_MINOR 28
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -191,6 +191,9 @@ typedef bool (*UEVR_Engine_TickFn)(UEVR_Engine_TickCb);
 typedef bool (*UEVR_Slate_DrawWindow_RenderThreadFn)(UEVR_Slate_DrawWindow_RenderThreadCb);
 typedef bool (*UEVR_Stereo_CalculateStereoViewOffsetFn)(UEVR_Stereo_CalculateStereoViewOffsetCb);
 typedef bool (*UEVR_ViewportClient_DrawFn)(UEVR_ViewportClient_DrawCb);
+typedef bool (*UEVR_UFunction_NativeFn)(UEVR_UObjectHandle, void*, void*); /* obj, frame, ret */
+typedef bool (*UEVR_UFunction_NativePreFn)(UEVR_UFunctionHandle, UEVR_UObjectHandle, void*, void*); /* obj, frame, ret */
+typedef bool (*UEVR_UFunction_NativePostFn)(UEVR_UFunctionHandle, UEVR_UObjectHandle, void*, void*); /* obj, frame, ret */
 
 typedef void (*UEVR_PluginRequiredVersionFn)(UEVR_PluginVersion*);
 
@@ -313,6 +316,7 @@ typedef struct {
 
 typedef struct {
     void* (*get_native_function)(UEVR_UFunctionHandle function);
+    bool (*hook_ptr)(UEVR_UFunctionHandle function, UEVR_UFunction_NativePreFn pre_hook, UEVR_UFunction_NativePostFn post_hook);
 } UEVR_UFunctionFunctions;
 
 typedef struct {

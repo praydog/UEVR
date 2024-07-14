@@ -517,6 +517,14 @@ public:
             return fn(to_handle());
         }
 
+        using UEVR_UFunction_CPPPreNative = bool(*)(API::UFunction*, API::UObject*, void*, void*);
+        using UEVR_UFunction_CPPPostNative = void(*)(API::UFunction*, API::UObject*, void*, void*);
+
+        bool hook_ptr(UEVR_UFunction_CPPPreNative pre, UEVR_UFunction_CPPPostNative post) {
+            static const auto fn = initialize()->hook_ptr;
+            return fn(to_handle(), (UEVR_UFunction_NativePreFn)pre, (UEVR_UFunction_NativePostFn)post);
+        }
+
     private:
         static inline const UEVR_UFunctionFunctions* s_functions{nullptr};
         inline static const UEVR_UFunctionFunctions* initialize() {

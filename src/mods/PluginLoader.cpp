@@ -484,11 +484,125 @@ UEVR_UClassFunctions g_uclass_functions {
 
 #define UFUNCTION(x) ((sdk::UFunction*)x)
 
+void PluginLoader::ufunction_hook_intermediary(UEVR_UObjectHandle obj, void* params, void* out_result, sdk::UFunction* func) {
+    auto& plugin_loader = PluginLoader::get();
+    std::shared_lock _{plugin_loader->m_ufunction_hooks_mtx};
+
+    auto it = plugin_loader->m_ufunction_hooks.find(func);
+
+    // uh...
+    if (it == plugin_loader->m_ufunction_hooks.end()) {
+        return;
+    }
+
+    auto& hook = it->second;
+    std::scoped_lock __{hook->mux};
+
+    bool any_false = false;
+
+    for (auto&& cb : hook->pre_callbacks) {
+        bool result = cb((UEVR_UFunctionHandle)func, obj, params, out_result);
+
+        if (!result) {
+            any_false = true;
+        }
+    }
+
+    // Call the original
+    if (!any_false) {
+        auto orig = hook->hook->get_original<UEVR_UFunction_NativeFn>();
+
+        if (orig != nullptr) {
+            orig(obj, params, out_result);
+        }
+    }
+
+    for (auto&& cb : hook->post_callbacks) {
+        cb((UEVR_UFunctionHandle)func, obj, params, out_result);
+    }
+}
+
+bool PluginLoader::hook_ufunction_ptr(UEVR_UFunctionHandle func, UEVR_UFunction_NativePreFn pre, UEVR_UFunction_NativePostFn post) {
+    std::unique_lock _{m_ufunction_hooks_mtx};
+
+    if (func == nullptr || (pre == nullptr && post == nullptr)) {
+        spdlog::error("hook_ufunction_ptr: Invalid arguments");
+        return false;
+    }
+
+    const auto offset = sdk::UFunction::get_native_function_offset();
+
+    if (offset == 0) {
+        spdlog::error("UFunction::get_native_function_offset() returned 0");
+        return false;
+    }
+
+    auto ufunc = UFUNCTION(func);
+
+    void** native = (void**)((uintptr_t)ufunc + offset);
+
+    if (*native == nullptr) {
+        return false;
+    }
+
+    auto& existing_hook = m_ufunction_hooks[ufunc];
+
+    if (existing_hook == nullptr) {
+        existing_hook = std::make_unique<UFunctionHookState>();
+        std::scoped_lock __{existing_hook->mux};
+
+        //existing_hook->hook = std::make_unique<PointerHook>(native, dst);
+
+        using namespace asmjit;
+        using namespace asmjit::x86;
+        {
+            CodeHolder code{};
+            code.init(m_jit_runtime.environment());
+            Assembler a{&code};
+
+            a.mov(r9, ufunc);
+            a.movabs(r10, &PluginLoader::ufunction_hook_intermediary);
+            a.jmp(r10);
+
+            m_jit_runtime.add((uintptr_t*)&existing_hook->jitted_pre, &code);
+        }
+
+        existing_hook->hook = std::make_unique<PointerHook>(native, (void*)existing_hook->jitted_pre);
+
+        if (pre != nullptr) {
+            existing_hook->pre_callbacks.push_back(pre);
+        }
+
+        if (post != nullptr) {
+            existing_hook->post_callbacks.push_back(post);
+        }
+    } else {
+        std::scoped_lock __{existing_hook->mux};
+
+        if (pre != nullptr) {
+            // We dont want to call the same function multiple times, could cause issues
+            if (std::find(existing_hook->pre_callbacks.begin(), existing_hook->pre_callbacks.end(), pre) == existing_hook->pre_callbacks.end()) {
+                existing_hook->pre_callbacks.push_back(pre);
+            }
+        }
+
+        if (post != nullptr) {
+            if (std::find(existing_hook->post_callbacks.begin(), existing_hook->post_callbacks.end(), post) == existing_hook->post_callbacks.end()) {
+                existing_hook->post_callbacks.push_back(post);
+            }
+        }
+    }
+
+    return true;
+}
+
 UEVR_UFunctionFunctions g_ufunction_functions {
-    // get_native_function
-    [](UEVR_UFunctionHandle func) {
+    .get_native_function = [](UEVR_UFunctionHandle func) {
         return (void*)UFUNCTION(func)->get_native_function();
     },
+    .hook_ptr = [](UEVR_UFunctionHandle func, UEVR_UFunction_NativePreFn pre, UEVR_UFunction_NativePostFn post) -> bool {
+        return PluginLoader::get()->hook_ufunction_ptr(func, pre, post);
+    }
 };
 
 namespace uevr {
@@ -1615,6 +1729,14 @@ void PluginLoader::attempt_unload_plugins() {
 
     for (auto& callbacks : m_plugin_callback_lists) {
         callbacks->clear();
+    }
+
+    {
+        std::unique_lock _{m_ufunction_hooks_mtx};
+
+        for (auto& [ufunction, hook] : m_ufunction_hooks) {
+            hook->remove_callbacks();
+        }
     }
 
     for (auto& pair : m_plugins) {
