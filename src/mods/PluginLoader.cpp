@@ -561,8 +561,11 @@ bool PluginLoader::hook_ufunction_ptr(UEVR_UFunctionHandle func, UEVR_UFunction_
             Assembler a{&code};
 
             a.mov(r9, ufunc);
-            a.movabs(r10, &PluginLoader::ufunction_hook_intermediary);
-            a.jmp(r10);
+            auto intermediary_label = a.newLabel();
+            a.jmp(ptr(intermediary_label));
+
+            a.bind(intermediary_label);
+            a.dq((uintptr_t)&PluginLoader::ufunction_hook_intermediary);
 
             m_jit_runtime.add((uintptr_t*)&existing_hook->jitted_pre, &code);
         }
