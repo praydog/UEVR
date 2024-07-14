@@ -124,8 +124,8 @@ private:
         std::vector<sol::protected_function> post_hooks{};
     };
 
-    static inline std::shared_mutex m_ufunction_hooks_mtx{};
-    static inline std::unordered_map<uevr::API::UFunction*, std::unique_ptr<UFunctionHookState>> m_ufunction_hooks{};
+    std::shared_mutex m_ufunction_hooks_mtx{};
+    std::unordered_map<uevr::API::UFunction*, std::unique_ptr<UFunctionHookState>> m_ufunction_hooks{};
     static bool global_ufunction_pre_handler(uevr::API::UFunction* fn, uevr::API::UObject* obj, void* params, void* result);
     static void global_ufunction_post_handler(uevr::API::UFunction* fn, uevr::API::UObject* obj, void* params, void* result);
 
