@@ -16,5 +16,5 @@ namespace lua::datatypes {
         void* locals;
     };
 
-    void bind_fframe(sol::state_view& lua);
+    //void bind_fframe(sol::state_view& lua);
 }

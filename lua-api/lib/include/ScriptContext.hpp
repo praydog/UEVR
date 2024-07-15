@@ -105,6 +105,8 @@ private:
     std::shared_ptr<sol::state> m_lua_shared{}; // This allows us to keep the state alive (if it was created by ScriptState)
     std::recursive_mutex m_mtx{};
     UEVR_PluginInitializeParam* m_plugin_initialize_param{nullptr};
+    std::vector<sol::protected_function> m_on_xinput_get_state_callbacks{};
+    std::vector<sol::protected_function> m_on_xinput_set_state_callbacks{};
     std::vector<sol::protected_function> m_on_pre_engine_tick_callbacks{};
     std::vector<sol::protected_function> m_on_post_engine_tick_callbacks{};
     std::vector<sol::protected_function> m_on_pre_slate_draw_window_render_thread_callbacks{};
@@ -129,6 +131,8 @@ private:
     static bool global_ufunction_pre_handler(uevr::API::UFunction* fn, uevr::API::UObject* obj, void* params, void* result);
     static void global_ufunction_post_handler(uevr::API::UFunction* fn, uevr::API::UObject* obj, void* params, void* result);
 
+    static void on_xinput_get_state(uint32_t* retval, uint32_t user_index, void* state);
+    static void on_xinput_set_state(uint32_t* retval, uint32_t user_index, void* vibration);
     static void on_pre_engine_tick(UEVR_UGameEngineHandle engine, float delta_seconds);
     static void on_post_engine_tick(UEVR_UGameEngineHandle engine, float delta_seconds);
     static void on_pre_slate_draw_window_render_thread(UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info);

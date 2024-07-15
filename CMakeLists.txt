@@ -600,11 +600,14 @@ list(APPEND luavrlib_SOURCES
 	"lua-api/lib/src/ScriptUtility.cpp"
 	"lua-api/lib/src/datatypes/StructObject.cpp"
 	"lua-api/lib/src/datatypes/Vector.cpp"
+	"lua-api/lib/src/datatypes/XInput.cpp"
 	"lua-api/lib/include/ScriptContext.hpp"
 	"lua-api/lib/include/ScriptState.hpp"
 	"lua-api/lib/include/ScriptUtility.hpp"
+	"lua-api/lib/include/datatypes/FFrame.hpp"
 	"lua-api/lib/include/datatypes/StructObject.hpp"
 	"lua-api/lib/include/datatypes/Vector.hpp"
+	"lua-api/lib/include/datatypes/XInput.hpp"
 )
 
 list(APPEND luavrlib_SOURCES

@@ -6,6 +6,9 @@
 
 #include <windows.h>
 
+#include <Xinput.h>
+
+#include "datatypes/XInput.hpp"
 #include "datatypes/Vector.hpp"
 #include "datatypes/StructObject.hpp"
 #include "datatypes/FFrame.hpp"
@@ -101,6 +104,8 @@ void ScriptContext::setup_callback_bindings() {
 
         s_callbacks_to_remove.clear();
 
+        add_callback(m_plugin_initialize_param->callbacks->on_xinput_get_state, on_xinput_get_state);
+        add_callback(m_plugin_initialize_param->callbacks->on_xinput_set_state, on_xinput_set_state);
         add_callback(cbs->on_pre_engine_tick, on_pre_engine_tick);
         add_callback(cbs->on_post_engine_tick, on_post_engine_tick);
         add_callback(cbs->on_pre_slate_draw_window_render_thread, on_pre_slate_draw_window_render_thread);
@@ -112,6 +117,14 @@ void ScriptContext::setup_callback_bindings() {
     }
 
     m_lua.new_usertype<UEVR_SDKCallbacks>("UEVR_SDKCallbacks",
+        "on_xinput_get_state", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_xinput_get_state_callbacks.push_back(fn);
+        },
+        "on_xinput_set_state", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_xinput_set_state_callbacks.push_back(fn);
+        },
         "on_pre_engine_tick", [this](sol::function fn) {
             std::scoped_lock _{ m_mtx };
             m_on_pre_engine_tick_callbacks.push_back(fn);
@@ -162,6 +175,7 @@ void ScriptContext::setup_callback_bindings() {
 int ScriptContext::setup_bindings() {
     m_lua.registry()["uevr_context"] = this;
 
+    lua::datatypes::bind_xinput(m_lua);
     lua::datatypes::bind_vectors(m_lua);
     lua::datatypes::bind_struct_object(m_lua);
 
@@ -711,6 +725,34 @@ void ScriptContext::global_ufunction_post_handler(uevr::API::UFunction* fn, uevr
             } catch (...) {
                 ScriptContext::log("Unknown exception in global_ufunction_post_handler");
             }
+        }
+    });
+}
+
+void ScriptContext::on_xinput_get_state(uint32_t* retval, uint32_t user_index, void* state) {
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
+
+        for (auto& fn : ctx->m_on_xinput_get_state_callbacks) try {
+            ctx->handle_protected_result(fn(retval, user_index, (XINPUT_STATE*)state));
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_xinput_get_state: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_xinput_get_state");
+        }
+    });
+}
+
+void ScriptContext::on_xinput_set_state(uint32_t* retval, uint32_t user_index, void* vibration) {
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
+
+        for (auto& fn : ctx->m_on_xinput_set_state_callbacks) try {
+            ctx->handle_protected_result(fn(retval, user_index, (XINPUT_VIBRATION*)vibration));
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_xinput_set_state: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_xinput_set_state");
         }
     });
 }
