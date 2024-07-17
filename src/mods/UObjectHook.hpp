@@ -221,6 +221,7 @@ private:
     struct MetaObject {
         std::wstring full_name{};
         sdk::UClass* uclass{nullptr};
+        std::vector<sdk::UClass*> super_classes{};
     };
 
     std::unordered_set<sdk::UObjectBase*> m_objects{};

@@ -248,13 +248,13 @@ void UObjectHook::add_new_object(sdk::UObjectBase* object) {
         m_reusable_meta_objects.pop_back();
     } else {
         meta_object = std::make_unique<MetaObject>();
+        meta_object->super_classes.reserve(16);
     }
 
     m_objects.insert(object);
+    meta_object->super_classes.clear();
     meta_object->full_name = object->get_full_name();
     meta_object->uclass = object->get_class();
-
-    m_meta_objects[object] = std::move(meta_object);
 
     m_most_recent_objects.push_front((sdk::UObject*)object);
 
@@ -263,6 +263,8 @@ void UObjectHook::add_new_object(sdk::UObjectBase* object) {
     }
 
     for (auto super = (sdk::UStruct*)object->get_class(); super != nullptr; super = super->get_super_struct()) {
+        meta_object->super_classes.push_back((sdk::UClass*)super);
+
         m_objects_by_class[(sdk::UClass*)super].insert(object);
 
         if (auto it = m_on_creation_add_component_jobs.find((sdk::UClass*)super); it != m_on_creation_add_component_jobs.end()) {
@@ -289,6 +291,8 @@ void UObjectHook::add_new_object(sdk::UObjectBase* object) {
             });
         }
     }
+    
+    m_meta_objects[object] = std::move(meta_object);
 
 #ifdef VERBOSE_UOBJECTHOOK
     SPDLOG_INFO("Adding object {:x} {:s}", (uintptr_t)object, utility::narrow(m_meta_objects[object]->full_name));
@@ -3543,19 +3547,21 @@ void* UObjectHook::destructor(sdk::UObjectBase* object, void* rdx, void* r8, voi
                 hook->m_camera_attach.object = nullptr;
             }
 
-            for (auto super = (sdk::UStruct*)it->second->uclass; super != nullptr;) {
+            /*for (auto super = (sdk::UStruct*)it->second->uclass; super != nullptr;) {
                 hook->m_objects_by_class[(sdk::UClass*)super].erase(object);
 
                 // Just make sure we don't do any operations on super because it might be invalid...
                 if (!hook->m_objects.contains(super)) {
-                    //SPDLOG_ERROR("Super for {:x} is not valid", (uintptr_t)object);
+                    SPDLOG_ERROR("Super for {:x} is not valid", (uintptr_t)object);
                     break;
                 }
 
                 super = super->get_super_struct();
-            }
+            }*/
 
-            //hook->m_objects_by_class[it->second->uclass].erase(object);
+            for (auto super : it->second->super_classes) {
+                hook->m_objects_by_class[super].erase(object);
+            }
 
             hook->m_reusable_meta_objects.push_back(std::move(it->second));
             hook->m_meta_objects.erase(object);
