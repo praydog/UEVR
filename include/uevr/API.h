@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 28
+#define UEVR_PLUGIN_VERSION_MINOR 29
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -62,6 +62,7 @@ DECLARE_UEVR_HANDLE(UEVR_FCanvasHandle);
 DECLARE_UEVR_HANDLE(UEVR_UObjectArrayHandle);
 DECLARE_UEVR_HANDLE(UEVR_UObjectHandle);
 DECLARE_UEVR_HANDLE(UEVR_FFieldHandle);
+DECLARE_UEVR_HANDLE(UEVR_UFieldHandle);
 DECLARE_UEVR_HANDLE(UEVR_FPropertyHandle);
 DECLARE_UEVR_HANDLE(UEVR_UStructHandle);
 DECLARE_UEVR_HANDLE(UEVR_UClassHandle);
@@ -292,6 +293,10 @@ typedef struct {
 } UEVR_FFieldFunctions;
 
 typedef struct {
+    UEVR_UFieldHandle (*get_next)(UEVR_UFieldHandle field);
+} UEVR_UFieldFunctions;
+
+typedef struct {
     int (*get_offset)(UEVR_FPropertyHandle prop);
     unsigned long long (*get_property_flags)(UEVR_FPropertyHandle prop);
     bool (*is_param)(UEVR_FPropertyHandle prop);
@@ -308,6 +313,7 @@ typedef struct {
     UEVR_FPropertyHandle (*find_property)(UEVR_UStructHandle klass, const wchar_t* name);
     int (*get_properties_size)(UEVR_UStructHandle klass); /* size in bytes */
     int (*get_min_alignment)(UEVR_UStructHandle klass);
+    UEVR_UFieldHandle (*get_children)(UEVR_UStructHandle klass);
 } UEVR_UStructFunctions;
 
 typedef struct {
@@ -453,6 +459,7 @@ typedef struct {
     const UEVR_FBoolPropertyFunctions* fboolproperty;
     const UEVR_FStructPropertyFunctions* fstructproperty;
     const UEVR_FEnumPropertyFunctions* fenumproperty;
+    const UEVR_UFieldFunctions* ufield;
 } UEVR_SDKData;
 
 DECLARE_UEVR_HANDLE(UEVR_IVRSystem);

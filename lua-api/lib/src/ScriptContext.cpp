@@ -456,8 +456,13 @@ int ScriptContext::setup_bindings() {
         }
     );
 
-    m_lua.new_usertype<uevr::API::UStruct>("UEVR_UStruct",
+    m_lua.new_usertype<uevr::API::UField>("UEVR_UField",
         sol::base_classes, sol::bases<uevr::API::UObject>(),
+        "get_next", &uevr::API::UField::get_next
+    );
+
+    m_lua.new_usertype<uevr::API::UStruct>("UEVR_UStruct",
+        sol::base_classes, sol::bases<uevr::API::UField, uevr::API::UObject>(),
         "static_class", &uevr::API::UStruct::static_class,
         "get_super_struct", &uevr::API::UStruct::get_super_struct,
         "get_super", &uevr::API::UStruct::get_super,
@@ -465,11 +470,12 @@ int ScriptContext::setup_bindings() {
             return self.find_function(name);
         },
         "get_child_properties", &uevr::API::UStruct::get_child_properties,
-        "get_properties_size", &uevr::API::UStruct::get_properties_size
+        "get_properties_size", &uevr::API::UStruct::get_properties_size,
+        "get_children", &uevr::API::UStruct::get_children
     );
 
     m_lua.new_usertype<uevr::API::UClass>("UEVR_UClass",
-        sol::base_classes, sol::bases<uevr::API::UStruct, uevr::API::UObject>(),
+        sol::base_classes, sol::bases<uevr::API::UStruct, uevr::API::UField, uevr::API::UObject>(),
         "static_class", &uevr::API::UClass::static_class,
         "get_class_default_object", &uevr::API::UClass::get_class_default_object,
         "get_objects_matching", &uevr::API::UClass::get_objects_matching<uevr::API::UObject>,
@@ -480,7 +486,7 @@ int ScriptContext::setup_bindings() {
         sol::meta_function::call, [](sol::this_state s, uevr::API::UFunction* fn, uevr::API::UObject* obj, sol::variadic_args args) -> sol::object {
             return lua::utility::call_function(s, obj, fn, args);
         },
-        sol::base_classes, sol::bases<uevr::API::UStruct, uevr::API::UObject>(),
+        sol::base_classes, sol::bases<uevr::API::UStruct, uevr::API::UField, uevr::API::UObject>(),
         "static_class", &uevr::API::UFunction::static_class,
         "call", &uevr::API::UFunction::call,
         "get_native_function", &uevr::API::UFunction::get_native_function,

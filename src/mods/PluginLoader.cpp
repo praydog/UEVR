@@ -470,6 +470,9 @@ UEVR_UStructFunctions g_ustruct_functions {
     },
     .get_min_alignment = [](UEVR_UStructHandle strct) {
         return USTRUCT(strct)->get_min_alignment();
+    },
+    .get_children = [](UEVR_UStructHandle strct) {
+        return (UEVR_UFieldHandle)USTRUCT(strct)->get_children();
     }
 };
 
@@ -1008,6 +1011,12 @@ UEVR_FEnumPropertyFunctions g_fenum_property_functions {
     }
 };
 
+UEVR_UFieldFunctions g_ufield_functions {
+    .get_next = [](UEVR_UFieldHandle field) -> UEVR_UFieldHandle {
+        return (UEVR_UFieldHandle)((sdk::UField*)field)->get_next();
+    }
+};
+
 UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
@@ -1030,7 +1039,8 @@ UEVR_SDKData g_sdk_data {
     &g_farray_property_functions,
     &g_fbool_property_functions,
     &g_fstruct_property_functions,
-    &g_fenum_property_functions
+    &g_fenum_property_functions,
+    &g_ufield_functions,
 };
 
 namespace uevr {

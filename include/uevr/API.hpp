@@ -121,6 +121,7 @@ public:
     struct UScriptStruct;
     struct UStructOps;
     struct FField;
+    struct UField;
     struct FProperty;
     struct FFieldClass;
     struct FUObjectArray;
@@ -380,7 +381,32 @@ public:
         }
     };
 
-    struct UStruct : public UObject {
+    struct UField : public UObject {
+        inline UEVR_UFieldHandle to_handle() { return (UEVR_UFieldHandle)this; }
+        inline UEVR_UFieldHandle to_handle() const { return (UEVR_UFieldHandle)this; }
+
+        static UClass* static_class() {
+            static auto result = API::get()->find_uobject<UClass>(L"Class /Script/CoreUObject.Field");
+            return result;
+        }
+
+        inline UField* get_next() const {
+            static const auto fn = initialize()->get_next;
+            return (UField*)fn(to_handle());
+        }
+
+    private:
+        static inline const UEVR_UFieldFunctions* s_functions{nullptr};
+        static inline const UEVR_UFieldFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->ufield;
+            }
+
+            return s_functions;
+        }
+    };
+
+    struct UStruct : public UField {
         inline UEVR_UStructHandle to_handle() { return (UEVR_UStructHandle)this; }
         inline UEVR_UStructHandle to_handle() const { return (UEVR_UStructHandle)this; }
 
@@ -412,6 +438,11 @@ public:
         FField* get_child_properties() const {
             static const auto fn = initialize()->get_child_properties;
             return (FField*)fn(to_handle());
+        }
+
+        UField* get_children() const {
+            static const auto fn = initialize()->get_children;
+            return (UField*)fn(to_handle());
         }
 
         int32_t get_properties_size() const {
