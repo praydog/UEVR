@@ -542,18 +542,8 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
             case L"ObjectProperty"_fnv:
             {
                 const auto arg_obj = args[args_index++];
-
-                if (arg_obj.is<std::vector<uevr::API::UObject*>>()) {
-                    auto arg_arr = arg_obj.as<std::vector<uevr::API::UObject*>>();
-                    auto& arr = *(uevr::API::TArray<uevr::API::UObject*>*)&params[offset];
-
-                    //if (!prop_desc->is_out_param()) {
-                        arr.count = arg_arr.size();
-                        arr.data = arg_arr.data();
-                    //} else {
-                        //throw sol::error("Cannot set an out parameter with an array (yet)");
-                    //}
-                } else if (arg_obj.is<sol::table>()) {
+                
+                if (arg_obj.is<sol::table>()) {
                     const auto arg_table = arg_obj.as<sol::table>();
 
                     auto& arr = *(uevr::API::TArray<uevr::API::UObject*>*)&params[offset];
