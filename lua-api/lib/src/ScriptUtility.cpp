@@ -139,17 +139,6 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
             return sol::make_object(s, sol::lua_nil);
         }
 
-        /*const auto struct_name_hash = utility::hash(struct_desc->get_fname()->to_string());
-
-        switch (struct_name_hash) {
-        case L"Vector"_fnv:
-            if (is_ue5()) {
-                return sol::make_object(s, (lua::datatypes::Vector3f*)struct_data);
-            }
-
-            return sol::make_object(s, (lua::datatypes::Vector3f*)struct_data);
-        };*/
-
         if (struct_desc == get_vector_struct()) {
             if (is_ue5()) {
                 if (is_self_temporary) {
@@ -166,9 +155,14 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
             }
         }
 
-        auto struct_object = lua::datatypes::StructObject{struct_data, struct_desc};
+        if (is_self_temporary) {
+            auto new_object = std::make_unique<lua::datatypes::StructObject>(struct_desc);
+            memcpy(new_object->object, struct_data, new_object->created_object.size());
+            return sol::make_object(s, std::move(new_object));
+        }
 
-        return sol::make_object(s, struct_object);
+        auto new_object = std::make_unique<lua::datatypes::StructObject>(struct_data, struct_desc);
+        return sol::make_object(s, std::move(new_object));
     }
     case L"ArrayProperty"_fnv:
     {
