@@ -187,7 +187,7 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
         const auto inner_name_hash = ::utility::hash(inner_c->get_fname()->to_string());
 
         switch (inner_name_hash) {
-        case "ObjectProperty"_fnv:
+        case L"ObjectProperty"_fnv:
         {
             const auto& arr = *(uevr::API::TArray<uevr::API::UObject*>*)((uintptr_t)self + offset);
 
