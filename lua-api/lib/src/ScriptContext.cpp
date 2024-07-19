@@ -820,14 +820,20 @@ void ScriptContext::on_post_slate_draw_window_render_thread(UEVR_FSlateRHIRender
 }
 
 void ScriptContext::on_pre_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle device, int view_index, float world_to_meters, UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double) {
-    const auto ue5_position = (lua::datatypes::Vector3d*)position;
-    const auto ue4_position = (lua::datatypes::Vector3f*)position;
-    const auto ue5_rotation = (lua::datatypes::Vector3d*)rotation;
-    const auto ue4_rotation = (lua::datatypes::Vector3f*)rotation;
-    const auto is_ue5 = lua::utility::is_ue5();
-
     g_contexts.for_each([=](auto ctx) {
         std::scoped_lock _{ ctx->m_mtx };
+
+        // Don't unnecessarily call into UObject stuff if there are no callbacks
+        // Some games can crash if it doesn't support it correctly
+        if (ctx->m_on_pre_calculate_stereo_view_offset_callbacks.empty()) {
+            return;
+        }
+
+        const auto ue5_position = (lua::datatypes::Vector3d*)position;
+        const auto ue4_position = (lua::datatypes::Vector3f*)position;
+        const auto ue5_rotation = (lua::datatypes::Vector3d*)rotation;
+        const auto ue4_rotation = (lua::datatypes::Vector3f*)rotation;
+        const auto is_ue5 = lua::utility::is_ue5();
 
         for (auto& fn : ctx->m_on_pre_calculate_stereo_view_offset_callbacks) try {
             if (is_ue5) {
@@ -844,14 +850,20 @@ void ScriptContext::on_pre_calculate_stereo_view_offset(UEVR_StereoRenderingDevi
 }
 
 void ScriptContext::on_post_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle device, int view_index, float world_to_meters, UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double) {
-    const auto ue5_position = (lua::datatypes::Vector3d*)position;
-    const auto ue4_position = (lua::datatypes::Vector3f*)position;
-    const auto ue5_rotation = (lua::datatypes::Vector3d*)rotation;
-    const auto ue4_rotation = (lua::datatypes::Vector3f*)rotation;
-    const auto is_ue5 = lua::utility::is_ue5();
-    
     g_contexts.for_each([=](auto ctx) {
         std::scoped_lock _{ ctx->m_mtx };
+
+        // Don't unnecessarily call into UObject stuff if there are no callbacks
+        // Some games can crash if it doesn't support it correctly
+        if (ctx->m_on_post_calculate_stereo_view_offset_callbacks.empty()) {
+            return;
+        }
+
+        const auto ue5_position = (lua::datatypes::Vector3d*)position;
+        const auto ue4_position = (lua::datatypes::Vector3f*)position;
+        const auto ue5_rotation = (lua::datatypes::Vector3d*)rotation;
+        const auto ue4_rotation = (lua::datatypes::Vector3f*)rotation;
+        const auto is_ue5 = lua::utility::is_ue5();
 
         for (auto& fn : ctx->m_on_post_calculate_stereo_view_offset_callbacks) try {
             if (is_ue5) {
