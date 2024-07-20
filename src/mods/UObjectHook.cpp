@@ -497,7 +497,19 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
         final_position = *view_location - offset1;
     }
 
-    if (!vr->is_using_controllers()) {
+    auto with_mutex = [this](auto fn) {
+        std::shared_lock _{m_mutex};
+        auto result = fn();
+
+        return result;
+    };
+
+    auto comps = with_mutex([this]() { return m_motion_controller_attached_components; });
+
+    const auto is_using_controllers = vr->is_using_controllers();
+    const auto has_any_head_components = std::any_of(comps.begin(), comps.end(), [](auto& it) { return it.second->hand == 2; });
+
+    if (!is_using_controllers && !has_any_head_components) {
         return;
     }
 
@@ -561,16 +573,7 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
     //left_hand_rotation = glm::normalize(left_hand_rotation * left_hand_offset_q);
     auto left_hand_euler = glm::degrees(utility::math::euler_angles_from_steamvr(left_hand_rotation));
 
-    auto with_mutex = [this](auto fn) {
-        std::shared_lock _{m_mutex};
-        auto result = fn();
-
-        return result;
-    };
-
     update_motion_controller_components(left_hand_position, left_hand_euler, right_hand_position, right_hand_euler);
-
-    auto comps = with_mutex([this]() { return m_motion_controller_attached_components; });
 
     sdk::TArray<sdk::UPrimitiveComponent*> overlapped_components{};
     sdk::TArray<sdk::UPrimitiveComponent*> overlapped_components_left{};
@@ -692,6 +695,10 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
     }
 
     for (auto& it : comps) {
+        if (!is_using_controllers && it.second->hand != 2) {
+            continue;
+        }
+
         auto comp = it.first;
         if (!this->exists(comp) || it.second == nullptr) {
             continue;
