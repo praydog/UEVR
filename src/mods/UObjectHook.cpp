@@ -694,6 +694,9 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
         update_overlaps(1, overlapped_components);
     }
 
+    const auto head_rotation =  glm::normalize(vqi_norm * (rotation_offset * glm::quat{vr->get_rotation(0)}));
+    const auto head_euler = glm::degrees(utility::math::euler_angles_from_steamvr(head_rotation));
+
     for (auto& it : comps) {
         if (!is_using_controllers && it.second->hand != 2) {
             continue;
@@ -715,11 +718,8 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
             glm::radians(-orig_rotation.z));
         const auto orig_rotation_quat = glm::quat{orig_rotation_mat};
 
-        const auto head_rotation = vqi_norm * glm::quat{vr->get_rotation(0)};
-
         const auto& hand_rotation = state.hand != 2 ? (state.hand == 1 ? right_hand_rotation : left_hand_rotation) : head_rotation;
         const auto& hand_position = state.hand != 2 ? (state.hand == 1 ? right_hand_position : left_hand_position) : final_position;
-        const auto head_euler = glm::degrees(utility::math::euler_angles_from_steamvr(head_rotation));
         const auto& hand_euler = state.hand != 2 ? (state.hand == 1 ? right_hand_euler : left_hand_euler) : head_euler;
 
         const auto adjusted_rotation = hand_rotation * glm::inverse(state.rotation_offset);
