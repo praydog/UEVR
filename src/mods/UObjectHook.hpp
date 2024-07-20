@@ -95,7 +95,7 @@ public:
         // State that can be parsed from disk
         glm::quat rotation_offset{glm::identity<glm::quat>()};
         glm::vec3 location_offset{0.0f, 0.0f, 0.0f};
-        uint8_t hand{1};
+        uint8_t hand{1}; // 2 == HMD
         bool permanent{false};
     };
 

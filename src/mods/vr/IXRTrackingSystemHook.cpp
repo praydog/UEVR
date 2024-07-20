@@ -218,6 +218,7 @@ detail::IHeadMountedDisplayVT& get_hmd_vtable(std::optional<std::string> version
     }
 
     // TODO: actually dump 5.4
+    // 5.4
     if (version.dwFileVersionMS == 0x50004 || str_version.starts_with("5.4")) {
         return ue5_3::IHeadMountedDisplayVT::get();
     }

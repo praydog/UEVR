@@ -291,7 +291,7 @@ void UObjectHook::add_new_object(sdk::UObjectBase* object) {
             });
         }
     }
-    
+
     m_meta_objects[object] = std::move(meta_object);
 
 #ifdef VERBOSE_UOBJECTHOOK
@@ -624,6 +624,8 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
                 } else if (!is_a_down_raw_right) {
                     state.adjusting = false;
                 }
+            } else {
+                state.adjusting = false;
             }
         }
         
@@ -706,9 +708,12 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
             glm::radians(-orig_rotation.z));
         const auto orig_rotation_quat = glm::quat{orig_rotation_mat};
 
-        const auto& hand_rotation = state.hand == 1 ? right_hand_rotation : left_hand_rotation;
-        const auto& hand_position = state.hand == 1 ? right_hand_position : left_hand_position;
-        const auto& hand_euler = state.hand == 1 ? right_hand_euler : left_hand_euler;
+        const auto head_rotation = vqi_norm * glm::quat{vr->get_rotation(0)};
+
+        const auto& hand_rotation = state.hand != 2 ? (state.hand == 1 ? right_hand_rotation : left_hand_rotation) : head_rotation;
+        const auto& hand_position = state.hand != 2 ? (state.hand == 1 ? right_hand_position : left_hand_position) : final_position;
+        const auto head_euler = glm::degrees(utility::math::euler_angles_from_steamvr(head_rotation));
+        const auto& hand_euler = state.hand != 2 ? (state.hand == 1 ? right_hand_euler : left_hand_euler) : head_euler;
 
         const auto adjusted_rotation = hand_rotation * glm::inverse(state.rotation_offset);
         const auto adjusted_euler = glm::degrees(utility::math::euler_angles_from_steamvr(adjusted_rotation));
@@ -2509,6 +2514,13 @@ void UObjectHook::ui_handle_scene_component(sdk::USceneComponent* comp) {
             if (ImGui::Button("Attach right")) {
                 m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
                 m_motion_controller_attached_components[comp]->hand = 1;
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Attach HMD")) {
+                m_motion_controller_attached_components[comp] = std::make_shared<MotionControllerState>();
+                m_motion_controller_attached_components[comp]->hand = 2;
             }
 
             if (ImGui::Button("Attach Camera to")) {
