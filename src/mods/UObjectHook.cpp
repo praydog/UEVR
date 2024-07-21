@@ -73,7 +73,7 @@ void UObjectHook::MotionControllerStateBase::from_json(const nlohmann::json& dat
 
     if (data.contains("hand")) {
         hand = data["hand"].get<uint8_t>();
-        hand = hand % 2;
+        hand = hand % (uint8_t)MotionControllerStateBase::Hand::LAST;
     }
 
     if (data.contains("permanent") && data["permanent"].is_boolean()) {
@@ -615,13 +615,13 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
         for (auto& it : comps) {
             auto& state = *it.second;
 
-            if (state.hand == 0) {
+            if (state.hand == (uint8_t)MotionControllerStateBase::Hand::LEFT) {
                 if (is_a_down_raw_left) {
                     state.adjusting = true;
                 } else if (!is_a_down_raw_left) {
                     state.adjusting = false;
                 }
-            } else if (state.hand == 1) {
+            } else if (state.hand == (uint8_t)MotionControllerStateBase::Hand::RIGHT) {
                 if (is_a_down_raw_right) {
                     state.adjusting = true;
                 } else if (!is_a_down_raw_right) {
@@ -718,9 +718,10 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
             glm::radians(-orig_rotation.z));
         const auto orig_rotation_quat = glm::quat{orig_rotation_mat};
 
-        const auto& hand_rotation = state.hand != 2 ? (state.hand == 1 ? right_hand_rotation : left_hand_rotation) : head_rotation;
-        const auto& hand_position = state.hand != 2 ? (state.hand == 1 ? right_hand_position : left_hand_position) : final_position;
-        const auto& hand_euler = state.hand != 2 ? (state.hand == 1 ? right_hand_euler : left_hand_euler) : head_euler;
+        using Hand = MotionControllerStateBase::Hand;
+        const auto& hand_rotation = state.hand != Hand::HMD ? (state.hand == Hand::RIGHT ? right_hand_rotation : left_hand_rotation) : head_rotation;
+        const auto& hand_position = state.hand != Hand::HMD ? (state.hand == Hand::RIGHT ? right_hand_position : left_hand_position) : final_position;
+        const auto& hand_euler = state.hand != Hand::HMD ? (state.hand == Hand::RIGHT ? right_hand_euler : left_hand_euler) : head_euler;
 
         const auto adjusted_rotation = hand_rotation * glm::inverse(state.rotation_offset);
         const auto adjusted_euler = glm::degrees(utility::math::euler_angles_from_steamvr(adjusted_rotation));

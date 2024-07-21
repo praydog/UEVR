@@ -87,6 +87,13 @@ protected:
 
 public:
     struct MotionControllerStateBase {
+        enum Hand : uint8_t {
+            LEFT = 0,
+            RIGHT,
+            HMD,
+            LAST
+        };
+
         nlohmann::json to_json() const;
         void from_json(const nlohmann::json& data);
 
@@ -95,7 +102,7 @@ public:
         // State that can be parsed from disk
         glm::quat rotation_offset{glm::identity<glm::quat>()};
         glm::vec3 location_offset{0.0f, 0.0f, 0.0f};
-        uint8_t hand{1}; // 2 == HMD
+        uint8_t hand{(uint8_t)Hand::RIGHT}; // 2 == HMD
         bool permanent{false};
     };
 
