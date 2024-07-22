@@ -121,6 +121,7 @@ void FFakeStereoRenderingHook::on_draw_ui() {
         m_asynchronous_scan->draw("Asynchronous Code Scanning");
         m_recreate_textures_on_reset->draw("Recreate Textures on Reset");
         m_frame_delay_compensation->draw("Frame Delay Compensation");
+        m_use_fmalloc_scene_view_extensions->draw("Use FMalloc for ISceneViewExtensions");
 
         if (m_tracking_system_hook != nullptr) {
             m_tracking_system_hook->on_draw_ui();
@@ -3398,7 +3399,7 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
     // so the view extensions are a TArray and not a TWeakPtr<TArray>
     if (!m_rendertarget_manager_embedded_in_stereo_device) {
         if (view_extensions_tweakptr.reference == nullptr) {
-            view_extensions_tweakptr.allocate_naive();
+            view_extensions_tweakptr.allocate_naive(m_use_fmalloc_scene_view_extensions->value());
         }
     }
 
@@ -3488,12 +3489,22 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
         // Allocate a bunch more than necessary to prevent crashes when the engine tries to add new entries
         const auto new_capacity = 32;
 
-        exts.data = new TWeakPtr<ISceneViewExtension>[new_capacity]{};
+        if (!m_use_fmalloc_scene_view_extensions->value()) {
+            exts.data = new TWeakPtr<ISceneViewExtension>[new_capacity]{};
+        } else {
+            if (auto fmalloc = sdk::FMalloc::get(); fmalloc != nullptr) {
+                exts.data = (TWeakPtr<ISceneViewExtension>*)fmalloc->malloc(new_capacity * sizeof(TWeakPtr<ISceneViewExtension>));
+            } else {
+                SPDLOG_ERROR("Failed to get FMalloc! Cannot allocate new view extensions array! Falling back to default allocation method...");
+                exts.data = new TWeakPtr<ISceneViewExtension>[new_capacity]{};
+            }
+        }
+
         exts.count = 0;
         exts.capacity = new_capacity;
 
         ZeroMemory(exts.data, sizeof(TWeakPtr<ISceneViewExtension>) * new_capacity);
-        exts.data[exts.count++].allocate_naive();
+        exts.data[exts.count++].allocate_naive(m_use_fmalloc_scene_view_extensions->value());
     } else if (view_extensions.extensions.data != nullptr && view_extensions.extensions.count <= view_extensions.extensions.capacity) {
         auto& exts = view_extensions.extensions;
 
@@ -3503,7 +3514,19 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
 
             const auto new_capacity = exts.capacity * 4;
             const auto old_capacity = exts.capacity;
-            auto new_exts = new TWeakPtr<ISceneViewExtension>[new_capacity];
+
+            TWeakPtr<ISceneViewExtension>* new_exts = nullptr;
+
+            if (!m_use_fmalloc_scene_view_extensions->value()) {
+                new_exts = new TWeakPtr<ISceneViewExtension>[new_capacity];
+            } else {
+                if (auto fmalloc = sdk::FMalloc::get(); fmalloc != nullptr) {
+                    new_exts = (TWeakPtr<ISceneViewExtension>*)fmalloc->malloc(new_capacity * sizeof(TWeakPtr<ISceneViewExtension>));
+                } else {
+                    SPDLOG_ERROR("Failed to get FMalloc! Cannot allocate new view extensions array! Falling back to default allocation method...");
+                    new_exts = new TWeakPtr<ISceneViewExtension>[new_capacity];
+                }
+            }
 
             ZeroMemory(new_exts, sizeof(TWeakPtr<ISceneViewExtension>) * new_capacity);
             memcpy(new_exts, exts.data, sizeof(TWeakPtr<ISceneViewExtension>) * old_capacity);
@@ -3517,7 +3540,7 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
             SPDLOG_INFO("Allocating new view extension entry onto existing array...");
         }
 
-        exts.data[exts.count++].allocate_naive();
+        exts.data[exts.count++].allocate_naive(m_use_fmalloc_scene_view_extensions->value());
     } else {
         SPDLOG_INFO("None of the previous conditions were met, so we're not allocating a new view extensions array");
     }
