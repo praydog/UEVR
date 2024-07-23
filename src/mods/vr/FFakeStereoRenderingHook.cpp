@@ -3494,6 +3494,9 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
         } else {
             if (auto fmalloc = sdk::FMalloc::get(); fmalloc != nullptr) {
                 exts.data = (TWeakPtr<ISceneViewExtension>*)fmalloc->malloc(new_capacity * sizeof(TWeakPtr<ISceneViewExtension>));
+                for (auto i = 0; i < new_capacity; ++i) {
+                    new (&exts.data[i]) TWeakPtr<ISceneViewExtension>();
+                }
             } else {
                 SPDLOG_ERROR("Failed to get FMalloc! Cannot allocate new view extensions array! Falling back to default allocation method...");
                 exts.data = new TWeakPtr<ISceneViewExtension>[new_capacity]{};
@@ -3522,6 +3525,9 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
             } else {
                 if (auto fmalloc = sdk::FMalloc::get(); fmalloc != nullptr) {
                     new_exts = (TWeakPtr<ISceneViewExtension>*)fmalloc->malloc(new_capacity * sizeof(TWeakPtr<ISceneViewExtension>));
+                    for (auto i = 0; i < new_capacity; ++i) {
+                        new (&new_exts[i]) TWeakPtr<ISceneViewExtension>();
+                    }
                 } else {
                     SPDLOG_ERROR("Failed to get FMalloc! Cannot allocate new view extensions array! Falling back to default allocation method...");
                     new_exts = new TWeakPtr<ISceneViewExtension>[new_capacity];
