@@ -949,6 +949,13 @@ private:
     
     const ModString::Ptr m_requested_runtime_name{ ModString::create("Frontend_RequestedRuntime", "unset") };
 
+    const ModToggle::Ptr m_lerp_camera_pitch{ ModToggle::create(generate_name("LerpCameraPitch"), false) };
+    const ModToggle::Ptr m_lerp_camera_yaw{ ModToggle::create(generate_name("LerpCameraYaw"), false) };
+    const ModToggle::Ptr m_lerp_camera_roll{ ModToggle::create(generate_name("LerpCameraRoll"), false) };
+    const ModSlider::Ptr m_lerp_camera_speed{ ModSlider::create(generate_name("LerpCameraSpeed"), 0.01f, 10.0f, 1.0f) };
+
+    std::chrono::high_resolution_clock::time_point m_last_lerp_update{};
+
     struct DecoupledPitchData {
         mutable std::shared_mutex mtx{};
         glm::quat pre_flattened_rotation{};
@@ -963,6 +970,11 @@ private:
         bool position_wants_freeze{false};
         bool rotation_wants_freeze{false};
     } m_camera_freeze{};
+
+    struct CameraLerp {
+        glm::vec3 last_position{};
+        glm::vec3 last_rotation{};
+    } m_camera_lerp{};
 
     struct CameraData {
         glm::vec3 offset{};
@@ -1040,6 +1052,10 @@ public:
             *m_show_fps,
             *m_show_statistics,
             *m_controllers_allowed,
+            *m_lerp_camera_pitch,
+            *m_lerp_camera_yaw,
+            *m_lerp_camera_roll,
+            *m_lerp_camera_speed,
         };
 
         add_components_vr();

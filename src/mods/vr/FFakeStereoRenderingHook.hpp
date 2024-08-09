@@ -283,6 +283,14 @@ public:
         return m_ignore_next_viewport_draw;
     }
 
+    auto& get_last_pre_rotation() {
+        return m_last_pre_rotation;
+    }
+
+    auto& get_last_pre_rotation_double() {
+        return m_last_pre_rotation_double;
+    }
+
     // Do not call these directly
     static void setup_viewpoint(ISceneViewExtension* extension, void* player_controller, void* view_info);
     static void localplayer_setup_viewpoint(void* localplayer, void* view_info, void* pass);
@@ -408,6 +416,9 @@ private:
 
     Rotator<float> m_last_afr_rotation{};
     Rotator<double> m_last_afr_rotation_double{};
+
+    Rotator<float> m_last_pre_rotation{};
+    Rotator<double> m_last_pre_rotation_double{};
 
     std::atomic<Rotator<float>> m_last_rotation{};
     std::atomic<Rotator<double>> m_last_rotation_double{};

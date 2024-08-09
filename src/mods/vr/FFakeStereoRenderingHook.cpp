@@ -4126,6 +4126,12 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     }
 
     if (true_index == 0 && !is_full_pass) {
+        if (has_double_precision) {
+            g_hook->m_last_pre_rotation_double = *rot_d;
+        } else {
+            g_hook->m_last_pre_rotation = *view_rotation;
+        }
+
         //vr->wait_for_present();
         
         if (!g_hook->m_has_view_extension_hook && !g_hook->m_has_game_viewport_client_draw_hook) {

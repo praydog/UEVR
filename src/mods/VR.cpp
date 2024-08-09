@@ -1396,8 +1396,70 @@ void VR::on_pre_calculate_stereo_view_offset(void* stereo_device, const int32_t 
         return;
     }
 
+    const auto now = std::chrono::high_resolution_clock::now();
+    const auto delta = std::chrono::duration<float, std::chrono::seconds::period>(now - m_last_lerp_update).count();
+
     Rotator<double>* view_rotation_double = (Rotator<double>*)view_rotation;
     Vector3d* view_location_double = (Vector3d*)view_location;
+
+    glm::vec3 target_rotation = is_double ? glm::vec3{*(glm::vec<3, double>*)view_rotation_double} : *(glm::vec<3, float>*)view_rotation;
+
+    const auto should_lerp_pitch = m_lerp_camera_pitch->value();
+    const auto should_lerp_yaw = m_lerp_camera_yaw->value();
+    const auto should_lerp_roll = m_lerp_camera_roll->value();
+
+    auto lerp_angle = [](auto a, auto b, auto t) {
+        const auto diff = b - a;
+        if constexpr (std::is_same_v<decltype(a), double>) {
+            if (diff > 180.0) {
+                b -= 360.0;
+            } else if (diff < -180.0) {
+                b += 360.0;
+            }
+        } else {
+            if (diff > 180.0f) {
+                b -= 360.0f;
+            } else if (diff < -180.0f) {
+                b += 360.0f;
+            }
+        }
+
+        return glm::lerp(a, b, t);
+    };
+
+    const auto lerp_t = m_lerp_camera_speed->value() * delta;
+
+    if (should_lerp_pitch) {
+        if (is_double) {
+            view_rotation_double->pitch = lerp_angle((double)m_camera_lerp.last_rotation.x, (double)target_rotation.x, (double)lerp_t);
+        } else {
+            view_rotation->pitch = lerp_angle(m_camera_lerp.last_rotation.x, target_rotation.x, lerp_t);
+        }
+    }
+
+    if (should_lerp_yaw) {
+        if (is_double) {
+            view_rotation_double->yaw = lerp_angle((double)m_camera_lerp.last_rotation.y, (double)target_rotation.y, (double)lerp_t);
+        } else {
+            view_rotation->yaw = lerp_angle(m_camera_lerp.last_rotation.y, target_rotation.y, lerp_t);
+        }
+    }
+
+    if (should_lerp_roll) {
+        if (is_double) {
+            view_rotation_double->roll = lerp_angle((double)m_camera_lerp.last_rotation.z, (double)target_rotation.z, (double)lerp_t);
+        } else {
+            view_rotation->roll = lerp_angle(m_camera_lerp.last_rotation.z, target_rotation.z, lerp_t);
+        }
+    }
+
+    if (is_double) {
+        m_camera_lerp.last_rotation = glm::vec3{ (float)view_rotation_double->pitch, (float)view_rotation_double->yaw, (float)view_rotation_double->roll };
+    } else {
+        m_camera_lerp.last_rotation = glm::vec3{ view_rotation->pitch, view_rotation->yaw, view_rotation->roll };
+    }
+
+    m_last_lerp_update = std::chrono::high_resolution_clock::now();
 
     if (m_camera_freeze.position_wants_freeze) {
         if (is_double) {
@@ -2439,7 +2501,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
 
     if (selected_page == PAGE_CAMERA) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
-        if (ImGui::TreeNode("Camera")) {
+        if (ImGui::TreeNode("Camera Freeze")) {
             float camera_offset[] = {m_camera_forward_offset->value(), m_camera_right_offset->value(), m_camera_up_offset->value()};
             if (ImGui::SliderFloat3("Camera Offset", camera_offset, -4000.0f, 4000.0f)) {
                 m_camera_forward_offset->value() = camera_offset[0];
@@ -2479,6 +2541,18 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
                     m_camera_freeze.rotation_frozen = false;
                 }
             }
+
+            ImGui::TreePop();
+        }
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Camera Lerp")) {
+            m_lerp_camera_pitch->draw("Lerp Pitch");
+            ImGui::SameLine();
+            m_lerp_camera_yaw->draw("Lerp Yaw");
+            ImGui::SameLine();
+            m_lerp_camera_roll->draw("Lerp Roll");
+            m_lerp_camera_speed->draw("Lerp Speed");
 
             ImGui::TreePop();
         }
