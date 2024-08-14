@@ -764,7 +764,7 @@ namespace mc_state {
             return;
         }
 
-        if (hand > 1) {
+        if (hand > 2) {
             return;
         }
 
