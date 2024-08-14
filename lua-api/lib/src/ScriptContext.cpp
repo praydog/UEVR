@@ -598,6 +598,45 @@ int ScriptContext::setup_bindings() {
         "get_item", &uevr::API::FUObjectArray::get_item
     );
 
+    m_lua.new_usertype<uevr::API::UObjectHook::MotionControllerState>("UEVR_MotionControllerState",
+        "set_rotation_offset", [](sol::this_state s, uevr::API::UObjectHook::MotionControllerState* state, sol::object obj) {
+            if (obj.is<UEVR_Quaternionf>()) {
+                const auto q = obj.as<UEVR_Quaternionf>();
+                state->set_rotation_offset(&q);
+            } else if (obj.is<lua::datatypes::Vector4f>()) {
+                const auto v = obj.as<lua::datatypes::Vector4f>();
+                const auto vq = (UEVR_Quaternionf*)&v;
+                state->set_rotation_offset(vq);
+            } else if (obj.is<lua::datatypes::Vector4d>()) {
+                const auto v = obj.as<lua::datatypes::Vector4d>();
+                const auto v_as_f = lua::datatypes::Vector3f{ (float)v.x, (float)v.y, (float)v.z };
+                const auto vq = (UEVR_Quaternionf*)&v_as_f;
+                state->set_rotation_offset(vq);
+            } else {
+                throw sol::error("Invalid type for set_rotation_offset");
+            }
+        },
+        "set_location_offset", [](sol::this_state s, uevr::API::UObjectHook::MotionControllerState* state, sol::object obj) {
+            if (obj.is<UEVR_Vector3f>()) {
+                const auto v = obj.as<UEVR_Vector3f>();
+                state->set_location_offset(&v);
+            } else if (obj.is<lua::datatypes::Vector3f>()) {
+                const auto v = obj.as<lua::datatypes::Vector3f>();
+                const auto vv = (UEVR_Vector3f*)&v;
+                state->set_location_offset(vv);
+            } else if (obj.is<lua::datatypes::Vector3d>()) {
+                const auto v = obj.as<lua::datatypes::Vector3d>();
+                const auto v_as_f = lua::datatypes::Vector3f{ (float)v.x, (float)v.y, (float)v.z };
+                const auto vv = (UEVR_Vector3f*)&v_as_f;
+                state->set_location_offset(vv);
+            } else {
+                throw sol::error("Invalid type for set_location_offset");
+            }
+        },
+        "set_hand", &uevr::API::UObjectHook::MotionControllerState::set_hand,
+        "set_permanent", &uevr::API::UObjectHook::MotionControllerState::set_permanent
+    );
+
     m_lua.new_usertype<uevr::API::UObjectHook>("UEVR_UObjectHook",
         "activate", &uevr::API::UObjectHook::activate,
         "exists", &uevr::API::UObjectHook::exists,
