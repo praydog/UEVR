@@ -84,6 +84,7 @@ void ScriptState::run_script(const std::string& p) {
         cpath = old_cpath + ";" + dir.string() + "/?.dll";
 
         m_lua["package"]["path"] = package_path;
+        m_lua["package"]["cpath"] = cpath;
         m_lua.safe_script_file(p);
     } catch (const std::exception& e) {
         //LuaLoader::get()->spew_error(e.what());
