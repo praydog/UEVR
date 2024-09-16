@@ -321,6 +321,14 @@ bool on_post_slate_draw_window_render_thread(UEVR_Slate_DrawWindow_RenderThreadC
     return PluginLoader::get()->add_on_post_slate_draw_window_render_thread(cb);
 }
 
+bool on_early_calculate_stereo_view_offset(UEVR_Stereo_CalculateStereoViewOffsetCb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_early_calculate_stereo_view_offset(cb);
+}
+
 bool on_pre_calculate_stereo_view_offset(UEVR_Stereo_CalculateStereoViewOffsetCb cb) {
     if (cb == nullptr) {
         return false;
@@ -362,7 +370,8 @@ UEVR_SDKCallbacks g_sdk_callbacks {
     uevr::on_pre_calculate_stereo_view_offset,
     uevr::on_post_calculate_stereo_view_offset,
     uevr::on_pre_viewport_client_draw,
-    uevr::on_post_viewport_client_draw
+    uevr::on_post_viewport_client_draw,
+    uevr::on_early_calculate_stereo_view_offset,
 };
 
 #define UOBJECT(x) ((sdk::UObject*)x)
@@ -2105,6 +2114,14 @@ bool PluginLoader::add_on_post_slate_draw_window_render_thread(UEVR_Slate_DrawWi
     m_on_post_slate_draw_window_render_thread_cbs.push_back(cb);
     return true;
 }
+
+bool PluginLoader::add_on_early_calculate_stereo_view_offset(UEVR_Stereo_CalculateStereoViewOffsetCb cb) {
+    std::unique_lock _{m_api_cb_mtx};
+
+    m_on_early_calculate_stereo_view_offset_cbs.push_back(cb);
+    return true;
+}
+
 
 bool PluginLoader::add_on_pre_calculate_stereo_view_offset(UEVR_Stereo_CalculateStereoViewOffsetCb cb) {
     std::unique_lock _{m_api_cb_mtx};

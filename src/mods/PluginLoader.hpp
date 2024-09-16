@@ -85,6 +85,7 @@ public:
     bool add_on_post_engine_tick(UEVR_Engine_TickCb cb);
     bool add_on_pre_slate_draw_window_render_thread(UEVR_Slate_DrawWindow_RenderThreadCb cb);
     bool add_on_post_slate_draw_window_render_thread(UEVR_Slate_DrawWindow_RenderThreadCb cb);
+    bool add_on_early_calculate_stereo_view_offset(UEVR_Stereo_CalculateStereoViewOffsetCb cb);
     bool add_on_pre_calculate_stereo_view_offset(UEVR_Stereo_CalculateStereoViewOffsetCb cb);
     bool add_on_post_calculate_stereo_view_offset(UEVR_Stereo_CalculateStereoViewOffsetCb cb);
     bool add_on_pre_viewport_client_draw(UEVR_ViewportClient_DrawCb cb);
