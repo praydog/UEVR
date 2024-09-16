@@ -110,6 +110,7 @@ void ScriptContext::setup_callback_bindings() {
         add_callback(cbs->on_post_engine_tick, on_post_engine_tick);
         add_callback(cbs->on_pre_slate_draw_window_render_thread, on_pre_slate_draw_window_render_thread);
         add_callback(cbs->on_post_slate_draw_window_render_thread, on_post_slate_draw_window_render_thread);
+        add_callback(cbs->on_early_calculate_stereo_view_offset, on_early_calculate_stereo_view_offset);
         add_callback(cbs->on_pre_calculate_stereo_view_offset, on_pre_calculate_stereo_view_offset);
         add_callback(cbs->on_post_calculate_stereo_view_offset, on_post_calculate_stereo_view_offset);
         add_callback(cbs->on_pre_viewport_client_draw, on_pre_viewport_client_draw);
@@ -140,6 +141,10 @@ void ScriptContext::setup_callback_bindings() {
         "on_post_slate_draw_window_render_thread", [this](sol::function fn) {
             std::scoped_lock _{ m_mtx };
             m_on_post_slate_draw_window_render_thread_callbacks.push_back(fn);
+        },
+        "on_early_calculate_stereo_view_offset", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_early_calculate_stereo_view_offset_callbacks.push_back(fn);
         },
         "on_pre_calculate_stereo_view_offset", [this](sol::function fn) {
             std::scoped_lock _{ m_mtx };
@@ -854,6 +859,36 @@ void ScriptContext::on_post_slate_draw_window_render_thread(UEVR_FSlateRHIRender
             ScriptContext::log("Exception in on_post_slate_draw_window_render_thread: " + std::string(e.what()));
         } catch (...) {
             ScriptContext::log("Unknown exception in on_post_slate_draw_window_render_thread");
+        }
+    });
+}
+
+void ScriptContext::on_early_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle device, int view_index, float world_to_meters, UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double) {
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
+
+        // Don't unnecessarily call into UObject stuff if there are no callbacks
+        // Some games can crash if it doesn't support it correctly
+        if (ctx->m_on_early_calculate_stereo_view_offset_callbacks.empty()) {
+            return;
+        }
+
+        const auto ue5_position = (lua::datatypes::Vector3d*)position;
+        const auto ue4_position = (lua::datatypes::Vector3f*)position;
+        const auto ue5_rotation = (lua::datatypes::Vector3d*)rotation;
+        const auto ue4_rotation = (lua::datatypes::Vector3f*)rotation;
+        const auto is_ue5 = lua::utility::is_ue5();
+
+        for (auto& fn : ctx->m_on_early_calculate_stereo_view_offset_callbacks) try {
+            if (is_ue5) {
+                ctx->handle_protected_result(fn(device, view_index, world_to_meters, ue5_position, ue5_rotation, is_double));
+            } else {
+                ctx->handle_protected_result(fn(device, view_index, world_to_meters, ue4_position, ue4_rotation, is_double));
+            }
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_early_calculate_stereo_view_offset: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_early_calculate_stereo_view_offset");
         }
     });
 }

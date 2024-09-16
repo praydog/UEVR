@@ -1960,6 +1960,21 @@ void PluginLoader::on_post_slate_draw_window(void* renderer, void* command_list,
     }
 }
 
+void PluginLoader::on_early_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
+                                                       const float world_to_meters, Vector3f* view_location, bool is_double)
+{
+    std::shared_lock _{m_api_cb_mtx};
+
+    for (auto&& cb : m_on_early_calculate_stereo_view_offset_cbs) {
+        try {
+            cb( (UEVR_StereoRenderingDeviceHandle)stereo_device, view_index, world_to_meters, 
+                (UEVR_Vector3f*)view_location, (UEVR_Rotatorf*)view_rotation, is_double);
+        } catch(...) {
+            spdlog::error("[APIProxy] Exception occurred in on_early_calculate_stereo_view_offset callback; one of the plugins has an error.");
+        }
+    }
+}
+
 void PluginLoader::on_pre_calculate_stereo_view_offset(void* stereo_device, const int32_t view_index, Rotator<float>* view_rotation, 
                                                        const float world_to_meters, Vector3f* view_location, bool is_double)
 {

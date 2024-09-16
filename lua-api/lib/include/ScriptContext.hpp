@@ -111,6 +111,7 @@ private:
     std::vector<sol::protected_function> m_on_post_engine_tick_callbacks{};
     std::vector<sol::protected_function> m_on_pre_slate_draw_window_render_thread_callbacks{};
     std::vector<sol::protected_function> m_on_post_slate_draw_window_render_thread_callbacks{};
+    std::vector<sol::protected_function> m_on_early_calculate_stereo_view_offset_callbacks{};
     std::vector<sol::protected_function> m_on_pre_calculate_stereo_view_offset_callbacks{};
     std::vector<sol::protected_function> m_on_post_calculate_stereo_view_offset_callbacks{};
     std::vector<sol::protected_function> m_on_pre_viewport_client_draw_callbacks{};
@@ -137,6 +138,7 @@ private:
     static void on_post_engine_tick(UEVR_UGameEngineHandle engine, float delta_seconds);
     static void on_pre_slate_draw_window_render_thread(UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info);
     static void on_post_slate_draw_window_render_thread(UEVR_FSlateRHIRendererHandle renderer, UEVR_FViewportInfoHandle viewport_info);
+    static void on_early_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle device, int view_index, float world_to_meters, UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double);
     static void on_pre_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle device, int view_index, float world_to_meters, UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double);
     static void on_post_calculate_stereo_view_offset(UEVR_StereoRenderingDeviceHandle device, int view_index, float world_to_meters, UEVR_Vector3f* position, UEVR_Rotatorf* rotation, bool is_double);
     static void on_pre_viewport_client_draw(UEVR_UGameViewportClientHandle viewport_client, UEVR_FViewportHandle viewport, UEVR_FCanvasHandle canvas);

@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 29
+#define UEVR_PLUGIN_VERSION_MINOR 30
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -228,6 +228,8 @@ typedef struct {
     UEVR_Stereo_CalculateStereoViewOffsetFn on_post_calculate_stereo_view_offset;
     UEVR_ViewportClient_DrawFn on_pre_viewport_client_draw;
     UEVR_ViewportClient_DrawFn on_post_viewport_client_draw;
+
+    UEVR_Stereo_CalculateStereoViewOffsetFn on_early_calculate_stereo_view_offset;
 } UEVR_SDKCallbacks;
 
 typedef struct {

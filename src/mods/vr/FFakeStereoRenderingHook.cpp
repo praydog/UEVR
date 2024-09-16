@@ -4159,6 +4159,10 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
     if (!is_full_pass) {
         for (auto& mod : mods) {
+            mod->on_early_calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location, g_hook->m_has_double_precision);
+        }
+
+        for (auto& mod : mods) {
             mod->on_pre_calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location, g_hook->m_has_double_precision);
         }
     }
