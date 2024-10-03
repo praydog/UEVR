@@ -744,6 +744,10 @@ void D3D12Component::draw_spectator_view(ID3D12GraphicsCommandList* command_list
     D3D12_CPU_DESCRIPTOR_HANDLE rtv_heaps[] = { backbuffer_ctx.get_rtv() };
     command_list->OMSetRenderTargets(1, rtv_heaps, FALSE, nullptr);
 
+    // Clear backbuffer
+    const float bb_clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    command_list->ClearRenderTargetView(backbuffer_ctx.get_rtv(), bb_clear_color, 0, nullptr);
+
     // Setup viewport and scissor rects
     command_list->RSSetViewports(1, &viewport);
     command_list->RSSetScissorRects(1, &scissor_rect);
