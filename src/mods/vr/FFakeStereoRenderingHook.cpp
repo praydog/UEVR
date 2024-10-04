@@ -6469,7 +6469,7 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                                 }
                             } else if (next_insn[0] == 0x84 && next_insn[1] == 0xC0) { // test al, al
                                 if (auto ref = utility::find_string_reference_in_path((uintptr_t)next_insn, "IsInRenderingThread()", false); ref.has_value()) {
-                                    if (ref->addr - (uintptr_t)next_insn < 30) {
+                                    if (ref->addr > (uintptr_t)next_insn && ref->addr - (uintptr_t)next_insn < 30) {
                                         SPDLOG_INFO("Found IsInRenderingThread() instead of the function we want, skipping this call!");
                                         next_call_is_not_the_right_one = true;
                                     }
