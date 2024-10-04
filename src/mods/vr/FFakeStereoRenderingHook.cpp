@@ -6419,11 +6419,16 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
             if (!next_call_is_not_the_right_one) try {
                 const auto addr = utility::resolve_displacement(ip);
 
-                if (addr && !IsBadReadPtr((void*)*addr, 12) && std::wstring_view{(const wchar_t*)*addr}.starts_with(L"BufferedRT")) {
-                    this->is_using_texture_desc = true;
-                    this->is_version_greq_5_1 = true;
+                if (addr && !IsBadReadPtr((void*)*addr, 12)) {
+                    if (std::wstring_view{(const wchar_t*)*addr}.starts_with(L"BufferedRT")) {
+                        this->is_using_texture_desc = true;
+                        this->is_version_greq_5_1 = true;
 
-                    SPDLOG_INFO("Found usage of string \"BufferedRT\" while analyzing AllocateRenderTargetTexture!");
+                        SPDLOG_INFO("Found usage of string \"BufferedRT\" while analyzing AllocateRenderTargetTexture!");
+                    } else if (std::string_view{(const char*)*addr}.starts_with("IsInRenderingThread") && std::string_view{decoded->Mnemonic}.starts_with("LEA") && decoded->Operands[0].Type == ND_OP_REG && decoded->Operands[0].Info.Register.Reg == NDR_RCX) {
+                        SPDLOG_INFO("Found usage of string \"IsInRenderingThread\" while analyzing AllocateRenderTargetTexture, skipping next call!");
+                        next_call_is_not_the_right_one = true;
+                    }
                 }
             } catch(...) {
 
@@ -6451,6 +6456,25 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                         } else if (auto result = utility::scan(fn, 50, "B8 00 08 00 00 C3"); result.has_value()) {
                             SPDLOG_INFO("First few instructions are a mov eax, 800h, ret, skipping this call!");
                             next_call_is_not_the_right_one = true;
+                        } else if (this->is_version_greq_5_1) { // Limiting the scope of this to newer UE5 versions so we don't potentially break older versions
+                            const auto module_fn_within = utility::get_module_within(fn);
+                            const auto next_insn = (uint8_t*)(ip + decoded->Length);
+
+                            // Seen on UE5.3.2 development builds
+                            if (auto result = utility::scan_disasm(fn, 15, "BD 01 00 00 00"); result.has_value()) {
+                                // This string is not unicode
+                                if (utility::find_string_reference_in_path(fn, "InGPUMask != 0", false).has_value()) {
+                                    SPDLOG_INFO("Found InGPUMask != 0 string within the function and mov ebp, 1, skipping this call!");
+                                    next_call_is_not_the_right_one = true;
+                                }
+                            } else if (next_insn[0] == 0x84 && next_insn[1] == 0xC0) { // test al, al
+                                if (auto ref = utility::find_string_reference_in_path((uintptr_t)next_insn, "IsInRenderingThread()", false); ref.has_value()) {
+                                    if (ref->addr - (uintptr_t)next_insn < 30) {
+                                        SPDLOG_INFO("Found IsInRenderingThread() instead of the function we want, skipping this call!");
+                                        next_call_is_not_the_right_one = true;
+                                    }
+                                }
+                            }
                         }
                     } catch(...) {
                         SPDLOG_INFO("Failed to analyze call at {:x}", ip);
