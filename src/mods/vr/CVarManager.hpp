@@ -202,6 +202,8 @@ private:
         // Bools
         std::make_unique<CVarStandard>(L"Renderer", L"r.HZBOcclusion", CVar::Type::BOOL, 0, 1),
         std::make_unique<CVarStandard>(L"Renderer", L"r.SSGI.Enable", CVar::Type::BOOL, 0, 1),
+        std::make_unique<CVarStandard>(L"Renderer", L"r.Shadow.Virtual.Enable", CVar::Type::BOOL, 0, 1),
+        std::make_unique<CVarStandard>(L"Renderer", L"r.TranslucentLightingVolume", CVar::Type::BOOL, 0, 1),
 
         // Ints
         std::make_unique<CVarStandard>(L"Renderer", L"r.DefaultFeature.AntiAliasing", CVar::Type::INT, 0, 2),
