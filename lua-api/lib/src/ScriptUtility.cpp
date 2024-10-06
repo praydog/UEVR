@@ -22,6 +22,17 @@ uevr::API::UScriptStruct* get_vector_struct() {
     return vector_struct;
 }
 
+uevr::API::UScriptStruct* get_rotator_struct() {
+    static auto rotator_struct = []() {
+        const auto modern_class = uevr::API::get()->find_uobject<uevr::API::UScriptStruct>(L"ScriptStruct /Script/CoreUObject.Rotator");
+        const auto old_class = modern_class == nullptr ? uevr::API::get()->find_uobject<uevr::API::UScriptStruct>(L"ScriptStruct /Script/CoreUObject.Object.Rotator") : nullptr;
+
+        return modern_class != nullptr ? modern_class : old_class;
+    }();
+
+    return rotator_struct;
+}
+
 bool is_ue5() {
     static auto cached_result = []() {
         const auto c = get_vector_struct();
@@ -388,7 +399,7 @@ void set_property(sol::this_state s, void* self, uevr::API::UStruct* owner_c, ue
             }
 
             memcpy((void*)((uintptr_t)self + offset), arg.object, struct_desc->get_struct_size());
-        } else if (struct_desc == get_vector_struct()) {
+        } else if (struct_desc == get_vector_struct() || struct_desc == get_rotator_struct()) { // Same layout
             if (value.is<lua::datatypes::Vector3f>()) {
                 const auto arg = value.as<lua::datatypes::Vector3f>();
 

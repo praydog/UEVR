@@ -10,6 +10,7 @@
 
 #include "datatypes/XInput.hpp"
 #include "datatypes/Vector.hpp"
+#include "datatypes/Quaternion.hpp"
 #include "datatypes/StructObject.hpp"
 #include "datatypes/FFrame.hpp"
 
@@ -182,6 +183,7 @@ int ScriptContext::setup_bindings() {
 
     lua::datatypes::bind_xinput(m_lua);
     lua::datatypes::bind_vectors(m_lua);
+    lua::datatypes::bind_quaternions(m_lua);
     lua::datatypes::bind_struct_object(m_lua);
 
     m_lua.new_usertype<UEVR_PluginInitializeParam>("UEVR_PluginInitializeParam",
@@ -876,7 +878,7 @@ void ScriptContext::on_early_calculate_stereo_view_offset(UEVR_StereoRenderingDe
         const auto ue5_position = (lua::datatypes::Vector3d*)position;
         const auto ue4_position = (lua::datatypes::Vector3f*)position;
         const auto ue5_rotation = (lua::datatypes::Vector3d*)rotation;
-        const auto ue4_rotation = (lua::datatypes::Vector3f*)rotation;
+    const auto ue4_rotation = (lua::datatypes::Vector3f*)rotation;
         const auto is_ue5 = lua::utility::is_ue5();
 
         for (auto& fn : ctx->m_on_early_calculate_stereo_view_offset_callbacks) try {
