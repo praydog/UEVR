@@ -3341,7 +3341,10 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
         case "DoubleProperty"_fnv:
             {
                 auto& value = *(double*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
-                ImGui::DragFloat(utility::narrow(prop->get_field_name().to_string()).data(), (float*)&value, 0.01f);
+                float casted_value = (float)value;
+                if (ImGui::DragFloat(utility::narrow(prop->get_field_name().to_string()).data(), (float*)&casted_value, 0.01f)) {
+                    value = (double)casted_value;
+                }
                 display_context(value);
             }
             break;
