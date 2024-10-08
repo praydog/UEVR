@@ -44,6 +44,9 @@ public:
         return m_states[index];
     }
 
+    // Resets the ScriptState and runs autorun scripts again.
+    void reset_scripts();
+
 private:
     ScriptState::GarbageCollectionData make_gc_data() const {
         ScriptState::GarbageCollectionData data{};
@@ -123,7 +126,4 @@ private:
         *m_gc_minor_multiplier,
         *m_gc_major_multiplier
     };
-
-    // Resets the ScriptState and runs autorun scripts again.
-    void reset_scripts();
 };

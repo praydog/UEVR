@@ -32,6 +32,7 @@
 #include "pluginloader/FUObjectArrayFunctions.hpp"
 #include "pluginloader/UScriptStructFunctions.hpp"
 
+#include "LuaLoader.hpp"
 #include "UObjectHook.hpp"
 #include "VR.hpp"
 
@@ -1747,26 +1748,31 @@ std::optional<std::string> PluginLoader::on_initialize_d3d_thread() {
 }
 
 void PluginLoader::attempt_unload_plugins() {
-    std::unique_lock _{m_api_cb_mtx};
-
-    for (auto& callbacks : m_plugin_callback_lists) {
-        callbacks->clear();
-    }
-
     {
-        std::unique_lock _{m_ufunction_hooks_mtx};
+        std::unique_lock _{m_api_cb_mtx};
 
-        for (auto& [ufunction, hook] : m_ufunction_hooks) {
-            hook->remove_callbacks();
+        for (auto& callbacks : m_plugin_callback_lists) {
+            callbacks->clear();
         }
+
+        {
+            std::unique_lock _{m_ufunction_hooks_mtx};
+
+            for (auto& [ufunction, hook] : m_ufunction_hooks) {
+                hook->remove_callbacks();
+            }
+        }
+
+        for (auto& pair : m_plugins) {
+            FreeLibrary(pair.second);
+        }
+
+        m_inline_hooks.clear();
+        m_plugins.clear();
     }
 
-    for (auto& pair : m_plugins) {
-        FreeLibrary(pair.second);
-    }
-
-    m_inline_hooks.clear();
-    m_plugins.clear();
+    // Done because we remove all the callbacks which Lua uses
+    LuaLoader::get()->reset_scripts();
 }
 
 void PluginLoader::reload_plugins() {
