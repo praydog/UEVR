@@ -308,45 +308,66 @@ int ScriptContext::setup_bindings() {
     // TODO: Add operators to these types
     m_lua.new_usertype<UEVR_Vector2f>("UEVR_Vector2f",
         "x", &UEVR_Vector2f::x,
-        "y", &UEVR_Vector2f::y
+        "y", &UEVR_Vector2f::y,
+        "as_full_binding", [](UEVR_Vector2f& self) -> lua::datatypes::Vector2f {
+            return *reinterpret_cast<lua::datatypes::Vector2f*>(&self);
+        }
     );
 
     m_lua.new_usertype<UEVR_Vector3f>("UEVR_Vector3f",
         "x", &UEVR_Vector3f::x,
         "y", &UEVR_Vector3f::y,
-        "z", &UEVR_Vector3f::z
+        "z", &UEVR_Vector3f::z,
+        "as_full_binding", [](UEVR_Vector3f& self) -> lua::datatypes::Vector3f {
+            return *reinterpret_cast<lua::datatypes::Vector3f*>(&self);
+        }
     );
 
     m_lua.new_usertype<UEVR_Vector3d>("UEVR_Vector3d",
         "x", &UEVR_Vector3d::x,
         "y", &UEVR_Vector3d::y,
-        "z", &UEVR_Vector3d::z
+        "z", &UEVR_Vector3d::z,
+        "as_full_binding", [](UEVR_Vector3d& self) -> lua::datatypes::Vector3d {
+            return *reinterpret_cast<lua::datatypes::Vector3d*>(&self);
+        }
     );
 
     m_lua.new_usertype<UEVR_Vector4f>("UEVR_Vector4f",
         "x", &UEVR_Vector4f::x,
         "y", &UEVR_Vector4f::y,
         "z", &UEVR_Vector4f::z,
-        "w", &UEVR_Vector4f::w
+        "w", &UEVR_Vector4f::w,
+        "as_full_binding", [](UEVR_Vector4f& self) -> lua::datatypes::Vector4f {
+            return *reinterpret_cast<lua::datatypes::Vector4f*>(&self);
+        }
     );
 
     m_lua.new_usertype<UEVR_Quaternionf>("UEVR_Quaternionf",
         "x", &UEVR_Quaternionf::x,
         "y", &UEVR_Quaternionf::y,
         "z", &UEVR_Quaternionf::z,
-        "w", &UEVR_Quaternionf::w
+        "w", &UEVR_Quaternionf::w,
+        "as_full_binding", [](UEVR_Quaternionf& self) -> lua::datatypes::Quaternionf {
+            return *reinterpret_cast<lua::datatypes::Quaternionf*>(&self);
+        }
     );
 
     m_lua.new_usertype<UEVR_Rotatorf>("UEVR_Rotatorf",
         "pitch", &UEVR_Rotatorf::pitch,
         "yaw", &UEVR_Rotatorf::yaw,
-        "roll", &UEVR_Rotatorf::roll
+        "roll", &UEVR_Rotatorf::roll,
+        "cast_to_vector", [](UEVR_Rotatorf& self) -> lua::datatypes::Vector3f {
+            return *reinterpret_cast<lua::datatypes::Vector3f*>(&self);
+        }
     );
 
     m_lua.new_usertype<UEVR_Rotatord>("UEVR_Rotatord",
         "pitch", &UEVR_Rotatord::pitch,
         "yaw", &UEVR_Rotatord::yaw,
-        "roll", &UEVR_Rotatord::roll
+        "roll", &UEVR_Rotatord::roll,
+        "cast_to_vector", [](UEVR_Rotatord& self) -> lua::datatypes::Vector3d {
+            return *reinterpret_cast<lua::datatypes::Vector3d*>(&self);
+        }
     );
 
     m_lua.new_usertype<UEVR_Matrix4x4f>("UEVR_Matrix4x4f",
@@ -618,6 +639,12 @@ int ScriptContext::setup_bindings() {
                 const auto v = obj.as<lua::datatypes::Vector4d>();
                 const auto v_as_f = lua::datatypes::Vector3f{ (float)v.x, (float)v.y, (float)v.z };
                 const auto vq = (UEVR_Quaternionf*)&v_as_f;
+                state->set_rotation_offset(vq);
+            } else if (obj.is<lua::datatypes::Vector3f>()) { // Assume euler
+                const auto euler = obj.as<lua::datatypes::Vector3f>();
+                auto result = glm::quat{glm::yawPitchRoll(-euler.y, euler.x, -euler.z)};
+                const auto vq = (UEVR_Quaternionf*)&result;
+
                 state->set_rotation_offset(vq);
             } else {
                 throw sol::error("Invalid type for set_rotation_offset");
