@@ -3381,7 +3381,27 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
             {
                 void* addr = (void*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
 
-                if (ImGui::TreeNode(utility::narrow(prop->get_field_name().to_string()).data())) {
+                const auto made = ImGui::TreeNode(utility::narrow(prop->get_field_name().to_string()).data());
+
+                if (ImGui::BeginPopupContextItem()) {
+                    if (ImGui::Button("Copy Address")) {
+                        const auto hex = (std::stringstream{} << std::hex << (uintptr_t)addr).str();
+
+                        if (OpenClipboard(NULL)) {
+                            EmptyClipboard();
+                            HGLOBAL hcd = GlobalAlloc(GMEM_DDESHARE, hex.size() + 1);
+                            char* data = (char*)GlobalLock(hcd);
+                            strcpy(data, hex.c_str());
+                            GlobalUnlock(hcd);
+                            SetClipboardData(CF_TEXT, hcd);
+                            CloseClipboard();
+                        }
+                    }
+
+                    ImGui::EndPopup();
+                }
+
+                if (made) {
                     auto scope2 = m_path.enter(utility::narrow(prop->get_field_name().to_string()));
                     ui_handle_struct(addr, ((sdk::FStructProperty*)prop)->get_struct());
                     ImGui::TreePop();
