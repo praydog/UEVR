@@ -548,8 +548,8 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
             {
                 const auto arg_obj = args[args_index++];
                 
-                if (arg_obj.is<sol::table>()) {
-                    const auto arg_table = arg_obj.as<sol::table>();
+                if (arg_obj.is<sol::lua_table>()) {
+                    const auto arg_table = arg_obj.as<sol::lua_table>();
 
                     auto& arr = *(uevr::API::TArray<uevr::API::UObject*>*)&params[offset];
 
@@ -574,6 +574,12 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
                 continue;
             }
         } else {
+            // Might need to check if this causes issues
+            if (prop_desc->is_out_param() && args[args_index].is<sol::lua_table>()) {
+                args_index++;
+                continue; // This means the caller wants to actually use this as an out parameter and not set it
+            }
+
             set_property(s, params.data(), fn, prop_desc, args[args_index++]);
         }
     }
@@ -603,8 +609,19 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
             }
 
             memcpy(arg.object, (void*)((uintptr_t)params.data() + prop->get_offset()), structprop->get_struct()->get_struct_size());
-        } else if (args[arg_index].is<sol::table>()) {
+        } else if (args[arg_index].is<sol::lua_table>()) {
+            auto tbl = args[arg_index].as<sol::lua_table>();
+            if (prop_name_hash == L"ClassProperty"_fnv) {
+                tbl["result"] = (uevr::API::UClass*)*(uevr::API::UClass**)((uintptr_t)params.data() + prop->get_offset());
+            } else if (prop_name_hash == L"ObjectProperty"_fnv) {
+                tbl["result"] = (uevr::API::UObject*)*(uevr::API::UObject**)((uintptr_t)params.data() + prop->get_offset());
+            } else {
+                //tbl["result"] = sol::make_object(s, sol::lua_nil);
+            }
+
             // TODO
+        } else if (args[args_index].is<sol::nil_t>()) {
+            // Do nothing
         } else {
             throw sol::error(std::format("Invalid argument type for argument {} ({})", arg_index, ::utility::narrow(prop_c->get_fname()->to_string())));
         }
