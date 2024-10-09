@@ -562,6 +562,7 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
                         }
 
                         arr.count = dynamic_arr.size();
+                        arr.capacity = dynamic_arr.size();
                         arr.data = dynamic_arr.data();
                     //} else {
                        //throw sol::error("Cannot set an out parameter with an array (yet)");
@@ -615,6 +616,41 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
                 tbl["result"] = (uevr::API::UClass*)*(uevr::API::UClass**)((uintptr_t)params.data() + prop->get_offset());
             } else if (prop_name_hash == L"ObjectProperty"_fnv) {
                 tbl["result"] = (uevr::API::UObject*)*(uevr::API::UObject**)((uintptr_t)params.data() + prop->get_offset());
+            } else if (prop_name_hash == L"ArrayProperty"_fnv) {
+                const auto tbl_was_empty = tbl.empty();
+                auto& arr = *(uevr::API::TArray<uevr::API::UObject*>*)((uintptr_t)params.data() + prop->get_offset());
+
+                if (!arr.empty()) {
+                    const auto inner_prop = ((uevr::API::FArrayProperty*)prop)->get_inner();
+
+                    if (inner_prop == nullptr) {
+                        continue;
+                    }
+
+                    const auto inner_c = inner_prop->get_class();
+
+                    if (inner_c == nullptr) {
+                        continue;
+                    }
+
+                    const auto inner_name_hash = ::utility::hash(inner_c->get_fname()->to_string());
+
+                    if (inner_name_hash == L"ObjectProperty"_fnv) {
+                        for (size_t i = 0; i < arr.count; ++i) {
+                            tbl[i + 1] = arr.data[i];
+                        }
+                    } else if (inner_name_hash == L"ClassProperty"_fnv) {
+                        for (size_t i = 0; i < arr.count; ++i) {
+                            tbl[i + 1] = (uevr::API::UClass*)arr.data[i];
+                        }
+                    } else {
+                        // TODO
+                    }
+
+                    if (tbl_was_empty) {
+                        arr.~TArray(); // This should be safe, as this is not our array
+                    }
+                }
             } else {
                 //tbl["result"] = sol::make_object(s, sol::lua_nil);
             }
