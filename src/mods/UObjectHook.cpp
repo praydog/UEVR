@@ -3175,7 +3175,17 @@ void UObjectHook::ui_handle_functions(void* object, sdk::UStruct* uclass) {
             }
 
             for (auto param = parameters; param != nullptr; param = param->get_next()) {
-                ImGui::Text("%s %s", utility::narrow(param->get_class()->get_name().to_string()), utility::narrow(param->get_field_name().to_string()).data());
+                const auto cname = utility::narrow(param->get_class()->get_name().to_string());
+                ImGui::Text("%s %s", cname.data(), utility::narrow(param->get_field_name().to_string()).data());
+
+                if (cname.contains("Property")) {
+                    const auto prop = (sdk::FProperty*)param;
+
+                    if (prop->is_out_param()) {
+                        ImGui::SameLine();
+                        ImGui::TextColored(ImVec4{0.0f, 1.0f, 0.0f, 1.0f}, "[Out]");
+                    }
+                }
             }
 
             ImGui::TreePop();
