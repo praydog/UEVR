@@ -11,6 +11,9 @@ namespace lua::datatypes {
                 "X", &name::x, \
                 "Y", &name::y, \
                 "Z", &name::z, \
+                "Pitch", &name::x, \
+                "Yaw", &name::y, \
+                "Roll", &name::z, \
                 "dot", [](name& v1, name& v2) { return glm::dot(v1, v2); }, \
                 "cross", [](name& v1, name& v2) { return glm::cross(v1, v2); }, \
                 "length", [](name& v) { return glm::length(v); }, \
@@ -45,6 +48,9 @@ namespace lua::datatypes {
                 "Y", &name::y, \
                 "Z", &name::z, \
                 "W", &name::w, \
+                "Pitch", &name::x, \
+                "Yaw", &name::y, \
+                "Roll", &name::z, \
                 "dot", [](name& v1, name& v2) { return glm::dot(v1, v2); }, \
                 "length", [](name& v) { return glm::length(v); }, \
                 "normalize", [](name& v) { v = glm::normalize(v); }, \

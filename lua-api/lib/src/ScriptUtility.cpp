@@ -151,7 +151,7 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
             return sol::make_object(s, sol::lua_nil);
         }
 
-        if (struct_desc == get_vector_struct()) {
+        if (struct_desc == get_vector_struct() || struct_desc == get_rotator_struct()) {
             if (is_ue5()) {
                 if (is_self_temporary) {
                     return sol::make_object(s, *(lua::datatypes::Vector3d*)struct_data);
