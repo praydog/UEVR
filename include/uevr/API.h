@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 31
+#define UEVR_PLUGIN_VERSION_MINOR 32
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -325,6 +325,8 @@ typedef struct {
 typedef struct {
     void* (*get_native_function)(UEVR_UFunctionHandle function);
     bool (*hook_ptr)(UEVR_UFunctionHandle function, UEVR_UFunction_NativePreFn pre_hook, UEVR_UFunction_NativePostFn post_hook);
+    unsigned int (*get_function_flags)(UEVR_UFunctionHandle function);
+    void (*set_function_flags)(UEVR_UFunctionHandle function, unsigned int flags);
 } UEVR_UFunctionFunctions;
 
 typedef struct {

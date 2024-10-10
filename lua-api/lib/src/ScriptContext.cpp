@@ -549,7 +549,9 @@ int ScriptContext::setup_bindings() {
             if (post != sol::nil) {
                 hook->post_hooks.push_back(post);
             }
-        }
+        },
+        "get_function_flags", &uevr::API::UFunction::get_function_flags,
+        "set_function_flags", &uevr::API::UFunction::set_function_flags
     );
 
     m_lua.new_usertype<uevr::API::FField>("UEVR_FField",

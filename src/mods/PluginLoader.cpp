@@ -618,7 +618,13 @@ UEVR_UFunctionFunctions g_ufunction_functions {
     },
     .hook_ptr = [](UEVR_UFunctionHandle func, UEVR_UFunction_NativePreFn pre, UEVR_UFunction_NativePostFn post) -> bool {
         return PluginLoader::get()->hook_ufunction_ptr(func, pre, post);
-    }
+    },
+    .get_function_flags = [](UEVR_UFunctionHandle func) -> uint32_t {
+        return UFUNCTION(func)->get_function_flags();
+    },
+    .set_function_flags = [](UEVR_UFunctionHandle func, uint32_t flags) {
+        UFUNCTION(func)->get_function_flags() = flags;
+    },
 };
 
 namespace uevr {

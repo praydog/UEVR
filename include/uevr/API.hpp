@@ -548,6 +548,16 @@ public:
             return fn(to_handle());
         }
 
+        uint32_t get_function_flags() const {
+            static const auto fn = initialize()->get_function_flags;
+            return fn(to_handle());
+        }
+
+        void set_function_flags(uint32_t flags) {
+            static const auto fn = initialize()->set_function_flags;
+            fn(to_handle(), flags);
+        }
+
         using UEVR_UFunction_CPPPreNative = bool(*)(API::UFunction*, API::UObject*, void*, void*);
         using UEVR_UFunction_CPPPostNative = void(*)(API::UFunction*, API::UObject*, void*, void*);
 
