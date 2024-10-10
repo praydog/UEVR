@@ -737,6 +737,15 @@ namespace uobjecthook {
         return (UEVR_UObjectHookMotionControllerStateHandle)result->get();
     }
 
+    void remove_motion_controller_state(UEVR_UObjectHandle obj_handle) {
+        const auto obj = (sdk::USceneComponent*)obj_handle;
+        if (obj == nullptr || !obj->is_a(sdk::USceneComponent::static_class())) {
+            return;
+        }
+
+        UObjectHook::get()->remove_motion_controller_state(obj);
+    }
+
     bool disabled() {
         return UObjectHook::get()->is_disabled();
     }
@@ -812,7 +821,8 @@ UEVR_UObjectHookFunctions g_uobjecthook_functions {
     uevr::uobjecthook::get_motion_controller_state,
     &g_mc_functions,
     uevr::uobjecthook::disabled,
-    uevr::uobjecthook::set_disabled
+    uevr::uobjecthook::set_disabled,
+    uevr::uobjecthook::remove_motion_controller_state
 };
 
 #define FFIELDCLASS(x) ((sdk::FFieldClass*)x)

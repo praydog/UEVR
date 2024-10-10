@@ -702,7 +702,8 @@ int ScriptContext::setup_bindings() {
             return uevr::API::UObjectHook::get_objects_by_class(c, allow_default);
         },
         "get_or_add_motion_controller_state", &uevr::API::UObjectHook::get_or_add_motion_controller_state,
-        "get_motion_controller_state", &uevr::API::UObjectHook::get_motion_controller_state
+        "get_motion_controller_state", &uevr::API::UObjectHook::get_motion_controller_state,
+        "remove_motion_controller_state", &uevr::API::UObjectHook::remove_motion_controller_state
     );
 
     m_lua.new_usertype<uevr::API>("UEVR_API",

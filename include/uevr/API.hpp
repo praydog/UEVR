@@ -1509,6 +1509,11 @@ public:
             static const auto fn = initialize()->get_motion_controller_state;
             return (MotionControllerState*)fn(obj->to_handle());
         }
+        
+        static void remove_motion_controller_state(UObject* obj) {
+            static const auto fn = initialize()->remove_motion_controller_state;
+            fn(obj->to_handle());
+        }
 
         struct MotionControllerState {
             inline UEVR_UObjectHookMotionControllerStateHandle to_handle() { return (UEVR_UObjectHookMotionControllerStateHandle)this; }

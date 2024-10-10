@@ -152,6 +152,11 @@ public:
         return {};
     }
 
+    void remove_motion_controller_state(sdk::USceneComponent* component) {
+        std::unique_lock _{m_mutex};
+        m_motion_controller_attached_components.erase(component);
+    }
+
 private:
     struct StatePath;
     struct PersistentState;
@@ -257,11 +262,6 @@ private:
         sdk::UObject* object{nullptr};
         glm::vec3 offset{};
     } m_camera_attach{};
-
-    void remove_motion_controller_state(sdk::USceneComponent* component) {
-        std::unique_lock _{m_mutex};
-        m_motion_controller_attached_components.erase(component);
-    }
 
     auto get_spawned_spheres() const {
         std::shared_lock _{m_mutex};
