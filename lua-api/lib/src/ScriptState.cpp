@@ -187,4 +187,10 @@ void ScriptState::on_draw_ui() {
         m_context->draw_ui();
     }
 }
+
+void ScriptState::dispatch_event(std::string_view event_name, std::string_view event_data) {
+    if (m_context != nullptr) {
+        m_context->dispatch_event(event_name, event_data);
+    }
+}
 }

@@ -174,6 +174,10 @@ void ScriptContext::setup_callback_bindings() {
         "on_script_reset", [this](sol::function fn) {
             std::scoped_lock _{ m_mtx };
             m_on_script_reset_callbacks.push_back(fn);
+        },
+        "on_lua_event", [this](sol::function fn) {
+            std::scoped_lock _{ m_mtx };
+            m_on_lua_event_callbacks.push_back(fn);
         }
     );
 }
@@ -1099,6 +1103,23 @@ void ScriptContext::on_script_reset() {
             ScriptContext::log("Exception in on_script_reset: " + std::string(e.what()));
         } catch (...) {
             ScriptContext::log("Unknown exception in on_script_reset");
+        }
+    });
+}
+
+void ScriptContext::on_lua_event(std::string_view event_name, std::string_view event_data) {
+    g_contexts.for_each([=](auto ctx) {
+        std::scoped_lock _{ ctx->m_mtx };
+
+        const char* event_name_data = event_name.data();
+        const char* event_data_data = event_data.data();
+
+        for (auto& fn : ctx->m_on_lua_event_callbacks) try {
+            ctx->handle_protected_result(fn(event_name_data, event_data_data));
+        } catch (const std::exception& e) {
+            ScriptContext::log("Exception in on_lua_event: " + std::string(e.what()));
+        } catch (...) {
+            ScriptContext::log("Unknown exception in on_lua_event");
         }
     });
 }

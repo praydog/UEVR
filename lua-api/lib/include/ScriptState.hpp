@@ -52,6 +52,7 @@ public:
     void on_frame();
     void on_draw_ui();
     void on_script_reset();
+    void dispatch_event(std::string_view event_name, std::string_view event_data);
 
     auto& context() {
         return m_context;

@@ -72,24 +72,48 @@ public:
     void script_reset() {
         std::scoped_lock _{m_mtx};
 
-        for (auto& cb : m_on_script_reset_callbacks) {
+        for (auto& cb : m_on_script_reset_callbacks) try {
             handle_protected_result(cb());
+        } catch (const std::exception& e) {
+            log("Exception in on_script_reset: " + std::string(e.what()));
+        } catch (...) {
+            log("Unknown exception in on_script_reset");
         }
     }
 
     void frame() {
         std::scoped_lock _{m_mtx};
 
-        for (auto& cb : m_on_frame_callbacks) {
+        for (auto& cb : m_on_frame_callbacks) try {
             handle_protected_result(cb());
+        } catch (const std::exception& e) {
+            log("Exception in on_frame: " + std::string(e.what()));
+        } catch (...) {
+            log("Unknown exception in on_frame");
         }
     }
 
     void draw_ui() {
         std::scoped_lock _{m_mtx};
 
-        for (auto& cb : m_on_draw_ui_callbacks) {
+        for (auto& cb : m_on_draw_ui_callbacks) try {
             handle_protected_result(cb());
+        } catch (const std::exception& e) {
+            log("Exception in on_draw_ui: " + std::string(e.what()));
+        } catch (...) {
+            log("Unknown exception in on_draw_ui");
+        }
+    }
+
+    void dispatch_event(std::string_view event_name, std::string_view event_data) {
+        std::scoped_lock _{m_mtx};
+
+        for (auto& cb : m_on_lua_event_callbacks) try {
+            handle_protected_result(cb(event_name, event_data));
+        } catch (const std::exception& e) {
+            log("Exception in on_lua_event: " + std::string(e.what()));
+        } catch (...) {
+            log("Unknown exception in on_lua_event");
         }
     }
 
@@ -116,6 +140,7 @@ private:
     std::vector<sol::protected_function> m_on_post_calculate_stereo_view_offset_callbacks{};
     std::vector<sol::protected_function> m_on_pre_viewport_client_draw_callbacks{};
     std::vector<sol::protected_function> m_on_post_viewport_client_draw_callbacks{};
+    std::vector<sol::protected_function> m_on_lua_event_callbacks{};
 
     // Custom UEVR callbacks
     std::vector<sol::protected_function> m_on_frame_callbacks{};
@@ -146,5 +171,6 @@ private:
     static void on_frame();
     static void on_draw_ui();
     static void on_script_reset();
+    static void on_lua_event(std::string_view event_name, std::string_view event_data);
 };
 }

@@ -110,6 +110,10 @@ int register_inline_hook(void* target, void* dst, void** original) {
 void unregister_inline_hook(int id) {
     PluginLoader::get()->remove_inline_hook(id);
 }
+
+void dispatch_lua_event(const char* event_name, const char* event_data) {
+    LuaLoader::get()->dispatch_event(event_name, event_data);
+}
 }
 
 namespace uevr {
@@ -188,7 +192,8 @@ UEVR_PluginFunctions g_plugin_functions {
     uevr::remove_callback,
     uevr::get_persistent_dir,
     uevr::register_inline_hook,
-    uevr::unregister_inline_hook
+    uevr::unregister_inline_hook,
+    uevr::dispatch_lua_event
 };
 
 #define GET_ENGINE_WORLD_RETNULL() \

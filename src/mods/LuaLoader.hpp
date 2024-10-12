@@ -46,6 +46,7 @@ public:
 
     // Resets the ScriptState and runs autorun scripts again.
     void reset_scripts();
+    void dispatch_event(std::string_view event_name, std::string_view event_data);
 
 private:
     ScriptState::GarbageCollectionData make_gc_data() const {

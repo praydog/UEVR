@@ -282,3 +282,13 @@ void LuaLoader::reset_scripts() {
     std::sort(m_known_scripts.begin(), m_known_scripts.end());
     std::sort(m_loaded_scripts.begin(), m_loaded_scripts.end());
 }
+
+void LuaLoader::dispatch_event(std::string_view event_name, std::string_view event_data) {
+    std::scoped_lock _{m_access_mutex};
+
+    if (m_main_state == nullptr) {
+        return;
+    }
+
+    m_main_state->dispatch_event(event_name, event_data);
+}
