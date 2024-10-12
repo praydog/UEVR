@@ -202,10 +202,26 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
                 return sol::make_object(s, sol::lua_nil);
             }
 
-            auto lua_arr = std::vector<uevr::API::UObject*>{};
+            auto lua_arr = sol::state_view{s}.create_table();
 
             for (size_t i = 0; i < arr.count; ++i) {
-                lua_arr.push_back(arr.data[i]);
+                lua_arr[i + 1] = arr.data[i];
+            }
+
+            return sol::make_object(s, lua_arr);
+        }
+        case L"ClassProperty"_fnv:
+        {
+            const auto& arr = *(uevr::API::TArray<uevr::API::UClass*>*)((uintptr_t)self + offset);
+
+            if (arr.data == nullptr || arr.count == 0) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            auto lua_arr = sol::state_view{s}.create_table();
+
+            for (size_t i = 0; i < arr.count; ++i) {
+                lua_arr[i + 1] = arr.data[i];
             }
 
             return sol::make_object(s, lua_arr);
@@ -616,50 +632,26 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
             memcpy(arg.object, (void*)((uintptr_t)params.data() + prop->get_offset()), structprop->get_struct()->get_struct_size());
         } else if (args[arg_index].is<sol::lua_table>()) {
             auto tbl = args[arg_index].as<sol::lua_table>();
-            if (prop_name_hash == L"ClassProperty"_fnv) {
-                tbl["result"] = (uevr::API::UClass*)*(uevr::API::UClass**)((uintptr_t)params.data() + prop->get_offset());
-            } else if (prop_name_hash == L"ObjectProperty"_fnv || prop_name_hash == L"InterfaceProperty"_fnv) {
-                tbl["result"] = (uevr::API::UObject*)*(uevr::API::UObject**)((uintptr_t)params.data() + prop->get_offset());
-            } else if (prop_name_hash == L"ArrayProperty"_fnv) {
-                const auto tbl_was_empty = tbl.empty();
+            const auto tbl_was_empty = tbl.empty();
+            auto result = prop_to_object(s, params.data(), prop, true);
+
+            if (prop_name_hash == L"ArrayProperty"_fnv) {
                 auto& arr = *(uevr::API::TArray<uevr::API::UObject*>*)((uintptr_t)params.data() + prop->get_offset());
 
-                if (!arr.empty()) {
-                    const auto inner_prop = ((uevr::API::FArrayProperty*)prop)->get_inner();
-
-                    if (inner_prop == nullptr) {
-                        continue;
+                if (!arr.empty() && tbl_was_empty) {
+                    // Shallow copy the array into the table
+                    auto result_tbl = result.as<sol::lua_table>();
+                    for (const auto& [k, v] : result_tbl) {
+                        tbl[k] = v;
                     }
-
-                    const auto inner_c = inner_prop->get_class();
-
-                    if (inner_c == nullptr) {
-                        continue;
-                    }
-
-                    const auto inner_name_hash = ::utility::hash(inner_c->get_fname()->to_string());
-
-                    if (inner_name_hash == L"ObjectProperty"_fnv || inner_name_hash == L"InterfaceProperty"_fnv) {
-                        for (size_t i = 0; i < arr.count; ++i) {
-                            tbl[i + 1] = arr.data[i];
-                        }
-                    } else if (inner_name_hash == L"ClassProperty"_fnv) {
-                        for (size_t i = 0; i < arr.count; ++i) {
-                            tbl[i + 1] = (uevr::API::UClass*)arr.data[i];
-                        }
-                    } else {
-                        // TODO
-                    }
-
-                    if (tbl_was_empty) {
-                        arr.~TArray(); // This should be safe, as this is not our array
-                    }
+                    
+                    arr.~TArray(); // This should be safe, as this is not our array
+                } else {
+                    tbl["result"] = result;
                 }
             } else {
-                //tbl["result"] = sol::make_object(s, sol::lua_nil);
+                tbl["result"] = result;
             }
-
-            // TODO
         } else if (args[args_index].is<sol::nil_t>()) {
             // Do nothing
         } else {
