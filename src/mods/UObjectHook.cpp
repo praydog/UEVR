@@ -3531,7 +3531,15 @@ void UObjectHook::ui_handle_array_property(void* addr, sdk::FArrayProperty* prop
 
         for (size_t i = 0; i < array_obj.count; ++i) try {
             auto element = (void*)((uintptr_t)array_obj.data + (i * element_size));
-            ui_handle_struct(element, strukt);
+
+            if (element != nullptr) {
+                if (ImGui::TreeNode((void*)element, "Element %d", i)) {
+                    // TODO: Figure out if this can be used with persistent states?
+                    //auto scope = m_path.enter("Element " + std::to_string(i));
+                    ui_handle_struct(element, strukt);
+                    ImGui::TreePop();
+                }
+            }
         } catch(...) {
             ImGui::Text("Failed to display element %d", i);
         }
