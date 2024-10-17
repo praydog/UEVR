@@ -72,9 +72,6 @@ private:
     std::vector<std::string> m_known_scripts{};
     std::unordered_map<std::string, bool> m_loaded_scripts_map{};
     std::vector<lua_State*> m_states_to_delete{};
-    std::string m_last_script_error{};
-    std::shared_mutex m_script_error_mutex{};
-    std::chrono::system_clock::time_point m_last_script_error_time{};
 
     bool m_console_spawned{false};
     bool m_needs_first_reset{true};

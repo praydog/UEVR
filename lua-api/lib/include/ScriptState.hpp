@@ -58,6 +58,14 @@ public:
         return m_context;
     }
 
+    std::optional<ScriptContext::ScriptErrorState> get_last_script_error() const {
+        if (m_context != nullptr) {
+            return m_context->get_last_script_error();
+        }
+
+        return std::nullopt;
+    }
+
     auto& lua() { return m_lua; }
 
 private:

@@ -87,8 +87,10 @@ ScriptContext::~ScriptContext() {
 }
 
 void ScriptContext::log(const std::string& message) {
-    std::cout << "[LuaVR] " << message << std::endl;
-    API::get()->log_info("[LuaVR] %s", message.c_str());
+    auto msg = std::format("[LuaVR] {}", message);
+    OutputDebugStringA((msg + "\n").c_str());
+    fprintf(stderr, "%s\n", msg.c_str());
+    API::get()->log_info("%s", msg.c_str());
 }
 
 void ScriptContext::setup_callback_bindings() {
@@ -830,9 +832,9 @@ bool ScriptContext::global_ufunction_pre_handler(uevr::API::UFunction* fn, uevr:
                     any_false = true;
                 }
             } catch (const std::exception& e) {
-                ScriptContext::log("Exception in global_ufunction_pre_handler: " + std::string(e.what()));
+                ctx->log_error("Exception in global_ufunction_pre_handler: " + std::string(e.what()));
             } catch (...) {
-                ScriptContext::log("Unknown exception in global_ufunction_pre_handler");
+                ctx->log_error("Unknown exception in global_ufunction_pre_handler");
             }
         }
     });
@@ -855,9 +857,9 @@ void ScriptContext::global_ufunction_post_handler(uevr::API::UFunction* fn, uevr
             for (auto& cb : it->second->post_hooks) try {
                 ctx->handle_protected_result(cb(fn, obj, locals_obj, result));
             } catch (const std::exception& e) {
-                ScriptContext::log("Exception in global_ufunction_post_handler: " + std::string(e.what()));
+                ctx->log_error("Exception in global_ufunction_post_handler: " + std::string(e.what()));
             } catch (...) {
-                ScriptContext::log("Unknown exception in global_ufunction_post_handler");
+                ctx->log_error("Unknown exception in global_ufunction_post_handler");
             }
         }
     });
@@ -870,9 +872,9 @@ void ScriptContext::on_xinput_get_state(uint32_t* retval, uint32_t user_index, v
         for (auto& fn : ctx->m_on_xinput_get_state_callbacks) try {
             ctx->handle_protected_result(fn(retval, user_index, (XINPUT_STATE*)state));
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_xinput_get_state: " + std::string(e.what()));
+            ctx->log_error("Exception in on_xinput_get_state: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_xinput_get_state");
+            ctx->log_error("Unknown exception in on_xinput_get_state");
         }
     });
 }
@@ -884,9 +886,9 @@ void ScriptContext::on_xinput_set_state(uint32_t* retval, uint32_t user_index, v
         for (auto& fn : ctx->m_on_xinput_set_state_callbacks) try {
             ctx->handle_protected_result(fn(retval, user_index, (XINPUT_VIBRATION*)vibration));
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_xinput_set_state: " + std::string(e.what()));
+            ctx->log_error("Exception in on_xinput_set_state: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_xinput_set_state");
+            ctx->log_error("Unknown exception in on_xinput_set_state");
         }
     });
 }
@@ -898,9 +900,9 @@ void ScriptContext::on_pre_engine_tick(UEVR_UGameEngineHandle engine, float delt
         for (auto& fn : ctx->m_on_pre_engine_tick_callbacks) try {
             ctx->handle_protected_result(fn(engine, delta_seconds));
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_pre_engine_tick: " + std::string(e.what()));
+            ctx->log_error("Exception in on_pre_engine_tick: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_pre_engine_tick");
+            ctx->log_error("Unknown exception in on_pre_engine_tick");
         }
     });
 }
@@ -912,9 +914,9 @@ void ScriptContext::on_post_engine_tick(UEVR_UGameEngineHandle engine, float del
         for (auto& fn : ctx->m_on_post_engine_tick_callbacks) try {
             ctx->handle_protected_result(fn(engine, delta_seconds));
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_post_engine_tick: " + std::string(e.what()));
+            ctx->log_error("Exception in on_post_engine_tick: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_post_engine_tick");
+            ctx->log_error("Unknown exception in on_post_engine_tick");
         }
     });
 }
@@ -926,9 +928,9 @@ void ScriptContext::on_pre_slate_draw_window_render_thread(UEVR_FSlateRHIRendere
         for (auto& fn : ctx->m_on_pre_slate_draw_window_render_thread_callbacks) try {
             ctx->handle_protected_result(fn(renderer, viewport_info));
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_pre_slate_draw_window_render_thread: " + std::string(e.what()));
+            ctx->log_error("Exception in on_pre_slate_draw_window_render_thread: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_pre_slate_draw_window_render_thread");
+            ctx->log_error("Unknown exception in on_pre_slate_draw_window_render_thread");
         }
     });
 }
@@ -940,9 +942,9 @@ void ScriptContext::on_post_slate_draw_window_render_thread(UEVR_FSlateRHIRender
         for (auto& fn : ctx->m_on_post_slate_draw_window_render_thread_callbacks) try {
             ctx->handle_protected_result(fn(renderer, viewport_info));
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_post_slate_draw_window_render_thread: " + std::string(e.what()));
+            ctx->log_error("Exception in on_post_slate_draw_window_render_thread: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_post_slate_draw_window_render_thread");
+            ctx->log_error("Unknown exception in on_post_slate_draw_window_render_thread");
         }
     });
 }
@@ -970,9 +972,9 @@ void ScriptContext::on_early_calculate_stereo_view_offset(UEVR_StereoRenderingDe
                 ctx->handle_protected_result(fn(device, view_index, world_to_meters, ue4_position, ue4_rotation, is_double));
             }
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_early_calculate_stereo_view_offset: " + std::string(e.what()));
+            ctx->log_error("Exception in on_early_calculate_stereo_view_offset: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_early_calculate_stereo_view_offset");
+            ctx->log_error("Unknown exception in on_early_calculate_stereo_view_offset");
         }
     });
 }
@@ -1000,9 +1002,9 @@ void ScriptContext::on_pre_calculate_stereo_view_offset(UEVR_StereoRenderingDevi
                 ctx->handle_protected_result(fn(device, view_index, world_to_meters, ue4_position, ue4_rotation, is_double));
             }
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_pre_calculate_stereo_view_offset: " + std::string(e.what()));
+            ctx->log_error("Exception in on_pre_calculate_stereo_view_offset: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_pre_calculate_stereo_view_offset");
+            ctx->log_error("Unknown exception in on_pre_calculate_stereo_view_offset");
         }
     });
 }
@@ -1030,9 +1032,9 @@ void ScriptContext::on_post_calculate_stereo_view_offset(UEVR_StereoRenderingDev
                 ctx->handle_protected_result(fn(device, view_index, world_to_meters, ue4_position, ue4_rotation, is_double));
             }
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_post_calculate_stereo_view_offset: " + std::string(e.what()));
+            ctx->log_error("Exception in on_post_calculate_stereo_view_offset: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_post_calculate_stereo_view_offset");
+            ctx->log_error("Unknown exception in on_post_calculate_stereo_view_offset");
         }
     });
 }
@@ -1044,9 +1046,9 @@ void ScriptContext::on_pre_viewport_client_draw(UEVR_UGameViewportClientHandle v
         for (auto& fn : ctx->m_on_pre_viewport_client_draw_callbacks) try {
             ctx->handle_protected_result(fn(viewport_client, viewport, canvas));
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_pre_viewport_client_draw: " + std::string(e.what()));
+            ctx->log_error("Exception in on_pre_viewport_client_draw: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_pre_viewport_client_draw");
+            ctx->log_error("Unknown exception in on_pre_viewport_client_draw");
         }
     });
 }
@@ -1058,9 +1060,9 @@ void ScriptContext::on_post_viewport_client_draw(UEVR_UGameViewportClientHandle 
         for (auto& fn : ctx->m_on_post_viewport_client_draw_callbacks) try {
             ctx->handle_protected_result(fn(viewport_client, viewport, canvas));
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_post_viewport_client_draw: " + std::string(e.what()));
+            ctx->log_error("Exception in on_post_viewport_client_draw: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_post_viewport_client_draw");
+            ctx->log_error("Unknown exception in on_post_viewport_client_draw");
         }
     });
 }
@@ -1072,9 +1074,9 @@ void ScriptContext::on_frame() {
         for (auto& fn : ctx->m_on_frame_callbacks) try {
             ctx->handle_protected_result(fn());
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_frame: " + std::string(e.what()));
+            ctx->log_error("Exception in on_frame: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_frame");
+            ctx->log_error("Unknown exception in on_frame");
         }
     });
 }
@@ -1086,9 +1088,9 @@ void ScriptContext::on_draw_ui() {
         for (auto& fn : ctx->m_on_draw_ui_callbacks) try {
             ctx->handle_protected_result(fn());
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_draw_ui: " + std::string(e.what()));
+            ctx->log_error("Exception in on_draw_ui: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_draw_ui");
+            ctx->log_error("Unknown exception in on_draw_ui");
         }
     });
 }
@@ -1100,9 +1102,9 @@ void ScriptContext::on_script_reset() {
         for (auto& fn : ctx->m_on_script_reset_callbacks) try {
             ctx->handle_protected_result(fn());
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_script_reset: " + std::string(e.what()));
+            ctx->log_error("Exception in on_script_reset: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_script_reset");
+            ctx->log_error("Unknown exception in on_script_reset");
         }
     });
 }
@@ -1117,9 +1119,9 @@ void ScriptContext::on_lua_event(std::string_view event_name, std::string_view e
         for (auto& fn : ctx->m_on_lua_event_callbacks) try {
             ctx->handle_protected_result(fn(event_name_data, event_data_data));
         } catch (const std::exception& e) {
-            ScriptContext::log("Exception in on_lua_event: " + std::string(e.what()));
+            ctx->log_error("Exception in on_lua_event: " + std::string(e.what()));
         } catch (...) {
-            ScriptContext::log("Unknown exception in on_lua_event");
+            ctx->log_error("Unknown exception in on_lua_event");
         }
     });
 }

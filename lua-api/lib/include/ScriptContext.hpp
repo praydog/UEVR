@@ -54,6 +54,13 @@ public:
     }
 
     static void log(const std::string& message);
+    void log_error(const std::string& message) {
+        log(message);
+
+        std::unique_lock _{m_script_error_mutex};
+        m_last_script_error_state.e = message;
+        m_last_script_error_state.t = std::chrono::system_clock::now();
+    }
 
     template<typename T1, typename T2>
     void add_callback(T1&& adder, T2&& cb) {
@@ -75,7 +82,7 @@ public:
         for (auto& cb : m_on_script_reset_callbacks) try {
             handle_protected_result(cb());
         } catch (const std::exception& e) {
-            log("Exception in on_script_reset: " + std::string(e.what()));
+            log_error("Exception in on_script_reset: " + std::string(e.what()));
         } catch (...) {
             log("Unknown exception in on_script_reset");
         }
@@ -87,9 +94,9 @@ public:
         for (auto& cb : m_on_frame_callbacks) try {
             handle_protected_result(cb());
         } catch (const std::exception& e) {
-            log("Exception in on_frame: " + std::string(e.what()));
+            log_error("Exception in on_frame: " + std::string(e.what()));
         } catch (...) {
-            log("Unknown exception in on_frame");
+            log_error("Unknown exception in on_frame");
         }
     }
 
@@ -99,9 +106,9 @@ public:
         for (auto& cb : m_on_draw_ui_callbacks) try {
             handle_protected_result(cb());
         } catch (const std::exception& e) {
-            log("Exception in on_draw_ui: " + std::string(e.what()));
+            log_error("Exception in on_draw_ui: " + std::string(e.what()));
         } catch (...) {
-            log("Unknown exception in on_draw_ui");
+            log_error("Unknown exception in on_draw_ui");
         }
     }
 
@@ -111,10 +118,20 @@ public:
         for (auto& cb : m_on_lua_event_callbacks) try {
             handle_protected_result(cb(event_name, event_data));
         } catch (const std::exception& e) {
-            log("Exception in on_lua_event: " + std::string(e.what()));
+            log_error("Exception in on_lua_event: " + std::string(e.what()));
         } catch (...) {
-            log("Unknown exception in on_lua_event");
+            log_error("Unknown exception in on_lua_event");
         }
+    }
+
+    struct ScriptErrorState {
+        std::string e{};
+        std::chrono::system_clock::time_point t{};
+    };
+
+    auto get_last_script_error() const {
+        std::shared_lock _{m_script_error_mutex};
+        return m_last_script_error_state;
     }
 
 private:
@@ -127,6 +144,9 @@ private:
 
     sol::state_view m_lua;
     std::shared_ptr<sol::state> m_lua_shared{}; // This allows us to keep the state alive (if it was created by ScriptState)
+    ScriptErrorState m_last_script_error_state{};
+    mutable std::shared_mutex m_script_error_mutex{};
+
     std::recursive_mutex m_mtx{};
     UEVR_PluginInitializeParam* m_plugin_initialize_param{nullptr};
     std::vector<sol::protected_function> m_on_xinput_get_state_callbacks{};

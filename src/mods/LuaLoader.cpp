@@ -171,17 +171,17 @@ void LuaLoader::on_draw_sidebar_entry(std::string_view in_entry) {
 
         m_log_to_disk->draw("Log Lua Errors to Disk");
 
-        if (!m_last_script_error.empty()) {
-            std::shared_lock _{m_script_error_mutex};
+        auto last_script_error = m_main_state != nullptr ? m_main_state->get_last_script_error() : std::nullopt;
 
+        if (last_script_error.has_value() && !last_script_error->e.empty()) {
             const auto now = std::chrono::system_clock::now();
-            const auto diff = now - m_last_script_error_time;
+            const auto diff = now - last_script_error->t;
             const auto sec = std::chrono::duration<float>(diff).count();
 
             ImGui::TextWrapped("Last Error Time: %.2f seconds ago", sec);
 
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-            ImGui::TextWrapped("Last Script Error: %s", m_last_script_error.data());
+            ImGui::TextWrapped("Last Script Error: %s", last_script_error->e.c_str());
             ImGui::PopStyleColor();
         } else {
             ImGui::TextWrapped("No Script Errors... yet!");
@@ -223,11 +223,6 @@ void LuaLoader::reset_scripts() {
     spdlog::info("[LuaLoader] Resetting scripts...");
 
     std::scoped_lock _{ m_access_mutex };
-
-    {
-        std::unique_lock _{ m_script_error_mutex };
-        m_last_script_error.clear();
-    }
 
     if (m_main_state != nullptr) {
         /*auto& mods = g_framework->get_mods()->get_mods();
