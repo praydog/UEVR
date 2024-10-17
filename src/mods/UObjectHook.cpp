@@ -1436,6 +1436,12 @@ void UObjectHook::update_persistent_states() {
                         boolprop->set_value_in_object(obj, prop_state->data.b);
                     }
                     break;
+                case "ByteProperty"_fnv:
+                    {
+                        auto& value = *(uint8_t*)(obj.as<uintptr_t>() + ((sdk::FProperty*)prop_desc)->get_offset());
+                        value = prop_state->data.u8;
+                    }
+                    break;
                 default:
                     // OH NO!!!!! anyways
                     break;
@@ -3373,6 +3379,16 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 auto value = boolprop->get_value_from_object(object);
                 if (ImGui::Checkbox(utility::narrow(prop->get_field_name().to_string()).data(), &value)) {
                     boolprop->set_value_in_object(object, value);
+                }
+                display_context(value);
+            }
+            break;
+        case "ByteProperty"_fnv:
+            {
+                auto& value = *(uint8_t*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                int converted = (int)value;
+                if (ImGui::SliderInt(utility::narrow(prop->get_field_name().to_string()).data(), &converted, 0, 255)) {
+                    value = (uint8_t)converted;
                 }
                 display_context(value);
             }
