@@ -198,6 +198,10 @@ int ScriptContext::setup_bindings() {
         _sol_lua_push_objects_Property = setmetatable({}, { __mode = "v" })
         _sol_lua_push_objects_Field = setmetatable({}, { __mode = "v" })
         _sol_lua_push_objects_Enum = setmetatable({}, { __mode = "v" })
+
+        -- Not a real UObject but is cacheable
+        _sol_lua_push_objects_MotionControllerState = setmetatable({}, { __mode = "v" })
+
         _sol_lua_push_usertypes = {}
         _sol_lua_push_ref_counts = {}
         _sol_lua_push_ephemeral_counts = {}
@@ -205,13 +209,13 @@ int ScriptContext::setup_bindings() {
 
 
     // templated lambda
-    auto create_uobject_ptr_gc = [&]<detail::UObjectBased T>(T* obj) {
-        m_lua["__UEVRUObjectPtrInternalCreate"] = [this]() -> sol::object {
+    auto create_uobject_ptr_gc = [&]<detail::CacheablePointer T>(T* obj) {
+        m_lua["__UEVRCachePtrInternalCreate"] = [this]() -> sol::object {
             return sol::make_object(m_lua, (T*)detail::FAKE_OBJECT_ADDR);
         };
 
         m_lua.do_string(R"(
-            local fake_obj = __UEVRUObjectPtrInternalCreate()
+            local fake_obj = __UEVRCachePtrInternalCreate()
             local mt = getmetatable(fake_obj)
 
             fake_obj = nil
@@ -222,7 +226,7 @@ int ScriptContext::setup_bindings() {
             end
         )");
 
-        m_lua["__UEVRUObjectPtrInternalCreate"] = sol::make_object(m_lua, sol::nil);
+        m_lua["__UEVRCachePtrInternalCreate"] = sol::make_object(m_lua, sol::nil);
     };
 
     lua::datatypes::bind_xinput(m_lua);
@@ -860,6 +864,8 @@ int ScriptContext::setup_bindings() {
         "set_permanent", &uevr::API::UObjectHook::MotionControllerState::set_permanent
     );
 
+    create_uobject_ptr_gc((API::UObjectHook::MotionControllerState*)nullptr);
+
     m_lua.new_usertype<uevr::API::UObjectHook>("UEVR_UObjectHook",
         "activate", &uevr::API::UObjectHook::activate,
         "exists", &uevr::API::UObjectHook::exists,
@@ -897,8 +903,26 @@ int ScriptContext::setup_bindings() {
 
             return sol::make_object(s, tbl);
         },
-        "get_or_add_motion_controller_state", &uevr::API::UObjectHook::get_or_add_motion_controller_state,
-        "get_motion_controller_state", &uevr::API::UObjectHook::get_motion_controller_state,
+        //"get_or_add_motion_controller_state", &uevr::API::UObjectHook::get_or_add_motion_controller_state,
+        "get_or_add_motion_controller_state", [](sol::this_state s, API::UObject* obj) -> sol::object {
+            auto state = API::UObjectHook::get_or_add_motion_controller_state(obj);
+
+            if (state == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            return sol::make_object(s, state);
+        },
+        //"get_motion_controller_state", &uevr::API::UObjectHook::get_motion_controller_state,
+        "get_motion_controller_state", [](sol::this_state s, uevr::API::UObjectHook* self, API::UObject* obj) -> sol::object {
+            auto state = API::UObjectHook::get_motion_controller_state(obj);
+
+            if (state == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            return sol::make_object(s, state);
+        },
         "remove_motion_controller_state", &uevr::API::UObjectHook::remove_motion_controller_state
     );
 

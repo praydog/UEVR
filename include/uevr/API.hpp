@@ -1565,6 +1565,10 @@ public:
         }
 
         struct MotionControllerState {
+            static consteval std::string_view internal_name() {
+                return "MotionControllerState";
+            }
+
             inline UEVR_UObjectHookMotionControllerStateHandle to_handle() { return (UEVR_UObjectHookMotionControllerStateHandle)this; }
             inline UEVR_UObjectHookMotionControllerStateHandle to_handle() const { return (UEVR_UObjectHookMotionControllerStateHandle)this; }
 

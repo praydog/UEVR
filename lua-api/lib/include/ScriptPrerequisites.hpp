@@ -9,13 +9,13 @@
 
 namespace detail {
 template<typename T>
-concept UObjectBased = std::is_base_of_v<uevr::API::UObject, T>;
+concept CacheablePointer = std::is_base_of_v<uevr::API::UObject, T> || std::is_base_of_v<uevr::API::UObjectHook::MotionControllerState, T>;
 
 constexpr uintptr_t FAKE_OBJECT_ADDR = 12345;
 }
 
 // Object pooling for UObject based pointers using a specialization for sol_lua_push
-template<detail::UObjectBased T>
+template<detail::CacheablePointer T>
 int sol_lua_push(sol::types<T*>, lua_State* l, T* obj) {
     static const std::string TABLE_NAME = std::string{"_sol_lua_push_objects"} + "_" + T::internal_name().data();
 
