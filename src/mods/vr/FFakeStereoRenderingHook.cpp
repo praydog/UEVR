@@ -4322,7 +4322,9 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
                     const auto pawn_pos = pawn->get_actor_location();
                     const auto new_pos = pawn_pos - head_offset_flat;
 
-                    pawn->set_actor_location(new_pos, false, false);
+                    // Roomscale sweep option allows the actor to affect the world
+                    // like push doors open, and prevent them from clipping through walls
+                    pawn->set_actor_location(new_pos, vr->is_roomscale_sweep_enabled(), false);
 
                     // Recenter the standing origin
                     auto current_standing_origin = vr->get_standing_origin();

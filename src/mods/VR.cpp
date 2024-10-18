@@ -2495,6 +2495,17 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         if (ImGui::TreeNode("Roomscale Movement")) {
             m_roomscale_movement->draw("Enabled");
 
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("When enabled, headset movement will affect the movement of the player character.");
+            }
+
+            ImGui::SameLine();
+            m_roomscale_sweep->draw("Sweep Movement");
+            // Draw description of option
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("When enabled, roomscale movement will use a sweep to prevent the player from moving through walls.\nThis also allows physics objects to interact with the player, like doors.");
+            }
+
             ImGui::TreePop();
         }
     }
