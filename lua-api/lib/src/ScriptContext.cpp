@@ -187,6 +187,44 @@ void ScriptContext::setup_callback_bindings() {
 int ScriptContext::setup_bindings() {
     m_lua.registry()["uevr_context"] = this;
 
+    // The purpose of multiple object pools is so we can do something like obj:as_class() and obj:as_struct()
+    // If we didn't do this, they would return the wrong type if called from for example, a cached UObject
+    m_lua.do_string(R"(
+        _sol_lua_push_objects_Object = setmetatable({}, { __mode = "v" })
+        _sol_lua_push_objects_Struct = setmetatable({}, { __mode = "v" })
+        _sol_lua_push_objects_ScriptStruct = setmetatable({}, { __mode = "v" })
+        _sol_lua_push_objects_Class = setmetatable({}, { __mode = "v" })
+        _sol_lua_push_objects_Function = setmetatable({}, { __mode = "v" })
+        _sol_lua_push_objects_Property = setmetatable({}, { __mode = "v" })
+        _sol_lua_push_objects_Field = setmetatable({}, { __mode = "v" })
+        _sol_lua_push_objects_Enum = setmetatable({}, { __mode = "v" })
+        _sol_lua_push_usertypes = {}
+        _sol_lua_push_ref_counts = {}
+        _sol_lua_push_ephemeral_counts = {}
+    )");
+
+
+    // templated lambda
+    auto create_uobject_ptr_gc = [&]<detail::UObjectBased T>(T* obj) {
+        m_lua["__UEVRUObjectPtrInternalCreate"] = [this]() -> sol::object {
+            return sol::make_object(m_lua, (T*)detail::FAKE_OBJECT_ADDR);
+        };
+
+        m_lua.do_string(R"(
+            local fake_obj = __UEVRUObjectPtrInternalCreate()
+            local mt = getmetatable(fake_obj)
+
+            fake_obj = nil
+            collectgarbage("collect")
+
+            mt.__gc = function(obj)
+                -- use for release function if we ever get one
+            end
+        )");
+
+        m_lua["__UEVRUObjectPtrInternalCreate"] = sol::make_object(m_lua, sol::nil);
+    };
+
     lua::datatypes::bind_xinput(m_lua);
     lua::datatypes::bind_vectors(m_lua);
     lua::datatypes::bind_quaternions(m_lua);
@@ -538,10 +576,15 @@ int ScriptContext::setup_bindings() {
         }
     );
 
+    
+    create_uobject_ptr_gc((API::UObject*)nullptr);
+
     m_lua.new_usertype<uevr::API::UField>("UEVR_UField",
         sol::base_classes, sol::bases<uevr::API::UObject>(),
         "get_next", &uevr::API::UField::get_next
     );
+    
+    create_uobject_ptr_gc((API::UField*)nullptr);
 
     m_lua.new_usertype<uevr::API::UStruct>("UEVR_UStruct",
         sol::base_classes, sol::bases<uevr::API::UField, uevr::API::UObject>(),
@@ -556,6 +599,16 @@ int ScriptContext::setup_bindings() {
         "get_children", &uevr::API::UStruct::get_children
     );
 
+    create_uobject_ptr_gc((API::UStruct*)nullptr);
+
+    m_lua.new_usertype<uevr::API::UScriptStruct>("UEVR_UScriptStruct",
+        sol::base_classes, sol::bases<uevr::API::UStruct>(),
+        "static_class", &uevr::API::UScriptStruct::static_class,
+        "get_struct_size", &uevr::API::UScriptStruct::get_struct_size
+    );
+
+    create_uobject_ptr_gc((API::UScriptStruct*)nullptr);
+
     m_lua.new_usertype<uevr::API::UClass>("UEVR_UClass",
         sol::base_classes, sol::bases<uevr::API::UStruct, uevr::API::UField, uevr::API::UObject>(),
         "static_class", &uevr::API::UClass::static_class,
@@ -563,6 +616,8 @@ int ScriptContext::setup_bindings() {
         "get_objects_matching", &uevr::API::UClass::get_objects_matching<uevr::API::UObject>,
         "get_first_object_matching", &uevr::API::UClass::get_first_object_matching<uevr::API::UObject>
     );
+
+    create_uobject_ptr_gc((API::UClass*)nullptr);
 
     m_lua.new_usertype<uevr::API::UFunction>("UEVR_UFunction",
         sol::meta_function::call, [](sol::this_state s, uevr::API::UFunction* fn, uevr::API::UObject* obj, sol::variadic_args args) -> sol::object {
@@ -607,6 +662,8 @@ int ScriptContext::setup_bindings() {
         "get_function_flags", &uevr::API::UFunction::get_function_flags,
         "set_function_flags", &uevr::API::UFunction::set_function_flags
     );
+
+    create_uobject_ptr_gc((API::UFunction*)nullptr);
 
     m_lua.new_usertype<uevr::API::FField>("UEVR_FField",
         "get_next", &uevr::API::FField::get_next,
@@ -826,9 +883,11 @@ bool ScriptContext::global_ufunction_pre_handler(uevr::API::UFunction* fn, uevr:
             auto fframe = (lua::datatypes::FFrame*)frame;
             auto locals = lua::datatypes::StructObject{fframe->locals, fn};
             auto locals_obj = sol::make_object(ctx->m_lua.lua_state(), &locals);
+            auto obj_obj = sol::make_object(ctx->m_lua.lua_state(), obj); // Doing this so it goes through our sol_lua_push
+            auto fn_obj = sol::make_object(ctx->m_lua.lua_state(), fn);
 
             for (auto& cb : it->second->pre_hooks) try {
-                if (sol::object result = ctx->handle_protected_result(cb(fn, obj, locals_obj, out_result)); !result.is<sol::nil_t>() && result.is<bool>() && result.as<bool>() == false) {
+                if (sol::object result = ctx->handle_protected_result(cb(fn_obj, obj_obj, locals_obj, out_result)); !result.is<sol::nil_t>() && result.is<bool>() && result.as<bool>() == false) {
                     any_false = true;
                 }
             } catch (const std::exception& e) {
@@ -853,9 +912,11 @@ void ScriptContext::global_ufunction_post_handler(uevr::API::UFunction* fn, uevr
             auto fframe = (lua::datatypes::FFrame*)frame;
             auto locals = lua::datatypes::StructObject{fframe->locals, fn};
             auto locals_obj = sol::make_object(ctx->m_lua.lua_state(), &locals);
+            auto obj_obj = sol::make_object(ctx->m_lua.lua_state(), obj);
+            auto fn_obj = sol::make_object(ctx->m_lua.lua_state(), fn);
 
             for (auto& cb : it->second->post_hooks) try {
-                ctx->handle_protected_result(cb(fn, obj, locals_obj, result));
+                ctx->handle_protected_result(cb(fn_obj, obj_obj, locals_obj, result));
             } catch (const std::exception& e) {
                 ctx->log_error("Exception in global_ufunction_post_handler: " + std::string(e.what()));
             } catch (...) {
@@ -896,9 +957,11 @@ void ScriptContext::on_xinput_set_state(uint32_t* retval, uint32_t user_index, v
 void ScriptContext::on_pre_engine_tick(UEVR_UGameEngineHandle engine, float delta_seconds) {
     g_contexts.for_each([=](auto ctx) {
         std::scoped_lock _{ ctx->m_mtx };
+        
+        auto engine_obj = sol::make_object(ctx->m_lua.lua_state(), (uevr::API::UObject*)engine);
 
         for (auto& fn : ctx->m_on_pre_engine_tick_callbacks) try {
-            ctx->handle_protected_result(fn(engine, delta_seconds));
+            ctx->handle_protected_result(fn(engine_obj, delta_seconds));
         } catch (const std::exception& e) {
             ctx->log_error("Exception in on_pre_engine_tick: " + std::string(e.what()));
         } catch (...) {
@@ -911,8 +974,10 @@ void ScriptContext::on_post_engine_tick(UEVR_UGameEngineHandle engine, float del
     g_contexts.for_each([=](auto ctx) {
         std::scoped_lock _{ ctx->m_mtx };
 
+        auto engine_obj = sol::make_object(ctx->m_lua.lua_state(), (uevr::API::UObject*)engine);
+
         for (auto& fn : ctx->m_on_post_engine_tick_callbacks) try {
-            ctx->handle_protected_result(fn(engine, delta_seconds));
+            ctx->handle_protected_result(fn(engine_obj, delta_seconds));
         } catch (const std::exception& e) {
             ctx->log_error("Exception in on_post_engine_tick: " + std::string(e.what()));
         } catch (...) {

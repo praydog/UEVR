@@ -282,6 +282,10 @@ public:
     };
     
     struct UObject {
+        static consteval std::string_view internal_name() {
+            return "Object";
+        }
+
         inline UEVR_UObjectHandle to_handle() { return (UEVR_UObjectHandle)this; }
         inline UEVR_UObjectHandle to_handle() const { return (UEVR_UObjectHandle)this; }
 
@@ -387,6 +391,10 @@ public:
     };
 
     struct UField : public UObject {
+        static consteval std::string_view internal_name() {
+            return "Field";
+        }
+
         inline UEVR_UFieldHandle to_handle() { return (UEVR_UFieldHandle)this; }
         inline UEVR_UFieldHandle to_handle() const { return (UEVR_UFieldHandle)this; }
 
@@ -412,6 +420,10 @@ public:
     };
 
     struct UStruct : public UField {
+        static consteval std::string_view internal_name() {
+            return "Struct";
+        }
+
         inline UEVR_UStructHandle to_handle() { return (UEVR_UStructHandle)this; }
         inline UEVR_UStructHandle to_handle() const { return (UEVR_UStructHandle)this; }
 
@@ -472,6 +484,10 @@ public:
     };
 
     struct UClass : public UStruct {
+        static consteval std::string_view internal_name() {
+            return "Class";
+        }
+
         inline UEVR_UClassHandle to_handle() { return (UEVR_UClassHandle)this; }
         inline UEVR_UClassHandle to_handle() const { return (UEVR_UClassHandle)this; }
 
@@ -532,6 +548,10 @@ public:
     };
 
     struct UFunction : public UStruct {
+        static consteval std::string_view internal_name() {
+            return "Function";
+        }
+
         inline UEVR_UFunctionHandle to_handle() { return (UEVR_UFunctionHandle)this; }
         inline UEVR_UFunctionHandle to_handle() const { return (UEVR_UFunctionHandle)this; }
 
@@ -583,6 +603,10 @@ public:
     };
 
     struct UScriptStruct : public UStruct {
+        static consteval std::string_view internal_name() {
+            return "ScriptStruct";
+        }
+
         inline UEVR_UScriptStructHandle to_handle() { return (UEVR_UScriptStructHandle)this; }
         inline UEVR_UScriptStructHandle to_handle() const { return (UEVR_UScriptStructHandle)this; }
 
@@ -797,7 +821,9 @@ public:
     };
 
     struct UEnum : public UObject {
-
+        static consteval std::string_view internal_name() {
+            return "Enum";
+        }
     };
 
     struct FNumericProperty : public FProperty {
@@ -980,17 +1006,25 @@ public:
 
     // TODO
     struct UEngine : public UObject {
+        static consteval std::string_view internal_name() {
+            return "Engine";
+        }
+
         static UEngine* get() {
             return API::get()->get_engine();
         }
     };
 
     struct UGameEngine : public UEngine {
-
+        static consteval std::string_view internal_name() {
+            return "GameEngine";
+        }
     };
 
     struct UWorld : public UObject {
-
+        static consteval std::string_view internal_name() {
+            return "World";
+        }
     };
 
     struct FUObjectArray {

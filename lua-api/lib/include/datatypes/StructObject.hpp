@@ -1,7 +1,7 @@
 #pragma once
 
 #include <uevr/API.hpp>
-#include <sol/sol.hpp>
+#include "ScriptPrerequisites.hpp"
 
 namespace lua::datatypes {
     struct StructObject {

@@ -8,7 +8,7 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/vector_angle.hpp>
 
-#include <sol/sol.hpp>
+#include "ScriptPrerequisites.hpp"
 #include <uevr/API.hpp>
 
 namespace lua::datatypes {

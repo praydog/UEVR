@@ -1,6 +1,6 @@
 #pragma once
 
-#include <sol/sol.hpp>
+#include "ScriptPrerequisites.hpp"
 
 namespace lua::datatypes {
     void bind_xinput(sol::state_view& lua);

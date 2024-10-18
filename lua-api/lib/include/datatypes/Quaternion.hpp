@@ -5,7 +5,7 @@
 #include <glm/ext/quaternion_float.hpp>
 #include <glm/ext/quaternion_double.hpp>
 
-#include <sol/sol.hpp>
+#include "ScriptPrerequisites.hpp"
 #include <uevr/API.hpp>
 
 namespace lua::datatypes {

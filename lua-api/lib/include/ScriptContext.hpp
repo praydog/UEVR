@@ -4,7 +4,7 @@
 #include <memory>
 #include <shared_mutex>
 
-#include <sol/sol.hpp>
+#include "ScriptPrerequisites.hpp"
 #include <uevr/API.hpp>
 
 #include <vector>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <sol/sol.hpp>
+#include "ScriptPrerequisites.hpp"
 #include <uevr/API.hpp>
 
 namespace lua::utility {
