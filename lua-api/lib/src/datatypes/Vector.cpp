@@ -4,6 +4,11 @@ namespace lua::datatypes {
     void bind_vectors(sol::state_view& lua) {
         #define BIND_VECTOR3_LIKE(name, datatype) \
             lua.new_usertype<name>(#name, \
+                "set", [](sol::object o, datatype x, datatype y, datatype z, datatype w) -> sol::object { \
+                    name& v = o.as<name>(); \
+                    v.x = x; v.y = y; v.z = z; \
+                    return o; \
+                }, \
                 "clone", [](name& v) -> name { return v; }, \
                 "x", &name::x, \
                 "y", &name::y, \
@@ -38,7 +43,12 @@ namespace lua::datatypes {
         BIND_VECTOR3_LIKE_END();
 
         #define BIND_VECTOR4_LIKE(name, datatype) \
-        lua.new_usertype<name>(#name, \
+            lua.new_usertype<name>(#name, \
+                "set", [](sol::object o, datatype x, datatype y, datatype z, datatype w) -> sol::object { \
+                    name& v = o.as<name>(); \
+                    v.x = x; v.y = y; v.z = z; v.w = w; \
+                    return o; \
+                }, \
                 "clone", [](name& v) -> name { return v; }, \
                 "x", &name::x, \
                 "y", &name::y, \

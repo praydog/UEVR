@@ -4,6 +4,7 @@ namespace lua::datatypes {
     void bind_quaternions(sol::state_view& lua) {
         #define BIND_QUATERNION_LIKE(name, datatype) \
             lua.new_usertype<name>(#name, \
+                "set", [](name& v, datatype x, datatype y, datatype z, datatype w) { v.x = x; v.y = y; v.z = z; v.w = w; }, \
                 "x", &name::x, \
                 "y", &name::y, \
                 "z", &name::z, \
