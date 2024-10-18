@@ -454,33 +454,55 @@ int ScriptContext::setup_bindings() {
         "get_address", [](uevr::API::UObject& self) {
             return (uintptr_t)&self;
         },
-        "static_class", &uevr::API::UObject::static_class,
+        "static_class", [](sol::this_state s) -> sol::object {
+            return sol::make_object(s, uevr::API::UObject::static_class());
+        },
         "get_fname", &uevr::API::UObject::get_fname,
+        "get_short_name", [](sol::this_state s, uevr::API::UObject& self) -> sol::object {
+            const auto wstr = self.get_fname()->to_string();
+            return sol::make_object(s, utility::narrow(wstr));
+        },
         "get_full_name", &uevr::API::UObject::get_full_name,
         "is_a", &uevr::API::UObject::is_a,
-        "as_class", [](uevr::API::UObject& self) -> uevr::API::UClass* {
+        "as_class", [](sol::this_state s, uevr::API::UObject& self) -> sol::object {
             if (auto c = self.dcast<uevr::API::UClass>()) {
-                return c;
+                return sol::make_object(s, c);
             }
 
-            return nullptr;
+            return sol::make_object(s, sol::lua_nil);
         },
-        "as_struct", [](uevr::API::UObject& self) -> uevr::API::UStruct* {
+        "as_struct", [](sol::this_state s, uevr::API::UObject& self) -> sol::object {
             if (auto c = self.dcast<uevr::API::UStruct>()) {
-                return c;
+                return sol::make_object(s, c);
             }
 
-            return nullptr;
+            return sol::make_object(s, sol::lua_nil);
         },
-        "as_function", [](uevr::API::UObject& self) -> uevr::API::UFunction* {
+        "as_function", [](sol::this_state s, uevr::API::UObject& self) -> sol::object {
             if (auto c = self.dcast<uevr::API::UFunction>()) {
-                return c;
+                return sol::make_object(s, c);
             }
 
-            return nullptr;
+            return sol::make_object(s, sol::lua_nil);
         },
-        "get_class", &uevr::API::UObject::get_class,
-        "get_outer", &uevr::API::UObject::get_outer,
+        "get_class", [](sol::this_state s, uevr::API::UObject& self) -> sol::object {
+            auto c = self.get_class();
+
+            if (c == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            return sol::make_object(s, c);
+        },
+        "get_outer", [](sol::this_state s, uevr::API::UObject& self) -> sol::object {
+            auto c = self.get_outer();
+
+            if (c == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            return sol::make_object(s, c);
+        },
         "get_bool_property", &uevr::API::UObject::get_bool_property,
         "get_float_property", [](uevr::API::UObject& self, const std::wstring& name) {
             return self.get_property<float>(name);
@@ -581,18 +603,34 @@ int ScriptContext::setup_bindings() {
 
     m_lua.new_usertype<uevr::API::UField>("UEVR_UField",
         sol::base_classes, sol::bases<uevr::API::UObject>(),
-        "get_next", &uevr::API::UField::get_next
+        "get_next", [](sol::this_state s, uevr::API::UField& self) -> sol::object {
+            auto next = self.get_next();
+
+            if (next == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            return sol::make_object(s, next);
+        }
     );
     
     create_uobject_ptr_gc((API::UField*)nullptr);
 
     m_lua.new_usertype<uevr::API::UStruct>("UEVR_UStruct",
         sol::base_classes, sol::bases<uevr::API::UField, uevr::API::UObject>(),
-        "static_class", &uevr::API::UStruct::static_class,
+        "static_class", [](sol::this_state s) -> sol::object {
+            return sol::make_object(s, uevr::API::UStruct::static_class());
+        },
         "get_super_struct", &uevr::API::UStruct::get_super_struct,
         "get_super", &uevr::API::UStruct::get_super,
-        "find_function", [](uevr::API::UStruct& self, const std::wstring& name) {
-            return self.find_function(name);
+        "find_function", [](sol::this_state s, uevr::API::UStruct& self, const std::wstring& name) {
+            auto f = self.find_function(name);
+
+            if (f == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            return sol::make_object(s, f);
         },
         "get_child_properties", &uevr::API::UStruct::get_child_properties,
         "get_properties_size", &uevr::API::UStruct::get_properties_size,
@@ -603,7 +641,9 @@ int ScriptContext::setup_bindings() {
 
     m_lua.new_usertype<uevr::API::UScriptStruct>("UEVR_UScriptStruct",
         sol::base_classes, sol::bases<uevr::API::UStruct>(),
-        "static_class", &uevr::API::UScriptStruct::static_class,
+        "static_class", [](sol::this_state s) -> sol::object {
+            return sol::make_object(s, uevr::API::UScriptStruct::static_class());
+        },
         "get_struct_size", &uevr::API::UScriptStruct::get_struct_size
     );
 
@@ -611,10 +651,37 @@ int ScriptContext::setup_bindings() {
 
     m_lua.new_usertype<uevr::API::UClass>("UEVR_UClass",
         sol::base_classes, sol::bases<uevr::API::UStruct, uevr::API::UField, uevr::API::UObject>(),
-        "static_class", &uevr::API::UClass::static_class,
-        "get_class_default_object", &uevr::API::UClass::get_class_default_object,
-        "get_objects_matching", &uevr::API::UClass::get_objects_matching<uevr::API::UObject>,
-        "get_first_object_matching", &uevr::API::UClass::get_first_object_matching<uevr::API::UObject>
+        "static_class", [](sol::this_state s) -> sol::object {
+            return sol::make_object(s, uevr::API::UClass::static_class());
+        },
+        "get_class_default_object", [](sol::this_state s, uevr::API::UClass& self) -> sol::object {
+            auto obj = self.get_class_default_object();
+
+            if (obj == nullptr) {
+                return sol::make_object(s, sol::nil);
+            }
+
+            return sol::make_object(s, obj); // So it goes through sol_lua_push for our pooling mechanism
+        },
+        "get_objects_matching", [](sol::this_state s, uevr::API::UClass& self, sol::function fn) -> sol::object {
+            auto tbl = sol::state_view{s}.create_table();
+            auto objects = self.get_objects_matching<uevr::API::UObject>();
+
+            for (auto obj : objects) {
+                tbl.add(sol::make_object(s, obj));
+            }
+
+            return sol::make_object(s, tbl);
+        },
+        "get_first_object_matching", [](sol::this_state s, uevr::API::UClass& self) -> sol::object {
+            auto object = self.get_first_object_matching<uevr::API::UObject>();
+
+            if (object == nullptr) {
+                return sol::make_object(s, sol::nil);
+            }
+
+            return sol::make_object(s, object); // So it goes through sol_lua_push for our pooling mechanism
+        }
     );
 
     create_uobject_ptr_gc((API::UClass*)nullptr);
@@ -624,7 +691,10 @@ int ScriptContext::setup_bindings() {
             return lua::utility::call_function(s, obj, fn, args);
         },
         sol::base_classes, sol::bases<uevr::API::UStruct, uevr::API::UField, uevr::API::UObject>(),
-        "static_class", &uevr::API::UFunction::static_class,
+        //"static_class", &uevr::API::UFunction::static_class,
+        "static_class", [](sol::this_state s) -> sol::object {
+            return sol::make_object(s, uevr::API::UFunction::static_class());
+        },
         "call", &uevr::API::UFunction::call,
         "get_native_function", &uevr::API::UFunction::get_native_function,
         "hook_ptr", [this](sol::this_state s, uevr::API::UFunction* fn, sol::function pre, sol::function post) {
@@ -759,6 +829,12 @@ int ScriptContext::setup_bindings() {
                 const auto vq = (UEVR_Quaternionf*)&result;
 
                 state->set_rotation_offset(vq);
+            } else if (obj.is<lua::datatypes::Vector3d>()) { // Assume euler
+                const auto euler = obj.as<lua::datatypes::Vector3d>();
+                auto result = glm::quat{glm::yawPitchRoll((float)-euler.y, (float)euler.x, (float)-euler.z)};
+                const auto vq = (UEVR_Quaternionf*)&result;
+
+                state->set_rotation_offset(vq);
             } else {
                 throw sol::error("Invalid type for set_rotation_offset");
             }
@@ -807,12 +883,19 @@ int ScriptContext::setup_bindings() {
 
             return sol::make_object(s, result);
         },
-        "get_objects_by_class", [](uevr::API::UClass* c, sol::object allow_default_obj) {
+        "get_objects_by_class", [](sol::this_state s, uevr::API::UClass* c, sol::object allow_default_obj) -> sol::object {
             bool allow_default = false;
             if (allow_default_obj.is<bool>()) {
                 allow_default = allow_default_obj.as<bool>();
             }
-            return uevr::API::UObjectHook::get_objects_by_class(c, allow_default);
+            auto objects = uevr::API::UObjectHook::get_objects_by_class(c, allow_default);
+            auto tbl = sol::state_view{s}.create_table();
+
+            for (auto obj : objects) {
+                tbl.add(sol::make_object(s, obj));
+            }
+
+            return sol::make_object(s, tbl);
         },
         "get_or_add_motion_controller_state", &uevr::API::UObjectHook::get_or_add_motion_controller_state,
         "get_motion_controller_state", &uevr::API::UObjectHook::get_motion_controller_state,
@@ -834,10 +917,43 @@ int ScriptContext::setup_bindings() {
 
             return sol::make_object(s, result);
         },
-        "get_engine", &uevr::API::get_engine,
-        "get_player_controller", &uevr::API::get_player_controller,
-        "get_local_pawn", &uevr::API::get_local_pawn,
-        "spawn_object", &uevr::API::spawn_object,
+        // Context: We are using sol::make_object to ensure that the object is using our pooling mechanism
+        "get_engine", [](sol::this_state s, uevr::API* api) -> sol::object {
+            auto engine = (API::UObject*)api->get_engine();
+
+            if (engine == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            return sol::make_object(s, engine);
+        },
+        "get_player_controller", [](sol::this_state s, uevr::API* api, int32_t index) -> sol::object {
+            auto controller = (API::UObject*)api->get_player_controller(index);
+
+            if (controller == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            return sol::make_object(s, controller);
+        },
+        "get_local_pawn", [](sol::this_state s, uevr::API* api, int32_t index) -> sol::object {
+            auto pawn = api->get_local_pawn(index);
+
+            if (pawn == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            return sol::make_object(s, pawn);
+        },
+        "spawn_object", [](sol::this_state s, uevr::API* api, API::UClass* klass, API::UObject* outer) -> sol::object {
+            auto obj = api->spawn_object(klass, outer);
+
+            if (obj == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            return sol::make_object(s, obj);
+        },
         "execute_command", [](uevr::API* api, const std::wstring& s) { api->execute_command(s.data()); },
         "get_uobject_array", &uevr::API::get_uobject_array,
         "get_console_manager", &uevr::API::get_console_manager
