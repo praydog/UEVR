@@ -205,7 +205,7 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
             auto lua_arr = sol::state_view{s}.create_table();
 
             for (size_t i = 0; i < arr.count; ++i) {
-                lua_arr[i + 1] = arr.data[i];
+                lua_arr[i + 1] = sol::make_object(s, arr.data[i]);
             }
 
             return sol::make_object(s, lua_arr);
@@ -221,7 +221,7 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
             auto lua_arr = sol::state_view{s}.create_table();
 
             for (size_t i = 0; i < arr.count; ++i) {
-                lua_arr[i + 1] = arr.data[i];
+                lua_arr[i + 1] = sol::make_object(s, arr.data[i]);
             }
 
             return sol::make_object(s, lua_arr);
