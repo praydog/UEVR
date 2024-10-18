@@ -2356,6 +2356,20 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
         return;
     }
 
+    if (object->is_a(sdk::UClass::static_class())) {
+        if (ImGui::TreeNode("Default Object")) {
+            auto def = ((sdk::UClass*)object)->get_class_default_object();
+
+            if (def != nullptr) {
+                ui_handle_object(def);
+            } else {
+                ImGui::Text("Null default object");
+            }
+
+            ImGui::TreePop();
+        }
+    }
+
     ImGui::Text("%s", utility::narrow(object->get_full_name()).data());
 
     static const auto material_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.MaterialInterface");
@@ -3411,6 +3425,7 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
             break;
         case "InterfaceProperty"_fnv:
         case "ObjectProperty"_fnv:
+        case "ClassProperty"_fnv:
             {
                 auto& value = *(sdk::UObject**)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
                 
