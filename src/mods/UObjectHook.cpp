@@ -1442,6 +1442,12 @@ void UObjectHook::update_persistent_states() {
                         value = prop_state->data.u8;
                     }
                     break;
+                case "UInt16Property"_fnv:
+                    {
+                        auto& value = *(uint16_t*)(obj.as<uintptr_t>() + ((sdk::FProperty*)prop_desc)->get_offset());
+                        value = prop_state->data.u16;
+                    }
+                    break;
                 default:
                     // OH NO!!!!! anyways
                     break;
@@ -3361,6 +3367,16 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 float casted_value = (float)value;
                 if (ImGui::DragFloat(utility::narrow(prop->get_field_name().to_string()).data(), (float*)&casted_value, 0.01f)) {
                     value = (double)casted_value;
+                }
+                display_context(value);
+            }
+            break;
+        case "UInt16Property"_fnv:
+            {
+                auto& value = *(uint16_t*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                int converted = (int)value;
+                if (ImGui::SliderInt(utility::narrow(prop->get_field_name().to_string()).data(), (int*)&converted, 0, 65535)) {
+                    value = (uint16_t)converted;
                 }
                 display_context(value);
             }

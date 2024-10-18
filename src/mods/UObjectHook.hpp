@@ -439,6 +439,7 @@ private:
                 float f;
                 int32_t i;
                 uint8_t u8;
+                uint16_t u16;
                 bool b;
             } data;
         };
