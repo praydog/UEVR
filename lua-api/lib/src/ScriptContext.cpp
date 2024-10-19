@@ -928,6 +928,15 @@ int ScriptContext::setup_bindings() {
 
     m_lua.new_usertype<uevr::API>("UEVR_API",
         "sdk", &uevr::API::sdk,
+        "to_uobject", [](sol::this_state s, uevr::API* api, uintptr_t addr) -> sol::object {
+            auto obj = (API::UObject*)addr;
+
+            if (obj == nullptr || !API::UObjectHook::exists(obj)) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            return sol::make_object(s, obj);
+        },
         "find_uobject", [](sol::this_state s, uevr::API* api, const std::wstring& name) -> sol::object {
             auto result = api->find_uobject<uevr::API::UObject>(name);
 
