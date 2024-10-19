@@ -1917,6 +1917,27 @@ void UObjectHook::draw_developer() {
 
         ImGui::TreePop();
     }
+
+    static std::array<char, 512> address_buffer{};
+    ImGui::InputText("Address Lookup", address_buffer.data(), address_buffer.size());
+
+    // Try-catch block around this because it's possible the user could enter invalid input
+    // also hex->int conversion can throw
+    try {
+        auto obj = (sdk::UObject*)std::stoull(address_buffer.data(), nullptr, 16);
+
+        if (obj != nullptr && this->exists(obj)) {
+            ImGui::PushID(obj);
+            if (ImGui::TreeNode(utility::narrow(obj->get_full_name()).c_str())) {
+                ui_handle_object(obj);
+                ImGui::TreePop();
+            }
+
+            ImGui::PopID();
+        }
+    } catch (...) {
+        // ignore
+    }
 }
 
 void UObjectHook::draw_main() {
