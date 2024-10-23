@@ -555,6 +555,8 @@ int ScriptContext::setup_bindings() {
                 // Only support basic arguments for now until we can test this more
                 if (args[i].is<uevr::API::UObject*>()) {
                     args_ptr[i] = args[i].as<uevr::API::UObject*>();
+                } else if (args[i].is<lua::datatypes::StructObject*>()) {
+                    args_ptr[i] = args[i].as<lua::datatypes::StructObject*>()->object;
                 } else {
                     // We dont support floats for now because we'd need to JIT the function call
                     throw sol::error("DANGEROUS_call_member_virtual: Invalid argument type");
