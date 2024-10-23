@@ -84,7 +84,7 @@ public:
         } catch (const std::exception& e) {
             log_error("Exception in on_script_reset: " + std::string(e.what()));
         } catch (...) {
-            log("Unknown exception in on_script_reset");
+            log_error("Unknown exception in on_script_reset");
         }
     }
 

@@ -14,7 +14,7 @@ namespace lua::datatypes {
 
         void* object{ nullptr };
         uevr::API::UStruct* desc{ nullptr };
-
+        
         std::vector<uint8_t> created_object{}; // Only used when the object is created by second constructor
     };
 
