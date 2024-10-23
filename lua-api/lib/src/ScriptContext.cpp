@@ -686,9 +686,10 @@ int ScriptContext::setup_bindings() {
 
             return sol::make_object(s, obj); // So it goes through sol_lua_push for our pooling mechanism
         },
-        "get_objects_matching", [](sol::this_state s, uevr::API::UClass& self, sol::function fn) -> sol::object {
+        "get_objects_matching", [](sol::this_state s, uevr::API::UClass& self, sol::object allow_default_obj) -> sol::object {
+            const bool allow_default = allow_default_obj.is<bool>() ? allow_default_obj.as<bool>() : false;
             auto tbl = sol::state_view{s}.create_table();
-            auto objects = self.get_objects_matching<uevr::API::UObject>();
+            auto objects = self.get_objects_matching<uevr::API::UObject>(allow_default);
 
             for (auto obj : objects) {
                 tbl.add(sol::make_object(s, obj));
@@ -696,8 +697,9 @@ int ScriptContext::setup_bindings() {
 
             return sol::make_object(s, tbl);
         },
-        "get_first_object_matching", [](sol::this_state s, uevr::API::UClass& self) -> sol::object {
-            auto object = self.get_first_object_matching<uevr::API::UObject>();
+        "get_first_object_matching", [](sol::this_state s, uevr::API::UClass& self, sol::object allow_default_obj) -> sol::object {
+            const bool allow_default = allow_default_obj.is<bool>() ? allow_default_obj.as<bool>() : false;
+            auto object = self.get_first_object_matching<uevr::API::UObject>(allow_default);
 
             if (object == nullptr) {
                 return sol::make_object(s, sol::nil);
