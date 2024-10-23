@@ -53,6 +53,22 @@ namespace lua::datatypes {
             "set_property", [](sol::this_state s, StructObject* self, const std::wstring& name, sol::object value) {
                 lua::utility::set_property(s, self->object, self->desc, name, value);
             },
+            "write_qword", [](StructObject& self, size_t offset, uint64_t value) {
+                size_t size = 0;
+                if (self.desc->is_a(uevr::API::UScriptStruct::static_class())) {
+                    auto script_struct = static_cast<uevr::API::UScriptStruct*>(self.desc);
+
+                    size = script_struct->get_struct_size();
+                } else {
+                    size = self.desc->get_properties_size();
+                }
+
+                if (offset + sizeof(uint64_t) > size) {
+                    throw sol::error("Offset out of bounds");
+                }
+
+                *(uint64_t*)((uintptr_t)self.object + offset) = value;
+            },
             sol::meta_function::index, [](sol::this_state s, StructObject* self, sol::object index_obj) -> sol::object {
                 if (!index_obj.is<std::string>()) {
                     return sol::make_object(s, sol::lua_nil);

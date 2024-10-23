@@ -583,6 +583,23 @@ int ScriptContext::setup_bindings() {
 
             return sol::make_object(s, result); // TODO: convert?
         },
+        "write_qword", [](API::UObject* self, size_t offset, uint64_t value) {
+                size_t size = 0;
+                const auto c = self->get_class();
+                if (c->is_a(uevr::API::UScriptStruct::static_class())) {
+                    auto script_struct = reinterpret_cast<uevr::API::UScriptStruct*>(c);
+
+                    size = script_struct->get_struct_size();
+                } else {
+                    size = c->get_properties_size();
+                }
+
+                if (offset + sizeof(uint64_t) > size) {
+                    throw sol::error("Offset out of bounds");
+                }
+
+                *(uint64_t*)((uintptr_t)self + offset) = value;
+            },
         sol::meta_function::index, [](sol::this_state s, uevr::API::UObject* self, sol::object index_obj) -> sol::object {
             if (!index_obj.is<std::string>()) {
                 return sol::make_object(s, sol::lua_nil);
@@ -1176,7 +1193,7 @@ void ScriptContext::on_early_calculate_stereo_view_offset(UEVR_StereoRenderingDe
         const auto ue5_position = (lua::datatypes::Vector3d*)position;
         const auto ue4_position = (lua::datatypes::Vector3f*)position;
         const auto ue5_rotation = (lua::datatypes::Vector3d*)rotation;
-    const auto ue4_rotation = (lua::datatypes::Vector3f*)rotation;
+        const auto ue4_rotation = (lua::datatypes::Vector3f*)rotation;
         const auto is_ue5 = lua::utility::is_ue5();
 
         for (auto& fn : ctx->m_on_early_calculate_stereo_view_offset_callbacks) try {
