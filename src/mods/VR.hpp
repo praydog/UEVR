@@ -311,20 +311,24 @@ public:
     }
 
     int get_left_controller_index() const {
+        const auto wants_swap = m_swap_controllers->value();
+
         if (m_runtime->is_openxr()) {
-            return 1;
+            return wants_swap ? 2 : 1;
         } else if (m_runtime->is_openvr()) {
-            return !m_controllers.empty() ? m_controllers[0] : -1;
+            return !m_controllers.empty() ? (wants_swap ? m_controllers[1] : m_controllers[0]) : -1;
         }
 
         return -1;
     }
 
     int get_right_controller_index() const {
+        const auto wants_swap = m_swap_controllers->value();
+
         if (m_runtime->is_openxr()) {
-            return 2;
+            return wants_swap ? 1 : 2;
         } else if (m_runtime->is_openvr()) {
-            return !m_controllers.empty() ? m_controllers[1] : -1;
+            return !m_controllers.empty() ? (wants_swap ? m_controllers[0] : m_controllers[1]) : -1;
         }
 
         return -1;
