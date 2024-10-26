@@ -1602,6 +1602,23 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
         }
 
         switch (utility::hash(*it)) {
+        case "Outer"_fnv:
+        {
+            static const auto object_t = sdk::UObject::static_class();
+
+            if (!previous_data_desc->is_a(object_t)) {
+                return nullptr;
+            }
+
+            previous_data = ((sdk::UObject*)previous_data)->get_outer();
+            if (previous_data != nullptr) {
+                previous_data_desc = ((sdk::UObject*)previous_data)->get_class();
+            } else {
+                previous_data_desc = nullptr;
+            }
+
+            break;
+        }
         case "Components"_fnv:
         {
             // Make sure the base is an AActor
@@ -2392,6 +2409,12 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
     }
 
     ImGui::Text("%s", utility::narrow(object->get_full_name()).data());
+
+    if (ImGui::TreeNode("Outer")) {
+        auto outer_scope = m_path.enter("Outer");
+        ui_handle_object(object->get_outer());
+        ImGui::TreePop();
+    }
 
     static const auto material_t = sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.MaterialInterface");
 
