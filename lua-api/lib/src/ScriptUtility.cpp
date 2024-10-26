@@ -565,6 +565,7 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
             switch (inner_name_hash) {
             case L"InterfaceProperty"_fnv:
             case L"ObjectProperty"_fnv:
+            case L"ClassProperty"_fnv:
             {
                 const auto arg_obj = args[args_index++];
                 
