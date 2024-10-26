@@ -484,7 +484,7 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
     bool ret_is_array{false};
 
     //std::vector<uint8_t> dynamic_data{};
-    std::vector<std::wstring> dynamic_strings{};
+    std::vector<std::unique_ptr<wchar_t[]>> dynamic_strings{};
     std::vector<std::vector<uevr::API::UObject*>> dynamic_object_arrays{};
     std::unordered_map<uevr::API::FProperty*, size_t> prop_to_arg_index{}; // For out parameters
 
@@ -531,19 +531,39 @@ sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API
             auto& fstr = *(FString*)&params[offset];
 
             if (arg_obj.is<std::wstring>()) {
-                dynamic_strings.push_back(arg_obj.as<std::wstring>());
+                const auto src = arg_obj.as<std::wstring>();
+                auto buffer = std::make_unique<wchar_t[]>(src.size() + 1);
+                std::copy(src.begin(), src.end(), buffer.get());
+                buffer[src.size()] = L'\0';
 
-                fstr.count = dynamic_strings.back().size() + 1;
-                fstr.data = (wchar_t*)dynamic_strings.back().c_str();
+                fstr.count = src.size() + 1;
+                fstr.capacity = fstr.count;
+                fstr.data = buffer.get();
+
+                dynamic_strings.push_back(std::move(buffer));
             } else if (arg_obj.is<std::string>()) {
-                dynamic_strings.push_back(::utility::widen(arg_obj.as<std::string>()));
+                const auto src = ::utility::widen(arg_obj.as<std::string>());
+                auto buffer = std::make_unique<wchar_t[]>(src.size() + 1);
+                std::copy(src.begin(), src.end(), buffer.get());
+                buffer[src.size()] = L'\0';
 
-                fstr.count = dynamic_strings.back().size() + 1;
-                fstr.data = (wchar_t*)dynamic_strings.back().c_str();
+                fstr.count = src.size() + 1;
+                fstr.capacity = fstr.count;
+                fstr.data = buffer.get();
+
+                dynamic_strings.push_back(std::move(buffer));
             } else if (arg_obj.is<wchar_t*>()) {
-                dynamic_strings.push_back(arg_obj.as<wchar_t*>());
+                const auto src = std::wstring_view{arg_obj.as<wchar_t*>()};
 
-                fstr.count = dynamic_strings.back().size() + 1;
+                auto buffer = std::make_unique<wchar_t[]>(src.size() + 1);
+                std::copy(src.begin(), src.end(), buffer.get());
+                buffer[src.size()] = L'\0';
+
+                fstr.count = src.size() + 1;
+                fstr.capacity = fstr.count;
+                fstr.data = buffer.get();
+
+                dynamic_strings.push_back(std::move(buffer));
             } else {
                 throw sol::error("Invalid argument type for FString");
             }
