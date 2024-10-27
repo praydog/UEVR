@@ -655,6 +655,15 @@ int ScriptContext::setup_bindings() {
 
             return sol::make_object(s, f);
         },
+        "find_property", [](sol::this_state s, uevr::API::UStruct& self, const std::wstring& name) {
+            auto p = self.find_property(name);
+
+            if (p == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            return sol::make_object(s, p);
+        },
         "get_child_properties", &uevr::API::UStruct::get_child_properties,
         "get_properties_size", &uevr::API::UStruct::get_properties_size,
         "get_children", &uevr::API::UStruct::get_children
@@ -764,6 +773,17 @@ int ScriptContext::setup_bindings() {
         "get_next", &uevr::API::FField::get_next,
         "get_fname", &uevr::API::FField::get_fname,
         "get_class", &uevr::API::FField::get_class
+    );
+
+    m_lua.new_usertype<uevr::API::FProperty>("UEVR_FProperty",
+        sol::base_classes, sol::bases<uevr::API::FField>(),
+        "get_offset", &uevr::API::FProperty::get_offset,
+        "get_property_flags", &uevr::API::FProperty::get_property_flags,
+        "is_param", &uevr::API::FProperty::is_param,
+        "is_out_param", &uevr::API::FProperty::is_out_param,
+        "is_return_param", &uevr::API::FProperty::is_return_param,
+        "is_reference_param", &uevr::API::FProperty::is_reference_param,
+        "is_pod", &uevr::API::FProperty::is_pod
     );
 
     m_lua.new_usertype<uevr::API::FFieldClass>("UEVR_FFieldClass",
