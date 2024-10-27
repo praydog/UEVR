@@ -9,6 +9,7 @@
 #include <sdk/UClass.hpp>
 #include <sdk/FField.hpp>
 #include <sdk/FProperty.hpp>
+#include <sdk/FEnumProperty.hpp>
 #include <sdk/UFunction.hpp>
 #include <sdk/AActor.hpp>
 #include <sdk/threading/GameThreadWorker.hpp>
@@ -3291,7 +3292,7 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
 
     for (auto prop : sorted_fields) {
         auto propc = prop->get_class();
-        const auto propc_type = utility::narrow(propc->get_name().to_string());
+        const auto propc_type = propc->get_name().to_string();
 
         if (object == nullptr) {
             const auto name = utility::narrow(propc->get_name().to_string());
@@ -3301,7 +3302,23 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
             continue;
         }
 
-        const auto hash_type = utility::hash(propc_type);
+        auto hash_type = utility::hash(propc_type);
+
+        if (hash_type == L"EnumProperty"_fnv) {
+            auto enum_prop = (sdk::FEnumProperty*)prop;
+            if (auto numeric_prop = (sdk::FProperty*)enum_prop->get_underlying_prop(); numeric_prop != nullptr) try {
+                if (auto nc = numeric_prop->get_class(); nc != nullptr) {
+                    const auto nc_name = nc->get_name().to_string_no_numbers(); // Calling this variant so we don't cause a crash if the name is bad.
+
+                    // This check is just in-case we get handed back some bad memory.
+                    if (nc_name.contains(L"Property")) {
+                        hash_type = utility::hash(nc_name);
+                    }
+                }
+            } catch (...) {
+                // Can happen because we haven't rigorously mapped out FEnumProperty yet for older UE versions.
+            }
+        }
 
         // Right-click lambda for supported properties, usually for saving.
         auto display_context = [&](auto value) {
@@ -3412,14 +3429,14 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
         };
 
         switch (hash_type) {
-        case "FloatProperty"_fnv:
+        case L"FloatProperty"_fnv:
             {
                 auto& value = *(float*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
                 ImGui::DragFloat(utility::narrow(prop->get_field_name().to_string()).data(), &value, 0.01f);
                 display_context(value);
             }
             break;
-        case "DoubleProperty"_fnv:
+        case L"DoubleProperty"_fnv:
             {
                 auto& value = *(double*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
                 float casted_value = (float)value;
@@ -3429,7 +3446,7 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 display_context(value);
             }
             break;
-        case "UInt16Property"_fnv:
+        case L"UInt16Property"_fnv:
             {
                 auto& value = *(uint16_t*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
                 int converted = (int)value;
@@ -3439,15 +3456,15 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 display_context(value);
             }
             break;
-        case "UInt32Property"_fnv:
-        case "IntProperty"_fnv:
+        case L"UInt32Property"_fnv:
+        case L"IntProperty"_fnv:
             {
                 auto& value = *(int32_t*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
                 ImGui::DragInt(utility::narrow(prop->get_field_name().to_string()).data(), &value, 1);
                 display_context(value);
             }
             break;
-        case "BoolProperty"_fnv:
+        case L"BoolProperty"_fnv:
             {
                 auto boolprop = (sdk::FBoolProperty*)prop;
                 auto value = boolprop->get_value_from_object(object);
@@ -3457,7 +3474,7 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 display_context(value);
             }
             break;
-        case "ByteProperty"_fnv:
+        case L"ByteProperty"_fnv:
             {
                 auto& value = *(uint8_t*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
                 int converted = (int)value;
@@ -3467,9 +3484,9 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 display_context(value);
             }
             break;
-        case "InterfaceProperty"_fnv:
-        case "ObjectProperty"_fnv:
-        case "ClassProperty"_fnv:
+        case L"InterfaceProperty"_fnv:
+        case L"ObjectProperty"_fnv:
+        case L"ClassProperty"_fnv:
             {
                 auto& value = *(sdk::UObject**)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
                 
@@ -3480,7 +3497,7 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 }
             }
             break;
-        case "StructProperty"_fnv:
+        case L"StructProperty"_fnv:
             {
                 void* addr = (void*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
 
@@ -3511,9 +3528,9 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 }
             }
             break;
-        case "Function"_fnv:
+        case L"Function"_fnv:
             break;
-        case "ArrayProperty"_fnv:
+        case L"ArrayProperty"_fnv:
             if (ImGui::TreeNode(utility::narrow(prop->get_field_name().to_string()).data())) {
                 auto scope2 = m_path.enter(utility::narrow(prop->get_field_name().to_string()));
                 ui_handle_array_property(object, (sdk::FArrayProperty*)prop);
@@ -3521,7 +3538,7 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
             }
 
             break;
-        case "NameProperty"_fnv:
+        case L"NameProperty"_fnv:
             {
                 const auto& value = *(sdk::FName*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
                 const auto wstr = value.to_string();
