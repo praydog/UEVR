@@ -757,6 +757,10 @@ namespace uobjecthook {
         UObjectHook::get()->remove_motion_controller_state(obj);
     }
 
+    void remove_all_motion_controller_states() {
+        UObjectHook::get()->remove_all_motion_controller_states();
+    }
+
     bool disabled() {
         return UObjectHook::get()->is_disabled();
     }
@@ -833,7 +837,8 @@ UEVR_UObjectHookFunctions g_uobjecthook_functions {
     &g_mc_functions,
     uevr::uobjecthook::disabled,
     uevr::uobjecthook::set_disabled,
-    uevr::uobjecthook::remove_motion_controller_state
+    uevr::uobjecthook::remove_motion_controller_state,
+    uevr::uobjecthook::remove_all_motion_controller_states
 };
 
 #define FFIELDCLASS(x) ((sdk::FFieldClass*)x)

@@ -157,6 +157,11 @@ public:
         m_motion_controller_attached_components.erase(component);
     }
 
+    void remove_all_motion_controller_states() {
+        std::unique_lock _{m_mutex};
+        m_motion_controller_attached_components.clear();
+    }
+
 private:
     struct StatePath;
     struct PersistentState;

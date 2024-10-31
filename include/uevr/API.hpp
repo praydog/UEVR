@@ -1564,6 +1564,11 @@ public:
             fn(obj->to_handle());
         }
 
+        static void remove_all_motion_controller_states() {
+            static const auto fn = initialize()->remove_all_motion_controller_states;
+            fn();
+        }
+
         struct MotionControllerState {
             static consteval std::string_view internal_name() {
                 return "MotionControllerState";
