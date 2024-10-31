@@ -585,23 +585,18 @@ int ScriptContext::setup_bindings() {
 
             return sol::make_object(s, result); // TODO: convert?
         },
-        "write_qword", [](API::UObject* self, size_t offset, uint64_t value) {
-                size_t size = 0;
-                const auto c = self->get_class();
-                if (c->is_a(uevr::API::UScriptStruct::static_class())) {
-                    auto script_struct = reinterpret_cast<uevr::API::UScriptStruct*>(c);
-
-                    size = script_struct->get_struct_size();
-                } else {
-                    size = c->get_properties_size();
-                }
-
-                if (offset + sizeof(uint64_t) > size) {
-                    throw sol::error("Offset out of bounds");
-                }
-
-                *(uint64_t*)((uintptr_t)self + offset) = value;
-            },
+        "write_qword", &lua::utility::write_t<uint64_t>,
+        "write_dword", &lua::utility::write_t<uint32_t>,
+        "write_word", &lua::utility::write_t<uint16_t>,
+        "write_byte", &lua::utility::write_t<uint8_t>,
+        "write_float", &lua::utility::write_t<float>,
+        "write_double", &lua::utility::write_t<double>,
+        "read_qword", &lua::utility::read_t<uint64_t>,
+        "read_dword", &lua::utility::read_t<uint32_t>,
+        "read_word", &lua::utility::read_t<uint16_t>,
+        "read_byte", &lua::utility::read_t<uint8_t>,
+        "read_float", &lua::utility::read_t<float>,
+        "read_double", &lua::utility::read_t<double>,
         sol::meta_function::index, [](sol::this_state s, uevr::API::UObject* self, sol::object index_obj) -> sol::object {
             if (!index_obj.is<std::string>()) {
                 return sol::make_object(s, sol::lua_nil);
@@ -964,7 +959,8 @@ int ScriptContext::setup_bindings() {
 
             return sol::make_object(s, state);
         },
-        "remove_motion_controller_state", &uevr::API::UObjectHook::remove_motion_controller_state
+        "remove_motion_controller_state", &uevr::API::UObjectHook::remove_motion_controller_state,
+        "remove_all_motion_controller_states", &uevr::API::UObjectHook::remove_all_motion_controller_states
     );
 
     m_lua.new_usertype<uevr::API>("UEVR_API",

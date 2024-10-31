@@ -17,4 +17,43 @@ namespace lua::utility {
 
     sol::object call_function(sol::this_state s, uevr::API::UObject* self, uevr::API::UFunction* fn, sol::variadic_args args);
     sol::object call_function(sol::this_state s, uevr::API::UObject* self, const std::wstring& name, sol::variadic_args args);
+
+    template <typename T>
+    void write_t(uevr::API::UObject* self, size_t offset, T value) {
+        size_t size = 0;
+        const auto c = self->get_class();
+        if (c->is_a(uevr::API::UScriptStruct::static_class())) {
+            auto script_struct = reinterpret_cast<uevr::API::UScriptStruct*>(c);
+
+            size = script_struct->get_struct_size();
+        } else {
+            size = c->get_properties_size();
+        }
+
+        if (offset + sizeof(T) > size) {
+            throw sol::error("Offset out of bounds");
+        }
+
+        *(T*)((uintptr_t)self + offset) = value;
+    }
+
+    template<typename T>
+    T read_t(uevr::API::UObject* self, size_t offset) {
+        size_t size = 0;
+        const auto c = self->get_class();
+
+        if (c->is_a(uevr::API::UScriptStruct::static_class())) {
+            auto script_struct = reinterpret_cast<uevr::API::UScriptStruct*>(c);
+
+            size = script_struct->get_struct_size();
+        } else {
+            size = c->get_properties_size();
+        }
+
+        if (offset + sizeof(T) > size) {
+            throw sol::error("Offset out of bounds");
+        }
+
+        return *(T*)((uintptr_t)self + offset);
+    }
 }
