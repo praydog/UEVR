@@ -1807,8 +1807,7 @@ UObjectHook::ResolvedObject UObjectHook::StatePath::resolve() const {
 
 void UObjectHook::on_frame() {
     if (m_keybind_toggle_uobject_hook->is_key_down_once()) {
-        m_uobject_hook_disabled = !m_uobject_hook_disabled;
-        m_fixed_visibilities = false;
+        set_disabled(!is_disabled());
     }
 }
 

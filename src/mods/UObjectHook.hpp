@@ -53,6 +53,7 @@ public:
 
     void set_disabled(bool disabled) {
         m_uobject_hook_disabled = disabled;
+        m_fixed_visibilities = false;
     }
 
 protected:
