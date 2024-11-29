@@ -574,7 +574,13 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
     //left_hand_rotation = glm::normalize(left_hand_rotation * left_hand_offset_q);
     auto left_hand_euler = glm::degrees(utility::math::euler_angles_from_steamvr(left_hand_rotation));
 
-    update_motion_controller_components(left_hand_position, left_hand_euler, right_hand_position, right_hand_euler);
+    const auto head_rotation =  glm::normalize(vqi_norm * (rotation_offset * glm::quat{vr->get_rotation(0)}));
+    const auto head_euler = glm::degrees(utility::math::euler_angles_from_steamvr(head_rotation));
+
+    update_motion_controller_components(
+        final_position, head_euler,
+        left_hand_position, left_hand_euler, 
+        right_hand_position, right_hand_euler);
 
     sdk::TArray<sdk::UPrimitiveComponent*> overlapped_components{};
     sdk::TArray<sdk::UPrimitiveComponent*> overlapped_components_left{};
@@ -694,9 +700,6 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
         update_overlaps(0, overlapped_components_left);
         update_overlaps(1, overlapped_components);
     }
-
-    const auto head_rotation =  glm::normalize(vqi_norm * (rotation_offset * glm::quat{vr->get_rotation(0)}));
-    const auto head_euler = glm::degrees(utility::math::euler_angles_from_steamvr(head_rotation));
 
     for (auto& it : comps) {
         if (!is_using_controllers && it.second->hand != 2) {
@@ -1458,8 +1461,10 @@ void UObjectHook::update_persistent_states() {
     }
 }
 
-void UObjectHook::update_motion_controller_components(const glm::vec3& left_hand_location, const glm::vec3& left_hand_euler,
-                                                      const glm::vec3& right_hand_location, const glm::vec3& right_hand_euler) 
+void UObjectHook::update_motion_controller_components(
+    const glm::vec3& hmd_location, const glm::vec3& hmd_euler,
+    const glm::vec3& left_hand_location, const glm::vec3& left_hand_euler,
+    const glm::vec3& right_hand_location, const glm::vec3& right_hand_euler) 
 {
     const auto mc_c = sdk::UMotionControllerComponent::static_class();
 
@@ -1498,9 +1503,10 @@ void UObjectHook::update_motion_controller_components(const glm::vec3& left_hand
             } else if (motion_source_str == L"Right") {
                 mc->set_world_location(right_hand_location, false, false);
                 mc->set_world_rotation(right_hand_euler, false);
-            } /*else {
-                SPDLOG_INFO("[UObjectHook] Unknown motion source {}", utility::narrow(motion_source_str));
-            }*/
+            } else if (motion_source_str == L"Head" || motion_source_str == L"HMD") {
+                mc->set_world_location(hmd_location, false, false);
+                mc->set_world_rotation(hmd_euler, false);
+            }
         } else {
             if (mc->get_hand() == sdk::EControllerHand::Left) {
                 mc->set_world_location(left_hand_location, false, false);
