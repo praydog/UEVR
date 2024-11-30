@@ -66,7 +66,22 @@ private:
         TRefCountPtr<IPooledRenderTarget>* out,
         const wchar_t* name,
         // these arent uintptrs, just defending against future changes to the size of the params
-        uintptr_t a6, uintptr_t a7, uintptr_t a8, uintptr_t a9, uintptr_t a10); 
+        uintptr_t a6, uintptr_t a7, uintptr_t a8, uintptr_t a9, uintptr_t a10);
+
+    static bool find_free_element_hook_ue5(
+        sdk::FRenderTargetPool* pool,
+        sdk::FPooledRenderTargetDesc* desc,
+        TRefCountPtr<IPooledRenderTarget>* out,
+        const wchar_t* name,
+        // these arent uintptrs, just defending against future changes to the size of the params
+        uintptr_t a5, uintptr_t a6, uintptr_t a7, uintptr_t a8, uintptr_t a9, uintptr_t a10
+    );
+
+    void on_post_find_free_element(sdk::FRenderTargetPool* pool, 
+        sdk::FPooledRenderTargetDesc* desc, 
+        TRefCountPtr<IPooledRenderTarget>* out, 
+        const wchar_t* name
+    );
 
     bool m_attempted_hook{false};
     bool m_hooked{false};
