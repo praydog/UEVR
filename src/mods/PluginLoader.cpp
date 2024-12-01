@@ -25,6 +25,7 @@
 #include <sdk/FBoolProperty.hpp>
 #include <sdk/FStructProperty.hpp>
 #include <sdk/FEnumProperty.hpp>
+#include <sdk/AActor.hpp>
 
 #include "pluginloader/FFakeStereoRenderingFunctions.hpp"
 #include "pluginloader/FRenderTargetPoolHook.hpp"
@@ -292,6 +293,10 @@ UEVR_SDKFunctions g_sdk_functions {
     []() -> UEVR_FConsoleManagerHandle {
         return (UEVR_FConsoleManagerHandle)sdk::FConsoleManager::get();
     },
+    // add_component_by_class
+    [](UEVR_UObjectHandle actor, UEVR_UClassHandle klass, bool deferred) -> UEVR_UObjectHandle {
+        return (UEVR_UObjectHandle)((sdk::AActor*)actor)->add_component_by_class((sdk::UClass*)klass, deferred);
+    }
 };
 
 namespace uevr {
