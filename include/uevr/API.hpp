@@ -183,6 +183,11 @@ public:
         return (UObject*)fn(klass->to_handle(), outer->to_handle());
     }
 
+    UObject* add_component_by_class(UObject* actor, UClass* klass, bool deferred = false) {
+        static const auto fn = sdk()->functions->add_component_by_class;
+        return (UObject*)fn(actor->to_handle(), klass->to_handle(), deferred);
+    }
+
     void execute_command(std::wstring_view command) {
         static const auto fn = sdk()->functions->execute_command;
         fn(command.data());

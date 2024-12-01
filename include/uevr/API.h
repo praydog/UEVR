@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 34
+#define UEVR_PLUGIN_VERSION_MINOR 35
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -254,6 +254,8 @@ typedef struct {
     void (*execute_command_ex)(UEVR_UObjectHandle world, const wchar_t* command, void* output_device);
 
     UEVR_FConsoleManagerHandle (*get_console_manager)();
+
+    UEVR_UObjectHandle (*add_component_by_class)(UEVR_UObjectHandle actor, UEVR_UClassHandle klass, bool deferred);
 } UEVR_SDKFunctions;
 
 typedef struct {

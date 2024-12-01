@@ -1013,6 +1013,20 @@ int ScriptContext::setup_bindings() {
 
             return sol::make_object(s, obj);
         },
+        "add_component_by_class", [](sol::this_state s, uevr::API* api, API::UObject* actor, API::UClass* klass, sol::object deferred_obj) -> sol::object {
+            bool deferred = false;
+            if (deferred_obj.is<bool>()) {
+                deferred = deferred_obj.as<bool>();
+            }
+
+            auto comp = api->add_component_by_class(actor, klass, deferred);
+
+            if (comp == nullptr) {
+                return sol::make_object(s, sol::lua_nil);
+            }
+
+            return sol::make_object(s, comp);
+        },
         "execute_command", [](uevr::API* api, const std::wstring& s) { api->execute_command(s.data()); },
         "get_uobject_array", &uevr::API::get_uobject_array,
         "get_console_manager", &uevr::API::get_console_manager
