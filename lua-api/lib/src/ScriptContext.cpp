@@ -597,22 +597,11 @@ int ScriptContext::setup_bindings() {
         "read_byte", &lua::utility::read_t<uint8_t>,
         "read_float", &lua::utility::read_t<float>,
         "read_double", &lua::utility::read_t<double>,
-        sol::meta_function::index, [](sol::this_state s, uevr::API::UObject* self, sol::object index_obj) -> sol::object {
-            if (!index_obj.is<std::string>()) {
-                return sol::make_object(s, sol::lua_nil);
-            }
-
-            const auto name = utility::widen(index_obj.as<std::string>());
-
-            return lua::utility::prop_to_object(s, self, name);
+        sol::meta_function::index, [](sol::this_state s, uevr::API::UObject* self, const std::wstring& index_obj) -> sol::object {
+            return lua::utility::prop_to_object(s, self, index_obj);
         },
-        sol::meta_function::new_index, [](sol::this_state s, uevr::API::UObject* self, sol::object index_obj, sol::object value) {
-            if (!index_obj.is<std::string>()) {
-                return;
-            }
-
-            const auto name = utility::widen(index_obj.as<std::string>());
-            lua::utility::set_property(s, self, name, value);
+        sol::meta_function::new_index, [](sol::this_state s, uevr::API::UObject* self, const std::wstring& index_obj, sol::object value) {
+            lua::utility::set_property(s, self, index_obj, value);
         }
     );
 

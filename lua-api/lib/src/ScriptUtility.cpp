@@ -142,6 +142,8 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
         }
 
         return sol::make_object(s, *(uevr::API::UClass**)((uintptr_t)self + offset));
+    case L"Function"_fnv:
+        return sol::make_object(s, (uevr::API::UFunction*)desc); // Not actually a property inside the object
     case L"StructProperty"_fnv:
     {
         const auto struct_data = (void*)((uintptr_t)self + offset);
