@@ -2076,6 +2076,7 @@ void VR::on_present() {
     auto runtime = get_runtime();
 
     if (!runtime->loaded) {
+        m_fake_stereo_hook->on_frame(); // Just let all the hooks engage, whatever.
         return;
     }
 
