@@ -1180,7 +1180,7 @@ void Framework::draw_ui() {
         m_cursor_state_changed = false;
     }
     
-    static const auto UEVR_NAME = std::format("UEVR [rev. {:.8}][{} {}]", UEVR_COMMIT_HASH, UEVR_BUILD_DATE, UEVR_BUILD_TIME);
+    static const auto UEVR_NAME = std::format("UEVR [{}+{}-{:.8}]", UEVR_TAG, UEVR_COMMITS_PAST_TAG, UEVR_COMMIT_HASH);
 
     ImGui::SetNextWindowSize(ImVec2(window_w, window_h), ImGuiCond_::ImGuiCond_Once);
     ImGui::Begin(UEVR_NAME.c_str(), &m_draw_ui);
