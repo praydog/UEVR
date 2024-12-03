@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 35
+#define UEVR_PLUGIN_VERSION_MINOR 36
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -218,6 +218,15 @@ typedef struct {
     int (*register_inline_hook)(void* target, void* dst, void** original);
     void (*unregister_inline_hook)(int hook_id);
     void (*dispatch_lua_event)(const char* event_name, const char* event_data);
+
+    const char* (*get_commit_hash)();
+    const char* (*get_tag)();
+    const char* (*get_tag_long)();
+    const char* (*get_branch)();
+    const char* (*get_build_date)();
+    const char* (*get_build_time)();
+    unsigned int (*get_commits_past_tag)();
+    unsigned int (*get_total_commits)();
 } UEVR_PluginFunctions;
 
 typedef struct {

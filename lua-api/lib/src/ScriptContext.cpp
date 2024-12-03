@@ -256,7 +256,16 @@ int ScriptContext::setup_bindings() {
         "log_error", &UEVR_PluginFunctions::log_error,
         "log_warn", &UEVR_PluginFunctions::log_warn,
         "log_info", &UEVR_PluginFunctions::log_info,
-        "is_drawing_ui", &UEVR_PluginFunctions::is_drawing_ui
+        "is_drawing_ui", &UEVR_PluginFunctions::is_drawing_ui,
+
+        "get_commit_hash", &UEVR_PluginFunctions::get_commit_hash,
+        "get_tag", &UEVR_PluginFunctions::get_tag,
+        "get_tag_long", &UEVR_PluginFunctions::get_tag_long,
+        "get_branch", &UEVR_PluginFunctions::get_branch,
+        "get_build_date", &UEVR_PluginFunctions::get_build_date,
+        "get_build_time", &UEVR_PluginFunctions::get_build_time,
+        "get_commits_past_tag", &UEVR_PluginFunctions::get_commits_past_tag,
+        "get_total_commits", &UEVR_PluginFunctions::get_total_commits
     );
 
     m_lua.new_usertype<UEVR_RendererData>("UEVR_RendererData",
