@@ -183,6 +183,13 @@ Framework::Framework(HMODULE framework_module)
     spdlog::set_default_logger(m_logger);
     spdlog::flush_on(spdlog::level::info);
     spdlog::info("UnrealVR entry");
+    spdlog::info("Commit hash: {}", UEVR_COMMIT_HASH);
+    spdlog::info("Tag: {}", UEVR_TAG);
+    spdlog::info("Commits past tag: {}", UEVR_COMMITS_PAST_TAG);
+    spdlog::info("Branch: {}", UEVR_BRANCH);
+    spdlog::info("Total commits: {}", UEVR_TOTAL_COMMITS);
+    spdlog::info("Build date: {}", UEVR_BUILD_DATE);
+    spdlog::info("Build time: {}", UEVR_BUILD_TIME);
 
     const auto module_size = *utility::get_module_size(m_game_module);
 
@@ -1428,6 +1435,13 @@ void Framework::draw_about() {
     ImGui::Text("Unreal Engine VR");
     ImGui::Text("https://github.com/praydog/UEVR");
     ImGui::Text("http://praydog.com");
+    ImGui::Text("Branch: %s", UEVR_BRANCH);
+    ImGui::Text("Commits: %i", UEVR_TOTAL_COMMITS);
+    ImGui::Text("Commit hash: %s", std::format("{:.8}", UEVR_COMMIT_HASH).c_str());
+    ImGui::Text("Tag: %s", UEVR_TAG);
+    ImGui::Text("Commits past tag: %i", UEVR_COMMITS_PAST_TAG);
+    ImGui::Text("Build date: %s", UEVR_BUILD_DATE);
+    ImGui::Text("Build time: %s", UEVR_BUILD_TIME);
 
     if (ImGui::CollapsingHeader("Licenses")) {
         ImGui::TreePush("Licenses");
