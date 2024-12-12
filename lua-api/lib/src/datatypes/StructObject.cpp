@@ -4,6 +4,16 @@
 #include <datatypes/StructObject.hpp>
 
 namespace lua::datatypes {
+    template<typename T>
+    T read_t_structobject(StructObject& self, size_t offset) {
+        return utility::read_t_struct<T>(self.object, self.desc, offset);
+    }
+
+    template<typename T>
+    void write_t_structobject(StructObject& self, size_t offset, T value) {
+        utility::write_t_struct<T>(self.object, self.desc, offset, value);
+    }
+
     void StructObject::construct(uevr::API::UStruct* def) {
         // TODO: Call constructor? Not important for now
         if (def->is_a(uevr::API::UScriptStruct::static_class())) {
@@ -53,22 +63,18 @@ namespace lua::datatypes {
             "set_property", [](sol::this_state s, StructObject* self, const std::wstring& name, sol::object value) {
                 lua::utility::set_property(s, self->object, self->desc, name, value);
             },
-            "write_qword", [](StructObject& self, size_t offset, uint64_t value) {
-                size_t size = 0;
-                if (self.desc->is_a(uevr::API::UScriptStruct::static_class())) {
-                    auto script_struct = static_cast<uevr::API::UScriptStruct*>(self.desc);
-
-                    size = script_struct->get_struct_size();
-                } else {
-                    size = self.desc->get_properties_size();
-                }
-
-                if (offset + sizeof(uint64_t) > size) {
-                    throw sol::error("Offset out of bounds");
-                }
-
-                *(uint64_t*)((uintptr_t)self.object + offset) = value;
-            },
+            "write_qword", &write_t_structobject<uint64_t>,
+            "write_dword", &write_t_structobject<uint32_t>,
+            "write_word", &write_t_structobject<uint16_t>,
+            "write_byte", &write_t_structobject<uint8_t>,
+            "write_float", &write_t_structobject<float>,
+            "write_double", &write_t_structobject<double>,
+            "read_qword", &read_t_structobject<uint64_t>,
+            "read_dword", &read_t_structobject<uint32_t>,
+            "read_word", &read_t_structobject<uint16_t>,
+            "read_byte", &read_t_structobject<uint8_t>,
+            "read_float", &read_t_structobject<float>,
+            "read_double", &read_t_structobject<double>,
             sol::meta_function::index, [](sol::this_state s, StructObject* self, sol::object index_obj) -> sol::object {
                 if (!index_obj.is<std::string>()) {
                     return sol::make_object(s, sol::lua_nil);
