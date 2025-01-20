@@ -1340,9 +1340,9 @@ public:
             return result;
         }
 
-        static void trigger_haptic_vibration(UEVR_TrackedDeviceIndex index, float amplitude, float frequency, float duration, UEVR_InputSourceHandle source) {
+        static void trigger_haptic_vibration(float seconds_from_now, float amplitude, float frequency, float duration, UEVR_InputSourceHandle source) {
             static const auto fn = initialize()->trigger_haptic_vibration;
-            fn(index, amplitude, frequency, duration, source);
+            fn(seconds_from_now, amplitude, frequency, duration, source);
         }
 
         static bool is_using_contriollers() {
