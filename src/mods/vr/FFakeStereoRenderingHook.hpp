@@ -194,7 +194,7 @@ public:
 
     void attempt_hooking();
     void attempt_hook_game_engine_tick(uintptr_t return_address = 0);
-    void attempt_hook_slate_thread(uintptr_t return_address = 0);
+    void attempt_hook_slate_thread(uintptr_t return_address = 0, bool alternate = false);
     void attempt_hook_update_viewport_rhi(uintptr_t return_address);
     void attempt_hook_fsceneview_constructor();
     
@@ -433,6 +433,7 @@ private:
     bool m_hooked_slate_thread{false};
     bool m_attempted_hook_game_engine_tick{false};
     bool m_attempted_hook_slate_thread{false};
+    bool m_attempted_hook_slate_thread_alternate{false};
     bool m_attempted_hook_update_viewport_rhi{false};
     bool m_attempted_hook_fsceneview_constructor{false};
     bool m_uses_old_rendertarget_manager{false};

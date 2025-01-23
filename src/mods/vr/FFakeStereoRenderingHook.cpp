@@ -374,11 +374,12 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
 namespace detail{
 bool pre_find_slate_thread() {
     sdk::slate::locate_draw_window_renderthread_fn(); // Can take a while to find
+    sdk::slate::locate_draw_window_renderthread_fn_alternate();
     return true;
 }
 }
 
-void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_address) {
+void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_address, bool alternate) {
     if (m_asynchronous_scan->value()) {
         static std::future<bool> future = std::async(std::launch::async, detail::pre_find_slate_thread);
 
@@ -394,14 +395,22 @@ void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_addres
         return;
     }
 
-    if (return_address == 0 && m_attempted_hook_slate_thread) {
+    const auto attempted = alternate ? m_attempted_hook_slate_thread_alternate : m_attempted_hook_slate_thread;
+
+    if (return_address == 0 && attempted) {
         return;
     }
 
     SPDLOG_INFO("Attempting to hook FSlateRHIRenderer::DrawWindow_RenderThread!");
-    m_attempted_hook_slate_thread = true;
 
-    auto func = sdk::slate::locate_draw_window_renderthread_fn();
+    if (alternate) {
+        SPDLOG_INFO("Using alternate method to hook FSlateRHIRenderer::DrawWindow_RenderThread!");
+        m_attempted_hook_slate_thread_alternate = true;
+    } else {
+        m_attempted_hook_slate_thread = true;
+    }
+
+    auto func = alternate ? sdk::slate::locate_draw_window_renderthread_fn_alternate() : sdk::slate::locate_draw_window_renderthread_fn();
 
     if (!func && return_address == 0) {
         SPDLOG_ERROR("Cannot hook FSlateRHIRenderer::DrawWindow_RenderThread");
@@ -3024,6 +3033,14 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
     
     if (!g_framework->is_game_data_intialized()) {
         return;
+    }
+
+    static size_t execution_count{0};
+
+    if (g_hook->m_attempted_hook_slate_thread && !g_hook->m_slate_thread_hook && !g_hook->m_attempted_hook_slate_thread_alternate && execution_count++ >= 50) {
+        SPDLOG_INFO("DrawWindow_RenderThread was not hooked after {} render calls, trying alternative hook", execution_count);
+
+        g_hook->attempt_hook_slate_thread(0, true);
     }
 
     auto& vr = VR::get();
