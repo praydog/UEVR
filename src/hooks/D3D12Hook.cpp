@@ -343,8 +343,10 @@ bool D3D12Hook::hook() {
 
             m_is_phase_1 = true;
 
-             auto& present_fn = (*(void***)target_swapchain)[8]; // Present
+            auto& present_fn = (*(void***)target_swapchain)[8]; // Present
+            auto& present1_fn = (*(void***)target_swapchain)[22]; // Present1
             m_present_hook = std::make_unique<PointerHook>(&present_fn, (void*)&D3D12Hook::present);
+            m_present1_hook = std::make_unique<PointerHook>(&present1_fn, (void*)&D3D12Hook::present1);
             m_hooked = true;
         });
     } catch (const std::exception& e) {
@@ -387,24 +389,23 @@ bool D3D12Hook::unhook() {
 
 thread_local int32_t g_present_depth = 0;
 
-HRESULT WINAPI D3D12Hook::present(IDXGISwapChain3* swap_chain, UINT sync_interval, UINT flags) {
-    std::scoped_lock _{g_framework->get_hook_monitor_mutex()};
-
+HRESULT D3D12Hook::present_internal(IDXGISwapChain3* swap_chain, UINT sync_interval, UINT flags, DXGI_PRESENT_PARAMETERS* params, bool present1) {
     auto d3d12 = g_d3d12_hook;
 
     HWND swapchain_wnd{nullptr};
     swap_chain->GetHwnd(&swapchain_wnd);
 
-    decltype(D3D12Hook::present)* present_fn{nullptr};
+    using Present1Fn = HRESULT(*)(IDXGISwapChain3*, UINT, UINT, DXGI_PRESENT_PARAMETERS*);
+    Present1Fn present_fn{nullptr};
 
-    //if (d3d12->m_is_phase_1) {
-        present_fn = d3d12->m_present_hook->get_original<decltype(D3D12Hook::present)*>();
-    /*} else {
-        present_fn = d3d12->m_swapchain_hook->get_method<decltype(D3D12Hook::present)*>(8);
-    }*/
+    if (!present1) {
+        present_fn = d3d12->m_present_hook->get_original<Present1Fn>();
+    } else {
+        present_fn = d3d12->m_present1_hook->get_original<Present1Fn>();
+    }
 
     if (d3d12->m_is_phase_1 && WindowFilter::get().is_filtered(swapchain_wnd)) {
-        return present_fn(swap_chain, sync_interval, flags);
+        return present_fn(swap_chain, sync_interval, flags, params);
     }
 
     if (!d3d12->m_is_phase_1 && swap_chain != d3d12->m_swapchain_hook->get_instance()) {
@@ -417,7 +418,7 @@ HRESULT WINAPI D3D12Hook::present(IDXGISwapChain3* swap_chain, UINT sync_interva
         }
 
         if (!d3d12->m_is_phase_1) {
-            return present_fn(swap_chain, sync_interval, flags);
+            return present_fn(swap_chain, sync_interval, flags, params);
         }
     }
 
@@ -474,7 +475,7 @@ HRESULT WINAPI D3D12Hook::present(IDXGISwapChain3* swap_chain, UINT sync_interva
             spdlog::info("Attempting to call real present function");
 
             ++g_present_depth;
-            const auto result = present_fn(swap_chain, sync_interval, flags);
+            const auto result = present_fn(swap_chain, sync_interval, flags, params);
             --g_present_depth;
 
             if (result != S_OK) {
@@ -515,7 +516,7 @@ HRESULT WINAPI D3D12Hook::present(IDXGISwapChain3* swap_chain, UINT sync_interva
     auto result = S_OK;
     
     if (!d3d12->m_ignore_next_present) {
-        result = present_fn(swap_chain, sync_interval, flags);
+        result = present_fn(swap_chain, sync_interval, flags, params);
 
         if (result != S_OK) {
             spdlog::error("Present failed: {:x}", result);
@@ -531,8 +532,20 @@ HRESULT WINAPI D3D12Hook::present(IDXGISwapChain3* swap_chain, UINT sync_interva
     }
 
     d3d12->m_inside_present = false;
-    
+
     return result;
+}
+
+HRESULT WINAPI D3D12Hook::present(IDXGISwapChain3* swap_chain, UINT sync_interval, UINT flags) {
+    std::scoped_lock _{g_framework->get_hook_monitor_mutex()};
+    
+    return D3D12Hook::present_internal(swap_chain, sync_interval, flags, nullptr, false);
+}
+
+HRESULT WINAPI D3D12Hook::present1(IDXGISwapChain3* swap_chain, UINT sync_interval, UINT flags, DXGI_PRESENT_PARAMETERS* params) {
+    std::scoped_lock _{g_framework->get_hook_monitor_mutex()};
+
+    return D3D12Hook::present_internal(swap_chain, sync_interval, flags, params, true);
 }
 
 thread_local int32_t g_resize_buffers_depth = 0;

@@ -125,6 +125,7 @@ protected:
     bool m_ignore_next_present{false};
 
     std::unique_ptr<PointerHook> m_present_hook{};
+    std::unique_ptr<PointerHook> m_present1_hook{};
     std::unique_ptr<VtableHook> m_swapchain_hook{};
     //std::unique_ptr<FunctionHook> m_create_swap_chain_hook{};
 
@@ -134,7 +135,10 @@ protected:
     OnResizeTargetFn m_on_resize_target{ nullptr };
     //OnCreateSwapChainFn m_on_create_swap_chain{ nullptr };
     
+    static HRESULT present_internal(IDXGISwapChain3* swap_chain, UINT sync_interval, UINT flags, DXGI_PRESENT_PARAMETERS* params, bool present1 = false);
+
     static HRESULT WINAPI present(IDXGISwapChain3* swap_chain, UINT sync_interval, UINT flags);
+    static HRESULT WINAPI present1(IDXGISwapChain3* swap_chain, UINT sync_interval, UINT flags, DXGI_PRESENT_PARAMETERS* params);
     static HRESULT WINAPI resize_buffers(IDXGISwapChain3* swap_chain, UINT buffer_count, UINT width, UINT height, DXGI_FORMAT new_format, UINT swap_chain_flags);
     static HRESULT WINAPI resize_target(IDXGISwapChain3* swap_chain, const DXGI_MODE_DESC* new_target_parameters);
     //static HRESULT WINAPI create_swap_chain(IDXGIFactory4* factory, IUnknown* device, HWND hwnd, const DXGI_SWAP_CHAIN_DESC* desc, const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* p_fullscreen_desc, IDXGIOutput* p_restrict_to_output, IDXGISwapChain** swap_chain);
