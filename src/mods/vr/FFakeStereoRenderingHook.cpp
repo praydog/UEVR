@@ -537,8 +537,15 @@ bool FFakeStereoRenderingHook::hook() {
             return false;
         };
 
+        const auto found_version = sdk::search_for_version(utility::get_executable());
+
+        if (!found_version) {
+            SPDLOG_WARN("Failed to find version in executable");
+        }
+
         // Check for version 4.27.2.0
-        if (check_file_version(0x4001B, 0x20000)) {
+        // 4.26 also works here
+        if (check_file_version(0x4001B, 0x20000) || found_version.value_or(L"") == L"4.26") {
             return nonstandard_create_stereo_device_hook_4_27();
         }
 
