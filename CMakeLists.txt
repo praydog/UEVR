@@ -875,6 +875,12 @@ set_target_properties(uevr PROPERTIES
 )
 
 add_custom_command(
+TARGET uevr PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "Compiling shaders for UEVR..."
+    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR}/src/mods/vr/shaders ${CMAKE_SOURCE_DIR}/src/mods/vr/shaders/compile_shaders.bat
+)
+
+add_custom_command(
     TARGET uevr PRE_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo "Generating commit hash..."
     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/MakeCommitHash.bat

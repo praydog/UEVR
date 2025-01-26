@@ -1,3 +1,5 @@
+#include <d3dcompiler.h>
+
 #include <openvr.h>
 #include <utility/String.hpp>
 #include <utility/ScopeGuard.hpp>
@@ -8,6 +10,9 @@
 
 #include <../../directxtk12-src/Inc/ResourceUploadBatch.h>
 #include <../../directxtk12-src/Inc/RenderTargetState.h>
+
+#include "shaders/Compiled/alpha_luminance_sprite_ps_SpritePixelShader.inc"
+#include "shaders/Compiled/alpha_luminance_sprite_ps_SpriteVertexShader.inc"
 
 #include "d3d12/DirectXTK.hpp"
 
@@ -65,6 +70,8 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         SPDLOG_ERROR_EVERY_N_SEC(1, "[VR] Failed to get back buffer.");
         return vr::VRCompositorError_None;
     }
+
+    const auto ui_should_invert_alpha = vr->get_overlay_component().should_invert_ui_alpha();
 
     // Update the UI overlay.
     auto runtime = vr->get_runtime();
@@ -215,6 +222,10 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     const auto is_2d_screen = vr->is_using_2d_screen();
 
     auto draw_2d_view = [&](d3d12::CommandContext& commands) {
+        if (ui_should_invert_alpha && m_game_ui_tex.texture.Get() != nullptr && m_game_ui_tex.srv_heap != nullptr) {
+            d3d12::render_srv_to_rtv(m_ui_batch_alpha_invert.get(), commands.cmd_list.Get(), m_game_ui_tex, m_game_ui_tex, std::nullopt, ENGINE_SRC_COLOR, ENGINE_SRC_COLOR);
+        }
+
         draw_spectator_view(commands.cmd_list.Get(), is_right_eye_frame);
 
         if (is_2d_screen && m_game_tex.texture.Get() != nullptr && m_game_tex.srv_heap != nullptr) {
@@ -276,7 +287,8 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
     // Draws the spectator view
     auto clear_rt = [&](d3d12::CommandContext& commands) {
-        commands.clear_rtv(m_game_ui_tex, (float*)&clear_color, ENGINE_SRC_COLOR);
+        const float ui_clear_color[] = { 0.0f, 0.0f, 0.0f, ui_should_invert_alpha ? 1.0f : 0.0f };
+        commands.clear_rtv(m_game_ui_tex, (float*)&ui_clear_color, ENGINE_SRC_COLOR);
     };
 
     if (runtime->is_openvr() && m_openvr.ui_tex.texture.Get() != nullptr) {
@@ -629,7 +641,12 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     return e;
 }
 
-std::unique_ptr<DirectX::DX12::SpriteBatch> D3D12Component::setup_sprite_batch_pso(DXGI_FORMAT output_format) {
+std::unique_ptr<DirectX::DX12::SpriteBatch> D3D12Component::setup_sprite_batch_pso(
+    DXGI_FORMAT output_format, 
+    std::span<const uint8_t> ps, 
+    std::span<const uint8_t> vs, 
+    std::optional<DirectX::SpriteBatchPipelineStateDescription> pd) 
+{
     spdlog::info("[D3D12] Setting up sprite batch PSO");
 
     auto& hook = g_framework->get_d3d12_hook();
@@ -641,10 +658,19 @@ std::unique_ptr<DirectX::DX12::SpriteBatch> D3D12Component::setup_sprite_batch_p
     DirectX::ResourceUploadBatch upload{ device };
     upload.Begin();
 
-    DirectX::RenderTargetState output_state{output_format, DXGI_FORMAT_UNKNOWN};
-    DirectX::SpriteBatchPipelineStateDescription pd{output_state};
+    if (!pd) {
+        pd = DirectX::SpriteBatchPipelineStateDescription{DirectX::RenderTargetState{output_format, DXGI_FORMAT_UNKNOWN}};
+    }
 
-    auto batch = std::make_unique<DirectX::DX12::SpriteBatch>(device, upload, pd);
+    if (ps.size() > 0) {
+        pd->customPixelShader = D3D12_SHADER_BYTECODE{ps.data(), ps.size()};
+    }
+
+    if (vs.size() > 0) {
+        pd->customVertexShader = D3D12_SHADER_BYTECODE{vs.data(), vs.size()};
+    }
+
+    auto batch = std::make_unique<DirectX::DX12::SpriteBatch>(device, upload, *pd);
 
     auto result = upload.End(command_queue);
     result.wait();
@@ -928,6 +954,7 @@ void D3D12Component::on_reset(VR* vr) {
     m_game_tex.reset();
     m_backbuffer_batch.reset();
     m_game_batch.reset();
+    m_ui_batch_alpha_invert.reset();
     m_graphics_memory.reset();
 
     if (runtime->is_openxr() && runtime->loaded) {
@@ -1143,6 +1170,31 @@ bool D3D12Component::setup() {
 
     m_backbuffer_batch = setup_sprite_batch_pso(real_backbuffer_desc.Format);
     m_game_batch = setup_sprite_batch_pso(backbuffer_desc.Format);
+
+    // Custom blend state to flip the alpha in-place of the UI texture without an intermediate render target
+    {
+        DirectX::SpriteBatchPipelineStateDescription invert_alpha_in_place_pd{DirectX::RenderTargetState{backbuffer_desc.Format, DXGI_FORMAT_UNKNOWN}};
+
+        auto& bd = invert_alpha_in_place_pd.blendDesc;
+        auto& bdrt = bd.RenderTarget[0];
+        bdrt.BlendEnable = TRUE;
+
+        bdrt.SrcBlend = D3D12_BLEND_ONE;
+        bdrt.DestBlend = D3D12_BLEND_ZERO;
+        bdrt.BlendOp = D3D12_BLEND_OP_ADD;
+
+        bdrt.SrcBlendAlpha = D3D12_BLEND_ONE;
+        bdrt.DestBlendAlpha = D3D12_BLEND_ZERO;
+        bdrt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+        bdrt.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+        m_ui_batch_alpha_invert = setup_sprite_batch_pso(
+            backbuffer_desc.Format, 
+            alpha_luminance_sprite_ps_SpritePixelShader, 
+            alpha_luminance_sprite_ps_SpriteVertexShader, 
+            invert_alpha_in_place_pd
+        );
+    }
 
     spdlog::info("[VR] d3d12 textures have been setup");
     m_force_reset = false;

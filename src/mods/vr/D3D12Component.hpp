@@ -1,5 +1,7 @@
 #pragma once
 
+#include <span>
+
 #include <d3d12.h>
 #include <dxgi.h>
 #include <mutex>
@@ -44,7 +46,12 @@ public:
 
 private:
     bool setup();
-    std::unique_ptr<DirectX::DX12::SpriteBatch> setup_sprite_batch_pso(DXGI_FORMAT output_format);
+    std::unique_ptr<DirectX::DX12::SpriteBatch> setup_sprite_batch_pso(
+        DXGI_FORMAT output_format, 
+        std::span<const uint8_t> vs = {}, std::span<const uint8_t> ps = {},
+        std::optional<DirectX::SpriteBatchPipelineStateDescription> pd = std::nullopt
+    );
+
     void draw_spectator_view(ID3D12GraphicsCommandList* command_list, bool is_right_eye_frame);
     void clear_backbuffer();
 
@@ -64,6 +71,7 @@ private:
     std::unique_ptr<DirectX::DX12::GraphicsMemory> m_graphics_memory{};
     std::unique_ptr<DirectX::DX12::SpriteBatch> m_backbuffer_batch{};
     std::unique_ptr<DirectX::DX12::SpriteBatch> m_game_batch{};
+    std::unique_ptr<DirectX::DX12::SpriteBatch> m_ui_batch_alpha_invert{};
 
     ID3D12Resource* m_last_checked_native{nullptr};
 
