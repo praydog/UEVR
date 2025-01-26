@@ -121,8 +121,8 @@ std::optional<std::string> VR::initialize_openvr() {
   if (GetModuleHandleW(L"openvr_api.dll") == nullptr) {
         HMODULE openvr_handle = nullptr;
         const auto module_path = Framework::get_persistent_dir("..\\uevr\\openvr_api.dll");
-        SetDllDirectoryW(module_path.parent_path().c_str());
-        openvr_handle = LoadLibraryExW(module_path.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR);
+        //SetDllDirectoryW(module_path.parent_path().c_str());
+        openvr_handle = LoadLibraryW(module_path.c_str());
         
           if (GetModuleHandleW(L"openvr_api.dll") == nullptr && GetModuleHandleW( module_path.c_str() ) == nullptr) {
         if (utility::load_module_from_current_directory(L"openvr_api.dll") == nullptr) {
@@ -134,7 +134,8 @@ std::optional<std::string> VR::initialize_openvr() {
             return std::nullopt;
             }
         }
-        else SetDllDirectoryW(nullptr);
+        //else 
+        //SetDllDirectoryW(nullptr);
   }
         if (utility::load_module_from_current_directory(L"openvr_api.dll") == nullptr) {
             spdlog::info("[VR] Could not load openvr_api.dll");
@@ -269,9 +270,9 @@ std::optional<std::string> VR::initialize_openxr() {
         // Glad that this just works
         const auto module_path = Framework::get_persistent_dir("..\\uevr\\openxr_loader.dll");
         // temporarily set override dir to mod path. will experiment with doing this earlier to see if we can just ignore any game engine plugins without the nullifier
-        SetDllDirectoryW(module_path.parent_path().c_str());
+       // SetDllDirectoryW(module_path.parent_path().c_str());
         // must use this flag to use set or add directory
-        openxr_handle = LoadLibraryExW(module_path.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR);
+        openxr_handle = LoadLibraryW(module_path.c_str());
         // one might be tempted to use GetModuleHandleExW here but that's actually for loading from memory locations
         if (GetModuleHandleW(L"openxr_loader.dll") == nullptr && GetModuleHandleW(module_path.c_str()) == nullptr) {
         if (utility::load_module_from_current_directory(L"openxr_loader.dll") == nullptr) {
@@ -284,7 +285,7 @@ std::optional<std::string> VR::initialize_openxr() {
             }
         }
         // unset override to restore normal dll path searching
-        SetDllDirectoryW(nullptr);
+       // SetDllDirectoryW(nullptr);
     }
 
     if (g_framework->is_dx12()) {
@@ -2426,6 +2427,8 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
 
         ImGui::TextWrapped("Render Resolution (per-eye): %d x %d", get_runtime()->get_width(), get_runtime()->get_height());
         ImGui::TextWrapped("Total Render Resolution: %d x %d", get_runtime()->get_width() * 2, get_runtime()->get_height());
+        ImGui::TextWrapped("Total Render Width: %d", get_runtime()->get_width() * 2);
+        ImGui::TextWrapped("Total Render Height: %d", get_runtime()->get_height());
         if (get_runtime()->is_openvr()) {
             ImGui::TextWrapped("Resolution can be changed in SteamVR");
         }
