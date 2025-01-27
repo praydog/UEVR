@@ -339,6 +339,7 @@ bool D3D12Hook::hook() {
         safetyhook::execute_while_frozen([&] {
             spdlog::info("Initializing hooks");
             m_present_hook.reset();
+            m_present1_hook.reset();
             m_swapchain_hook.reset();
 
             m_is_phase_1 = true;
@@ -379,6 +380,7 @@ bool D3D12Hook::unhook() {
     spdlog::info("Unhooking D3D12");
 
     m_present_hook.reset();
+    m_present1_hook.reset();
     m_swapchain_hook.reset();
 
     m_hooked = false;
