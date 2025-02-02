@@ -712,7 +712,30 @@ void D3D12Component::draw_spectator_view(ID3D12GraphicsCommandList* command_list
         return;
     }
 
-    auto& backbuffer_ctx = m_backbuffer_textures[index];
+    if (index >= m_backbuffer_textures.size()) {
+        m_backbuffer_textures.resize(index + 1);
+        spdlog::info("[VR] Resized backbuffer textures to {}", index + 1);
+
+        for (auto& tex : m_backbuffer_textures) {
+            if (tex == nullptr) {
+                tex = std::make_unique<d3d12::TextureContext>();
+            }
+        }
+    }
+
+    auto& backbuffer_ctx_ptr = m_backbuffer_textures[index];
+    
+    if (backbuffer_ctx_ptr == nullptr) {
+        // if this has happened, assume the rest of the textures are also null
+        for (auto& tex : m_backbuffer_textures) {
+            if (tex == nullptr) {
+                tex = std::make_unique<d3d12::TextureContext>();
+            }
+        }
+    }
+
+    auto& backbuffer_ctx = *backbuffer_ctx_ptr;
+
     const auto desc = backbuffer->GetDesc();
 
     if (backbuffer_ctx.texture.Get() != backbuffer.Get()) {
@@ -730,8 +753,8 @@ void D3D12Component::draw_spectator_view(ID3D12GraphicsCommandList* command_list
     }
 
     // Copy the previous right eye frame to the left eye frame
-    if (vr->is_using_afr() && !is_right_eye_frame && m_backbuffer_textures[(index + 2) % 3].texture != nullptr) {
-        const auto& last_right_eye_buffer = m_backbuffer_textures[(index + 2) % 3].texture;
+    if (vr->is_using_afr() && !is_right_eye_frame && m_backbuffer_textures[(index + 2) % m_backbuffer_textures.size()]->texture != nullptr) {
+        const auto& last_right_eye_buffer = m_backbuffer_textures[(index + 2) % m_backbuffer_textures.size()]->texture;
 
         if (backbuffer.Get() != last_right_eye_buffer.Get()) {
             m_generic_commands[index % 3].wait(INFINITE);
@@ -874,16 +897,30 @@ void D3D12Component::clear_backbuffer() {
     }
 
     if (index >= m_backbuffer_textures.size()) {
-        // we don't support more than 3 backbuffers
-        return;
+        m_backbuffer_textures.resize(index + 1);
+        spdlog::info("[VR] Resized backbuffer textures to {}", index + 1);
+
+        for (auto& tex : m_backbuffer_textures) {
+            if (tex == nullptr) {
+                tex = std::make_unique<d3d12::TextureContext>();
+            }
+        }
     }
 
-    auto& backbuffer_ctx = m_backbuffer_textures[index];
+    auto& backbuffer_ctx_ptr = m_backbuffer_textures[index];
+    
+    if (backbuffer_ctx_ptr == nullptr) {
+        // if this has happened, assume the rest of the textures are also null
+        for (auto& tex : m_backbuffer_textures) {
+            if (tex == nullptr) {
+                tex = std::make_unique<d3d12::TextureContext>();
+            }
+        }
+    }
+
+    auto& backbuffer_ctx = *backbuffer_ctx_ptr;
 
     if (backbuffer_ctx.texture.Get() != backbuffer.Get()) {
-        // Get backbuffer desc
-        const auto desc = backbuffer->GetDesc();
-
         if (!backbuffer_ctx.setup(device, backbuffer.Get(), std::nullopt, std::nullopt, L"Backbuffer")) {
             spdlog::error("[VR] Failed to setup backbuffer RTV (D3D12)");
             return;
@@ -1018,7 +1055,7 @@ bool D3D12Component::setup() {
     }
 
     ComPtr<ID3D12Resource> real_backbuffer{};
-    if (FAILED(swapchain->GetBuffer(0, IID_PPV_ARGS(&real_backbuffer)))) {
+    if (FAILED(swapchain->GetBuffer(swapchain->GetCurrentBackBufferIndex(), IID_PPV_ARGS(&real_backbuffer)))) {
         spdlog::error("[VR] Failed to get real back buffer (D3D12).");
         return false;
     }
@@ -1037,29 +1074,6 @@ bool D3D12Component::setup() {
     }
 
     const auto real_backbuffer_desc = real_backbuffer->GetDesc();
-
-    // Create RTV/SRV for backbuffer.
-    for (auto i = 0; i < 3; ++i) {
-        auto& backbuffer_ctx = m_backbuffer_textures[i];
-        ComPtr<ID3D12Resource> current_backbuffer{};
-        if (FAILED(swapchain->GetBuffer(i, IID_PPV_ARGS(&current_backbuffer)))) {
-            spdlog::error("[VR] Failed to get back buffer at {} (D3D12).", i);
-            continue;
-        }
-
-        if (backbuffer_ctx.texture.Get() != current_backbuffer.Get()) {
-            // Get backbuffer desc
-            const auto desc = current_backbuffer->GetDesc();
-
-            if (!backbuffer_ctx.setup(device, current_backbuffer.Get(), std::nullopt, std::nullopt, L"Backbuffer")) {
-                spdlog::error("[VR] Failed to setup backbuffer RTV (D3D12)");
-                continue;
-            }
-
-            spdlog::info("[VR] Created backbuffer RTV (D3D12)");
-        }
-    }
-
 
     auto backbuffer_desc = backbuffer->GetDesc();
 
@@ -1254,7 +1268,7 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
     
     // Get the existing backbuffer
     // so we can get the format and stuff.
-    if (backbuffer == nullptr && FAILED(swapchain->GetBuffer(0, IID_PPV_ARGS(&backbuffer)))) {
+    if (backbuffer == nullptr && FAILED(swapchain->GetBuffer(swapchain->GetCurrentBackBufferIndex(), IID_PPV_ARGS(&backbuffer)))) {
         spdlog::error("[VR] Failed to get back buffer.");
         return "Failed to get back buffer.";
     }
