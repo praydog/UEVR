@@ -753,8 +753,8 @@ void D3D12Component::draw_spectator_view(ID3D12GraphicsCommandList* command_list
     }
 
     // Copy the previous right eye frame to the left eye frame
-    if (vr->is_using_afr() && !is_right_eye_frame && m_backbuffer_textures[(index + 2) % m_backbuffer_textures.size()]->texture != nullptr) {
-        const auto& last_right_eye_buffer = m_backbuffer_textures[(index + 2) % m_backbuffer_textures.size()]->texture;
+    if (vr->is_using_afr() && !is_right_eye_frame && m_backbuffer_textures[(index - 1) % m_backbuffer_textures.size()]->texture != nullptr) {
+        const auto& last_right_eye_buffer = m_backbuffer_textures[(index - 1) % m_backbuffer_textures.size()]->texture;
 
         if (backbuffer.Get() != last_right_eye_buffer.Get()) {
             m_generic_commands[index % 3].wait(INFINITE);
