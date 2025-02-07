@@ -3035,18 +3035,21 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
         return;
     }
 
-    static size_t execution_count{0};
-
-    if (g_hook->m_attempted_hook_slate_thread && !g_hook->m_slate_thread_hook && !g_hook->m_attempted_hook_slate_thread_alternate && execution_count++ >= 50) {
-        SPDLOG_INFO("DrawWindow_RenderThread was not hooked after {} render calls, trying alternative hook", execution_count);
-
-        g_hook->attempt_hook_slate_thread(0, true);
-    }
-
     auto& vr = VR::get();
 
     if (!vr->is_hmd_active()) {
         return;
+    }
+
+    static size_t execution_count{0};
+
+    // This should 100% only get executed if the headset is on, because
+    // FFakeStereoRenderingHook::render_texture_render_thread is the first fallback for hooking
+    // And we don't want to miss that unintentionally
+    if (g_hook->m_attempted_hook_slate_thread && !g_hook->m_slate_thread_hook && !g_hook->m_attempted_hook_slate_thread_alternate && execution_count++ >= 50) {
+        SPDLOG_INFO("DrawWindow_RenderThread was not hooked after {} render calls, trying alternative hook", execution_count);
+
+        g_hook->attempt_hook_slate_thread(0, true);
     }
 
     if (vr->is_stereo_emulation_enabled()) {
