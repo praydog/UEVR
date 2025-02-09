@@ -1733,7 +1733,7 @@ void D3D12Component::OpenXR::copy(
                 (*pre_commands)(texture_ctx->commands, ctx.textures[texture_index].texture);
             }
 
-            // We may simple just want to render to the render target directly
+            // We may simply just want to render to the render target directly
             // hence, a null resource is allowed.
             if (resource != nullptr) {
                 if (src_box == nullptr) {
