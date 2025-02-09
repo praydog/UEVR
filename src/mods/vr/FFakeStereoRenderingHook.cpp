@@ -6434,25 +6434,29 @@ bool VRRenderTargetManager_Base::create_scene_capture_texture() try {
 
     UObjectHook::get()->activate();
 
+    static bool already_updated{false};
+
     // Enqueue offset lookup on the render thread because that's when the resource is actually created.
-    RenderThreadWorker::get().enqueue([tgt = this->scene_capture_target]() -> void {
-        RHIThreadWorker::get().enqueue([tgt = tgt]() -> void {
-            if (!UObjectHook::get()->exists(tgt)) {
-                SPDLOG_ERROR("Scene capture target was destroyed between threads!");
-                return;
-            }
-
-            if (sdk::UTexture::update_render_resource_offset_texture2d(tgt)) {
-                SPDLOG_INFO("Successfully updated render resource offset for scene capture target!");
-
-                if (auto rsrc = (sdk::FTextureRenderTargetResource*)tgt->get_resource(); rsrc != nullptr) {
-                    sdk::FTextureRenderTargetResource::update_render_target_vtable_offset(rsrc);
+    if (!already_updated) {
+        RenderThreadWorker::get().enqueue([tgt = this->scene_capture_target]() -> void {
+            RHIThreadWorker::get().enqueue([tgt = tgt]() -> void {
+                if (!UObjectHook::get()->exists(tgt)) {
+                    SPDLOG_ERROR("Scene capture target was destroyed between threads!");
+                    return;
                 }
-            } else {
-                SPDLOG_ERROR("Failed to update render resource offset for scene capture target!");
-            }
+
+                if (sdk::UTexture::update_render_resource_offset_texture2d(tgt)) {
+                    SPDLOG_INFO("Successfully updated render resource offset for scene capture target!");
+
+                    if (auto rsrc = (sdk::FTextureRenderTargetResource*)tgt->get_resource(); rsrc != nullptr) {
+                        already_updated = sdk::FTextureRenderTargetResource::update_render_target_vtable_offset(rsrc);
+                    }
+                } else {
+                    SPDLOG_ERROR("Failed to update render resource offset for scene capture target!");
+                }
+            });
         });
-    });
+    }
 
     SPDLOG_INFO("Scene capture texture created!");
 
