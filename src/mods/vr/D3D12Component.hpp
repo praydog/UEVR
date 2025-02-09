@@ -65,8 +65,6 @@ private:
     d3d12::TextureContext m_game_ui_tex{};
     d3d12::TextureContext m_game_tex{};
     d3d12::TextureContext m_scene_capture_tex{};
-    d3d12::TextureContext m_intermediate_game_tex{};
-    ComPtr<ID3D12Resource> m_intermediate_game_tex_native{};
     std::array<d3d12::CommandContext, 3> m_game_tex_commands{};
     std::array<d3d12::TextureContext, 2> m_2d_screen_tex{};
     std::vector<std::unique_ptr<d3d12::TextureContext>> m_backbuffer_textures{};
@@ -168,7 +166,7 @@ private:
         std::optional<std::string> create_swapchains();
         void destroy_swapchains();
         void copy(uint32_t swapchain_idx, ID3D12Resource* src,
-            std::optional<std::function<void(d3d12::CommandContext&)>> pre_commands = std::nullopt,
+            std::optional<std::function<void(d3d12::CommandContext&, ID3D12Resource*)>> pre_commands = std::nullopt,
             std::optional<std::function<void(d3d12::CommandContext&)>> additional_commands = std::nullopt,
             D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT, D3D12_BOX* src_box = nullptr);
 

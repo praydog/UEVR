@@ -185,6 +185,108 @@ void CommandContext::copy_region(ID3D12Resource* src, ID3D12Resource* dst, D3D12
     this->has_commands = true;
 }
 
+void CommandContext::copy_region(ID3D12Resource* src, ID3D12Resource* dst, D3D12_BOX* src_box, UINT dst_x, UINT dst_y, UINT dst_z, D3D12_RESOURCE_STATES src_state, D3D12_RESOURCE_STATES dst_state) {
+    std::scoped_lock _{this->mtx};
+
+    if (src == nullptr || dst == nullptr) {
+        spdlog::error("[VR] nullptr passed to copy_region");
+        return;
+    }
+
+    // Switch src into copy source.
+    D3D12_RESOURCE_BARRIER src_barrier{};
+
+    src_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    src_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    src_barrier.Transition.pResource = src;
+    src_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    src_barrier.Transition.StateBefore = src_state;
+    src_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+
+    // Switch dst into copy destination.
+    D3D12_RESOURCE_BARRIER dst_barrier{};
+    dst_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    dst_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    dst_barrier.Transition.pResource = dst;
+    dst_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    dst_barrier.Transition.StateBefore = dst_state;
+    dst_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+
+    {
+        D3D12_RESOURCE_BARRIER barriers[2]{src_barrier, dst_barrier};
+        this->cmd_list->ResourceBarrier(2, barriers);
+    }
+
+    // Copy the resource.
+    D3D12_TEXTURE_COPY_LOCATION src_loc{};
+    src_loc.pResource = src;
+    src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    src_loc.SubresourceIndex = 0;
+
+    D3D12_TEXTURE_COPY_LOCATION dst_loc{};
+    dst_loc.pResource = dst;
+    dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    dst_loc.SubresourceIndex = 0;
+
+    this->cmd_list->CopyTextureRegion(&dst_loc, dst_x, dst_y, dst_z, &src_loc, src_box);
+
+    // Switch back to present.
+    src_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    src_barrier.Transition.StateAfter = src_state;
+    dst_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    dst_barrier.Transition.StateAfter = dst_state;
+
+    {
+        D3D12_RESOURCE_BARRIER barriers[2]{src_barrier, dst_barrier};
+        this->cmd_list->ResourceBarrier(2, barriers);
+    }
+
+    this->has_commands = true;
+}
+
+// More optimal than two copy_region calls.
+void CommandContext::copy_region_stereo(ID3D12Resource* srcleft, ID3D12Resource* srcright, ID3D12Resource* dst, D3D12_BOX* srcleft_box, D3D12_BOX* srcright_box,
+    UINT dstleft_x, UINT dstleft_y, UINT dstleft_z,
+    UINT dstright_x, UINT dstright_y, UINT dstright_z,
+    D3D12_RESOURCE_STATES src_state,
+    D3D12_RESOURCE_STATES dst_state)
+{
+    if (srcleft == nullptr || srcright == nullptr || dst == nullptr) {
+        spdlog::error("[VR] nullptr passed to copy_region_stereo");
+        return;
+    }
+
+    // Transition states to copy source / dest.
+    D3D12_RESOURCE_BARRIER barriers[3]
+    {
+        { D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, D3D12_RESOURCE_BARRIER_FLAG_NONE, {srcleft, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, src_state, D3D12_RESOURCE_STATE_COPY_SOURCE} },
+        { D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, D3D12_RESOURCE_BARRIER_FLAG_NONE, {srcright, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, src_state, D3D12_RESOURCE_STATE_COPY_SOURCE} },
+        { D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, D3D12_RESOURCE_BARRIER_FLAG_NONE, {dst, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, dst_state, D3D12_RESOURCE_STATE_COPY_DEST} }
+    };
+    
+    this->cmd_list->ResourceBarrier(3, barriers);
+
+    // Copy left half
+    D3D12_TEXTURE_COPY_LOCATION src_loc_left = { srcleft, D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, 0 };
+    D3D12_TEXTURE_COPY_LOCATION dst_loc = { dst, D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, 0 };
+
+    this->cmd_list->CopyTextureRegion(&dst_loc, dstleft_x, dstleft_y, dstleft_z, &src_loc_left, srcleft_box);
+
+    // Copy right half
+    D3D12_TEXTURE_COPY_LOCATION src_loc_right = { srcright, D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, 0 };
+
+    this->cmd_list->CopyTextureRegion(&dst_loc, dstright_x, dstright_y, dstright_z, &src_loc_right, srcright_box);
+
+    // Transition states back to original.
+    barriers[0] = { D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, D3D12_RESOURCE_BARRIER_FLAG_NONE, {srcleft, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, D3D12_RESOURCE_STATE_COPY_SOURCE, src_state} };
+    barriers[1] = { D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, D3D12_RESOURCE_BARRIER_FLAG_NONE, {srcright, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, D3D12_RESOURCE_STATE_COPY_SOURCE, src_state} };
+    barriers[2] = { D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, D3D12_RESOURCE_BARRIER_FLAG_NONE, {dst, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, D3D12_RESOURCE_STATE_COPY_DEST, dst_state} };
+
+    this->cmd_list->ResourceBarrier(3, barriers);
+
+    this->has_commands = true;
+}
+
 void CommandContext::clear_rtv(ID3D12Resource* dst, D3D12_CPU_DESCRIPTOR_HANDLE rtv, const float* color, D3D12_RESOURCE_STATES dst_state) {
     std::scoped_lock _{this->mtx};
 
