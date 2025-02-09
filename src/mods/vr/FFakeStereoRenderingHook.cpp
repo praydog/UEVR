@@ -2999,6 +2999,8 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
             openxr->pipeline_states[now_frame].frame_count = now_frame;
         } else {
             auto openvr = (runtimes::OpenVR*)runtime;
+            std::unique_lock __{ openvr->pose_mtx };
+
             const auto last_frame = (frame_count) % openvr->pose_queue.size();
             const auto now_frame = (frame_count + 1) % openvr->pose_queue.size();
             openvr->pose_queue[now_frame] = openvr->pose_queue[last_frame];
