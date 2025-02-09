@@ -2947,15 +2947,34 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
     if (rtm->get_scene_capture_utexture() == nullptr) {
         if (!rtm->create_scene_capture_texture()) {
             SPDLOG_ERROR("Failed to create scene capture texture");
+            const auto prev_count = view_family.views.count;
+            view_family.views.count = 1;
             g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, view_family);
+            view_family.views.count = prev_count;
             return;
         }
 
         // Waiting for RHI thread to finish creating the texture
         if (rtm->get_scene_capture_utexture() == nullptr) {
+            const auto prev_count = view_family.views.count;
+            view_family.views.count = 1;
             g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, view_family);
+            view_family.views.count = prev_count;
             return;
         }
+    }
+
+    const auto rt = rtm->get_scene_capture_utexture();
+    const auto rtrsrc = rt != nullptr ? (sdk::FTextureRenderTargetResource*)rt->get_resource() : nullptr;
+    const auto rtfrt = rtrsrc != nullptr ? rtrsrc->as_render_target() : nullptr;
+
+    // Wait until RT is ready
+    if (rtfrt == nullptr) {
+        const auto prev_count = view_family.views.count;
+        view_family.views.count = 1;
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, view_family);
+        view_family.views.count = prev_count;
+        return;
     }
 
     auto& view_family_target = *(sdk::FRenderTarget**)((uintptr_t)&view_family + sizeof(sdk::TArray<void*>) + sizeof(void*));
@@ -3033,10 +3052,6 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
         // instead of "just" re-using the existing one is that doing that causes a 90% FPS drop
         // because the engine is still working on the old render target
         const auto original_target = view_family_target;
-
-        const auto rt = g_hook->get_render_target_manager()->get_scene_capture_utexture();
-        const auto rtrsrc = rt != nullptr ? (sdk::FTextureRenderTargetResource*)rt->get_resource() : nullptr;
-        const auto rtfrt = rtrsrc != nullptr ? rtrsrc->as_render_target() : nullptr;
 
         if (rtfrt != nullptr) {
             view_family_target = rtfrt;
@@ -6375,11 +6390,19 @@ void VRRenderTargetManager_Base::destroy_scene_capture() try {
         this->scene_capture_actor = nullptr;
         this->scene_capture_component = nullptr;
         this->scene_capture_target = nullptr;
+
+        RHIThreadWorker::get().enqueue([this]() -> void {
+            this->scene_capture_target_rhi_thread = nullptr;
+        });
     }
 
     if (this->scene_capture_target != nullptr && this->in_flight_target == nullptr) {
         this->scene_capture_target->remove_from_root();
         this->scene_capture_target = nullptr;
+
+        RHIThreadWorker::get().enqueue([this]() -> void {
+            this->scene_capture_target_rhi_thread = nullptr;
+        });
     }
 } catch (const std::exception& e) {
     SPDLOG_ERROR("[VRRenderTargetManager] Exception in destroy_scene_capture: {}", e.what());
@@ -6388,8 +6411,10 @@ void VRRenderTargetManager_Base::destroy_scene_capture() try {
 }
 
 FRHITexture2D* VRRenderTargetManager_Base::get_scene_capture_render_target() const {
-    if (this->scene_capture_target != nullptr) {
-        auto rsrc = (sdk::FTextureRenderTargetResource*)this->scene_capture_target->get_resource();
+    auto sct = RHIThreadWorker::get().is_same_thread() ? this->scene_capture_target_rhi_thread : this->scene_capture_target;
+
+    if (sct != nullptr) {
+        auto rsrc = (sdk::FTextureRenderTargetResource*)sct->get_resource();
         auto rsrc_frt = rsrc != nullptr ? rsrc->as_render_target() : nullptr;
 
         if (rsrc_frt != nullptr) {
@@ -6464,7 +6489,12 @@ bool VRRenderTargetManager_Base::create_scene_capture_texture() try {
 
                     if (auto rsrc = (sdk::FTextureRenderTargetResource*)tgt->get_resource(); rsrc != nullptr) {
                         already_updated = sdk::FTextureRenderTargetResource::update_render_target_vtable_offset(rsrc);
-                        this->scene_capture_target = tgt;
+
+                        GameThreadWorker::get().enqueue([this, tgt]() -> void {
+                            this->scene_capture_target = tgt;
+                        });
+
+                        this->scene_capture_target_rhi_thread = tgt;
 
                         SPDLOG_INFO("Scene capture texture created!");
                     }
@@ -6472,13 +6502,20 @@ bool VRRenderTargetManager_Base::create_scene_capture_texture() try {
                     SPDLOG_ERROR("Failed to update render resource offset for scene capture target!");
                 }
 
-                this->in_flight_target = nullptr;
+                GameThreadWorker::get().enqueue([this, tgt]() -> void {
+                    this->in_flight_target = nullptr;
+                });
             });
         });
     
         SPDLOG_INFO("Waiting for scene capture texture to be created...");
     } else {
         this->scene_capture_target = tgt;
+
+        RHIThreadWorker::get().enqueue([this, tgt = tgt]() -> void {
+            this->scene_capture_target_rhi_thread = tgt;
+        });
+
         SPDLOG_INFO("Scene capture texture created!");
     }
 

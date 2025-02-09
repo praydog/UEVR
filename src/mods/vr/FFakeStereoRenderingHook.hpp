@@ -113,6 +113,7 @@ protected:
     sdk::AActor* scene_capture_actor{nullptr};
     sdk::USceneCaptureComponent2D* scene_capture_component{nullptr};
     sdk::UTexture* scene_capture_target{nullptr}; // For custom compatibility rendering
+    sdk::UTexture* scene_capture_target_rhi_thread{nullptr}; // For custom compatibility rendering
     sdk::UTexture* in_flight_target{nullptr};
 };
 
