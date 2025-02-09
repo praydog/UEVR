@@ -97,6 +97,9 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
     if (m_game_tex.texture.Get() == nullptr && backbuffer.Get() == real_backbuffer.Get()) {
         spdlog::info("[VR] Setting up game texture as copy of backbuffer");
+
+        m_intermediate_game_tex.reset();
+        m_intermediate_game_tex_native.Reset();
         
         ComPtr<ID3D12Resource> backbuffer_copy{};
         D3D12_HEAP_PROPERTIES heap_props{};
@@ -144,7 +147,82 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             spdlog::error("[VR] Failed to fully setup game texture.");
             m_game_tex.reset();
         }
+
+        m_intermediate_game_tex_native.Reset();
+
+        D3D12_HEAP_PROPERTIES heap_props{};
+        heap_props.Type = D3D12_HEAP_TYPE_DEFAULT;
+        heap_props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+        heap_props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+
+        auto desc = backbuffer->GetDesc();
+        desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        desc.Flags &= ~D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+
+        if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr, IID_PPV_ARGS(&m_intermediate_game_tex_native)))) {
+            spdlog::error("[VR] Failed to create backbuffer copy.");
+            return vr::VRCompositorError_None;
+        }
+
+        if (!m_intermediate_game_tex.setup(device, m_intermediate_game_tex_native.Get(), DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_B8G8R8A8_UNORM, L"Intermediate Game Texture")) {
+            spdlog::error("[VR] Failed to fully setup intermediate game texture.");
+            m_intermediate_game_tex.reset();
+        }
     }
+
+    if (vr->is_native_stereo_fix_enabled()) {
+        const auto scene_capture = ffsr->get_render_target_manager()->get_scene_capture_render_target();
+        const auto scene_capture_rt = scene_capture != nullptr ? (ID3D12Resource*)scene_capture->get_native_resource() : nullptr;
+
+        if (scene_capture_rt != nullptr && m_scene_capture_tex.texture.Get() != scene_capture_rt) {
+            spdlog::info("[VR] Setting up scene capture texture as reference to original");
+
+            if (!m_scene_capture_tex.setup(device, scene_capture_rt, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_B8G8R8A8_UNORM, L"Scene Capture Texture")) {
+                spdlog::error("[VR] Failed to fully setup scene capture texture.");
+                m_scene_capture_tex.reset();
+            }
+        }
+
+        if (scene_capture_rt == nullptr && m_scene_capture_tex.texture.Get() != nullptr) {
+            spdlog::info("[VR] Resetting scene capture texture");
+
+            m_scene_capture_tex.reset();
+        }
+    } else {
+        m_scene_capture_tex.reset();
+    }
+
+    // We need to render the scene capture texture to the right side of the double wide texture
+    auto pre_render = [&](d3d12::CommandContext& commands) {
+        const float game_clear_color[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+        commands.clear_rtv(m_intermediate_game_tex, game_clear_color, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        commands.has_commands = true;
+        //commands.copy(backbuffer.Get(), m_intermediate_game_tex_native.Get(), ENGINE_SRC_COLOR, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+        // Render left half from original to left half of intermediate
+        d3d12::render_srv_to_rtv(
+            m_game_batch.get(),
+            commands.cmd_list.Get(),
+            m_game_tex,
+            m_intermediate_game_tex,
+            RECT{0, 0, (LONG)((float)m_backbuffer_size[0] / 2.0f), (LONG)m_backbuffer_size[1]},
+            RECT{0, 0, (LONG)((float)m_backbuffer_size[0] / 2.0f), (LONG)m_backbuffer_size[1]},
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        );
+
+        // Render scene capture to right half of intermediate
+        d3d12::render_srv_to_rtv(
+            m_game_batch.get(),
+            commands.cmd_list.Get(),
+            m_scene_capture_tex,
+            m_intermediate_game_tex,
+            std::nullopt,
+            RECT{(LONG)((float)m_backbuffer_size[0] / 2.0f), 0, (LONG)((float)m_backbuffer_size[0]), (LONG)m_backbuffer_size[1]},
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        );
+    };
 
     // For copying the real backbuffer if we need to
     if (m_game_tex.texture.Get() != nullptr && backbuffer == real_backbuffer) {
@@ -482,7 +560,11 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 }
             } else {
                 // Copy over the entire double wide instead
-                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DOUBLE_WIDE, backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr);
+                if (m_scene_capture_tex.texture.Get() == nullptr) {
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DOUBLE_WIDE, backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr);
+                } else {
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DOUBLE_WIDE, m_intermediate_game_tex_native.Get(), pre_render, std::nullopt, D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr);
+                }
 
                 if (scene_depth_tex != nullptr) {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DEPTH, scene_depth_tex.Get(), ENGINE_SRC_DEPTH, nullptr);
@@ -520,7 +602,11 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             }
 
             if (!is_afr) {
-                m_openvr.copy_right(backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+                if (m_scene_capture_tex.texture.Get() == nullptr) {
+                    m_openvr.copy_right(backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+                } else {
+                    m_openvr.copy_left_to_right(m_scene_capture_tex.texture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+                }
             } else {
                 m_openvr.copy_left_to_right(backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
             }
@@ -990,6 +1076,9 @@ void D3D12Component::on_reset(VR* vr) {
     m_openvr.ui_tex.reset();
     m_game_ui_tex.reset();
     m_game_tex.reset();
+    m_scene_capture_tex.reset();
+    m_intermediate_game_tex.reset();
+    m_intermediate_game_tex_native.Reset();
     m_backbuffer_batch.reset();
     m_game_batch.reset();
     m_ui_batch_alpha_invert.reset();
