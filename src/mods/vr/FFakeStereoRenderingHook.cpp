@@ -2699,14 +2699,14 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
     const auto is_ue5 = g_hook->has_double_precision();
     auto init_options_ue5 = (sdk::FSceneViewInitOptionsUE5*)init_options;
 
-    const auto has_valid_svsi = is_ue5 ? init_options_ue5->scene_view_state != nullptr : init_options->scene_view_state != nullptr;
+    const auto has_valid_svsi = init_options->get_scene_state();
 
     if (has_valid_svsi) {
         if (is_ue5) {
-            auto& vio_entry = g_hook->m_sceneview_data.view_init_options_ue5[init_options_ue5->scene_view_state];
+            auto& vio_entry = g_hook->m_sceneview_data.view_init_options_ue5[init_options->get_scene_state()];
             memcpy(&vio_entry, init_options, sizeof(sdk::FSceneViewInitOptionsUE5));
         } else {
-            auto& vio_entry = g_hook->m_sceneview_data.view_init_options_ue4[init_options->scene_view_state];
+            auto& vio_entry = g_hook->m_sceneview_data.view_init_options_ue4[init_options->get_scene_state()];
             memcpy(&vio_entry, init_options, sizeof(sdk::FSceneViewInitOptionsUE4));
         }
     }
@@ -2800,7 +2800,9 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
     const auto init_options_stereo_pass = init_options->get_stereo_pass();
 
     if (vr->is_native_stereo_fix_enabled() && vr->is_native_stereo_fix_same_pass_enabled() && init_options_stereo_pass > EStereoscopicPass::eSSP_PRIMARY) {
-        init_options->set_stereo_pass(EStereoscopicPass::eSSP_PRIMARY);
+        if (g_hook->get_render_target_manager()->get_scene_capture_render_target() != nullptr) {
+            init_options->set_stereo_pass(EStereoscopicPass::eSSP_PRIMARY);
+        }
     }
 
     const auto init_options_scene_state = init_options->get_scene_state();
