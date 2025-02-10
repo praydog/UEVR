@@ -329,7 +329,13 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
     if (vr->is_native_stereo_fix_enabled()) {
         const auto scene_capture = ffsr->get_render_target_manager()->get_scene_capture_render_target();
-        const auto scene_capture_rt = scene_capture != nullptr ? (ID3D11Resource*)scene_capture->get_native_resource() : nullptr;
+        const auto scene_capture_rt = scene_capture != nullptr ? (ID3D11Texture2D*)scene_capture->get_native_resource() : nullptr;
+        if (scene_capture_rt != nullptr && scene_capture_rt != m_scene_capture_tex_ref.tex.Get()) {
+            D3D11_TEXTURE2D_DESC desc{};
+            scene_capture_rt->GetDesc(&desc);
+
+            spdlog::info("[VR] Scene capture texture format: {}, {}x{}", desc.Format, desc.Width, desc.Height);
+        }
         m_scene_capture_tex_ref.set(scene_capture_rt, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_B8G8R8A8_UNORM);
     } else {
         m_scene_capture_tex_ref.reset();

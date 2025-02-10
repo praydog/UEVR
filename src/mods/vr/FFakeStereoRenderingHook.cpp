@@ -2694,6 +2694,8 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
         SPDLOG_INFO("FSceneView constructor called from {:x}", retaddr);
     }
 
+    sdk::FSceneViewInitOptionsBase::update_offsets(init_options);
+
     const auto is_ue5 = g_hook->has_double_precision();
     auto init_options_ue5 = (sdk::FSceneViewInitOptionsUE5*)init_options;
 
@@ -2793,12 +2795,15 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
                 init_options_projection_matrix = proj_mat;
             }
         }
-
-        //init_options_stereo_pass = 0;
     }
 
-    auto& init_options_scene_state = is_ue5 ? init_options_ue5->scene_view_state : init_options->scene_view_state;
-    auto& init_options_stereo_pass = is_ue5 ? init_options_ue5->stereo_pass : init_options->stereo_pass;
+    const auto init_options_stereo_pass = init_options->get_stereo_pass();
+
+    if (vr->is_native_stereo_fix_enabled() && vr->is_native_stereo_fix_same_pass_enabled() && init_options_stereo_pass > EStereoscopicPass::eSSP_PRIMARY) {
+        init_options->set_stereo_pass(EStereoscopicPass::eSSP_PRIMARY);
+    }
+
+    const auto init_options_scene_state = init_options->get_scene_state();
 
     bool new_scene_state_inserted_this_frame = false;
 
@@ -2815,13 +2820,13 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
     }
 
     if (init_options_scene_state != nullptr && !new_scene_state_inserted_this_frame && vr->is_ghosting_fix_enabled() && !known_scene_states.empty() && vr->is_using_afr() && true_index == 1) {
-        init_options_stereo_pass = 1;
+        init_options->set_stereo_pass(EStereoscopicPass::eSSP_PRIMARY);
 
         // Set the scene state to the one that isn't the current one
         for (auto scene_state : known_scene_states) {
             if (scene_state != init_options_scene_state) {
                 SPDLOG_INFO_ONCE("Setting scene state to {:x}", (uintptr_t)scene_state);
-                init_options_scene_state = scene_state;
+                init_options->set_scene_state(scene_state);
                 break;
             }
         }
