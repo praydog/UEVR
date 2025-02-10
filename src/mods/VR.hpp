@@ -1025,6 +1025,7 @@ public:
             *m_load_blueprint_code,
             *m_2d_screen_mode,
             *m_roomscale_movement,
+            *m_roomscale_sweep,
             *m_swap_controllers,
             *m_horizontal_projection_override,
             *m_vertical_projection_override,
