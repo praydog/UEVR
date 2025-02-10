@@ -6472,6 +6472,30 @@ bool VRRenderTargetManager_Base::create_scene_capture_texture() try {
     UObjectHook::get()->activate();
 
     static bool already_updated{false};
+    static std::array<uintptr_t, 100> original_frender_target_vtable{};
+    static auto gamma_increase_fn = +[](const sdk::FRenderTarget* frt) -> float {
+        return 2.2f;
+    };
+
+    static auto hook_frt = [](sdk::FRenderTarget* frt) {
+        if (frt == nullptr) {
+            SPDLOG_WARN("[FRenderTarget] FRenderTarget is null! Can't hook!");
+            return;
+        }
+
+        SPDLOG_INFO("[FRenderTarget] Hooking FRenderTarget!");
+
+        auto& vtable = *(void**)frt;
+        memcpy(original_frender_target_vtable.data(), vtable, 100);
+
+        if (auto display_gamma_index = sdk::FRenderTarget::get_display_gamma_index(); display_gamma_index != 0) {
+            original_frender_target_vtable[*display_gamma_index] = (uintptr_t)gamma_increase_fn;
+            vtable = original_frender_target_vtable.data();
+            SPDLOG_INFO("[FRenderTarget] Hooked FRenderTarget!");
+        } else {
+            SPDLOG_WARN("[FRenderTarget] Gamma index not found, can't hook!");
+        }
+    };
 
     // Enqueue offset lookup on the render thread because that's when the resource is actually created.
     if (!already_updated) {
@@ -6490,7 +6514,16 @@ bool VRRenderTargetManager_Base::create_scene_capture_texture() try {
                     if (auto rsrc = (sdk::FTextureRenderTargetResource*)tgt->get_resource(); rsrc != nullptr) {
                         already_updated = sdk::FTextureRenderTargetResource::update_render_target_vtable_offset(rsrc);
 
-                        GameThreadWorker::get().enqueue([this, tgt]() -> void {
+                        if (already_updated) {
+                            const auto frt = rsrc->as_render_target();
+
+                            if (frt != nullptr) {
+                                sdk::FRenderTarget::update_get_display_gamma_index(frt);
+                            }
+                        }
+
+                        GameThreadWorker::get().enqueue([this, tgt, frt = rsrc->as_render_target()]() -> void {
+                            hook_frt(frt);
                             this->scene_capture_target = tgt;
                         });
 
@@ -6510,6 +6543,10 @@ bool VRRenderTargetManager_Base::create_scene_capture_texture() try {
     
         SPDLOG_INFO("Waiting for scene capture texture to be created...");
     } else {
+        auto rsrc = (sdk::FTextureRenderTargetResource*)tgt->get_resource();
+        auto frt = rsrc != nullptr ? rsrc->as_render_target() : nullptr;
+        hook_frt(frt);
+
         this->scene_capture_target = tgt;
 
         RHIThreadWorker::get().enqueue([this, tgt = tgt]() -> void {
