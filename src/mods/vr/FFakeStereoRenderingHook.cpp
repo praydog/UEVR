@@ -3304,7 +3304,7 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
 
     const auto frame_count = *(uint32_t*)((uintptr_t)&view_family + SceneViewExtensionAnalyzer::frame_count_offset);
 
-    if (vr->is_native_stereo_fix_enabled() && (frame_count % 2) == 0) {
+    if (vr->is_native_stereo_fix_enabled() && (frame_count % 2) == 1) {
         return;
     }
 
