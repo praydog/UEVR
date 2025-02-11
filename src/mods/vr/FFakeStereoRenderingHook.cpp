@@ -2065,6 +2065,7 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(sdk::UGameViewport
 
     g_hook->m_in_viewport_client_draw = true;
     g_hook->m_was_in_viewport_client_draw = false;
+    g_hook->get_render_target_manager()->set_viewport(viewport);
 
     utility::ScopeGuard _{ 
         []() { 
@@ -6481,6 +6482,13 @@ bool VRRenderTargetManager_Base::create_scene_capture_texture() try {
     static bool already_updated{false};
     static std::array<uintptr_t, 100> original_frender_target_vtable{};
     static auto gamma_increase_fn = +[](const sdk::FRenderTarget* frt) -> float {
+        auto rtm = g_hook->get_render_target_manager();
+        auto viewport = rtm != nullptr ? rtm->get_viewport() : nullptr;
+
+        if (viewport != nullptr) {
+            return viewport->get_display_gamma();
+        }
+
         return 2.2f;
     };
 

@@ -81,6 +81,14 @@ public:
     sdk::UTexture* get_scene_capture_utexture() {
         return scene_capture_target;
     }
+    
+    sdk::FViewport* get_viewport() const {
+        return last_viewport;
+    }
+
+    void set_viewport(sdk::FViewport* vp) {
+        last_viewport = vp;
+    }
 
 protected:
     FRHITexture2D* ui_target{};
@@ -115,6 +123,7 @@ protected:
     sdk::UTexture* scene_capture_target{nullptr}; // For custom compatibility rendering
     sdk::UTexture* scene_capture_target_rhi_thread{nullptr}; // For custom compatibility rendering
     sdk::UTexture* in_flight_target{nullptr};
+    sdk::FViewport* last_viewport{nullptr};
 };
 
 struct VRRenderTargetManager : IStereoRenderTargetManager, VRRenderTargetManager_Base {
