@@ -2374,6 +2374,7 @@ struct SceneViewExtensionAnalyzer {
                                     pre_render_viewfamily_renderthread_index = next_index;
 
                                     frame_count_offset = i;
+                                    sdk::FSceneViewFamily::set_frame_count_offset(frame_count_offset);
 
                                     setup_view_extension_hook();
                                     return false;
@@ -3083,6 +3084,8 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
     if (!g_framework->is_game_data_intialized()) {
         return;
     }
+
+    sdk::FSceneViewFamily::update_offsets(&view_family, g_hook->get_render_target_manager()->get_viewport());
 
     if (!g_hook->has_engine_tick_hook()) {
         // Alternative place of running game thread work.
