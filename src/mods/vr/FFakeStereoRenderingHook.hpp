@@ -19,10 +19,8 @@
 
 struct FRHICommandListImmediate;
 struct VRRenderTargetManager_418;
-struct FSceneView;
 struct UCanvas;
 struct IStereoLayers;
-struct FSceneViewFamily;
 
 namespace sdk {
 struct FSceneViewStateInterface;
@@ -33,6 +31,8 @@ class AActor;
 class UObject;
 class USceneCaptureComponent2D;
 class UTexture;
+class FSceneViewFamily;
+class FSceneView;
 }
 
 // Injector-specific structure for VRRenderTargetManager that they will all secondarily inherit from
@@ -333,10 +333,10 @@ public:
     // Do not call these directly
     static void setup_viewpoint(ISceneViewExtension* extension, void* player_controller, void* view_info);
     static void localplayer_setup_viewpoint(void* localplayer, void* view_info, void* pass);
-    static void setup_view_family(ISceneViewExtension* extension, FSceneViewFamily& view_family);
-    static void begin_render_viewfamily_real(void* render_module, sdk::FCanvas* canvas, FSceneViewFamily& view_family);
-    static void begin_render_viewfamily(ISceneViewExtension* extension, FSceneViewFamily& view_family);
-    static void pre_render_viewfamily_renderthread(ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, FSceneViewFamily& view_family);
+    static void setup_view_family(ISceneViewExtension* extension, sdk::FSceneViewFamily& view_family);
+    static void begin_render_viewfamily_real(void* render_module, sdk::FCanvas* canvas, sdk::FSceneViewFamily& view_family);
+    static void begin_render_viewfamily(ISceneViewExtension* extension, sdk::FSceneViewFamily& view_family);
+    static void pre_render_viewfamily_renderthread(ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, sdk::FSceneViewFamily& view_family);
 
 private:
     bool hook();
@@ -372,7 +372,7 @@ private:
     static Matrix4x4f* calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index);
     static void render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list,
         FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size);
-    static void init_canvas(FFakeStereoRendering* stereo, FSceneView* view, UCanvas* canvas);
+    static void init_canvas(FFakeStereoRendering* stereo, sdk::FSceneView* view, UCanvas* canvas);
     static uint32_t get_desired_number_of_views_hook(FFakeStereoRendering* stereo, bool is_stereo_enabled);
     static EStereoscopicPass get_view_pass_for_index_hook(FFakeStereoRendering* stereo, bool stereo_requested, int32_t view_index);
 

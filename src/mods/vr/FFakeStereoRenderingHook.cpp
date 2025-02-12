@@ -34,6 +34,7 @@
 #include <sdk/UTexture.hpp>
 #include <sdk/APlayerCameraManager.hpp>
 #include <sdk/FStructProperty.hpp>
+#include <sdk/FSceneViewFamily.hpp>
 
 #include <sdk/UGameplayStatics.hpp>
 #include <sdk/APawn.hpp>
@@ -2841,7 +2842,7 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
     return g_hook->m_sceneview_data.constructor_hook.unsafe_call<sdk::FSceneView*>(view, init_options, a3, a4);
 }
 
-void FFakeStereoRenderingHook::setup_view_family(ISceneViewExtension* extension, FSceneViewFamily& view_family) {
+void FFakeStereoRenderingHook::setup_view_family(ISceneViewExtension* extension, sdk::FSceneViewFamily& view_family) {
     ZoneScopedN("SetupViewFamily");
 
     static bool once = true;
@@ -2926,49 +2927,66 @@ void FFakeStereoRenderingHook::localplayer_setup_viewpoint(void* localplayer, vo
     g_hook->m_localplayer_get_viewpoint_hook.call<void>(localplayer, view_info, pass);
 }
 
-void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module, sdk::FCanvas* canvas, FSceneViewFamily& view_family) {
+void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module, sdk::FCanvas* canvas, sdk::FSceneViewFamily& view_family_candidate) {
     ZoneScopedN("BeginRenderViewFamilyReal");
 
     SPDLOG_INFO_ONCE("Called BeginRenderViewFamilyReal for the first time");
 
     if (!g_framework->is_game_data_intialized()) {
-        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, view_family);
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
         return;
     }
 
     auto& vr = VR::get();
     auto rtm = g_hook->get_render_target_manager();
 
-    if (!vr->is_hmd_active() || vr->is_using_afr()) {
+    if (!vr->is_hmd_active() || !vr->is_native_stereo_fix_enabled()) {
         rtm->destroy_scene_capture();
 
-        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, view_family);
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
         return;
     }
 
-    if (!vr->is_native_stereo_fix_enabled()) {
-        rtm->destroy_scene_capture();
+    struct TArrayViewViewFamily {
+        sdk::FSceneViewFamily** data;
+        uint32_t count;
+    };
 
-        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, view_family);
+    const auto uses_tarrayview = sdk::FSceneViewFamily::has_vtable() && *(void**)&view_family_candidate != sdk::FSceneViewFamily::get_vtable_ptr();
+    const auto ue5_view_family_array = (TArrayViewViewFamily*)&view_family_candidate;
+
+    if (uses_tarrayview && ue5_view_family_array->data == nullptr) {
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
         return;
     }
+
+    // UE5 passes an TArrayView of ViewFamily pointers instead of a single ViewFamily
+    sdk::FSceneViewFamily& view_family = uses_tarrayview ? *ue5_view_family_array->data[0] : view_family_candidate;
+
+    auto views_ptr = view_family.get_views();
+    if (views_ptr == nullptr) {
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
+        return;
+    }
+
+    auto& views = *views_ptr;
 
     if (rtm->get_scene_capture_utexture() == nullptr) {
         if (!rtm->create_scene_capture_texture()) {
             SPDLOG_ERROR("Failed to create scene capture texture");
-            const auto prev_count = view_family.views.count;
-            view_family.views.count = 1;
-            g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, view_family);
-            view_family.views.count = prev_count;
+            const auto prev_count = views.count;
+            views.count = 1;
+            g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
+            views.count = prev_count;
             return;
         }
 
         // Waiting for RHI thread to finish creating the texture
         if (rtm->get_scene_capture_utexture() == nullptr) {
-            const auto prev_count = view_family.views.count;
-            view_family.views.count = 1;
-            g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, view_family);
-            view_family.views.count = prev_count;
+            const auto prev_count = views.count;
+            views.count = 1;
+            g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
+            views.count = prev_count;
             return;
         }
     }
@@ -2976,33 +2994,34 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
     const auto rt = rtm->get_scene_capture_utexture();
     const auto rtrsrc = rt != nullptr ? (sdk::FTextureRenderTargetResource*)rt->get_resource() : nullptr;
     const auto rtfrt = rtrsrc != nullptr ? rtrsrc->as_render_target() : nullptr;
+    const auto rtfrt_rtt = rtfrt != nullptr ? rtfrt->get_render_target_texture() : nullptr;
 
     // Wait until RT is ready
-    if (rtfrt == nullptr) {
-        const auto prev_count = view_family.views.count;
-        view_family.views.count = 1;
-        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, view_family);
-        view_family.views.count = prev_count;
+    if (rtfrt == nullptr || rtfrt_rtt == nullptr || *rtfrt_rtt == nullptr) {
+        const auto prev_count = views.count;
+        views.count = 1;
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
+        views.count = prev_count;
         return;
     }
 
-    auto& view_family_target = *(sdk::FRenderTarget**)((uintptr_t)&view_family + sizeof(sdk::TArray<void*>) + sizeof(void*));
+
+    auto view_family_target = view_family.get_render_target();
 
     if (view_family_target == nullptr) {
-        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, view_family);
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
         return;
     }
 
     bool wants_swap = false;
-    uint32_t original_count = view_family.views.count;
+    uint32_t original_count = views.count;
 
     std::array<uint8_t, sizeof(sdk::TArray<sdk::FSceneView*>)> original_views_data{};
-    sdk::TArray<sdk::FSceneView*>& views = *(sdk::TArray<sdk::FSceneView*>*)&view_family.views;
     memcpy(original_views_data.data(), &views, sizeof(sdk::TArray<sdk::FSceneView*>));
     
     sdk::TArray<sdk::FSceneView*> views_copy2{};
 
-    if (view_family.views.count > 1) {
+    if (views.count > 1) {
         views_copy2.data = (sdk::FSceneView**)sdk::FMalloc::get()->malloc(sizeof(sdk::FSceneView*));
         views_copy2.count = 1;
         views_copy2.capacity = 1;
@@ -3010,7 +3029,7 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
         views_copy2.data[0] = views.data[1];
 
         wants_swap = true;
-        view_family.views.count = 1;
+        views.count = 1;
 
         auto runtime = vr->get_runtime();
         const auto frame_count = runtime->internal_frame_count;
@@ -3050,8 +3069,8 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
         view_family.views.data[1]->constructor((sdk::FSceneViewInitOptions*)init_options_copy2.data());*/
     }
 
-    // Call original
-    g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, view_family);
+    // Call original. We're passing address of the reference because safetyhook doesn't call the function correctly with classes (not structs)
+    g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
 
     if (wants_swap) {
         memcpy(&views, &views_copy2, sizeof(sdk::TArray<sdk::FSceneView*>));
@@ -3063,20 +3082,20 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
         const auto original_target = view_family_target;
 
         if (rtfrt != nullptr) {
-            view_family_target = rtfrt;
+            view_family.set_render_target(rtfrt);
         }
 
         // Call it again
         ++*(uint32_t*)((uintptr_t)&view_family + SceneViewExtensionAnalyzer::frame_count_offset);
-        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, view_family);
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
 
         memcpy(&views, original_views_data.data(), sizeof(sdk::TArray<sdk::FSceneView*>));
 
-        view_family_target = original_target;
+        view_family.set_render_target(original_target);
     }
 }
 
-void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* extension, FSceneViewFamily& view_family) {
+void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* extension, sdk::FSceneViewFamily& view_family) {
     ZoneScopedN("BeginRenderViewFamily");
 
     SPDLOG_INFO_ONCE("Called BeginRenderViewFamily for the first time");
@@ -3099,6 +3118,8 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
     }
 
     const auto frame_count = *(uint32_t*)((uintptr_t)&view_family + SceneViewExtensionAnalyzer::frame_count_offset);
+    auto views_ptr = view_family.get_views();
+
     //vr->update_hmd_state(true, frame_count);
     auto runtime = vr->get_runtime();
     runtime->internal_frame_count = frame_count;
@@ -3107,7 +3128,9 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
     // This is a HACKHACKHACK to get splitscreen working on around 4.20 to 4.27 something
     // This is completely borked on UE5
     // We can probably do it better inside the sceneview constructor hook, but that needs to be handled with care
-    if (vr->is_splitscreen_compatibility_enabled()) {
+    if (vr->is_splitscreen_compatibility_enabled() && views_ptr != nullptr) {
+        auto& views = *views_ptr;
+        
         // B = dst, A = src
         static auto copy_init_options_from = [](const sdk::FSceneView& a, sdk::FSceneView& b) {
             std::scoped_lock _{g_hook->m_sceneview_data.mtx};
@@ -3148,7 +3171,7 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
                 x += w;
             }
 
-            auto view = view_family.views.data[view_index % view_family.views.count];
+            auto view = views.data[view_index % views.count];
 
             FIntRect view_rect{x, y, x + w, y + h};
 
@@ -3195,16 +3218,16 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
         };
 
         const auto requested_index = vr->get_requested_splitscreen_index();
-        const auto final_index = std::min<uint32_t>(view_family.views.count - 1, requested_index);
+        const auto final_index = std::min<uint32_t>(views.count - 1, requested_index);
         const auto other_index = final_index != 0 ? 0 : 1;
 
         if (final_index > 0) {
-            if (view_family.views.count > 1) {
-                copy_init_options_from(*view_family.views.data[final_index], *view_family.views.data[other_index]);
+            if (views.count > 1) {
+                copy_init_options_from(*views.data[final_index], *views.data[other_index]);
             }
 
             if (!vr->is_using_afr()) {
-                if (view_family.views.count > 1) {
+                if (views.count > 1) {
                     do_splitscreen(other_index);
                 } else {
                     do_splitscreen(0);
@@ -3221,13 +3244,13 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
     // This check might seem kind of arbitrary, but sometimes (rarely) the offset
     // for the views can be wrong so if the count is some sane number
     // then we can assume that the offset is correct
-    if (vr->is_using_afr() && view_family.views.count >= 2 && view_family.views.count <= 4) {
-        SPDLOG_INFO_ONCE("Setting view count to 1 (from {})", view_family.views.count);
-        view_family.views.count = 1;
+    if (vr->is_using_afr() && views_ptr != nullptr && views_ptr->count >= 2 && views_ptr->count <= 4) {
+        SPDLOG_INFO_ONCE("Setting view count to 1 (from {})", views_ptr->count);
+        views_ptr->count = 1;
     }
 
 
-    using BeginRenderViewFamilyRealFn = void(*)(void*, sdk::FCanvas*, FSceneViewFamily*);
+    using BeginRenderViewFamilyRealFn = void(*)(void*, sdk::FCanvas*, sdk::FSceneViewFamily*);
     static BeginRenderViewFamilyRealFn begin_rendering_view_family_real_fn = nullptr;
     static bool already_tried = false;
     if (begin_rendering_view_family_real_fn == nullptr && !already_tried && vr->is_native_stereo_fix_enabled()) {
@@ -3272,7 +3295,7 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
     }
 }
 
-void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, FSceneViewFamily& view_family) {
+void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, sdk::FSceneViewFamily& view_family) {
     ZoneScopedN("PreRenderViewFamily_RenderThread");
 
     utility::ScopeGuard _{[]() {
@@ -3308,6 +3331,8 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
 
     const auto frame_count = *(uint32_t*)((uintptr_t)&view_family + SceneViewExtensionAnalyzer::frame_count_offset);
 
+    // We only want to run this logic on the first "frame" (left eye) passed through here
+    // When using Native Stereo Fix
     if (vr->is_native_stereo_fix_enabled() && (frame_count % 2) == 1) {
         return;
     }
@@ -4854,7 +4879,7 @@ __forceinline void FFakeStereoRenderingHook::render_texture_render_thread(FFakeS
     }*/
 }
 
-void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneView* view, UCanvas* canvas) {
+void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, sdk::FSceneView* view, UCanvas* canvas) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("init canvas called!");
 #else
