@@ -30,13 +30,21 @@
 #include <sdk/UObjectArray.hpp>
 #include <sdk/FBoolProperty.hpp>
 #include <sdk/FViewport.hpp>
+#include <sdk/UKismetRenderingLibrary.hpp>
+#include <sdk/UTexture.hpp>
+#include <sdk/APlayerCameraManager.hpp>
+#include <sdk/FStructProperty.hpp>
+#include <sdk/FSceneViewFamily.hpp>
 
 #include <sdk/UGameplayStatics.hpp>
 #include <sdk/APawn.hpp>
 #include <sdk/APlayerController.hpp>
+#include <sdk/USceneCaptureComponent2D.hpp>
+#include <sdk/FTextureRenderTargetResource.hpp>
 
 #include "Framework.hpp"
 #include "Mods.hpp"
+#include "mods/UObjectHook.hpp"
 
 #include <bdshemu.h>
 #include <bddisasm.h>
@@ -126,6 +134,36 @@ void FFakeStereoRenderingHook::on_draw_ui() {
         if (m_tracking_system_hook != nullptr) {
             m_tracking_system_hook->on_draw_ui();
         }
+
+#if 0
+        if (ImGui::Button("Spawn scene capture")) {
+            get_render_target_manager()->create_scene_capture();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Destroy scene capture")) {
+            get_render_target_manager()->destroy_scene_capture();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Create texture")) {
+            get_render_target_manager()->create_scene_capture_texture();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Destroy texture")) {
+            get_render_target_manager()->destroy_scene_capture();
+        }
+
+        bool status = false;
+
+        if (get_render_target_manager()->get_scene_capture_utexture() != nullptr) {
+            if (UObjectHook::get()->exists(get_render_target_manager()->get_scene_capture_utexture())) {
+                status = true;
+            }
+        }
+        ImGui::Text("Scene Capture Texture: %s", status ? "Exists" : "Does not exist");
+#endif
 
         auto& data = m_viewport_rt_hook_data;
         std::scoped_lock _{data.retaddr_mutex};
@@ -466,7 +504,7 @@ void FFakeStereoRenderingHook::attempt_hook_fsceneview_constructor() {
 
     auto& vr = VR::get();
 
-    if (!vr->is_ghosting_fix_enabled() && !vr->is_splitscreen_compatibility_enabled() && !vr->is_sceneview_compatibility_enabled()) {
+    if (!vr->is_ghosting_fix_enabled() && !vr->is_splitscreen_compatibility_enabled() && !vr->is_sceneview_compatibility_enabled() && !vr->is_native_stereo_fix_enabled()) {
         return;
     }
 
@@ -2028,6 +2066,7 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(sdk::UGameViewport
 
     g_hook->m_in_viewport_client_draw = true;
     g_hook->m_was_in_viewport_client_draw = false;
+    g_hook->get_render_target_manager()->set_viewport(viewport);
 
     utility::ScopeGuard _{ 
         []() { 
@@ -2336,6 +2375,7 @@ struct SceneViewExtensionAnalyzer {
                                     pre_render_viewfamily_renderthread_index = next_index;
 
                                     frame_count_offset = i;
+                                    sdk::FSceneViewFamily::set_frame_count_offset(frame_count_offset);
 
                                     setup_view_extension_hook();
                                     return false;
@@ -2650,17 +2690,26 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
 
     std::scoped_lock ___{g_hook->m_sceneview_data.mtx};
 
+    const auto retaddr = (uintptr_t)_ReturnAddress();
+
+    if (!g_hook->m_sceneview_data.seen_retaddrs.contains(retaddr)) {
+        g_hook->m_sceneview_data.seen_retaddrs.insert(retaddr);
+        SPDLOG_INFO("FSceneView constructor called from {:x}", retaddr);
+    }
+
+    sdk::FSceneViewInitOptionsBase::update_offsets(init_options);
+
     const auto is_ue5 = g_hook->has_double_precision();
     auto init_options_ue5 = (sdk::FSceneViewInitOptionsUE5*)init_options;
 
-    const auto has_valid_svsi = is_ue5 ? init_options_ue5->scene_view_state != nullptr : init_options->scene_view_state != nullptr;
+    const auto has_valid_svsi = init_options->get_scene_state();
 
     if (has_valid_svsi) {
         if (is_ue5) {
-            auto& vio_entry = g_hook->m_sceneview_data.view_init_options_ue5[init_options_ue5->scene_view_state];
+            auto& vio_entry = g_hook->m_sceneview_data.view_init_options_ue5[init_options->get_scene_state()];
             memcpy(&vio_entry, init_options, sizeof(sdk::FSceneViewInitOptionsUE5));
         } else {
-            auto& vio_entry = g_hook->m_sceneview_data.view_init_options_ue4[init_options->scene_view_state];
+            auto& vio_entry = g_hook->m_sceneview_data.view_init_options_ue4[init_options->get_scene_state()];
             memcpy(&vio_entry, init_options, sizeof(sdk::FSceneViewInitOptionsUE4));
         }
     }
@@ -2684,7 +2733,7 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
         int32_t x = 0;
         int32_t y = 0;
 
-        if (!vr->is_using_afr() && true_index == 1) {
+        if (!vr->is_using_afr() && true_index == 1 && !vr->is_native_stereo_fix_enabled()) {
             x += w;
         }
 
@@ -2749,12 +2798,17 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
                 init_options_projection_matrix = proj_mat;
             }
         }
-
-        //init_options_stereo_pass = 0;
     }
 
-    auto& init_options_scene_state = is_ue5 ? init_options_ue5->scene_view_state : init_options->scene_view_state;
-    auto& init_options_stereo_pass = is_ue5 ? init_options_ue5->stereo_pass : init_options->stereo_pass;
+    const auto init_options_stereo_pass = init_options->get_stereo_pass();
+
+    if (vr->is_native_stereo_fix_enabled() && vr->is_native_stereo_fix_same_pass_enabled() && init_options_stereo_pass > EStereoscopicPass::eSSP_PRIMARY) {
+        if (g_hook->get_render_target_manager()->get_scene_capture_render_target() != nullptr) {
+            init_options->set_stereo_pass(EStereoscopicPass::eSSP_PRIMARY);
+        }
+    }
+
+    const auto init_options_scene_state = init_options->get_scene_state();
 
     bool new_scene_state_inserted_this_frame = false;
 
@@ -2771,13 +2825,13 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
     }
 
     if (init_options_scene_state != nullptr && !new_scene_state_inserted_this_frame && vr->is_ghosting_fix_enabled() && !known_scene_states.empty() && vr->is_using_afr() && true_index == 1) {
-        init_options_stereo_pass = 1;
+        init_options->set_stereo_pass(EStereoscopicPass::eSSP_PRIMARY);
 
         // Set the scene state to the one that isn't the current one
         for (auto scene_state : known_scene_states) {
             if (scene_state != init_options_scene_state) {
                 SPDLOG_INFO_ONCE("Setting scene state to {:x}", (uintptr_t)scene_state);
-                init_options_scene_state = scene_state;
+                init_options->set_scene_state(scene_state);
                 break;
             }
         }
@@ -2788,7 +2842,7 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
     return g_hook->m_sceneview_data.constructor_hook.unsafe_call<sdk::FSceneView*>(view, init_options, a3, a4);
 }
 
-void FFakeStereoRenderingHook::setup_view_family(ISceneViewExtension* extension, FSceneViewFamily& view_family) {
+void FFakeStereoRenderingHook::setup_view_family(ISceneViewExtension* extension, sdk::FSceneViewFamily& view_family) {
     ZoneScopedN("SetupViewFamily");
 
     static bool once = true;
@@ -2873,7 +2927,175 @@ void FFakeStereoRenderingHook::localplayer_setup_viewpoint(void* localplayer, vo
     g_hook->m_localplayer_get_viewpoint_hook.call<void>(localplayer, view_info, pass);
 }
 
-void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* extension, FSceneViewFamily& view_family) {
+void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module, sdk::FCanvas* canvas, sdk::FSceneViewFamily& view_family_candidate) {
+    ZoneScopedN("BeginRenderViewFamilyReal");
+
+    SPDLOG_INFO_ONCE("Called BeginRenderViewFamilyReal for the first time");
+
+    if (!g_framework->is_game_data_intialized()) {
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
+        return;
+    }
+
+    auto& vr = VR::get();
+    auto rtm = g_hook->get_render_target_manager();
+
+    if (!vr->is_hmd_active() || !vr->is_native_stereo_fix_enabled()) {
+        rtm->destroy_scene_capture();
+
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
+        return;
+    }
+
+    struct TArrayViewViewFamily {
+        sdk::FSceneViewFamily** data;
+        uint32_t count;
+    };
+
+    const auto uses_tarrayview = sdk::FSceneViewFamily::has_vtable() && *(void**)&view_family_candidate != sdk::FSceneViewFamily::get_vtable_ptr();
+    const auto ue5_view_family_array = (TArrayViewViewFamily*)&view_family_candidate;
+
+    if (uses_tarrayview && ue5_view_family_array->data == nullptr) {
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
+        return;
+    }
+
+    // UE5 passes an TArrayView of ViewFamily pointers instead of a single ViewFamily
+    sdk::FSceneViewFamily& view_family = uses_tarrayview ? *ue5_view_family_array->data[0] : view_family_candidate;
+
+    auto views_ptr = view_family.get_views();
+    if (views_ptr == nullptr) {
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
+        return;
+    }
+
+    auto& views = *views_ptr;
+
+    if (rtm->get_scene_capture_utexture() == nullptr) {
+        if (!rtm->create_scene_capture_texture()) {
+            SPDLOG_ERROR("Failed to create scene capture texture");
+            const auto prev_count = views.count;
+            views.count = 1;
+            g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
+            views.count = prev_count;
+            return;
+        }
+
+        // Waiting for RHI thread to finish creating the texture
+        if (rtm->get_scene_capture_utexture() == nullptr) {
+            const auto prev_count = views.count;
+            views.count = 1;
+            g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
+            views.count = prev_count;
+            return;
+        }
+    }
+
+    const auto rt = rtm->get_scene_capture_utexture();
+    const auto rtrsrc = rt != nullptr ? (sdk::FTextureRenderTargetResource*)rt->get_resource() : nullptr;
+    const auto rtfrt = rtrsrc != nullptr ? rtrsrc->as_render_target() : nullptr;
+    const auto rtfrt_rtt = rtfrt != nullptr ? rtfrt->get_render_target_texture() : nullptr;
+
+    // Wait until RT is ready
+    if (rtfrt == nullptr || rtfrt_rtt == nullptr || *rtfrt_rtt == nullptr) {
+        const auto prev_count = views.count;
+        views.count = 1;
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
+        views.count = prev_count;
+        return;
+    }
+
+
+    auto view_family_target = view_family.get_render_target();
+
+    if (view_family_target == nullptr) {
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
+        return;
+    }
+
+    bool wants_swap = false;
+    uint32_t original_count = views.count;
+
+    std::array<uint8_t, sizeof(sdk::TArray<sdk::FSceneView*>)> original_views_data{};
+    memcpy(original_views_data.data(), &views, sizeof(sdk::TArray<sdk::FSceneView*>));
+    
+    sdk::TArray<sdk::FSceneView*> views_copy2{};
+
+    if (views.count > 1) {
+        views_copy2.data = (sdk::FSceneView**)sdk::FMalloc::get()->malloc(sizeof(sdk::FSceneView*));
+        views_copy2.count = 1;
+        views_copy2.capacity = 1;
+
+        views_copy2.data[0] = views.data[1];
+
+        wants_swap = true;
+        views.count = 1;
+
+        auto runtime = vr->get_runtime();
+        const auto frame_count = runtime->internal_frame_count;
+        const auto game_frame_count = *(uint32_t*)((uintptr_t)&view_family + SceneViewExtensionAnalyzer::frame_count_offset);
+
+        // We need to clone the VR state from last frame to this frame
+        if (runtime->is_openxr()) {
+            auto openxr = (runtimes::OpenXR*)runtime;
+            std::scoped_lock __{ openxr->sync_assignment_mtx };
+
+            const auto last_frame = (frame_count) % runtimes::OpenXR::QUEUE_SIZE;
+            const auto now_frame = (frame_count + 1) % runtimes::OpenXR::QUEUE_SIZE;
+            openxr->pipeline_states[now_frame] = openxr->pipeline_states[last_frame];
+            openxr->pipeline_states[now_frame].frame_count = now_frame;
+        } else {
+            auto openvr = (runtimes::OpenVR*)runtime;
+            std::unique_lock __{ openvr->pose_mtx };
+
+            const auto last_frame = (frame_count) % openvr->pose_queue.size();
+            const auto now_frame = (frame_count + 1) % openvr->pose_queue.size();
+            openvr->pose_queue[now_frame] = openvr->pose_queue[last_frame];
+        }
+
+        /*auto init_options = (sdk::FSceneViewInitOptions*)((uintptr_t)view_family.views.data[0] + INIT_OPTIONS_OFFSET);
+        init_options->stereo_pass = 0;
+
+        auto init_options2 = (sdk::FSceneViewInitOptions*)((uintptr_t)view_family.views.data[1] + INIT_OPTIONS_OFFSET);
+        init_options2->stereo_pass = 0;
+
+        std::array<uint8_t, 0x500> init_options_copy{};
+        std::array<uint8_t, 0x500> init_options_copy2{};
+
+        memcpy(init_options_copy.data(), init_options, 0x500);
+        view_family.views.data[0]->constructor((sdk::FSceneViewInitOptions*)init_options_copy.data()); // Triggers our hook as well
+
+        memcpy(init_options_copy2.data(), init_options2, 0x500);
+        view_family.views.data[1]->constructor((sdk::FSceneViewInitOptions*)init_options_copy2.data());*/
+    }
+
+    // Call original. We're passing address of the reference because safetyhook doesn't call the function correctly with classes (not structs)
+    g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
+
+    if (wants_swap) {
+        memcpy(&views, &views_copy2, sizeof(sdk::TArray<sdk::FSceneView*>));
+
+        // Swap out the existing render target for our custom one
+        // Also, the entire point of swapping the render target
+        // instead of "just" re-using the existing one is that doing that causes a 90% FPS drop
+        // because the engine is still working on the old render target
+        const auto original_target = view_family_target;
+
+        if (rtfrt != nullptr) {
+            view_family.set_render_target(rtfrt);
+        }
+
+        // Call it again
+        ++*(uint32_t*)((uintptr_t)&view_family + SceneViewExtensionAnalyzer::frame_count_offset);
+        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
+
+        memcpy(&views, original_views_data.data(), sizeof(sdk::TArray<sdk::FSceneView*>));
+
+        view_family.set_render_target(original_target);
+    }
+}
+
+void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* extension, sdk::FSceneViewFamily& view_family) {
     ZoneScopedN("BeginRenderViewFamily");
 
     SPDLOG_INFO_ONCE("Called BeginRenderViewFamily for the first time");
@@ -2881,6 +3103,8 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
     if (!g_framework->is_game_data_intialized()) {
         return;
     }
+
+    sdk::FSceneViewFamily::update_offsets(&view_family, g_hook->get_render_target_manager()->get_viewport());
 
     if (!g_hook->has_engine_tick_hook()) {
         // Alternative place of running game thread work.
@@ -2894,6 +3118,8 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
     }
 
     const auto frame_count = *(uint32_t*)((uintptr_t)&view_family + SceneViewExtensionAnalyzer::frame_count_offset);
+    auto views_ptr = view_family.get_views();
+
     //vr->update_hmd_state(true, frame_count);
     auto runtime = vr->get_runtime();
     runtime->internal_frame_count = frame_count;
@@ -2902,7 +3128,9 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
     // This is a HACKHACKHACK to get splitscreen working on around 4.20 to 4.27 something
     // This is completely borked on UE5
     // We can probably do it better inside the sceneview constructor hook, but that needs to be handled with care
-    if (vr->is_splitscreen_compatibility_enabled()) {
+    if (vr->is_splitscreen_compatibility_enabled() && views_ptr != nullptr) {
+        auto& views = *views_ptr;
+        
         // B = dst, A = src
         static auto copy_init_options_from = [](const sdk::FSceneView& a, sdk::FSceneView& b) {
             std::scoped_lock _{g_hook->m_sceneview_data.mtx};
@@ -2943,7 +3171,7 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
                 x += w;
             }
 
-            auto view = view_family.views.data[view_index % view_family.views.count];
+            auto view = views.data[view_index % views.count];
 
             FIntRect view_rect{x, y, x + w, y + h};
 
@@ -2990,16 +3218,16 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
         };
 
         const auto requested_index = vr->get_requested_splitscreen_index();
-        const auto final_index = std::min<uint32_t>(view_family.views.count - 1, requested_index);
+        const auto final_index = std::min<uint32_t>(views.count - 1, requested_index);
         const auto other_index = final_index != 0 ? 0 : 1;
 
         if (final_index > 0) {
-            if (view_family.views.count > 1) {
-                copy_init_options_from(*view_family.views.data[final_index], *view_family.views.data[other_index]);
+            if (views.count > 1) {
+                copy_init_options_from(*views.data[final_index], *views.data[other_index]);
             }
 
             if (!vr->is_using_afr()) {
-                if (view_family.views.count > 1) {
+                if (views.count > 1) {
                     do_splitscreen(other_index);
                 } else {
                     do_splitscreen(0);
@@ -3016,13 +3244,58 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
     // This check might seem kind of arbitrary, but sometimes (rarely) the offset
     // for the views can be wrong so if the count is some sane number
     // then we can assume that the offset is correct
-    if (vr->is_using_afr() && view_family.views.count >= 2 && view_family.views.count <= 4) {
-        SPDLOG_INFO_ONCE("Setting view count to 1 (from {})", view_family.views.count);
-        view_family.views.count = 1;
+    if (vr->is_using_afr() && views_ptr != nullptr && views_ptr->count >= 2 && views_ptr->count <= 4) {
+        SPDLOG_INFO_ONCE("Setting view count to 1 (from {})", views_ptr->count);
+        views_ptr->count = 1;
+    }
+
+
+    using BeginRenderViewFamilyRealFn = void(*)(void*, sdk::FCanvas*, sdk::FSceneViewFamily*);
+    static BeginRenderViewFamilyRealFn begin_rendering_view_family_real_fn = nullptr;
+    static bool already_tried = false;
+    if (begin_rendering_view_family_real_fn == nullptr && !already_tried && vr->is_native_stereo_fix_enabled()) {
+        already_tried = true;
+
+        // Get callstack
+        constexpr auto max_stack_depth = 100;
+        uintptr_t stack[max_stack_depth]{};
+
+        const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
+        uintptr_t mid = 0;
+
+        for (int i = 1; i < depth; i++) {
+            SPDLOG_INFO(" {:x}", (uintptr_t)stack[i]);
+            mid = stack[i];
+            break;
+        }
+
+        if (mid != 0) {
+            const auto candidate = utility::find_virtual_function_start(mid);
+
+            if (candidate) {
+                begin_rendering_view_family_real_fn = (BeginRenderViewFamilyRealFn)*candidate;
+
+                if (begin_rendering_view_family_real_fn != nullptr) {
+                    SPDLOG_INFO("Found BeginRenderingViewFamily real function at {:x}", (uintptr_t)begin_rendering_view_family_real_fn);
+
+                    g_hook->m_render_module_begin_render_viewfamily_hook = safetyhook::create_inline((uintptr_t)begin_rendering_view_family_real_fn, (uintptr_t)&begin_render_viewfamily_real);
+
+                    if (g_hook->m_render_module_begin_render_viewfamily_hook) {
+                        SPDLOG_INFO("Hooked BeginRenderingViewFamily real function");
+                    } else {
+                        SPDLOG_ERROR("Failed to hook BeginRenderingViewFamily real function");
+                    }
+                } else {
+                    SPDLOG_ERROR("Failed to find BeginRenderingViewFamily real function");
+                }
+            } else {
+                SPDLOG_ERROR("Failed to find BeginRenderingViewFamily real function");
+            }
+        }
     }
 }
 
-void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, FSceneViewFamily& view_family) {
+void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, sdk::FSceneViewFamily& view_family) {
     ZoneScopedN("PreRenderViewFamily_RenderThread");
 
     utility::ScopeGuard _{[]() {
@@ -3035,18 +3308,21 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
         return;
     }
 
-    static size_t execution_count{0};
-
-    if (g_hook->m_attempted_hook_slate_thread && !g_hook->m_slate_thread_hook && !g_hook->m_attempted_hook_slate_thread_alternate && execution_count++ >= 50) {
-        SPDLOG_INFO("DrawWindow_RenderThread was not hooked after {} render calls, trying alternative hook", execution_count);
-
-        g_hook->attempt_hook_slate_thread(0, true);
-    }
-
     auto& vr = VR::get();
 
     if (!vr->is_hmd_active()) {
         return;
+    }
+
+    static size_t execution_count{0};
+
+    // This should 100% only get executed if the headset is on, because
+    // FFakeStereoRenderingHook::render_texture_render_thread is the first fallback for hooking
+    // And we don't want to miss that unintentionally
+    if (g_hook->m_attempted_hook_slate_thread && !g_hook->m_slate_thread_hook && !g_hook->m_attempted_hook_slate_thread_alternate && execution_count++ >= 50) {
+        SPDLOG_INFO("DrawWindow_RenderThread was not hooked after {} render calls, trying alternative hook", execution_count);
+
+        g_hook->attempt_hook_slate_thread(0, true);
     }
 
     if (vr->is_stereo_emulation_enabled()) {
@@ -3054,6 +3330,12 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
     }
 
     const auto frame_count = *(uint32_t*)((uintptr_t)&view_family + SceneViewExtensionAnalyzer::frame_count_offset);
+
+    // We only want to run this logic on the first "frame" (left eye) passed through here
+    // When using Native Stereo Fix
+    if (vr->is_native_stereo_fix_enabled() && (frame_count % 2) == 1) {
+        return;
+    }
 
     static bool is_ue5_rdg_builder = false;
     static uint32_t ue5_command_offset = 0;
@@ -4078,7 +4360,10 @@ void FFakeStereoRenderingHook::adjust_view_rect(FFakeStereoRendering* stereo, in
     *w = *w / 2;
 
     const auto true_index = index_starts_from_one ? ((index + 1) % 2) : (index % 2);
-    *x += *w * true_index;
+
+    if (!VR::get()->is_native_stereo_fix_enabled()) {
+        *x += *w * true_index;
+    }
 }
 
 __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
@@ -4594,7 +4879,7 @@ __forceinline void FFakeStereoRenderingHook::render_texture_render_thread(FFakeS
     }*/
 }
 
-void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, FSceneView* view, UCanvas* canvas) {
+void FFakeStereoRenderingHook::init_canvas(FFakeStereoRendering* stereo, sdk::FSceneView* view, UCanvas* canvas) {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("init canvas called!");
 #else
@@ -5400,6 +5685,7 @@ bool VRRenderTargetManager_Base::need_reallocate_view_target(const sdk::FViewpor
         this->last_width = w;
         this->last_height = h;
         this->wants_depth_reallocate = true;
+        this->destroy_scene_capture();
         g_hook->set_should_recreate_textures(false);
         return true;
     }
@@ -6117,6 +6403,8 @@ void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx)
         if (texture != nullptr) {
             SPDLOG_INFO(" Resulting texture: {:x}", (uintptr_t)texture);
             SPDLOG_INFO(" Real resource: {:x}", (uintptr_t)texture->get_native_resource());
+            
+            FRHITexture2D::set_vtable(*(void**)texture);
         } else {
             SPDLOG_INFO(" Texture is still null!");
         }
@@ -6128,6 +6416,303 @@ void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx)
     //rtm->ui_target = texture;
     rtm->texture_hook_ref = nullptr;
     ++rtm->last_texture_index;
+}
+
+void VRRenderTargetManager_Base::destroy_scene_capture() try {
+    if (this->scene_capture_actor != nullptr) {
+        SPDLOG_INFO("Destroying scene capture!");
+
+        this->scene_capture_actor->destroy_actor();
+        this->scene_capture_actor = nullptr;
+        this->scene_capture_component = nullptr;
+        this->scene_capture_target = nullptr;
+
+        RHIThreadWorker::get().enqueue([this]() -> void {
+            this->scene_capture_target_rhi_thread = nullptr;
+        });
+    }
+
+    if (this->scene_capture_target != nullptr && this->in_flight_target == nullptr) {
+        this->scene_capture_target->remove_from_root();
+        this->scene_capture_target = nullptr;
+
+        RHIThreadWorker::get().enqueue([this]() -> void {
+            this->scene_capture_target_rhi_thread = nullptr;
+        });
+    }
+} catch (const std::exception& e) {
+    SPDLOG_ERROR("[VRRenderTargetManager] Exception in destroy_scene_capture: {}", e.what());
+} catch (...) {
+    SPDLOG_ERROR("[VRRenderTargetManager] Unknown exception in destroy_scene_capture!");
+}
+
+FRHITexture2D* VRRenderTargetManager_Base::get_scene_capture_render_target() const {
+    auto sct = RHIThreadWorker::get().is_same_thread() ? this->scene_capture_target_rhi_thread : this->scene_capture_target;
+
+    if (sct != nullptr) {
+        auto rsrc = (sdk::FTextureRenderTargetResource*)sct->get_resource();
+        auto rsrc_frt = rsrc != nullptr ? rsrc->as_render_target() : nullptr;
+
+        if (rsrc_frt != nullptr) {
+            auto tex_ref = rsrc_frt->get_render_target_texture();
+            if (tex_ref != nullptr) {
+                return *tex_ref;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+bool VRRenderTargetManager_Base::create_scene_capture_texture() try {
+    if (this->in_flight_target != nullptr) {
+        return false;
+    }
+
+    destroy_scene_capture();
+
+    SPDLOG_INFO("Creating scene capture texture!");
+
+    static auto kismet_rendering = sdk::UKismetRenderingLibrary::get();
+
+    if (kismet_rendering == nullptr) {
+        SPDLOG_ERROR("[VRRenderTargetManager] Failed to get UKismetRenderingLibrary!");
+        return false;
+    }
+
+    auto engine = sdk::UGameEngine::get();
+
+    if (engine == nullptr) {
+        SPDLOG_ERROR("[VRRenderTargetManager] Failed to get UGameEngine!");
+        return false;
+    }
+
+    auto world = engine->get_world();
+
+    if (world == nullptr) {
+        SPDLOG_ERROR("[VRRenderTargetManager] Failed to get UWorld!");
+        return false;
+    }
+
+
+    const float clear_color[4] {0.0f, 0.0f, 0.0f, 1.0f};
+    auto tgt = kismet_rendering->create_render_target_2d(world, VR::get()->get_hmd_width(), VR::get()->get_hmd_height(), 2, clear_color, false);
+
+    if (tgt == nullptr) {
+        SPDLOG_ERROR("[VRRenderTargetManager] Failed to create texture!");
+        return false;
+    }
+
+    tgt->add_to_root();
+
+    UObjectHook::get()->activate();
+
+    static bool already_updated{false};
+    static std::array<uintptr_t, 100> original_frender_target_vtable{};
+    static auto gamma_increase_fn = +[](const sdk::FRenderTarget* frt) -> float {
+        auto rtm = g_hook->get_render_target_manager();
+        auto viewport = rtm != nullptr ? rtm->get_viewport() : nullptr;
+
+        if (viewport != nullptr) {
+            return viewport->get_display_gamma();
+        }
+
+        return 2.2f;
+    };
+
+    static auto hook_frt = [](sdk::FRenderTarget* frt) {
+        if (frt == nullptr) {
+            SPDLOG_WARN("[FRenderTarget] FRenderTarget is null! Can't hook!");
+            return;
+        }
+
+        SPDLOG_INFO("[FRenderTarget] Hooking FRenderTarget!");
+
+        auto& vtable = *(void**)frt;
+        memcpy(original_frender_target_vtable.data(), vtable, 100);
+
+        if (auto display_gamma_index = sdk::FRenderTarget::get_display_gamma_index(); display_gamma_index != 0) {
+            original_frender_target_vtable[*display_gamma_index] = (uintptr_t)gamma_increase_fn;
+            vtable = original_frender_target_vtable.data();
+            SPDLOG_INFO("[FRenderTarget] Hooked FRenderTarget!");
+        } else {
+            SPDLOG_WARN("[FRenderTarget] Gamma index not found, can't hook!");
+        }
+    };
+
+    // Enqueue offset lookup on the render thread because that's when the resource is actually created.
+    if (!already_updated) {
+        this->in_flight_target = tgt;
+
+        RenderThreadWorker::get().enqueue([this, tgt]() -> void {
+            RHIThreadWorker::get().enqueue([this, tgt]() -> void {
+                if (!UObjectHook::get()->exists(tgt)) {
+                    SPDLOG_ERROR("Scene capture target was destroyed between threads!");
+                    return;
+                }
+
+                if (sdk::UTexture::update_render_resource_offset_texture2d(tgt)) {
+                    SPDLOG_INFO("Successfully updated render resource offset for scene capture target!");
+
+                    if (auto rsrc = (sdk::FTextureRenderTargetResource*)tgt->get_resource(); rsrc != nullptr) {
+                        already_updated = sdk::FTextureRenderTargetResource::update_render_target_vtable_offset(rsrc);
+
+                        if (already_updated) {
+                            const auto frt = rsrc->as_render_target();
+
+                            if (frt != nullptr) {
+                                sdk::FRenderTarget::update_get_display_gamma_index(frt);
+                            }
+                        }
+
+                        GameThreadWorker::get().enqueue([this, tgt, frt = rsrc->as_render_target()]() -> void {
+                            hook_frt(frt);
+                            this->scene_capture_target = tgt;
+                        });
+
+                        this->scene_capture_target_rhi_thread = tgt;
+
+                        SPDLOG_INFO("Scene capture texture created!");
+                    }
+                } else {
+                    SPDLOG_ERROR("Failed to update render resource offset for scene capture target!");
+                }
+
+                GameThreadWorker::get().enqueue([this, tgt]() -> void {
+                    this->in_flight_target = nullptr;
+                });
+            });
+        });
+    
+        SPDLOG_INFO("Waiting for scene capture texture to be created...");
+    } else {
+        auto rsrc = (sdk::FTextureRenderTargetResource*)tgt->get_resource();
+        auto frt = rsrc != nullptr ? rsrc->as_render_target() : nullptr;
+        hook_frt(frt);
+
+        this->scene_capture_target = tgt;
+
+        RHIThreadWorker::get().enqueue([this, tgt = tgt]() -> void {
+            this->scene_capture_target_rhi_thread = tgt;
+        });
+
+        SPDLOG_INFO("Scene capture texture created!");
+    }
+
+    return this->scene_capture_target != nullptr;
+} catch (const std::exception& e) {
+    SPDLOG_ERROR("[VRRenderTargetManager] Exception in create_scene_capture_texture: {}", e.what());
+    return false;
+} catch (...) {
+    SPDLOG_ERROR("[VRRenderTargetManager] Unknown exception in create_scene_capture_texture!");
+    return false;
+}
+
+bool VRRenderTargetManager_Base::create_scene_capture() try {
+    destroy_scene_capture();
+
+    SPDLOG_INFO("Creating scene capture!");
+
+    static auto kismet_rendering = sdk::UKismetRenderingLibrary::get();
+
+    if (kismet_rendering == nullptr) {
+        SPDLOG_ERROR("[VRRenderTargetManager] Failed to get UKismetRenderingLibrary!");
+        return false;
+    }
+
+    static auto scene_capture_c = sdk::USceneCaptureComponent2D::static_class();
+
+    if (scene_capture_c == nullptr) {
+        SPDLOG_ERROR("[VRRenderTargetManager] Failed to get USceneCaptureComponent2D class!");
+        return false;
+    }
+
+    auto ugs = sdk::UGameplayStatics::get();
+
+    if (ugs == nullptr) {
+        SPDLOG_ERROR("[VRRenderTargetManager] Failed to get UGameplayStatics!");
+        return false;
+    }
+
+    auto engine = sdk::UGameEngine::get();
+
+    if (engine == nullptr) {
+        SPDLOG_ERROR("[VRRenderTargetManager] Failed to get UGameEngine!");
+        return false;
+    }
+
+    auto world = engine->get_world();
+
+    if (world == nullptr) {
+        SPDLOG_ERROR("[VRRenderTargetManager] Failed to get UWorld!");
+        return false;
+    }
+
+    static auto actor_c = sdk::AActor::static_class();
+
+    if (actor_c == nullptr) {
+        SPDLOG_ERROR("[VRRenderTargetManager] Failed to get AActor class!");
+        return false;
+    }
+
+    this->scene_capture_actor = ugs->spawn_actor(world, actor_c, glm::vec3{0, 0, 0});
+
+    if (this->scene_capture_actor == nullptr) {
+        SPDLOG_ERROR("[VRRenderTargetManager] Failed to spawn actor!");
+        return false;
+    }
+
+    this->scene_capture_component = (sdk::USceneCaptureComponent2D*)this->scene_capture_actor->add_component_by_class(scene_capture_c, false);
+
+    if (this->scene_capture_component == nullptr) {
+        SPDLOG_ERROR("[VRRenderTargetManager] Failed to add scene capture component!");
+        return false;
+    }
+
+    const float clear_color[4] {0.0f, 0.0f, 0.0f, 1.0f};
+    this->scene_capture_target = kismet_rendering->create_render_target_2d(world, VR::get()->get_hmd_width(), VR::get()->get_hmd_height(), 2, clear_color, false);
+
+    if (this->scene_capture_target == nullptr) {
+        SPDLOG_ERROR("[VRRenderTargetManager] Failed to create texture!");
+        return false;
+    }
+
+    SPDLOG_INFO("[VRRenderTargetManager] Created texture target: {:x}", (uintptr_t)this->scene_capture_target);
+    this->scene_capture_component->set_texture_target(this->scene_capture_target);
+
+    this->scene_capture_actor->finish_add_component(this->scene_capture_component);
+
+    UObjectHook::get()->activate();
+
+    // Enqueue offset lookup on the render thread because that's when the resource is actually created.
+    RenderThreadWorker::get().enqueue([tgt = this->scene_capture_target]() -> void {
+        RHIThreadWorker::get().enqueue([tgt = tgt]() -> void {
+            if (!UObjectHook::get()->exists(tgt)) {
+                SPDLOG_ERROR("Scene capture target was destroyed between threads!");
+                return;
+            }
+
+            if (sdk::UTexture::update_render_resource_offset_texture2d(tgt)) {
+                SPDLOG_INFO("Successfully updated render resource offset for scene capture target!");
+
+                if (auto rsrc = (sdk::FTextureRenderTargetResource*)tgt->get_resource(); rsrc != nullptr) {
+                    sdk::FTextureRenderTargetResource::update_render_target_vtable_offset(rsrc);
+                }
+            } else {
+                SPDLOG_ERROR("Failed to update render resource offset for scene capture target!");
+            }
+        });
+    });
+
+    SPDLOG_INFO("Scene capture created!");
+
+    return true;
+} catch (const std::exception& e) {
+    SPDLOG_ERROR("[VRRenderTargetManager] Exception in create_scene_capture: {}", e.what());
+    return false;
+} catch (...) {
+    SPDLOG_ERROR("[VRRenderTargetManager] Unknown exception in create_scene_capture!");
+    return false;
 }
 
 // This is a very special fix for cases where engine modifications

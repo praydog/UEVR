@@ -532,6 +532,14 @@ public:
         return m_sceneview_compatibility_mode->value();
     }
 
+    bool is_native_stereo_fix_enabled() const {
+        return m_native_stereo_fix->value() && !is_using_afr();
+    }
+
+    bool is_native_stereo_fix_same_pass_enabled() const {
+        return m_native_stereo_fix_same_pass->value();
+    }
+
     bool is_ahud_compatibility_enabled() const {
         return m_compatibility_ahud->value();
     }
@@ -927,6 +935,8 @@ private:
     const ModSlider::Ptr m_depth_scale{ ModSlider::create(generate_name("DepthScale"), 0.01f, 1.0f, 1.0f) };
 
     const ModToggle::Ptr m_ghosting_fix{ ModToggle::create(generate_name("GhostingFix"), false) };
+    const ModToggle::Ptr m_native_stereo_fix{ ModToggle::create(generate_name("NativeStereoFix"), false) };
+    const ModToggle::Ptr m_native_stereo_fix_same_pass{ ModToggle::create(generate_name("NativeStereoFixSamePass"), true) };
 
     const ModSlider::Ptr m_custom_z_near{ ModSlider::create(generate_name("CustomZNear"), 0.001f, 100.0f, 0.01f, true) };
     const ModToggle::Ptr m_custom_z_near_enabled{ ModToggle::create(generate_name("EnableCustomZNear"), false, true) };
@@ -1015,6 +1025,7 @@ public:
             *m_load_blueprint_code,
             *m_2d_screen_mode,
             *m_roomscale_movement,
+            *m_roomscale_sweep,
             *m_swap_controllers,
             *m_horizontal_projection_override,
             *m_vertical_projection_override,
@@ -1042,6 +1053,8 @@ public:
             *m_custom_z_near,
             *m_custom_z_near_enabled,
             *m_ghosting_fix,
+            *m_native_stereo_fix,
+            *m_native_stereo_fix_same_pass,
             *m_splitscreen_compatibility_mode,
             *m_splitscreen_view_index,
             *m_compatibility_skip_pip,

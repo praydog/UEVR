@@ -135,6 +135,7 @@ private:
     ComPtr<ID3D11Texture2D> m_ui_tex{};
     TextureContext m_engine_ui_ref{};
     TextureContext m_engine_tex_ref{};
+    TextureContext m_scene_capture_tex_ref{};
     std::array<TextureContext, 2> m_2d_screen_tex{};
     ComPtr<ID3D11Texture2D> m_left_eye_tex{};
     ComPtr<ID3D11Texture2D> m_right_eye_tex{};
@@ -181,7 +182,7 @@ private:
         void initialize(XrSessionCreateInfo& session_info);
         std::optional<std::string> create_swapchains();
         void destroy_swapchains();
-        void copy(uint32_t swapchain_idx, ID3D11Texture2D* resource, D3D11_BOX* src_box = nullptr);
+        void copy(uint32_t swapchain_idx, ID3D11Texture2D* resource, D3D11_BOX* src_box = nullptr, std::function<void(ID3D11Texture2D*)> pre_commands = nullptr);
 
         bool ever_acquired(uint32_t swapchain_idx) {
             std::scoped_lock _{this->mtx};

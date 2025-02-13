@@ -11,6 +11,7 @@
 #include <sdk/FViewportInfo.hpp>
 #include <sdk/threading/ThreadWorker.hpp>
 #include <sdk/RHICommandList.hpp>
+#include <sdk/UTexture.hpp>
 
 #include "IXRTrackingSystemHook.hpp"
 
@@ -18,16 +19,20 @@
 
 struct FRHICommandListImmediate;
 struct VRRenderTargetManager_418;
-struct FSceneView;
 struct UCanvas;
 struct IStereoLayers;
-struct FSceneViewFamily;
 
 namespace sdk {
 struct FSceneViewStateInterface;
 class FViewport;
 class FCanvas;
 class UGameViewportClient;
+class AActor;
+class UObject;
+class USceneCaptureComponent2D;
+class UTexture;
+class FSceneViewFamily;
+class FSceneView;
 }
 
 // Injector-specific structure for VRRenderTargetManager that they will all secondarily inherit from
@@ -49,13 +54,40 @@ public:
 
 public:
     FRHITexture2D*& get_ui_target() { return ui_target; }
-    FRHITexture2D* get_render_target() { return render_target; }
+    FRHITexture2D* get_render_target() {
+        return render_target; 
+    }
+
+    FRHITexture2D* get_scene_capture_render_target() const;
     void set_render_target(FRHITexture2D* rt) { render_target = rt; }
 
     bool is_ue_5_0_3() const { return is_version_5_0_3; }
 
     const std::optional<size_t>& get_viewport_force_separate_rt_offset() const { 
         return m_viewport_force_separate_rt_offset; 
+    }
+
+    bool create_scene_capture();
+    void destroy_scene_capture();
+    bool create_scene_capture_texture();
+    sdk::USceneCaptureComponent2D* get_scene_capture_component() {
+        return scene_capture_component;
+    }
+
+    sdk::AActor* get_scene_capture_actor() {
+        return scene_capture_actor;
+    }
+
+    sdk::UTexture* get_scene_capture_utexture() {
+        return scene_capture_target;
+    }
+    
+    sdk::FViewport* get_viewport() const {
+        return last_viewport;
+    }
+
+    void set_viewport(sdk::FViewport* vp) {
+        last_viewport = vp;
     }
 
 protected:
@@ -85,6 +117,13 @@ protected:
 
     std::optional<size_t> m_viewport_force_separate_rt_offset{};
     bool m_attempted_find_force_separate_rt{false};
+
+    sdk::AActor* scene_capture_actor{nullptr};
+    sdk::USceneCaptureComponent2D* scene_capture_component{nullptr};
+    sdk::UTexture* scene_capture_target{nullptr}; // For custom compatibility rendering
+    sdk::UTexture* scene_capture_target_rhi_thread{nullptr}; // For custom compatibility rendering
+    sdk::UTexture* in_flight_target{nullptr};
+    sdk::FViewport* last_viewport{nullptr};
 };
 
 struct VRRenderTargetManager : IStereoRenderTargetManager, VRRenderTargetManager_Base {
@@ -294,9 +333,10 @@ public:
     // Do not call these directly
     static void setup_viewpoint(ISceneViewExtension* extension, void* player_controller, void* view_info);
     static void localplayer_setup_viewpoint(void* localplayer, void* view_info, void* pass);
-    static void setup_view_family(ISceneViewExtension* extension, FSceneViewFamily& view_family);
-    static void begin_render_viewfamily(ISceneViewExtension* extension, FSceneViewFamily& view_family);
-    static void pre_render_viewfamily_renderthread(ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, FSceneViewFamily& view_family);
+    static void setup_view_family(ISceneViewExtension* extension, sdk::FSceneViewFamily& view_family);
+    static void begin_render_viewfamily_real(void* render_module, sdk::FCanvas* canvas, sdk::FSceneViewFamily& view_family);
+    static void begin_render_viewfamily(ISceneViewExtension* extension, sdk::FSceneViewFamily& view_family);
+    static void pre_render_viewfamily_renderthread(ISceneViewExtension* extension, sdk::FRHICommandListBase* cmd_list, sdk::FSceneViewFamily& view_family);
 
 private:
     bool hook();
@@ -332,7 +372,7 @@ private:
     static Matrix4x4f* calculate_stereo_projection_matrix(FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index);
     static void render_texture_render_thread(FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list,
         FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size);
-    static void init_canvas(FFakeStereoRendering* stereo, FSceneView* view, UCanvas* canvas);
+    static void init_canvas(FFakeStereoRendering* stereo, sdk::FSceneView* view, UCanvas* canvas);
     static uint32_t get_desired_number_of_views_hook(FFakeStereoRendering* stereo, bool is_stereo_enabled);
     static EStereoscopicPass get_view_pass_for_index_hook(FFakeStereoRendering* stereo, bool stereo_requested, int32_t view_index);
 
@@ -371,6 +411,7 @@ private:
         // For keeping track of what the states were before our modifications.
         std::unordered_map<sdk::FSceneViewStateInterface*, sdk::FSceneViewInitOptionsUE4> view_init_options_ue4{};
         std::unordered_map<sdk::FSceneViewStateInterface*, sdk::FSceneViewInitOptionsUE5> view_init_options_ue5{};
+        std::unordered_set<uintptr_t> seen_retaddrs{};
     } m_sceneview_data;
 
     safetyhook::InlineHook m_localplayer_get_viewpoint_hook{};
@@ -383,6 +424,7 @@ private:
     safetyhook::InlineHook m_slate_thread_hook{};
     safetyhook::InlineHook m_gameviewportclient_draw_hook{};
     safetyhook::InlineHook m_viewport_draw_hook{}; // for AFR
+    safetyhook::InlineHook m_render_module_begin_render_viewfamily_hook{};
 
     // both of these are used to figure out where the localplayer is, they aren't actively
     // used for anything else, the second one is an alternative hook if the first one

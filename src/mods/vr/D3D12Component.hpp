@@ -1,5 +1,7 @@
 #pragma once
 
+#include <span>
+
 #include <d3d12.h>
 #include <dxgi.h>
 #include <mutex>
@@ -44,7 +46,12 @@ public:
 
 private:
     bool setup();
-    std::unique_ptr<DirectX::DX12::SpriteBatch> setup_sprite_batch_pso(DXGI_FORMAT output_format);
+    std::unique_ptr<DirectX::DX12::SpriteBatch> setup_sprite_batch_pso(
+        DXGI_FORMAT output_format, 
+        std::span<const uint8_t> vs = {}, std::span<const uint8_t> ps = {},
+        std::optional<DirectX::SpriteBatchPipelineStateDescription> pd = std::nullopt
+    );
+
     void draw_spectator_view(ID3D12GraphicsCommandList* command_list, bool is_right_eye_frame);
     void clear_backbuffer();
 
@@ -57,13 +64,15 @@ private:
 
     d3d12::TextureContext m_game_ui_tex{};
     d3d12::TextureContext m_game_tex{};
+    d3d12::TextureContext m_scene_capture_tex{};
     std::array<d3d12::CommandContext, 3> m_game_tex_commands{};
     std::array<d3d12::TextureContext, 2> m_2d_screen_tex{};
-    std::array<d3d12::TextureContext, 3> m_backbuffer_textures{};
+    std::vector<std::unique_ptr<d3d12::TextureContext>> m_backbuffer_textures{};
 
     std::unique_ptr<DirectX::DX12::GraphicsMemory> m_graphics_memory{};
     std::unique_ptr<DirectX::DX12::SpriteBatch> m_backbuffer_batch{};
     std::unique_ptr<DirectX::DX12::SpriteBatch> m_game_batch{};
+    std::unique_ptr<DirectX::DX12::SpriteBatch> m_ui_batch_alpha_invert{};
 
     ID3D12Resource* m_last_checked_native{nullptr};
 
@@ -157,7 +166,7 @@ private:
         std::optional<std::string> create_swapchains();
         void destroy_swapchains();
         void copy(uint32_t swapchain_idx, ID3D12Resource* src,
-            std::optional<std::function<void(d3d12::CommandContext&)>> pre_commands = std::nullopt,
+            std::optional<std::function<void(d3d12::CommandContext&, ID3D12Resource*)>> pre_commands = std::nullopt,
             std::optional<std::function<void(d3d12::CommandContext&)>> additional_commands = std::nullopt,
             D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT, D3D12_BOX* src_box = nullptr);
 

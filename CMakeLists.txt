@@ -71,12 +71,12 @@ FetchContent_Declare(bddisasm
 )
 FetchContent_MakeAvailable(bddisasm)
 
-message(STATUS "Fetching kananlib (61a04d4219e3cb81b524a6990d3924289982bbf6)...")
+message(STATUS "Fetching kananlib (7ceca3f80a1ec4f89b613afb3f5b41832766609e)...")
 FetchContent_Declare(kananlib
 	GIT_REPOSITORY
 		"https://github.com/cursey/kananlib"
 	GIT_TAG
-		61a04d4219e3cb81b524a6990d3924289982bbf6
+		7ceca3f80a1ec4f89b613afb3f5b41832766609e
 )
 FetchContent_MakeAvailable(kananlib)
 
@@ -872,6 +872,12 @@ set_target_properties(uevr PROPERTIES
 		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
 	ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO
 		"${CMAKE_BINARY_DIR}/lib/${CMKR_TARGET}"
+)
+
+add_custom_command(
+TARGET uevr PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "Compiling shaders for UEVR..."
+    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR}/src/mods/vr/shaders ${CMAKE_SOURCE_DIR}/src/mods/vr/shaders/compile_shaders.bat
 )
 
 add_custom_command(

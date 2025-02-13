@@ -2458,6 +2458,13 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         m_ghosting_fix->draw("Ghosting Fix");
 
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
+        if (ImGui::TreeNode("Native Stereo Fix")) {
+            m_native_stereo_fix->draw("Enabled");
+            m_native_stereo_fix_same_pass->draw("Use Same Stereo Pass");
+            ImGui::TreePop();
+        }
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Near Clip Plane")) {
             m_custom_z_near_enabled->draw("Enable");
 

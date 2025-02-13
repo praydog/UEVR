@@ -42,6 +42,10 @@ public:
         return m_intersect_state;
     }
 
+    bool should_invert_ui_alpha() const {
+        return m_ui_invert_alpha->value();
+    }
+
 private:
     // Cached data for imgui VR overlay so we know when we need to update it
     // instead of doing it constantly every frame
@@ -102,6 +106,7 @@ private:
     const ModSlider::Ptr m_slate_size{ ModSlider::create("UI_Size", 0.5f, 10.0f, 2.0f) };
     const ModSlider::Ptr m_slate_cylinder_angle{ ModSlider::create("UI_Cylinder_Angle", 0.0f, 360.0f, 90.0f) };
     const ModToggle::Ptr m_ui_follows_view{ ModToggle::create("UI_FollowView", false) };
+    const ModToggle::Ptr m_ui_invert_alpha{ ModToggle::create("UI_InvertAlpha", false) };
 
     const ModSlider::Ptr m_framework_distance{ ModSlider::create("UI_Framework_Distance", 0.5f, 10.0f, 1.75f) };
     const ModSlider::Ptr m_framework_size{ ModSlider::create("UI_Framework_Size", 0.5f, 10.0f, 2.0f) };
@@ -121,6 +126,7 @@ public:
             *m_slate_size,
             *m_slate_cylinder_angle,
             *m_ui_follows_view,
+            *m_ui_invert_alpha,
             *m_framework_distance,
             *m_framework_size,
             *m_framework_ui_follows_view,

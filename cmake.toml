@@ -55,7 +55,7 @@ tag = "70db095765ab2066dd88dfb7bbcc42259ed167c5"
 
 [fetch-content.kananlib]
 git = "https://github.com/cursey/kananlib"
-tag = "61a04d4219e3cb81b524a6990d3924289982bbf6"
+tag = "7ceca3f80a1ec4f89b613afb3f5b41832766609e"
 
 [fetch-content.safetyhook]
 git = "https://github.com/praydog/safetyhook"
@@ -273,6 +273,12 @@ link-libraries = [
     "uesdk"
 ]
 cmake-after="""
+add_custom_command(
+TARGET uevr PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "Compiling shaders for UEVR..."
+    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR}/src/mods/vr/shaders ${CMAKE_SOURCE_DIR}/src/mods/vr/shaders/compile_shaders.bat
+)
+
 add_custom_command(
     TARGET uevr PRE_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo "Generating commit hash..."

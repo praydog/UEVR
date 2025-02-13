@@ -76,7 +76,7 @@ struct OpenVR final : public VRRuntime {
 
     std::chrono::system_clock::time_point last_hmd_active_time{};
 
-    std::array<vr::HmdMatrix34_t, 3> pose_queue{};
+    std::array<vr::HmdMatrix34_t, 6> pose_queue{};
 
     vr::VRActionHandle_t pose_action{vr::k_ulInvalidActionHandle};
     vr::VRActionHandle_t grip_pose_action{vr::k_ulInvalidActionHandle};
