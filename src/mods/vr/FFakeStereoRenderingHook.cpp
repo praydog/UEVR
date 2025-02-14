@@ -3085,8 +3085,14 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
             view_family.set_render_target(rtfrt);
         }
 
+        auto scene = (sdk::FScene*)view_family.get_scene_interface();
+
+        if (scene != nullptr) {
+            // We decrement the frame count because it fixes motion vectors in the right eye.
+            scene->decrement_frame_count();
+        }
+        
         // Call it again
-        ++*(uint32_t*)((uintptr_t)&view_family + SceneViewExtensionAnalyzer::frame_count_offset);
         g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
 
         memcpy(&views, original_views_data.data(), sizeof(sdk::TArray<sdk::FSceneView*>));
@@ -3105,6 +3111,11 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
     }
 
     sdk::FSceneViewFamily::update_offsets(&view_family, g_hook->get_render_target_manager()->get_viewport());
+    auto si = view_family.get_scene_interface();
+
+    if (si != nullptr) {
+        sdk::FScene::update_offsets((sdk::FScene*)si);
+    }
 
     if (!g_hook->has_engine_tick_hook()) {
         // Alternative place of running game thread work.
@@ -3330,12 +3341,15 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
     }
 
     const auto frame_count = *(uint32_t*)((uintptr_t)&view_family + SceneViewExtensionAnalyzer::frame_count_offset);
+    static uint32_t last_frame = 0;
 
     // We only want to run this logic on the first "frame" (left eye) passed through here
     // When using Native Stereo Fix
-    if (vr->is_native_stereo_fix_enabled() && (frame_count % 2) == 1) {
+    if (vr->is_native_stereo_fix_enabled() && frame_count == last_frame) {
         return;
     }
+
+    last_frame = frame_count;
 
     static bool is_ue5_rdg_builder = false;
     static uint32_t ue5_command_offset = 0;
