@@ -2699,6 +2699,10 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
 
     sdk::FSceneViewInitOptionsBase::update_offsets(init_options);
 
+    if (auto view_family = init_options->get_view_family(); view_family != nullptr) {
+        sdk::FSceneViewFamily::update_offsets(view_family, nullptr);
+    }
+
     const auto is_ue5 = g_hook->has_double_precision();
     auto init_options_ue5 = (sdk::FSceneViewInitOptionsUE5*)init_options;
 
@@ -2802,9 +2806,22 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
 
     const auto init_options_stereo_pass = init_options->get_stereo_pass();
 
+    std::optional<uint32_t> views_original_count{};
+
     if (vr->is_native_stereo_fix_enabled() && vr->is_native_stereo_fix_same_pass_enabled() && init_options_stereo_pass > EStereoscopicPass::eSSP_PRIMARY) {
         if (g_hook->get_render_target_manager()->get_scene_capture_render_target() != nullptr) {
             init_options->set_stereo_pass(EStereoscopicPass::eSSP_PRIMARY);
+
+            auto view_family = init_options->get_view_family();
+            auto views = view_family != nullptr ? view_family->get_views() : nullptr;
+
+            if (views != nullptr) {
+                // Hide the fact that we have multiple views from the FSceneView constructor.
+                // At least 1 view causes special stereo logic to run in the constructor.
+                // Notably I've seen more than 1 view causing crashes on UE5 with the native stereo fix without doing this.
+                views_original_count = views->count;
+                views->count = 0;
+            }
         }
     }
 
@@ -2839,7 +2856,19 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
 
     last_index++;
 
-    return g_hook->m_sceneview_data.constructor_hook.unsafe_call<sdk::FSceneView*>(view, init_options, a3, a4);
+    auto result = g_hook->m_sceneview_data.constructor_hook.unsafe_call<sdk::FSceneView*>(view, init_options, a3, a4);
+
+    // Reset the view count back to what it was.
+    if (views_original_count.has_value()) {
+        auto view_family = init_options->get_view_family();
+        auto views = view_family != nullptr ? view_family->get_views() : nullptr;
+
+        if (views != nullptr) {
+            views->count = views_original_count.value();
+        }
+    }
+
+    return result;
 }
 
 void FFakeStereoRenderingHook::setup_view_family(ISceneViewExtension* extension, sdk::FSceneViewFamily& view_family) {
@@ -6575,7 +6604,7 @@ bool VRRenderTargetManager_Base::create_scene_capture_texture() try {
                             const auto frt = rsrc->as_render_target();
 
                             if (frt != nullptr) {
-                                sdk::FRenderTarget::update_get_display_gamma_index(frt);
+                                sdk::FRenderTarget::update_offsets(frt);
                             }
                         }
 
