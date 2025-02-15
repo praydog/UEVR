@@ -69,18 +69,8 @@ public:
 
     bool create_scene_capture();
     void destroy_scene_capture();
-    bool create_scene_capture_texture();
-    sdk::USceneCaptureComponent2D* get_scene_capture_component() {
-        return scene_capture_component;
-    }
 
-    sdk::AActor* get_scene_capture_actor() {
-        return scene_capture_actor;
-    }
-
-    sdk::UTexture* get_scene_capture_utexture() {
-        return scene_capture_target;
-    }
+    sdk::UTexture* get_scene_capture_utexture() const;
     
     sdk::FViewport* get_viewport() const {
         return last_viewport;
