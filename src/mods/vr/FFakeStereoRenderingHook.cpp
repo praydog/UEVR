@@ -5028,6 +5028,10 @@ uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoR
         return 1;
     }
 
+    if (vr->is_native_stereo_fix_enabled() && (g_hook->get_render_target_manager()->get_scene_capture_render_target() == nullptr || !g_hook->m_sceneview_data.constructor_hook)) {
+        return 1; // wait for the scene capture render target to be set and FSceneView constructor to be hooked
+    }
+
     return 2;
 }
 
