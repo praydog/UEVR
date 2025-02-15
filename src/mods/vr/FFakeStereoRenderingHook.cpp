@@ -6660,6 +6660,8 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
         }
     };
 
+    static const auto utex_c = sdk::UTexture::static_class();
+
     // Enqueue offset lookup on the render thread because that's when the resource is actually created.
     if (!already_updated) {
         this->in_flight_target = tgt;
@@ -6710,37 +6712,47 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
     
         SPDLOG_INFO("Waiting for scene capture texture to be created...");
     } else {
-        auto rsrc = (sdk::FTextureRenderTargetResource*)tgt->get_resource();
-        auto frt = rsrc != nullptr ? rsrc->as_render_target() : nullptr;
-        hook_frt(frt);
-
-        this->scene_capture_target = tgt;
         this->in_flight_target = tgt;
 
         RenderThreadWorker::get().enqueue([this, tgt]() -> void {
             RHIThreadWorker::get().enqueue([this, tgt]() -> void {
-                if (!UObjectHook::get()->exists(tgt)) {
+                if (!UObjectHook::get()->exists(tgt) || !tgt->is_a(utex_c)) {
                     SPDLOG_ERROR("Scene capture target was destroyed between threads!");
                     GameThreadWorker::get().enqueue([this]() -> void {
                         this->in_flight_target = nullptr;
                         destroy_scene_capture();
                     });
-                    
+
                     return;
                 }
 
                 this->scene_capture_target_rhi_thread = tgt;
 
                 GameThreadWorker::get().enqueue([this, tgt]() -> void {
+                    if (!UObjectHook::get()->exists(tgt) || !tgt->is_a(utex_c)) {
+                        SPDLOG_ERROR("Scene capture target was destroyed between threads!");
+                        GameThreadWorker::get().enqueue([this]() -> void {
+                            this->in_flight_target = nullptr;
+                            destroy_scene_capture();
+                        });
+    
+                        return;
+                    }
+
                     this->in_flight_target = nullptr;
+                    this->scene_capture_target = tgt;
+
+                    auto rsrc = (sdk::FTextureRenderTargetResource*)tgt->get_resource();
+                    auto frt = rsrc != nullptr ? rsrc->as_render_target() : nullptr;
+                    hook_frt(frt);
+
+                    SPDLOG_INFO("Scene capture texture fully created!");
                 });
             });
         });
 
         SPDLOG_INFO("Scene capture texture created!");
     }
-
-    return this->scene_capture_target != nullptr;
 
     SPDLOG_INFO("Scene capture created!");
 
