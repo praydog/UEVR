@@ -3043,26 +3043,14 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
     }
 
     bool wants_swap = false;
-    uint32_t original_count = views.count;
-
-    std::array<uint8_t, sizeof(sdk::TArray<sdk::FSceneView*>)> original_views_data{};
-    memcpy(original_views_data.data(), &views, sizeof(sdk::TArray<sdk::FSceneView*>));
-    
-    sdk::TArray<sdk::FSceneView*> views_copy2{};
+    const uint32_t original_count = views.count;
 
     if (views.count > 1) {
-        views_copy2.data = (sdk::FSceneView**)sdk::FMalloc::get()->malloc(sizeof(sdk::FSceneView*));
-        views_copy2.count = 1;
-        views_copy2.capacity = 1;
-
-        views_copy2.data[0] = views.data[1];
-
-        wants_swap = true;
         views.count = 1;
+        wants_swap = true;
 
         auto runtime = vr->get_runtime();
         const auto frame_count = runtime->internal_frame_count;
-        const auto game_frame_count = *(uint32_t*)((uintptr_t)&view_family + SceneViewExtensionAnalyzer::frame_count_offset);
 
         // We need to clone the VR state from last frame to this frame
         if (runtime->is_openxr()) {
@@ -3102,8 +3090,6 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
     g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
 
     if (wants_swap) {
-        memcpy(&views, &views_copy2, sizeof(sdk::TArray<sdk::FSceneView*>));
-
         // Swap out the existing render target for our custom one
         // Also, the entire point of swapping the render target
         // instead of "just" re-using the existing one is that doing that causes a 90% FPS drop
@@ -3121,13 +3107,17 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
             scene->decrement_frame_count();
         }
         
+        std::swap(views[0], views[1]);
+
         // Call it again
         g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
 
-        memcpy(&views, original_views_data.data(), sizeof(sdk::TArray<sdk::FSceneView*>));
+        std::swap(views[0], views[1]);
 
         view_family.set_render_target(original_target);
     }
+
+    views.count = original_count;
 }
 
 void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* extension, sdk::FSceneViewFamily& view_family) {
