@@ -6176,6 +6176,8 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
                 rtm->texture_hook_ref = (FTexture2DRHIRef*)ctx.r8;
             }
         } else { // most common version.
+            SPDLOG_INFO("Calling common version of texture create (several arguments)");
+
             void (*func)(
                 uintptr_t rhi,
                 FTexture2DRHIRef* out,
@@ -6995,14 +6997,13 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                 str_addr.has_value(); 
                 str_addr = utility::scan_string(*str_addr + 1, (module_end - (*str_addr + 1)), str.data(), true)) 
             {
-                const auto string_ref = utility::scan_displacement_reference(*addr_module, (uintptr_t)*str_addr);
-
-                if (string_ref) {
+                // Scan for ALL references to this string
+                for (auto string_ref = utility::scan_displacement_reference(*addr_module, (uintptr_t)*str_addr);
+                    string_ref.has_value();
+                    string_ref = utility::scan_displacement_reference(*string_ref + 1, (module_end - (*string_ref + 1)), (uintptr_t)*str_addr))
+                {
                     const auto string_ref_func_start = utility::find_function_start((uintptr_t)*string_ref);
                     const auto return_addr_func_start = utility::find_function_start(addr);
-
-                    SPDLOG_INFO("String ref func start: {:x}", (uintptr_t)*string_ref_func_start);
-                    SPDLOG_INFO("Return addr func start: {:x}", (uintptr_t)*return_addr_func_start);
 
                     if (string_ref_func_start && return_addr_func_start && *string_ref_func_start == *return_addr_func_start) {
                         return true;
