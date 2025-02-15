@@ -7005,6 +7005,9 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                     const auto string_ref_func_start = utility::find_function_start((uintptr_t)*string_ref);
                     const auto return_addr_func_start = utility::find_function_start(addr);
 
+                    SPDLOG_INFO("String ref func start: {:x}", (uintptr_t)*string_ref_func_start);
+                    SPDLOG_INFO("Return addr func start: {:x}", (uintptr_t)*return_addr_func_start);
+
                     if (string_ref_func_start && return_addr_func_start && *string_ref_func_start == *return_addr_func_start) {
                         return true;
                     }
