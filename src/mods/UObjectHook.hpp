@@ -55,6 +55,10 @@ public:
         m_uobject_hook_disabled = disabled;
         m_fixed_visibilities = false;
     }
+    
+    bool is_fully_hooked() const {
+        return m_fully_hooked;
+    }
 
 protected:
     std::string_view get_name() const override { return "UObjectHook"; };

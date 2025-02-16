@@ -58,7 +58,7 @@ public:
         return render_target; 
     }
 
-    FRHITexture2D* get_scene_capture_render_target() const;
+    FRHITexture2D* get_scene_capture_render_target();
     void set_render_target(FRHITexture2D* rt) { render_target = rt; }
 
     bool is_ue_5_0_3() const { return is_version_5_0_3; }
@@ -70,7 +70,7 @@ public:
     bool create_scene_capture();
     void destroy_scene_capture();
 
-    sdk::UTexture* get_scene_capture_utexture() const;
+    sdk::UTexture* get_scene_capture_utexture();
     
     sdk::FViewport* get_viewport() const {
         return last_viewport;
