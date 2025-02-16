@@ -2999,41 +2999,21 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
     }
 
     auto& views = *views_ptr;
-
-    if (rtm->get_scene_capture_utexture() == nullptr) {
-        if (!rtm->create_scene_capture()) {
-            SPDLOG_ERROR("Failed to create scene capture texture");
-            const auto prev_count = views.count;
-            views.count = 1;
-            g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
-            views.count = prev_count;
-            return;
-        }
-    }
-
-    // Waiting for RHI thread to finish creating the texture
-    if (rtm->get_scene_capture_render_target() == nullptr) {
-        const auto prev_count = views.count;
-        views.count = 1;
-        g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
-        views.count = prev_count;
-        return;
-    }
+    const auto prev_count = views.count;
 
     const auto rt = rtm->get_scene_capture_utexture();
     const auto rtrsrc = rt != nullptr ? (sdk::FTextureRenderTargetResource*)rt->get_resource() : nullptr;
     const auto rtfrt = rtrsrc != nullptr ? rtrsrc->as_render_target() : nullptr;
-    const auto rtfrt_rtt = rtfrt != nullptr ? rtfrt->get_render_target_texture() : nullptr;
 
-    // Wait until RT is ready
-    if (rtfrt == nullptr || rtfrt_rtt == nullptr || *rtfrt_rtt == nullptr) {
-        const auto prev_count = views.count;
+    if (rtfrt == nullptr) {
+        // This is fine to call constantly because we use an in-flight render target
+        // that gets unset after the texture is fully created. This function exits early otherwise.
+        rtm->create_scene_capture();
         views.count = 1;
         g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, &view_family_candidate);
         views.count = prev_count;
         return;
     }
-
 
     auto view_family_target = view_family.get_render_target();
 
@@ -3043,8 +3023,6 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
     }
 
     bool wants_swap = false;
-    const uint32_t original_count = views.count;
-
     if (views.count > 1) {
         views.count = 1;
         wants_swap = true;
@@ -3096,9 +3074,7 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
         // because the engine is still working on the old render target
         const auto original_target = view_family_target;
 
-        if (rtfrt != nullptr) {
-            view_family.set_render_target(rtfrt);
-        }
+        view_family.set_render_target(rtfrt);
 
         auto scene = (sdk::FScene*)view_family.get_scene_interface();
 
@@ -3117,7 +3093,7 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
         view_family.set_render_target(original_target);
     }
 
-    views.count = original_count;
+    views.count = prev_count;
 }
 
 void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* extension, sdk::FSceneViewFamily& view_family) {
@@ -6464,7 +6440,7 @@ void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx)
 }
 
 void VRRenderTargetManager_Base::destroy_scene_capture() try {
-    if (this->scene_capture_actor != nullptr) {
+    if (this->scene_capture_actor != nullptr && this->in_flight_target == nullptr) {
         SPDLOG_INFO("Destroying scene capture!");
 
         try {
@@ -6507,9 +6483,10 @@ void VRRenderTargetManager_Base::destroy_scene_capture() try {
 FRHITexture2D* VRRenderTargetManager_Base::get_scene_capture_render_target() {
     const auto is_same_as_rhi_thread = RHIThreadWorker::get().is_same_thread();
     const auto sct = is_same_as_rhi_thread ? this->scene_capture_target_rhi_thread : this->scene_capture_target;
-    static auto utexture_c = sdk::UTexture::static_class();
 
     if (sct != nullptr) try {
+        static auto utexture_c = sdk::UTexture::static_class();
+
         // I REALLY don't want to lock a mutex in a hot path so let's hope that our exception handler catches everything.
         if (!sct->is_a(utexture_c) || sct->is_pending_kill_or_unreachable()) {
             SPDLOG_WARN("[VRRenderTargetManager] Scene capture target is not a UTexture! Texture probably deleted on level change!");
@@ -6543,7 +6520,7 @@ FRHITexture2D* VRRenderTargetManager_Base::get_scene_capture_render_target() {
 
 sdk::UTexture* VRRenderTargetManager_Base::get_scene_capture_utexture() {
     static const auto utex_c = sdk::UTexture::static_class();
-    auto utex = this->scene_capture_target;
+    const auto utex = this->scene_capture_target;
 
     if (utex != nullptr) try {
         if (utex->is_a(utex_c) && !utex->is_pending_kill_or_unreachable()) {
@@ -6727,6 +6704,13 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
                             });
                             
                             GameThreadWorker::get().enqueue([this, tgt]() -> void {
+                                if (tgt->is_pending_kill_or_unreachable() || !tgt->is_a(utex_c)) {
+                                    SPDLOG_ERROR("Scene capture target was destroyed between threads!");
+                                    this->in_flight_target = nullptr;
+                                    destroy_scene_capture();
+                                    return;
+                                }
+                                
                                 this->scene_capture_target = tgt;
                                 this->in_flight_target = nullptr;
     
@@ -6806,13 +6790,10 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
                 });
     
                 GameThreadWorker::get().enqueue([this, tgt]() -> void {
-                    if (!tgt->is_a(utex_c)) {
+                    if (tgt->is_pending_kill_or_unreachable() || !tgt->is_a(utex_c)) {
                         SPDLOG_ERROR("Scene capture target was destroyed between threads!");
-                        GameThreadWorker::get().enqueue([this]() -> void {
-                            this->in_flight_target = nullptr;
-                            destroy_scene_capture();
-                        });
-    
+                        this->in_flight_target = nullptr;
+                        destroy_scene_capture();
                         return;
                     }
     
