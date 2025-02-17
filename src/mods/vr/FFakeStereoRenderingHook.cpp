@@ -362,7 +362,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
         }
 
         if (!g_framework->is_game_data_intialized()) {
-            return hook->m_tick_hook.call<void*>(engine, delta, idle);
+            return hook->m_tick_hook.unsafe_call<void*>(engine, delta, idle);
         }
 
         hook->attempt_hooking();
@@ -391,7 +391,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
             mod->on_pre_engine_tick(engine, delta);
         }
 
-        const auto result = hook->m_tick_hook.call<void*>(engine, delta, idle);
+        const auto result = hook->m_tick_hook.unsafe_call<void*>(engine, delta, idle);
 
         for (auto& mod : mods) {
             mod->on_post_engine_tick(engine, delta);
