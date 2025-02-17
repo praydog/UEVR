@@ -1652,50 +1652,37 @@ bool Framework::initialize() {
     initialize_xinput_hook();
     initialize_dinput_hook();
 
-    // TODO
-    /*if (m_first_frame) {
-        m_dinput_hook = std::make_unique<DInputHook>(m_wnd);
-    } else {
-        m_dinput_hook->set_window(m_wnd);
-    }*/
-
     if (m_first_frame) {
         m_first_frame = false;
 
         spdlog::info("Starting game data initialization thread");
 
+        m_mods = std::make_unique<Mods>();
+
         // Game specific initialization stuff. Code that runs any D3D must not run here (like VR code).
-        std::thread init_thread([this]() {
-            try {
-                //Framework::initialize_sdk(); // TODO
-                m_mods = std::make_unique<Mods>();
+        // This originally used a thread but that was determined to be unnecessary.
+        // All D3D code runs in a separate on_initialize_d3d_thread call for each mod.
+        // All mod on_initialize code is not heavy enough to warrant a thread.
+        try {
+            auto e = m_mods->on_initialize();
 
-                auto e = m_mods->on_initialize();
-
-                if (e) {
-                    if (e->empty()) {
-                        m_error = "An unknown error has occurred.";
-                    } else {
-                        m_error = *e;
-                    }
-
-                    spdlog::error("Initialization of mods failed. Reason: {}", m_error);
+            if (e) {
+                if (e->empty()) {
+                    m_error = "An unknown error has occurred.";
+                } else {
+                    m_error = *e;
                 }
-                
-                // Allow the window to initially render so the user knows we are loading.
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-                m_game_data_initialized = true;
-            } catch(...) {
-                m_error = "An exception has occurred during initialization.";
-                m_game_data_initialized = true;
-                spdlog::error("Initialization of mods failed. Reason: exception thrown.");
+                spdlog::error("Initialization of mods failed. Reason: {}", m_error);
             }
+            
 
-            spdlog::info("Game data initialization thread finished");
-        });
-
-        init_thread.detach();
+            m_game_data_initialized = true;
+        } catch(...) {
+            m_error = "An exception has occurred during initialization.";
+            m_game_data_initialized = true;
+            spdlog::error("Initialization of mods failed. Reason: exception thrown.");
+        }
     }
 
     return true;
