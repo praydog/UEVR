@@ -105,13 +105,6 @@ void FFakeStereoRenderingHook::on_frame() {
     attempt_hook_slate_thread();
     attempt_hook_fsceneview_constructor();
 
-    // TODO: see if this can be threaded; it might not be able to because of TLS or something
-    if (!VR::get()->should_skip_uobjectarray_init()) {
-        sdk::FName::get_constructor();
-        sdk::FName::get_to_string();
-        sdk::FUObjectArray::get();
-    }
-
     // Ideally we want to do all hooking
     // from game engine tick. if it fails
     // we will fall back to doing it here.
@@ -233,6 +226,13 @@ void FFakeStereoRenderingHook::on_draw_ui() {
 void FFakeStereoRenderingHook::attempt_hooking() {
     if (m_finished_hooking || m_tried_hooking) {
         return;
+    }
+
+    // TODO: see if this can be threaded; it might not be able to because of TLS or something
+    if (!VR::get()->should_skip_uobjectarray_init()) {
+        sdk::FName::get_constructor();
+        sdk::FName::get_to_string();
+        sdk::FUObjectArray::get();
     }
 
     if (!m_injected_stereo_at_runtime) {
