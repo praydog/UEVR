@@ -97,14 +97,20 @@ int register_inline_hook(void* target, void* dst, void** original) {
         return -1;
     }
 
-    auto hook = safetyhook::create_inline(target, dst);
+    auto hook = safetyhook::create_inline(target, dst, safetyhook::InlineHook::StartDisabled);
 
     if (!hook) {
         spdlog::error("Failed to create inline hook at {:x}", (uintptr_t)target);
         return -1;
     }
 
+    // Plugin needs to be aware of this before enabling the hook.
     *original = hook.original<void*>();
+
+    if (auto enable_result = hook.enable(); !enable_result.has_value()) {
+        spdlog::error("Failed to enable inline hook at {:x}: {}", (uintptr_t)target, enable_result.error().type);
+        return -1;
+    }
 
     return PluginLoader::get()->add_inline_hook(std::move(hook));
 }
