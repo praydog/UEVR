@@ -7268,7 +7268,16 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                         memcpy(this->texture_create_insn_bytes.data(), (void*)ip, decoded->Length);
 
                         this->texture_hook = safetyhook::create_mid((void*)post_call, &VRRenderTargetManager::texture_hook_callback);
+
+                        if (!this->texture_hook) {
+                            SPDLOG_ERROR("Failed to create post texture hook!");
+                        }
+
                         this->pre_texture_hook = safetyhook::create_mid((void*)ip, &VRRenderTargetManager::pre_texture_hook_callback);
+                        if (!this->pre_texture_hook) {
+                            SPDLOG_ERROR("Failed to create pre texture hook!");
+                        }
+
                         this->set_up_texture_hook = true;
 
                         return false;
