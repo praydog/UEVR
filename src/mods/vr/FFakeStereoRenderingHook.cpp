@@ -398,10 +398,16 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
         }
 
         return result;
-    });
+    }, safetyhook::InlineHook::StartDisabled);
 
     if (!m_tick_hook) {
         SPDLOG_ERROR("Failed to hook UGameEngine::Tick!");
+        return;
+    }
+
+    if (auto tick_hook_enable = m_tick_hook.enable(); !tick_hook_enable.has_value()) {
+        SPDLOG_ERROR("Failed to enable UGameEngine::Tick hook! {}", (int)tick_hook_enable.error().type);
+        return;
     }
 
     m_hooked_game_engine_tick = true;
@@ -467,11 +473,16 @@ void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_addres
         SPDLOG_INFO("Found FSlateRHIRenderer::DrawWindow_RenderThread with alternative return address method: {:x}", *func);
     }
 
-    m_slate_thread_hook = safetyhook::create_inline((void*)*func, &FFakeStereoRenderingHook::slate_draw_window_render_thread);
+    m_slate_thread_hook = safetyhook::create_inline((void*)*func, &FFakeStereoRenderingHook::slate_draw_window_render_thread, safetyhook::InlineHook::StartDisabled);
     m_hooked_slate_thread = true;
 
     if (!m_slate_thread_hook) {
         SPDLOG_ERROR("Failed to hook FSlateRHIRenderer::DrawWindow_RenderThread!");
+        return;
+    }
+
+    if (auto enable_result = m_slate_thread_hook.enable(); !enable_result.has_value()) {
+        SPDLOG_ERROR("Failed to enable FSlateRHIRenderer::DrawWindow_RenderThread hook! {}", (int)enable_result.error().type);
         return;
     }
 
@@ -520,11 +531,19 @@ void FFakeStereoRenderingHook::attempt_hook_fsceneview_constructor() {
         return;
     }
 
-    g_hook->m_sceneview_data.constructor_hook = safetyhook::create_inline(*constructor, (uintptr_t)&sceneview_constructor);
+    g_hook->m_sceneview_data.constructor_hook = safetyhook::create_inline(*constructor, (uintptr_t)&sceneview_constructor, safetyhook::InlineHook::StartDisabled);
 
     if (!g_hook->m_sceneview_data.constructor_hook) {
         SPDLOG_ERROR("Failed to hook FSceneView::FSceneView constructor!");
+        return;
     }
+
+    if (auto enable_result = g_hook->m_sceneview_data.constructor_hook.enable(); !enable_result.has_value()) {
+        SPDLOG_ERROR("Failed to enable FSceneView::FSceneView constructor hook! {}", (int)enable_result.error().type);
+        return;
+    }
+
+    SPDLOG_INFO("Hooked FSceneView::FSceneView constructor!");
 }
 
 bool FFakeStereoRenderingHook::hook() {
@@ -1789,11 +1808,16 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
         return false;
     }
 
-    m_gameviewportclient_draw_hook = safetyhook::create_inline((void*)*game_viewport_client_draw, &game_viewport_client_draw_hook);
+    m_gameviewportclient_draw_hook = safetyhook::create_inline((void*)*game_viewport_client_draw, &game_viewport_client_draw_hook, safetyhook::InlineHook::StartDisabled);
     m_has_game_viewport_client_draw_hook = true;
 
     if (!m_gameviewportclient_draw_hook) {
         SPDLOG_ERROR("Failed to hook UGameViewportClient::Draw!");
+        return false;
+    }
+
+    if (auto enable_result = m_gameviewportclient_draw_hook.enable(); !enable_result.has_value()) {
+        SPDLOG_ERROR("Failed to enable UGameViewportClient::Draw hook!");
         return false;
     }
 
@@ -2924,6 +2948,7 @@ void FFakeStereoRenderingHook::setup_viewpoint(ISceneViewExtension* extension, v
             return;
         }
 
+        // No need to StartDisabled on this because we're on the same thread.
         g_hook->m_localplayer_get_viewpoint_hook = safetyhook::create_inline(*caller, (uintptr_t)&localplayer_setup_viewpoint);
         
         if (!g_hook->m_localplayer_get_viewpoint_hook) {
