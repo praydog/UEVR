@@ -2,7 +2,6 @@
 #include <vector>
 
 #include <spdlog/spdlog.h>
-#include <safetyhook/thread_freezer.hpp>
 
 #include "utility/Thread.hpp"
 
@@ -41,27 +40,27 @@ WindowsMessageHook::WindowsMessageHook(HWND wnd)
     std::lock_guard _{ g_proc_mutex };
     spdlog::info("Initializing WindowsMessageHook");
 
-    safetyhook::execute_while_frozen([this] {
-        g_windows_message_hook = this;
+    utility::ThreadSuspender __{};
 
-        // Save the original window procedure.
-        m_original_proc = (WNDPROC)GetWindowLongPtr(m_wnd, GWLP_WNDPROC);
+    g_windows_message_hook = this;
 
-        // Set it to our "hook" procedure.
-        SetWindowLongPtr(m_wnd, GWLP_WNDPROC, (LONG_PTR)&window_proc);
+    // Save the original window procedure.
+    m_original_proc = (WNDPROC)GetWindowLongPtr(m_wnd, GWLP_WNDPROC);
 
-        spdlog::info("Hooked Windows message handler");
-    });
+    // Set it to our "hook" procedure.
+    SetWindowLongPtr(m_wnd, GWLP_WNDPROC, (LONG_PTR)&window_proc);
+
+    spdlog::info("Hooked Windows message handler");
 }
 
 WindowsMessageHook::~WindowsMessageHook() {
     std::lock_guard _{ g_proc_mutex };
     spdlog::info("Destroying WindowsMessageHook");
 
-    safetyhook::execute_while_frozen([this] {
-        remove();
-        g_windows_message_hook = nullptr;
-    });
+    utility::ThreadSuspender __{};
+
+    remove();
+    g_windows_message_hook = nullptr;
 }
 
 bool WindowsMessageHook::remove() {

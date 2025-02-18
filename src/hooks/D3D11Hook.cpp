@@ -3,8 +3,6 @@
 #include <utility/Thread.hpp>
 #include <utility/Module.hpp>
 
-#include <safetyhook/thread_freezer.hpp>
-
 #include "WindowFilter.hpp"
 #include "Framework.hpp"
 
@@ -77,18 +75,18 @@ bool D3D11Hook::hook() {
     }
 
     try {
-        safetyhook::execute_while_frozen([&] {
-            m_present_hook.reset();
-            m_resize_buffers_hook.reset();
+        utility::ThreadSuspender _{};
+        
+        m_present_hook.reset();
+        m_resize_buffers_hook.reset();
 
-            auto& present_fn = (*(void***)swap_chain)[8];
-            auto& resize_buffers_fn = (*(void***)swap_chain)[13];
+        auto& present_fn = (*(void***)swap_chain)[8];
+        auto& resize_buffers_fn = (*(void***)swap_chain)[13];
 
-            m_present_hook = std::make_unique<PointerHook>(&present_fn, (void*)&D3D11Hook::present);
-            m_resize_buffers_hook = std::make_unique<PointerHook>(&resize_buffers_fn, (void*)&D3D11Hook::resize_buffers);
+        m_present_hook = std::make_unique<PointerHook>(&present_fn, (void*)&D3D11Hook::present);
+        m_resize_buffers_hook = std::make_unique<PointerHook>(&resize_buffers_fn, (void*)&D3D11Hook::resize_buffers);
 
-            m_hooked = true;
-        });
+        m_hooked = true;
     } catch (const std::exception& e) {
         spdlog::error("Failed to hook D3D11: {}", e.what());
         m_hooked = false;
