@@ -7267,17 +7267,33 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                         this->texture_create_insn_bytes.resize(decoded->Length);
                         memcpy(this->texture_create_insn_bytes.data(), (void*)ip, decoded->Length);
 
-                        this->texture_hook = safetyhook::create_mid((void*)post_call, &VRRenderTargetManager::texture_hook_callback);
+                        auto texture_hook_result = safetyhook::MidHook::create((void*)post_call, &VRRenderTargetManager::texture_hook_callback);
 
-                        if (!this->texture_hook) {
-                            SPDLOG_ERROR("Failed to create post texture hook!");
+                        if (!texture_hook_result.has_value()) {
+                            const auto e = texture_hook_result.error();
+
+                            if (e.type == safetyhook::MidHook::Error::BAD_ALLOCATION) {
+                                SPDLOG_ERROR("Failed to create post texture hook: BAD_ALLOCATION: {}", (uint8_t)e.allocator_error);
+                            } else {
+                                SPDLOG_ERROR("Failed to create post texture hook: BAD_INLINE_HOOK: {}", (uint8_t)e.inline_hook_error.type);
+                            }
+                        } else {
+                            this->texture_hook = std::move(texture_hook_result.value());
                         }
 
-                        this->pre_texture_hook = safetyhook::create_mid((void*)ip, &VRRenderTargetManager::pre_texture_hook_callback);
-                        if (!this->pre_texture_hook) {
-                            SPDLOG_ERROR("Failed to create pre texture hook!");
-                        }
+                        auto pre_texure_hook_result = safetyhook::MidHook::create((void*)ip, &VRRenderTargetManager::pre_texture_hook_callback);
 
+                        if (!pre_texure_hook_result.has_value()) {
+                            const auto e = pre_texure_hook_result.error();
+
+                            if (e.type == safetyhook::MidHook::Error::BAD_ALLOCATION) {
+                                SPDLOG_ERROR("Failed to create pre texture hook: BAD_ALLOCATION: {}", (uint8_t)e.allocator_error);
+                            } else {
+                                SPDLOG_ERROR("Failed to create pre texture hook: BAD_INLINE_HOOK: {}", (uint8_t)e.inline_hook_error.type);
+                            }
+                        } else {
+                            this->pre_texture_hook = std::move(pre_texure_hook_result.value());
+                        }
                         this->set_up_texture_hook = true;
 
                         return false;
