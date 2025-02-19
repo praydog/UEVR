@@ -1,0 +1,3 @@
+Copyright (c) 2022-2025 praydog
+
+All rights reserved.
