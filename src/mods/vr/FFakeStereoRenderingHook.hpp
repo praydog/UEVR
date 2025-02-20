@@ -351,6 +351,9 @@ private:
     void post_init_properties(uintptr_t localplayer);
 
     // Hooks
+    // UGameEngine
+    static void* engine_tick_hook(sdk::UGameEngine* engine, float delta, bool idle);
+
     // FSceneView
     static sdk::FSceneView* sceneview_constructor(sdk::FSceneView* sceneview, sdk::FSceneViewInitOptions* init_options, void* a3, void* a4);
     

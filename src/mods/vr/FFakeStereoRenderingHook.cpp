@@ -341,64 +341,7 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
     }
 
     // TODO: move this to a better place
-    m_tick_hook = safetyhook::create_inline((void*)*func, +[](sdk::UGameEngine* engine, float delta, bool idle) -> void* {
-        ZoneScopedN("UGameEngine::Tick Hook");
-        FrameMarkStart("UGameEngine::Tick");
-
-        auto hook = g_hook;
-        
-        hook->m_in_engine_tick = true;
-
-        utility::ScopeGuard _{[]() {
-            g_hook->m_in_engine_tick = false;
-            FrameMarkEnd("UGameEngine::Tick");
-        }};
-        
-        static bool once = true;
-
-        if (once) {
-            SPDLOG_INFO("First time calling UGameEngine::Tick!");
-            once = false;
-        }
-
-        if (!g_framework->is_game_data_intialized()) {
-            return hook->m_tick_hook.unsafe_call<void*>(engine, delta, idle);
-        }
-
-        hook->attempt_hooking();
-
-        // Best place to run game thread jobs.
-        GameThreadWorker::get().execute();
-
-        if (hook->m_ignore_next_engine_tick) {
-            hook->m_ignored_engine_delta = delta;
-            hook->m_ignore_next_engine_tick = false;
-            return nullptr;
-        }
-        
-        g_framework->enable_engine_thread();
-        g_framework->run_imgui_frame(false);
-
-        delta += hook->m_ignored_engine_delta;
-        hook->m_ignored_engine_delta = 0.0f;
-
-        if (hook->m_tracking_system_hook != nullptr) {
-            hook->m_tracking_system_hook->on_pre_engine_tick(engine, delta);
-        }
-
-        const auto& mods = g_framework->get_mods()->get_mods();
-        for (auto& mod : mods) {
-            mod->on_pre_engine_tick(engine, delta);
-        }
-
-        const auto result = hook->m_tick_hook.unsafe_call<void*>(engine, delta, idle);
-
-        for (auto& mod : mods) {
-            mod->on_post_engine_tick(engine, delta);
-        }
-
-        return result;
-    }, safetyhook::InlineHook::StartDisabled);
+    m_tick_hook = safetyhook::create_inline((void*)*func, &engine_tick_hook, safetyhook::InlineHook::StartDisabled);
 
     if (!m_tick_hook) {
         SPDLOG_ERROR("Failed to hook UGameEngine::Tick!");
@@ -413,6 +356,65 @@ void FFakeStereoRenderingHook::attempt_hook_game_engine_tick(uintptr_t return_ad
     m_hooked_game_engine_tick = true;
 
     SPDLOG_INFO("Hooked UGameEngine::Tick!");
+}
+
+void* FFakeStereoRenderingHook::engine_tick_hook(sdk::UGameEngine* engine, float delta, bool idle) {
+    ZoneScopedN("UGameEngine::Tick Hook");
+    FrameMarkStart("UGameEngine::Tick");
+
+    auto hook = g_hook;
+    
+    hook->m_in_engine_tick = true;
+
+    utility::ScopeGuard _{[]() {
+        g_hook->m_in_engine_tick = false;
+        FrameMarkEnd("UGameEngine::Tick");
+    }};
+    
+    static bool once = true;
+
+    if (once) {
+        SPDLOG_INFO("First time calling UGameEngine::Tick!");
+        once = false;
+    }
+
+    if (!g_framework->is_game_data_intialized()) {
+        return hook->m_tick_hook.unsafe_call<void*>(engine, delta, idle);
+    }
+
+    hook->attempt_hooking();
+
+    // Best place to run game thread jobs.
+    GameThreadWorker::get().execute();
+
+    if (hook->m_ignore_next_engine_tick) {
+        hook->m_ignored_engine_delta = delta;
+        hook->m_ignore_next_engine_tick = false;
+        return nullptr;
+    }
+    
+    g_framework->enable_engine_thread();
+    g_framework->run_imgui_frame(false);
+
+    delta += hook->m_ignored_engine_delta;
+    hook->m_ignored_engine_delta = 0.0f;
+
+    if (hook->m_tracking_system_hook != nullptr) {
+        hook->m_tracking_system_hook->on_pre_engine_tick(engine, delta);
+    }
+
+    const auto& mods = g_framework->get_mods()->get_mods();
+    for (auto& mod : mods) {
+        mod->on_pre_engine_tick(engine, delta);
+    }
+
+    const auto result = hook->m_tick_hook.unsafe_call<void*>(engine, delta, idle);
+
+    for (auto& mod : mods) {
+        mod->on_post_engine_tick(engine, delta);
+    }
+
+    return result;
 }
 
 namespace detail{
