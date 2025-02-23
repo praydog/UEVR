@@ -1468,7 +1468,7 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_27() {
     }
 
     static constexpr auto FSCENEVIEW_STEREO_PASS_OFFSET = 0xAF0;
-    static auto get_stereo_pass = [](const FSceneView& view) -> EStereoscopicPass {
+    static auto get_stereo_pass = [](const sdk::FSceneView& view) -> EStereoscopicPass {
         return (EStereoscopicPass)*(uint8_t*)((uintptr_t)&view + FSCENEVIEW_STEREO_PASS_OFFSET);
     };
 
@@ -1555,7 +1555,7 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_27() {
         return pass != EStereoscopicPass::eSSP_FULL;
     }; // DeviceIsStereoEyePass
 
-    m_fallback_vtable[DEVICE_IS_STEREO_EYE_VIEW_INDEX] = +[](FFakeStereoRendering* stereo, const FSceneView& view) -> bool {
+    m_fallback_vtable[DEVICE_IS_STEREO_EYE_VIEW_INDEX] = +[](FFakeStereoRendering* stereo, const sdk::FSceneView& view) -> bool {
     #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
         SPDLOG_INFO("DeviceIsStereoEyeView called: {:x} {} ", (uintptr_t)_ReturnAddress(), (uint32_t)get_stereo_pass(view));
     #endif
@@ -1571,7 +1571,7 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_27() {
         return pass == EStereoscopicPass::eSSP_FULL || pass == EStereoscopicPass::eSSP_PRIMARY;
     }; // DeviceIsAPrimaryPass
 
-    m_fallback_vtable[DEVICE_IS_A_PRIMARY_VIEW_INDEX] = +[](FFakeStereoRendering* stereo, const FSceneView& view) -> bool {
+    m_fallback_vtable[DEVICE_IS_A_PRIMARY_VIEW_INDEX] = +[](FFakeStereoRendering* stereo, const sdk::FSceneView& view) -> bool {
     #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
         SPDLOG_INFO("DeviceIsAPrimaryView called: {:x} {} ", (uintptr_t)_ReturnAddress(), (uint32_t)get_stereo_pass(view));
     #endif
@@ -1587,7 +1587,7 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_4_27() {
         return !(pass == EStereoscopicPass::eSSP_FULL || pass == EStereoscopicPass::eSSP_PRIMARY);
     }; // DeviceIsASecondaryPass
 
-    m_fallback_vtable[DEVICE_IS_A_SECONDARY_VIEW_INDEX] = +[](FFakeStereoRendering* stereo, const FSceneView& view) -> bool {
+    m_fallback_vtable[DEVICE_IS_A_SECONDARY_VIEW_INDEX] = +[](FFakeStereoRendering* stereo, const sdk::FSceneView& view) -> bool {
     #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
         SPDLOG_INFO("DeviceIsASecondaryView called: {:x} {} ", (uintptr_t)_ReturnAddress(), (uint32_t)get_stereo_pass(view));
     #endif
@@ -6532,52 +6532,39 @@ void VRRenderTargetManager_Base::destroy_scene_capture() try {
     if (this->scene_capture_actor != nullptr && this->in_flight_target == nullptr) {
         SPDLOG_INFO("Destroying scene capture!");
 
-        try {
-            if (this->scene_capture_actor->is_a(sdk::AActor::static_class()) && !this->scene_capture_actor->is_pending_kill_or_unreachable()) {
-                this->scene_capture_actor->destroy_actor();
-    
-                RHIThreadWorker::get().enqueue([this]() -> void {
-                    this->scene_capture_target_rhi_thread = nullptr;
-                });
-            } else {
-                this->scene_capture_target_rhi_thread = nullptr;
-            }
-        } catch (const std::exception& e) {
-            SPDLOG_ERROR("[VRRenderTargetManager] Exception in destroy_scene_capture: {}", e.what());
-            this->scene_capture_target_rhi_thread = nullptr;
-        } catch (...) {
-            SPDLOG_ERROR("[VRRenderTargetManager] Unknown exception in destroy_scene_capture!");
-            this->scene_capture_target_rhi_thread = nullptr;
+        if (this->scene_capture_actor.valid()) {
+            this->scene_capture_actor->destroy_actor();
         }
+    }
 
+    if (this->in_flight_target == nullptr) {
         this->scene_capture_actor = nullptr;
         this->scene_capture_component = nullptr;
         this->scene_capture_target = nullptr;
     }
-
-    if (this->scene_capture_target != nullptr && this->in_flight_target == nullptr) {
-        this->scene_capture_target->remove_from_root();
-        this->scene_capture_target = nullptr;
-
-        RHIThreadWorker::get().enqueue([this]() -> void {
-            this->scene_capture_target_rhi_thread = nullptr;
-        });
-    }
 } catch (const std::exception& e) {
     SPDLOG_ERROR("[VRRenderTargetManager] Exception in destroy_scene_capture: {}", e.what());
+    this->scene_capture_target_rhi_thread = nullptr;
+    this->scene_capture_target = nullptr;
+    this->scene_capture_actor = nullptr;
+    this->scene_capture_component = nullptr;
+
+    RHIThreadWorker::get().enqueue([this]() -> void {
+        this->scene_capture_target_rhi_thread = nullptr;
+    });
 } catch (...) {
     SPDLOG_ERROR("[VRRenderTargetManager] Unknown exception in destroy_scene_capture!");
 }
 
 FRHITexture2D* VRRenderTargetManager_Base::get_scene_capture_render_target() {
     const auto is_same_as_rhi_thread = RHIThreadWorker::get().is_same_thread();
-    const auto sct = is_same_as_rhi_thread ? this->scene_capture_target_rhi_thread : this->scene_capture_target;
+    const auto& sct = is_same_as_rhi_thread ? this->scene_capture_target_rhi_thread : this->scene_capture_target;
 
     if (sct != nullptr) try {
         static auto utexture_c = sdk::UTexture::static_class();
 
         // I REALLY don't want to lock a mutex in a hot path so let's hope that our exception handler catches everything.
-        if (!sct->is_a(utexture_c) || sct->is_pending_kill_or_unreachable()) {
+        if (!sct.valid()) {
             SPDLOG_WARN("[VRRenderTargetManager] Scene capture target is not a UTexture! Texture probably deleted on level change!");
             
             if (is_same_as_rhi_thread) {
@@ -6609,10 +6596,10 @@ FRHITexture2D* VRRenderTargetManager_Base::get_scene_capture_render_target() {
 
 sdk::UTexture* VRRenderTargetManager_Base::get_scene_capture_utexture() {
     static const auto utex_c = sdk::UTexture::static_class();
-    const auto utex = this->scene_capture_target;
+    const auto& utex = this->scene_capture_target;
 
     if (utex != nullptr) try {
-        if (utex->is_a(utex_c) && !utex->is_pending_kill_or_unreachable()) {
+        if (utex.valid()) {
             return (sdk::UTexture*)utex;
         }
 
@@ -6649,7 +6636,7 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
 
     SPDLOG_INFO("Creating scene capture!");
 
-    static auto kismet_rendering = sdk::UKismetRenderingLibrary::get();
+    auto kismet_rendering = sdk::UKismetRenderingLibrary::get();
 
     if (kismet_rendering == nullptr) {
         SPDLOG_ERROR("[VRRenderTargetManager] Failed to get UKismetRenderingLibrary!");
@@ -6706,14 +6693,16 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
     }
 
     const float clear_color[4] {0.0f, 0.0f, 0.0f, 1.0f};
-    auto tgt = kismet_rendering->create_render_target_2d(world, VR::get()->get_hmd_width(), VR::get()->get_hmd_height(), 2, clear_color, false);
+    auto tgt_raw = kismet_rendering->create_render_target_2d(world, VR::get()->get_hmd_width(), VR::get()->get_hmd_height(), 2, clear_color, false);
 
-    if (tgt == nullptr) {
+    if (tgt_raw == nullptr) {
         SPDLOG_ERROR("[VRRenderTargetManager] Failed to create texture!");
         return false;
     }
 
-    SPDLOG_INFO("[VRRenderTargetManager] Created texture target: {:x}", (uintptr_t)tgt);
+    sdk::UObjectReference tgt{tgt_raw};
+
+    SPDLOG_INFO("[VRRenderTargetManager] Created texture target: {:x}", (uintptr_t)tgt.get());
     this->scene_capture_actor->finish_add_component(this->scene_capture_component);
 
     this->scene_capture_component->set_texture_target(tgt);
@@ -6767,7 +6756,7 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
         // Repeats every render loop for 5 seconds, times out if the texture is not created.
         RenderThreadWorker::ConditionalJobFunc render_thread_conditional_task = [this, tgt]() -> bool {
             try {
-                if (tgt->is_pending_kill_or_unreachable() || !tgt->is_a(utex_c)) {
+                if (!tgt.valid()) {
                     SPDLOG_ERROR("Scene capture target was destroyed between threads!");
                     GameThreadWorker::get().enqueue([this]() -> void {
                         this->in_flight_target = nullptr;
@@ -6789,11 +6778,17 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
                             hook_frt(frt);
     
                             RHIThreadWorker::get().enqueue([this, tgt]() -> void {
+                                if (!tgt.valid()) {
+                                    SPDLOG_ERROR("Scene capture target was destroyed between threads!");
+                                    this->scene_capture_target_rhi_thread = nullptr;
+                                    return;
+                                }
+
                                 this->scene_capture_target_rhi_thread = tgt;
                             });
                             
                             GameThreadWorker::get().enqueue([this, tgt]() -> void {
-                                if (tgt->is_pending_kill_or_unreachable() || !tgt->is_a(utex_c)) {
+                                if (!tgt.valid()) {
                                     SPDLOG_ERROR("Scene capture target was destroyed between threads!");
                                     this->in_flight_target = nullptr;
                                     destroy_scene_capture();
@@ -6845,7 +6840,7 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
             });
         };
 
-        RenderThreadWorker::get().enqueue_conditional(render_thread_conditional_task, render_thread_on_timeout, std::chrono::seconds(5));
+        RenderThreadWorker::get().enqueue_conditional(render_thread_conditional_task, render_thread_on_timeout, std::chrono::seconds(2));
     
         SPDLOG_INFO("Waiting for scene capture texture to be created...");
     } else {
@@ -6853,7 +6848,7 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
 
         RenderThreadWorker::ConditionalJobFunc render_thread_conditional_task = [this, tgt]() -> bool {
             try {
-                if (tgt->is_pending_kill_or_unreachable() || !tgt->is_a(utex_c)) {
+                if (!tgt.valid()) {
                     SPDLOG_ERROR("Scene capture target was destroyed between threads!");
                     GameThreadWorker::get().enqueue([this]() -> void {
                         this->in_flight_target = nullptr;
@@ -6865,9 +6860,10 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
     
                 auto rsrc = (sdk::FTextureRenderTargetResource*)tgt->get_resource();
                 auto frt = rsrc != nullptr ? rsrc->as_render_target() : nullptr;
+                auto frttex = frt != nullptr ? frt->get_render_target_texture() : nullptr;
     
                 // Wait until FRenderTarget is not null.
-                if (frt == nullptr) {
+                if (frt == nullptr || frttex == nullptr || *frttex == nullptr) {
                     SPDLOG_WARN("Waiting for render target to be valid...");
                     return false;
                 }
@@ -6875,11 +6871,17 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
                 hook_frt(frt);
     
                 RHIThreadWorker::get().enqueue([this, tgt]() -> void {
+                    if (!tgt.valid()) {
+                        SPDLOG_ERROR("Scene capture target was destroyed between threads!");
+                        this->scene_capture_target_rhi_thread = nullptr;
+                        return;
+                    }
+
                     this->scene_capture_target_rhi_thread = tgt;
                 });
     
                 GameThreadWorker::get().enqueue([this, tgt]() -> void {
-                    if (tgt->is_pending_kill_or_unreachable() || !tgt->is_a(utex_c)) {
+                    if (!tgt.valid()) {
                         SPDLOG_ERROR("Scene capture target was destroyed between threads!");
                         this->in_flight_target = nullptr;
                         destroy_scene_capture();
@@ -6918,7 +6920,7 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
             });
         };
 
-        RenderThreadWorker::get().enqueue_conditional(render_thread_conditional_task, render_thread_on_timeout, std::chrono::seconds(5));
+        RenderThreadWorker::get().enqueue_conditional(render_thread_conditional_task, render_thread_on_timeout, std::chrono::seconds(2));
 
         SPDLOG_INFO("Waiting for scene capture texture to be created...");
     }

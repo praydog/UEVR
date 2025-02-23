@@ -12,6 +12,10 @@
 #include <sdk/threading/ThreadWorker.hpp>
 #include <sdk/RHICommandList.hpp>
 #include <sdk/UTexture.hpp>
+#include <sdk/UObjectReference.hpp>
+#include <sdk/AActor.hpp>
+#include <sdk/USceneCaptureComponent2D.hpp>
+#include <sdk/UTexture.hpp>
 
 #include "IXRTrackingSystemHook.hpp"
 
@@ -108,11 +112,11 @@ protected:
     std::optional<size_t> m_viewport_force_separate_rt_offset{};
     bool m_attempted_find_force_separate_rt{false};
 
-    sdk::AActor* scene_capture_actor{nullptr};
-    sdk::USceneCaptureComponent2D* scene_capture_component{nullptr};
-    sdk::UTexture* scene_capture_target{nullptr}; // For custom compatibility rendering
-    sdk::UTexture* scene_capture_target_rhi_thread{nullptr}; // For custom compatibility rendering
-    sdk::UTexture* in_flight_target{nullptr};
+    sdk::UObjectReference<sdk::AActor> scene_capture_actor{nullptr};
+    sdk::UObjectReference<sdk::USceneCaptureComponent2D> scene_capture_component{nullptr};
+    sdk::UObjectReference<sdk::UTexture> scene_capture_target{nullptr}; // For custom compatibility rendering
+    sdk::UObjectReference<sdk::UTexture> scene_capture_target_rhi_thread{nullptr}; // For custom compatibility rendering
+    sdk::UTexture* in_flight_target{nullptr}; // Not a reference because this is basically a barrier against creating a new scene capture target
     sdk::FViewport* last_viewport{nullptr};
 };
 
