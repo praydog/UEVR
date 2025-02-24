@@ -423,12 +423,20 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
         if (!is_afr) {
             // Render right side to right screen tex
-            render_srv_to_rtv(
-                m_game_batch.get(),
-                m_engine_tex_ref,
-                m_2d_screen_tex[1],
-                RECT{(LONG)((float)m_backbuffer_size[0] / 2.0f), 0, (LONG)((float)m_backbuffer_size[0]), (LONG)m_backbuffer_size[1]}
-            );
+            if (m_scene_capture_tex_ref.has_texture() && m_scene_capture_tex_ref.has_srv()) {
+                render_srv_to_rtv(
+                    m_game_batch.get(),
+                    m_scene_capture_tex_ref,
+                    m_2d_screen_tex[1]
+                );
+            } else {
+                render_srv_to_rtv(
+                    m_game_batch.get(),
+                    m_engine_tex_ref,
+                    m_2d_screen_tex[1],
+                    RECT{(LONG)((float)m_backbuffer_size[0] / 2.0f), 0, (LONG)((float)m_backbuffer_size[0]), (LONG)m_backbuffer_size[1]}
+                );
+            }
 
             if (m_engine_ui_ref.has_texture() && m_engine_ui_ref.has_srv()) {
                 render_srv_to_rtv(
@@ -441,6 +449,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
         // Clear the RT so the entire background is black when submitting to the compositor
         context->ClearRenderTargetView(m_engine_tex_ref, clear_color);
+
+        if (m_scene_capture_tex_ref.has_rtv()) {
+            context->ClearRenderTargetView(m_scene_capture_tex_ref, clear_color);
+        }
     };
 
     if (is_2d_screen) {
