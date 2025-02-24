@@ -889,7 +889,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             const auto original_centerh = (float)eye_height / 2.0f;
 
             // left side of double wide tex only on AFR/synced
-            if (vr->is_using_afr()) {
+            if (vr->is_using_afr() || vr->is_native_stereo_fix_enabled()) {
                 source_rect.left = 0;
                 source_rect.top = 0;
                 source_rect.right = (LONG)eye_width;

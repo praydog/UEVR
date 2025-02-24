@@ -891,8 +891,8 @@ void D3D12Component::draw_spectator_view(ID3D12GraphicsCommandList* command_list
     // only show one half of the double wide texture (right side)
     RECT source_rect{};
 
-    // Show left side when using AFR
-    if (vr->is_using_afr()) {
+    // Show left side when using AFR or native stereo fix
+    if (vr->is_using_afr() || vr->is_native_stereo_fix_enabled()) {
         source_rect.left = 0;
         source_rect.top = 0;
         source_rect.right = m_backbuffer_size[0] / 2;
