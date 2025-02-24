@@ -6736,7 +6736,7 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
         SPDLOG_INFO("[FRenderTarget] Hooking FRenderTarget!");
 
         auto& vtable = *(void**)frt;
-        memcpy(original_frender_target_vtable.data(), vtable, 100);
+        memcpy(original_frender_target_vtable.data(), vtable, original_frender_target_vtable.size() * sizeof(uintptr_t));
 
         if (auto display_gamma_index = sdk::FRenderTarget::get_display_gamma_index(); display_gamma_index != 0) {
             original_frender_target_vtable[*display_gamma_index] = (uintptr_t)gamma_increase_fn;
