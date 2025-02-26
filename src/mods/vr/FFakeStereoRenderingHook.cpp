@@ -5085,10 +5085,11 @@ uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoR
 
     if (vr->is_native_stereo_fix_enabled()) {
         auto rtm = g_hook->get_render_target_manager();
-        if ((rtm->get_scene_capture_render_target() == nullptr || !g_hook->m_sceneview_data.constructor_hook)) {
+        if ((rtm->get_scene_capture_render_target() == nullptr || !g_hook->m_sceneview_data.constructor_hook || !g_hook->m_render_module_begin_render_viewfamily_hook)) {
             if (rtm->get_scene_capture_utexture() == nullptr) {
                 rtm->create_scene_capture();
             }
+
             return 1; // wait for the scene capture render target to be set and FSceneView constructor to be hooked
         }
     }
@@ -6541,14 +6542,17 @@ void VRRenderTargetManager_Base::destroy_scene_capture() try {
         this->scene_capture_actor = nullptr;
         this->scene_capture_component = nullptr;
         this->scene_capture_target = nullptr;
+
+        RHIThreadWorker::get().enqueue([this]() -> void {
+            this->scene_capture_target_rhi_thread = nullptr;
+        });
     }
 } catch (const std::exception& e) {
     SPDLOG_ERROR("[VRRenderTargetManager] Exception in destroy_scene_capture: {}", e.what());
-    this->scene_capture_target_rhi_thread = nullptr;
     this->scene_capture_target = nullptr;
     this->scene_capture_actor = nullptr;
     this->scene_capture_component = nullptr;
-
+    
     RHIThreadWorker::get().enqueue([this]() -> void {
         this->scene_capture_target_rhi_thread = nullptr;
     });
@@ -6557,12 +6561,14 @@ void VRRenderTargetManager_Base::destroy_scene_capture() try {
 }
 
 FRHITexture2D* VRRenderTargetManager_Base::get_scene_capture_render_target() {
+    if (this->in_flight_target != nullptr) {
+        return nullptr;
+    }
+
     const auto is_same_as_rhi_thread = RHIThreadWorker::get().is_same_thread();
     const auto& sct = is_same_as_rhi_thread ? this->scene_capture_target_rhi_thread : this->scene_capture_target;
 
     if (sct != nullptr) try {
-        static auto utexture_c = sdk::UTexture::static_class();
-
         // I REALLY don't want to lock a mutex in a hot path so let's hope that our exception handler catches everything.
         if (!sct.valid()) {
             SPDLOG_WARN("[VRRenderTargetManager] Scene capture target is not a UTexture! Texture probably deleted on level change!");
@@ -6595,7 +6601,10 @@ FRHITexture2D* VRRenderTargetManager_Base::get_scene_capture_render_target() {
 }
 
 sdk::UTexture* VRRenderTargetManager_Base::get_scene_capture_utexture() {
-    static const auto utex_c = sdk::UTexture::static_class();
+    if (this->in_flight_target != nullptr) {
+        return nullptr;
+    }
+
     const auto& utex = this->scene_capture_target;
 
     if (utex != nullptr) try {
@@ -6774,6 +6783,11 @@ bool VRRenderTargetManager_Base::create_scene_capture() try {
     
                         if (frt != nullptr) {
                             sdk::FRenderTarget::update_offsets(frt);
+
+                            if (frt->get_render_target_texture() == nullptr || *frt->get_render_target_texture() == nullptr) {
+                                SPDLOG_WARN("Waiting for render target texture to be valid...");
+                                return false;
+                            }
     
                             hook_frt(frt);
     
