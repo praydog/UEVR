@@ -52,6 +52,8 @@ public:
                                               const float world_to_meters, Vector3f* view_location, bool is_double) override;
     void on_pre_viewport_client_draw(void* viewport_client, void* viewport, void* canvas) override;
     void on_post_viewport_client_draw(void* viewport_client, void* viewport, void* canvas) override;
+
+    void dispatch_custom_event(const char* event_name, const char* event_data);
     
 public:
     void attempt_unload_plugins();
@@ -80,6 +82,7 @@ public:
     bool add_on_xinput_set_state(UEVR_OnXInputSetStateCb cb);
     bool add_on_post_render_vr_framework_dx11(UEVR_OnPostRenderVRFrameworkDX11Cb cb);
     bool add_on_post_render_vr_framework_dx12(UEVR_OnPostRenderVRFrameworkDX12Cb cb);
+    bool add_on_custom_event(UEVR_OnCustomEventCb cb);
 
     bool add_on_pre_engine_tick(UEVR_Engine_TickCb cb);
     bool add_on_post_engine_tick(UEVR_Engine_TickCb cb);
@@ -155,6 +158,7 @@ private:
     std::vector<UEVR_OnMessageCb> m_on_message_cbs{};
     std::vector<UEVR_OnXInputGetStateCb> m_on_xinput_get_state_cbs{};
     std::vector<UEVR_OnXInputSetStateCb> m_on_xinput_set_state_cbs{};
+    std::vector<UEVR_OnCustomEventCb> m_on_custom_event_cbs{};
 
     std::vector<UEVR_Engine_TickCb> m_on_pre_engine_tick_cbs{};
     std::vector<UEVR_Engine_TickCb> m_on_post_engine_tick_cbs{};
@@ -181,6 +185,9 @@ private:
         (std::vector<generic_std_function>*)&m_on_message_cbs,
         (std::vector<generic_std_function>*)&m_on_xinput_get_state_cbs,
         (std::vector<generic_std_function>*)&m_on_xinput_set_state_cbs,
+
+        // Custom
+        (std::vector<generic_std_function>*)&m_on_custom_event_cbs,
 
         // SDK
         (std::vector<generic_std_function>*)&m_on_pre_engine_tick_cbs,

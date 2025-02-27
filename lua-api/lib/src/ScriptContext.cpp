@@ -265,7 +265,8 @@ int ScriptContext::setup_bindings() {
         "get_build_date", &UEVR_PluginFunctions::get_build_date,
         "get_build_time", &UEVR_PluginFunctions::get_build_time,
         "get_commits_past_tag", &UEVR_PluginFunctions::get_commits_past_tag,
-        "get_total_commits", &UEVR_PluginFunctions::get_total_commits
+        "get_total_commits", &UEVR_PluginFunctions::get_total_commits,
+        "dispatch_custom_event", &UEVR_PluginFunctions::dispatch_custom_event
     );
 
     m_lua.new_usertype<UEVR_RendererData>("UEVR_RendererData",
@@ -1038,7 +1039,10 @@ int ScriptContext::setup_bindings() {
         },
         "execute_command", [](uevr::API* api, const std::wstring& s) { api->execute_command(s.data()); },
         "get_uobject_array", &uevr::API::get_uobject_array,
-        "get_console_manager", &uevr::API::get_console_manager
+        "get_console_manager", &uevr::API::get_console_manager,
+        "dispatch_custom_event", [](uevr::API* api, const char* event_name, const char* event_data) {
+            api->dispatch_custom_event(event_name, event_data);
+        }
     );
 
     setup_callback_bindings();

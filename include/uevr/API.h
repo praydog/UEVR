@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 36
+#define UEVR_PLUGIN_VERSION_MINOR 37
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -187,6 +187,10 @@ typedef bool (*UEVR_OnMessageFn)(UEVR_OnMessageCb);
 typedef bool (*UEVR_OnXInputGetStateFn)(UEVR_OnXInputGetStateCb);
 typedef bool (*UEVR_OnXInputSetStateFn)(UEVR_OnXInputSetStateCb);
 
+/* Lua */
+typedef void (*UEVR_OnCustomEventCb)(const char* evt, const char* evt_data);
+typedef bool (*UEVR_OnCustomEventFn)(UEVR_OnCustomEventCb);
+
 /* Engine */
 typedef bool (*UEVR_Engine_TickFn)(UEVR_Engine_TickCb);
 typedef bool (*UEVR_Slate_DrawWindow_RenderThreadFn)(UEVR_Slate_DrawWindow_RenderThreadCb);
@@ -206,6 +210,7 @@ typedef struct {
     UEVR_OnXInputSetStateFn on_xinput_set_state;
     UEVR_OnPostRenderVRFrameworkDX11Fn on_post_render_vr_framework_dx11;
     UEVR_OnPostRenderVRFrameworkDX12Fn on_post_render_vr_framework_dx12;
+    UEVR_OnCustomEventFn on_custom_event;
 } UEVR_PluginCallbacks;
 
 typedef struct {
@@ -227,6 +232,9 @@ typedef struct {
     const char* (*get_build_time)();
     unsigned int (*get_commits_past_tag)();
     unsigned int (*get_total_commits)();
+
+    /* Intended for C plugins to listen to via on_custom_event */
+    void (*dispatch_custom_event)(const char* event_name, const char* event_data);
 } UEVR_PluginFunctions;
 
 typedef struct {

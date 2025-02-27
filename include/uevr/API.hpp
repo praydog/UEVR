@@ -110,6 +110,12 @@ public:
         fn(event_name.data(), event_data.data());
     }
 
+    // This is not sent to Lua, it's sent to all plugins
+    void dispatch_custom_event(std::string_view event_name, std::string_view event_data) {
+        static const auto fn = param()->functions->dispatch_custom_event;
+        fn(event_name.data(), event_data.data());
+    }
+
     template <typename... Args> void log_error(const char* format, Args... args) { m_param->functions->log_error(format, args...); }
     template <typename... Args> void log_warn(const char* format, Args... args) { m_param->functions->log_warn(format, args...); }
     template <typename... Args> void log_info(const char* format, Args... args) { m_param->functions->log_info(format, args...); }

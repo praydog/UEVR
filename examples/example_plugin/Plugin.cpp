@@ -185,6 +185,10 @@ public:
         return !ImGui::GetIO().WantCaptureMouse && !ImGui::GetIO().WantCaptureKeyboard;
     }
 
+    void on_custom_event(const char* event_name, const char* event_data) override {
+        API::get()->log_info("Custom Event: %s %s", event_name, event_data);
+    }
+
     void print_all_objects() {
         API::get()->log_info("Printing all objects...");
 

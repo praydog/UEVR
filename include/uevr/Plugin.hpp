@@ -73,6 +73,8 @@ public:
     virtual void on_pre_viewport_client_draw(UEVR_UGameViewportClientHandle viewport_client, UEVR_FViewportHandle viewport, UEVR_FCanvasHandle) {}
     virtual void on_post_viewport_client_draw(UEVR_UGameViewportClientHandle viewport_client, UEVR_FViewportHandle viewport, UEVR_FCanvasHandle) {}
 
+    virtual void on_custom_event(const char* event_name, const char* event_data) {}
+
 protected:
 };
 }
@@ -116,6 +118,10 @@ extern "C" __declspec(dllexport) bool uevr_plugin_initialize(const UEVR_PluginIn
 
     callbacks->on_xinput_set_state([](unsigned int* retval, unsigned int user_index, void* vibration) {
         uevr::detail::g_plugin->on_xinput_set_state(retval, user_index, (XINPUT_VIBRATION*)vibration);
+    });
+
+    callbacks->on_custom_event([](const char* event_name, const char* event_data) {
+        uevr::detail::g_plugin->on_custom_event(event_name, event_data);
     });
 
     sdk_callbacks->on_pre_engine_tick([](UEVR_UGameEngineHandle engine, float delta) {

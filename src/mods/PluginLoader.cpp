@@ -122,6 +122,10 @@ void unregister_inline_hook(int id) {
 void dispatch_lua_event(const char* event_name, const char* event_data) {
     LuaLoader::get()->dispatch_event(event_name, event_data);
 }
+
+void dispatch_custom_event(const char* event_name, const char* event_data) {
+    PluginLoader::get()->dispatch_custom_event(event_name, event_data);
+}
 }
 
 namespace uevr {
@@ -180,6 +184,14 @@ bool on_post_render_vr_framework_dx12(UEVR_OnPostRenderVRFrameworkDX12Cb cb) {
 
     return PluginLoader::get()->add_on_post_render_vr_framework_dx12(cb);
 }
+
+bool on_custom_event(UEVR_OnCustomEventCb cb) {
+    if (cb == nullptr) {
+        return false;
+    }
+
+    return PluginLoader::get()->add_on_custom_event(cb);
+}
 }
 
 UEVR_PluginCallbacks g_plugin_callbacks {
@@ -189,7 +201,8 @@ UEVR_PluginCallbacks g_plugin_callbacks {
     uevr::on_xinput_get_state,
     uevr::on_xinput_set_state,
     uevr::on_post_render_vr_framework_dx11,
-    uevr::on_post_render_vr_framework_dx12
+    uevr::on_post_render_vr_framework_dx12,
+    uevr::on_custom_event
 };
 
 UEVR_PluginFunctions g_plugin_functions {
@@ -226,7 +239,8 @@ UEVR_PluginFunctions g_plugin_functions {
     },
     .get_total_commits = []() -> unsigned int {
         return UEVR_TOTAL_COMMITS;
-    }
+    },
+    .dispatch_custom_event = uevr::dispatch_custom_event
 };
 
 #define GET_ENGINE_WORLD_RETNULL() \
@@ -2107,6 +2121,18 @@ void PluginLoader::on_post_viewport_client_draw(void* viewport_client, void* vie
     }
 }
 
+void PluginLoader::dispatch_custom_event(const char* event_name, const char* event_data) {
+    std::shared_lock _{m_api_cb_mtx};
+
+    for (auto&& cb : m_on_custom_event_cbs) {
+        try {
+            cb(event_name, event_data);
+        } catch(...) {
+            spdlog::error("[APIProxy] Exception occurred in custom event callback; one of the plugins has an error.");
+        }
+    }
+}
+
 bool PluginLoader::add_on_present(UEVR_OnPresentCb cb) {
     std::unique_lock _{m_api_cb_mtx};
 
@@ -2153,6 +2179,13 @@ bool PluginLoader::add_on_post_render_vr_framework_dx12(UEVR_OnPostRenderVRFrame
     std::unique_lock _{m_api_cb_mtx};
 
     m_on_post_render_vr_framework_dx12_cbs.push_back(cb);
+    return true;
+}
+
+bool PluginLoader::add_on_custom_event(UEVR_OnCustomEventCb cb) {
+    std::unique_lock _{m_api_cb_mtx};
+
+    m_on_custom_event_cbs.push_back(cb);
     return true;
 }
 
