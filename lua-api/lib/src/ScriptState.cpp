@@ -156,7 +156,8 @@ void ScriptState::on_frame() {
         return;
     }
 
-    // This is thread safe, so we don't need to lock the mutex
+    auto _ = std::scoped_lock{m_context->get_mutex()};
+
     switch (m_gc_data.gc_type) {
         case ScriptState::GarbageCollectionType::FULL:
             lua_gc(m_lua, LUA_GCCOLLECT);
