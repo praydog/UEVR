@@ -502,22 +502,24 @@ void Framework::on_frame_d3d11() {
         m_mods->on_present();
     }
 
-    ComPtr<ID3D11DeviceContext> context{};
-    float clear_color[]{0.0f, 0.0f, 0.0f, 0.0f};
-
-    m_d3d11_hook->get_device()->GetImmediateContext(&context);
-    context->ClearRenderTargetView(m_d3d11.blank_rt_rtv.Get(), clear_color);
-    context->ClearRenderTargetView(m_d3d11.rt_rtv.Get(), clear_color);
-    context->OMSetRenderTargets(1, m_d3d11.rt_rtv.GetAddressOf(), NULL);
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-
-    for (auto& mod : m_mods->get_mods()) {
-        mod->on_post_render_vr_framework_dx11(context.Get(), m_d3d11.rt.Get(), m_d3d11.rt_rtv.Get());
+    if (auto draw_data = ImGui::GetDrawData(); draw_data != nullptr) {
+        ComPtr<ID3D11DeviceContext> context{};
+        float clear_color[]{0.0f, 0.0f, 0.0f, 0.0f};
+    
+        m_d3d11_hook->get_device()->GetImmediateContext(&context);
+        context->ClearRenderTargetView(m_d3d11.blank_rt_rtv.Get(), clear_color);
+        context->ClearRenderTargetView(m_d3d11.rt_rtv.Get(), clear_color);
+        context->OMSetRenderTargets(1, m_d3d11.rt_rtv.GetAddressOf(), NULL);
+        ImGui_ImplDX11_RenderDrawData(draw_data);
+    
+        for (auto& mod : m_mods->get_mods()) {
+            mod->on_post_render_vr_framework_dx11(context.Get(), m_d3d11.rt.Get(), m_d3d11.rt_rtv.Get());
+        }
+    
+        // Set the back buffer to be the render target.
+        context->OMSetRenderTargets(1, m_d3d11.bb_rtv.GetAddressOf(), nullptr);
+        ImGui_ImplDX11_RenderDrawData(draw_data);
     }
-
-    // Set the back buffer to be the render target.
-    context->OMSetRenderTargets(1, m_d3d11.bb_rtv.GetAddressOf(), nullptr);
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
     if (is_init_ok) {
         m_mods->on_post_frame();
@@ -623,7 +625,7 @@ void Framework::on_frame_d3d12() {
     }
 
     cmd_ctx->wait(INFINITE);
-    {
+    if (auto draw_data = ImGui::GetDrawData(); draw_data != nullptr) {
         std::scoped_lock _{ cmd_ctx->mtx };
         cmd_ctx->has_commands = true;
 
@@ -645,7 +647,7 @@ void Framework::on_frame_d3d12() {
         cmd_ctx->cmd_list->SetDescriptorHeaps(1, m_d3d12.srv_desc_heap.GetAddressOf());
 
         ImGui::GetIO().BackendRendererUserData = m_d3d12.imgui_backend_datas[1];
-        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmd_ctx->cmd_list.Get());
+        ImGui_ImplDX12_RenderDrawData(draw_data, cmd_ctx->cmd_list.Get());
 
         for (auto& mod : m_mods->get_mods()) {
             rts[0] = m_d3d12.get_cpu_rtv(device, D3D12::RTV::IMGUI);
@@ -668,7 +670,7 @@ void Framework::on_frame_d3d12() {
         cmd_ctx->cmd_list->SetDescriptorHeaps(1, m_d3d12.srv_desc_heap.GetAddressOf());
 
         ImGui::GetIO().BackendRendererUserData = m_d3d12.imgui_backend_datas[0];
-        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmd_ctx->cmd_list.Get());
+        ImGui_ImplDX12_RenderDrawData(draw_data, cmd_ctx->cmd_list.Get());
 
         barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
