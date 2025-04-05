@@ -28,6 +28,7 @@ if(CMKR_ROOT_PROJECT)
 endif()
 
  
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
 
 # Enable PDB generation in release mode, but without the extra crap that RelWithDebInfo adds
