@@ -334,8 +334,6 @@ bool D3D12Hook::hook() {
     }
 
     try {
-        utility::ThreadSuspender _{};
-        
         spdlog::info("Initializing hooks");
         m_present_hook.reset();
         m_present1_hook.reset();

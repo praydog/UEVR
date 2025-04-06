@@ -75,8 +75,6 @@ bool D3D11Hook::hook() {
     }
 
     try {
-        utility::ThreadSuspender _{};
-        
         m_present_hook.reset();
         m_resize_buffers_hook.reset();
 
