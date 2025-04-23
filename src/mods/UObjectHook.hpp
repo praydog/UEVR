@@ -222,7 +222,7 @@ private:
         const glm::vec3& left_hand_location, const glm::vec3& left_hand_euler,
         const glm::vec3& right_hand_location, const glm::vec3& right_hand_euler);
 
-    static void* add_object(void* rcx, void* rdx, void* r8, void* r9);
+    static void* add_object(void* rcx, void* rdx, void* r8, void* r9, void* stack1, void* stack2, void* stack3, void* stack4);
     static void* destructor(sdk::UObjectBase* object, void* rdx, void* r8, void* r9);
 
     bool m_hooked{false};

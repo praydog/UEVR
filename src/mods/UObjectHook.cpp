@@ -3699,9 +3699,9 @@ void UObjectHook::ui_handle_struct(void* addr, sdk::UStruct* uclass) {
     }
 }
 
-void* UObjectHook::add_object(void* rcx, void* rdx, void* r8, void* r9) {
+void* UObjectHook::add_object(void* rcx, void* rdx, void* r8, void* r9, void* stack1, void* stack2, void* stack3, void* stack4) {
     auto& hook = UObjectHook::get();
-    auto result = hook->m_add_object_hook.unsafe_call<void*>(rcx, rdx, r8, r9);
+    auto result = hook->m_add_object_hook.unsafe_call<void*>(rcx, rdx, r8, r9, stack1, stack2, stack3, stack4);
 
     {
         static bool is_rcx = [&]() {
