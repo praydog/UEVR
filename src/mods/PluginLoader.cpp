@@ -27,6 +27,7 @@
 #include <sdk/FStructProperty.hpp>
 #include <sdk/FEnumProperty.hpp>
 #include <sdk/AActor.hpp>
+#include <sdk/UGameViewportClient.hpp>
 
 #include "pluginloader/FFakeStereoRenderingFunctions.hpp"
 #include "pluginloader/FRenderTargetPoolHook.hpp"
@@ -1104,6 +1105,25 @@ UEVR_UFieldFunctions g_ufield_functions {
     }
 };
 
+UEVR_UGameViewportClientFunctions g_game_viewport_client_functions {
+    .exec = [](UEVR_UGameViewportClientHandle vp, const wchar_t* command) {
+        if (command == nullptr) {
+            return;
+        }
+
+        auto viewport_client = (sdk::UGameViewportClient*)vp;
+        viewport_client->exec(command);
+    },
+    .exec_ex = [](UEVR_UGameViewportClientHandle vp, UEVR_UObjectHandle world, const wchar_t* command, void* output_device) {
+        if (command == nullptr) {
+            return;
+        }
+
+        auto viewport_client = (sdk::UGameViewportClient*)vp;
+        viewport_client->exec((sdk::UWorld*)world, command, output_device);
+    },
+};
+
 UEVR_SDKData g_sdk_data {
     &g_sdk_functions,
     &g_sdk_callbacks,
@@ -1128,6 +1148,7 @@ UEVR_SDKData g_sdk_data {
     &g_fstruct_property_functions,
     &g_fenum_property_functions,
     &g_ufield_functions,
+    &g_game_viewport_client_functions,
 };
 
 namespace uevr {

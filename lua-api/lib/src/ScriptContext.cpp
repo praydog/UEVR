@@ -785,6 +785,14 @@ int ScriptContext::setup_bindings() {
         "get_name", &uevr::API::FFieldClass::get_name
     );
 
+    m_lua.new_usertype<uevr::API::UGameViewportClient>("UEVR_UGameViewportClient",
+        sol::base_classes, sol::bases<uevr::API::UObject>(),
+        // casting because overloads.
+        "exec", static_cast<void(uevr::API::UGameViewportClient::*)(std::wstring_view)>(&uevr::API::UGameViewportClient::exec)
+    );
+
+    create_uobject_ptr_gc((API::UGameViewportClient*)nullptr);
+
     m_lua.new_usertype<uevr::API::FConsoleManager>("UEVR_FConsoleManager",
         "get_console_objects", &uevr::API::FConsoleManager::get_console_objects,
         "find_object", [](uevr::API::FConsoleManager& self, const std::wstring& name) {
@@ -1311,7 +1319,7 @@ void ScriptContext::on_pre_viewport_client_draw(UEVR_UGameViewportClientHandle v
         std::scoped_lock _{ ctx->m_mtx };
 
         for (auto& fn : ctx->m_on_pre_viewport_client_draw_callbacks) try {
-            ctx->handle_protected_result(fn(viewport_client, viewport, canvas));
+            ctx->handle_protected_result(fn((uevr::API::UGameViewportClient*)viewport_client, viewport, canvas));
         } catch (const std::exception& e) {
             ctx->log_error("Exception in on_pre_viewport_client_draw: " + std::string(e.what()));
         } catch (...) {
@@ -1325,7 +1333,7 @@ void ScriptContext::on_post_viewport_client_draw(UEVR_UGameViewportClientHandle 
         std::scoped_lock _{ ctx->m_mtx };
 
         for (auto& fn : ctx->m_on_post_viewport_client_draw_callbacks) try {
-            ctx->handle_protected_result(fn(viewport_client, viewport, canvas));
+            ctx->handle_protected_result(fn((uevr::API::UGameViewportClient*)viewport_client, viewport, canvas));
         } catch (const std::exception& e) {
             ctx->log_error("Exception in on_post_viewport_client_draw: " + std::string(e.what()));
         } catch (...) {

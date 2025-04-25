@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 37
+#define UEVR_PLUGIN_VERSION_MINOR 38
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -464,6 +464,11 @@ typedef struct {
 } UEVR_FEnumPropertyFunctions;
 
 typedef struct {
+    void (*exec)(UEVR_UGameViewportClientHandle vp, const wchar_t* command);
+    void (*exec_ex)(UEVR_UGameViewportClientHandle vp, UEVR_UObjectHandle world, const wchar_t* command, void* output_device);
+} UEVR_UGameViewportClientFunctions;
+
+typedef struct {
     const UEVR_SDKFunctions* functions;
     const UEVR_SDKCallbacks* callbacks;
     const UEVR_UObjectFunctions* uobject;
@@ -487,6 +492,7 @@ typedef struct {
     const UEVR_FStructPropertyFunctions* fstructproperty;
     const UEVR_FEnumPropertyFunctions* fenumproperty;
     const UEVR_UFieldFunctions* ufield;
+    const UEVR_UGameViewportClientFunctions* game_viewport_client;
 } UEVR_SDKData;
 
 DECLARE_UEVR_HANDLE(UEVR_IVRSystem);

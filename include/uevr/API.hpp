@@ -125,6 +125,7 @@ public:
     struct UObject;
     struct UEngine;
     struct UGameEngine;
+    struct UGameViewportClient;
     struct UWorld;
     struct UStruct;
     struct UClass;
@@ -1029,6 +1030,35 @@ public:
     struct UGameEngine : public UEngine {
         static consteval std::string_view internal_name() {
             return "GameEngine";
+        }
+    };
+
+    struct UGameViewportClient : public UObject {
+        static consteval std::string_view internal_name() {
+            return "GameViewportClient";
+        }
+        
+        inline UEVR_UGameViewportClientHandle to_handle() { return (UEVR_UGameViewportClientHandle)this; }
+        inline UEVR_UGameViewportClientHandle to_handle() const { return (UEVR_UGameViewportClientHandle)this; }
+
+        void exec(std::wstring_view command) {
+            static const auto fn = initialize()->exec;
+            fn(to_handle(), command.data());
+        }
+
+        void exec(UWorld* world, std::wstring_view command, void* output_device) {
+            static const auto fn = initialize()->exec_ex;
+            fn(to_handle(), (UEVR_UObjectHandle)world, command.data(), output_device);
+        }
+        
+    private:
+        static inline const UEVR_UGameViewportClientFunctions* s_functions{nullptr};
+        static inline const UEVR_UGameViewportClientFunctions* initialize() {
+            if (s_functions == nullptr) {
+                s_functions = API::get()->sdk()->game_viewport_client;
+            }
+
+            return s_functions;
         }
     };
 
