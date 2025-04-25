@@ -788,8 +788,9 @@ int ScriptContext::setup_bindings() {
 
     m_lua.new_usertype<uevr::API::UGameViewportClient>("UEVR_UGameViewportClient",
         sol::base_classes, sol::bases<uevr::API::UObject>(),
-        // casting because overloads.
-        "exec", static_cast<void(uevr::API::UGameViewportClient::*)(std::wstring_view)>(&uevr::API::UGameViewportClient::exec)
+        "exec", [](uevr::API::UGameViewportClient* vpc, const std::wstring& cmd) {
+            vpc->exec(cmd.data());
+        }
     );
 
     create_uobject_ptr_gc((API::UGameViewportClient*)nullptr);
