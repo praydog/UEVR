@@ -198,6 +198,7 @@ int ScriptContext::setup_bindings() {
         _sol_lua_push_objects_Property = setmetatable({}, { __mode = "v" })
         _sol_lua_push_objects_Field = setmetatable({}, { __mode = "v" })
         _sol_lua_push_objects_Enum = setmetatable({}, { __mode = "v" })
+        _sol_lua_push_objects_GameViewportClient = setmetatable({}, { __mode = "v" })
 
         -- Not a real UObject but is cacheable
         _sol_lua_push_objects_MotionControllerState = setmetatable({}, { __mode = "v" })
@@ -1318,8 +1319,14 @@ void ScriptContext::on_pre_viewport_client_draw(UEVR_UGameViewportClientHandle v
     g_contexts.for_each([=](auto ctx) {
         std::scoped_lock _{ ctx->m_mtx };
 
+        if (ctx->m_on_pre_viewport_client_draw_callbacks.empty()) {
+            return;
+        }
+
+        auto vpc_sol = sol::make_object(ctx->m_lua.lua_state(), (uevr::API::UGameViewportClient*)viewport_client);
+
         for (auto& fn : ctx->m_on_pre_viewport_client_draw_callbacks) try {
-            ctx->handle_protected_result(fn((uevr::API::UGameViewportClient*)viewport_client, viewport, canvas));
+            ctx->handle_protected_result(fn(vpc_sol, (uintptr_t)viewport, (uintptr_t)canvas));
         } catch (const std::exception& e) {
             ctx->log_error("Exception in on_pre_viewport_client_draw: " + std::string(e.what()));
         } catch (...) {
@@ -1332,8 +1339,14 @@ void ScriptContext::on_post_viewport_client_draw(UEVR_UGameViewportClientHandle 
     g_contexts.for_each([=](auto ctx) {
         std::scoped_lock _{ ctx->m_mtx };
 
+        if (ctx->m_on_post_viewport_client_draw_callbacks.empty()) {
+            return;
+        }
+
+        auto vpc_sol = sol::make_object(ctx->m_lua.lua_state(), (uevr::API::UGameViewportClient*)viewport_client);
+
         for (auto& fn : ctx->m_on_post_viewport_client_draw_callbacks) try {
-            ctx->handle_protected_result(fn((uevr::API::UGameViewportClient*)viewport_client, viewport, canvas));
+            ctx->handle_protected_result(fn(vpc_sol, (uintptr_t)viewport, (uintptr_t)canvas));
         } catch (const std::exception& e) {
             ctx->log_error("Exception in on_post_viewport_client_draw: " + std::string(e.what()));
         } catch (...) {
