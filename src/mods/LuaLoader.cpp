@@ -10,6 +10,10 @@
 #include <lstate.h> // weird include order because of sol
 #include <lgc.h>
 
+#include "bindings/ImGui.hpp"
+#include "bindings/FS.hpp"
+#include "bindings/Json.hpp"
+
 std::shared_ptr<LuaLoader>& LuaLoader::get() {
     static auto instance = std::make_shared<LuaLoader>();
     return instance;
@@ -242,6 +246,10 @@ void LuaLoader::reset_scripts() {
     m_main_state = std::make_shared<ScriptState>(make_gc_data(), &g_plugin_initialize_param, true);
     m_states.insert(m_states.begin(), m_main_state);
 
+    for (auto& state : m_states) {
+        state_post_init(state);
+    }
+
     //callback functions for main lua state creation
     /*auto& mods = g_framework->get_mods()->get_mods();
     for (auto& mod : mods) {
@@ -276,6 +284,18 @@ void LuaLoader::reset_scripts() {
 
     std::sort(m_known_scripts.begin(), m_known_scripts.end());
     std::sort(m_loaded_scripts.begin(), m_loaded_scripts.end());
+}
+
+void LuaLoader::state_post_init(std::shared_ptr<ScriptState>& state) {
+    std::scoped_lock _{state->context()->get_mutex()};
+    auto& lua = state->lua();
+
+    //auto debug = lua["debug"];
+    //debug["getregistry"] = sol::nil;
+
+    bindings::open_imgui(state.get());
+    bindings::open_json(state.get());
+    bindings::open_fs(state.get());
 }
 
 void LuaLoader::dispatch_event(std::string_view event_name, std::string_view event_data) {
