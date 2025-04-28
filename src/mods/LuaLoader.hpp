@@ -46,6 +46,7 @@ public:
 
     // Resets the ScriptState and runs autorun scripts again.
     void reset_scripts();
+    void state_post_init(std::shared_ptr<ScriptState>& state);
     void dispatch_event(std::string_view event_name, std::string_view event_data);
 
 private:
