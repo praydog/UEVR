@@ -547,7 +547,7 @@ int ScriptContext::setup_bindings() {
             return lua::utility::call_function(s, self, name, args);
         },
         "DANGEROUS_call_member_virtual", [](sol::this_state s, uevr::API::UObject* self, size_t index, sol::variadic_args args) -> sol::object {
-            if (args.size() > 3) {
+            if (args.size() > 5) {
                 throw sol::error("DANGEROUS_call_member_virtual: Too many arguments (max 3)");
             }
 
@@ -555,7 +555,7 @@ int ScriptContext::setup_bindings() {
                 throw sol::error("DANGEROUS_call_member_virtual: Index too high");
             }
 
-            void* args_ptr[3]{};
+            void* args_ptr[5]{};
 
             for (size_t i = 0; i < args.size(); ++i) {
                 if (args[i].is<sol::nil_t>()) {
@@ -568,6 +568,8 @@ int ScriptContext::setup_bindings() {
                     args_ptr[i] = args[i].as<uevr::API::UObject*>();
                 } else if (args[i].is<lua::datatypes::StructObject*>()) {
                     args_ptr[i] = args[i].as<lua::datatypes::StructObject*>()->object;
+                } else if (args[i].is<intptr_t>()) {
+                    args_ptr[i] = (void*)args[i].as<intptr_t>();
                 } else {
                     // We dont support floats for now because we'd need to JIT the function call
                     throw sol::error("DANGEROUS_call_member_virtual: Invalid argument type");
@@ -575,7 +577,7 @@ int ScriptContext::setup_bindings() {
             }
 
             void* result{};
-            using fn_t = void*(*)(uevr::API::UObject*, void*, void*, void*);
+            using fn_t = void*(*)(uevr::API::UObject*, void*, void*, void*, void*, void*);
             const auto vtable = *(void***)self;
             if (vtable == nullptr) {
                 throw sol::error("DANGEROUS_call_member_virtual: Object has no vtable");
@@ -588,7 +590,7 @@ int ScriptContext::setup_bindings() {
 
             try {
                 // We need to wrap this in a try-catch block because who knows what the function does
-                result = fn(self, args_ptr[0], args_ptr[1], args_ptr[2]);
+                result = fn(self, args_ptr[0], args_ptr[1], args_ptr[2], args_ptr[3], args_ptr[4]);
             } catch (...) {
                 throw sol::error("DANGEROUS_call_member_virtual: Exception thrown");
                 return sol::make_object(s, sol::lua_nil);
