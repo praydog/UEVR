@@ -57,6 +57,16 @@ ScriptState::ScriptState(const ScriptState::GarbageCollectionData& gc_data, UEVR
     if (result != 0) {
         const auto table = sol::stack::pop<sol::table>(m_lua);
         m_lua["uevr"] = table;
+
+        m_lua.registry()["package_path"] = m_lua["package"]["path"];
+        m_lua.registry()["package_cpath"] = m_lua["package"]["cpath"];
+        m_lua.registry()["package_searchers"] = m_lua.create_table();
+    
+        sol::table package_searchers = m_lua["package"]["searchers"];
+    
+        for (auto&& [k, v] : package_searchers) {
+            m_lua.registry()["package_searchers"][k] = v;
+        }
     }
 }
 
@@ -67,8 +77,9 @@ ScriptState::~ScriptState() {
 void ScriptState::run_script(const std::string& p) {
     uevr::API::get()->log_info(std::format("Running script {}...", p).c_str());
 
-    std::string old_package_path = m_lua["package"]["path"];
-    std::string old_cpath = m_lua["package"]["cpath"];
+    const std::string old_pristine_path = m_lua.registry()["package_path"];
+    const std::string old_pristine_cpath = m_lua.registry()["package_cpath"];
+    const std::string old_path = m_lua["package"]["path"];
 
     try {
         auto path = std::filesystem::path(p);
@@ -77,14 +88,17 @@ void ScriptState::run_script(const std::string& p) {
         std::string package_path = m_lua["package"]["path"];
         std::string cpath = m_lua["package"]["cpath"];
 
-        package_path = old_package_path + ";" + dir.string() + "/?.lua";
+        package_path = old_path + ";" + dir.string() + "/?.lua";
         package_path = package_path + ";" + dir.string() + "/?/init.lua";
         //package_path = package_path + ";" + dir.string() + "/?.dll";
 
-        cpath = old_cpath + ";" + dir.string() + "/?.dll";
+        cpath = old_pristine_cpath + ";" + dir.string() + "/?.dll";
 
         m_lua["package"]["path"] = package_path;
         m_lua["package"]["cpath"] = cpath;
+        m_lua.registry()["package_path"] = m_lua["package"]["path"];
+        m_lua.registry()["package_cpath"] = m_lua["package"]["cpath"];
+
         m_lua.safe_script_file(p);
     } catch (const std::exception& e) {
         //LuaLoader::get()->spew_error(e.what());
@@ -94,8 +108,9 @@ void ScriptState::run_script(const std::string& p) {
         api::ue::msg((std::stringstream{} << "Unknown error when running script " << p).str().c_str());
     }
 
-    m_lua["package"]["path"] = old_package_path;
-    m_lua["package"]["cpath"] = old_cpath;
+    m_lua["package"]["path"] = old_path;
+    m_lua.registry()["package_path"] = old_pristine_path;
+    m_lua.registry()["package_cpath"] = old_pristine_cpath;
 }
 
 void ScriptState::gc_data_changed(GarbageCollectionData data) {
