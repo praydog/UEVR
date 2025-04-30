@@ -243,39 +243,33 @@ sol::object call_member_virtual(sol::this_state s, uevr::API::UObject* self, siz
     code.init(rt.environment());
 
     asmjit::x86::Assembler a{&code};
-    std::array<asmjit::x86::Gpq, 3> gpr_map{asmjit::x86::rdx, asmjit::x86::r8, asmjit::x86::r9};
-    std::array<asmjit::x86::Xmm, 3> xmm_map{asmjit::x86::xmm1, asmjit::x86::xmm2, asmjit::x86::xmm3};
+    static constexpr std::array<asmjit::x86::Gpq, 3> gpr_map{asmjit::x86::rdx, asmjit::x86::r8, asmjit::x86::r9};
+    static constexpr std::array<asmjit::x86::Xmm, 3> xmm_map{asmjit::x86::xmm1, asmjit::x86::xmm2, asmjit::x86::xmm3};
+    constexpr size_t SCRATCH_SPACE_SIZE = sizeof(void*) * 2;
+    constexpr size_t SHADOW_SPACE_SIZE = 32;
+
+    size_t stack_correction_total = SHADOW_SPACE_SIZE;
+    const auto num_stack_args = args.size() > 3 ? args.size() - 3 : 0;
+    const auto stack_arg_size = num_stack_args * sizeof(void*);
+
+    // Allocate space for the stacks
+    stack_correction_total += stack_arg_size + SCRATCH_SPACE_SIZE;
+    stack_correction_total = ((stack_correction_total + 15) & ~15) + 8;
 
     // r9 will be our temp register that points to the args
     a.mov(asmjit::x86::r9, asmjit::x86::r8);
 
     // Store the rest of the args on the stack
-    a.sub(asmjit::x86::rsp, 0x38);
-    a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, 0), asmjit::x86::rcx);
-    a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, 8), asmjit::x86::rdx);
+    a.sub(asmjit::x86::rsp, stack_correction_total);
 
-    size_t stack_correction_total = 0x38;
-    size_t stack_correction_args = 0;
-
-    const auto num_stack_args = args.size() > 3 ? args.size() - 3 : 0;
-
-    if (num_stack_args > 0) {
-        // Align the stack to 16 bytes if needed
-        const auto stack_arg_size = num_stack_args * sizeof(void*);
-        if ((stack_correction_total + stack_arg_size) % 16 != 0) {
-            stack_correction_total += 16 - ((stack_correction_total + stack_arg_size) % 16);
-            a.sub(asmjit::x86::rsp, 16 - ((stack_correction_total + stack_arg_size) % 16));
-        }
-    }
+    // Our custom saved registers (scratch space)
+    a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, stack_arg_size), asmjit::x86::rcx);
+    a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, stack_arg_size + sizeof(void*)), asmjit::x86::rdx);
 
     // Start with stack args first
     for (size_t i = 3; i < args.size(); ++i) {
-        a.sub(asmjit::x86::rsp, sizeof(void*));
         a.mov(asmjit::x86::rcx, asmjit::x86::qword_ptr(asmjit::x86::r9, i * sizeof(void*)));
-        a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, 0), asmjit::x86::rcx);
-        
-        stack_correction_total += sizeof(void*);
-        stack_correction_args += sizeof(void*);
+        a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, ((i - 3) * sizeof(void*))), asmjit::x86::rcx);
     }
 
     // Then GPRs
@@ -298,8 +292,8 @@ sol::object call_member_virtual(sol::this_state s, uevr::API::UObject* self, siz
     }
 
     // Call the function
-    a.mov(asmjit::x86::rcx, asmjit::x86::qword_ptr(asmjit::x86::rsp, stack_correction_args));
-    a.call(asmjit::x86::qword_ptr(asmjit::x86::rsp, stack_correction_args + 0x8));
+    a.mov(asmjit::x86::rcx, asmjit::x86::qword_ptr(asmjit::x86::rsp, stack_arg_size));
+    a.call(asmjit::x86::qword_ptr(asmjit::x86::rsp, stack_arg_size + sizeof(void*)));
 
     a.add(asmjit::x86::rsp, stack_correction_total);
     a.ret();
