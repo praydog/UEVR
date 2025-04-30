@@ -7,6 +7,7 @@
 #include <windows.h>
 
 #include <Xinput.h>
+#include <asmjit/asmjit.h>
 
 #include "datatypes/XInput.hpp"
 #include "datatypes/Vector.hpp"
@@ -182,6 +183,137 @@ void ScriptContext::setup_callback_bindings() {
             m_on_lua_event_callbacks.push_back(fn);
         }
     );
+}
+
+__declspec(noinline)
+sol::object call_member_virtual(sol::this_state s, uevr::API::UObject* self, size_t index, sol::variadic_args args) {
+    if (index > 1000) { // Yeah right
+        throw sol::error("DANGEROUS_call_member_virtual: Index too high");
+    }
+
+    if (args.size() > 32) {
+        throw sol::error("DANGEROUS_call_member_virtual: Too many arguments");
+    }
+
+    enum TypeBits {
+        PRIMITIVE_INTEGER = 1 << 0,
+        PRIMITIVE_FLOAT = 1 << 1,
+    };
+
+    using Stub = void* (*)(void* self, void* target_fn, void* args_ptr);
+    static asmjit::JitRuntime rt;
+    static std::unordered_map<size_t, Stub> stubs{};
+
+    std::array<size_t, 32> args_converted{0};
+    size_t type_bits{0};
+
+    for (size_t i = 0; i < args.size(); ++i) {
+        if (args[i].is<sol::nil_t>()) {
+            args_converted[i] = 0;
+            type_bits |= PRIMITIVE_INTEGER << (2 * i);
+            continue;
+        }
+
+        if (args[i].is<uevr::API::UObject*>()) {
+            args_converted[i] = (size_t)args[i].as<uevr::API::UObject*>();
+            type_bits |= PRIMITIVE_INTEGER << (2 * i);
+        } else if (args[i].is<lua::datatypes::StructObject*>()) {
+            args_converted[i] = (size_t)args[i].as<lua::datatypes::StructObject*>()->object;
+            type_bits |= PRIMITIVE_INTEGER << (2 * i);;
+        } else if (args[i].is<float>()) {
+            float f = args[i].as<float>();
+            args_converted[i] = (size_t)*(uint32_t*)&f;
+            type_bits |= PRIMITIVE_FLOAT << (2 * i);
+        } else if (args[i].is<intptr_t>()) {
+            args_converted[i] = (size_t)args[i].as<intptr_t>();
+            type_bits |= PRIMITIVE_INTEGER << (2 * i);
+        } else {
+            // UNKNOWN!
+            args_converted[i] = 0;
+            type_bits |= PRIMITIVE_INTEGER << (2 * i);
+        }
+    }
+
+    if (auto it = stubs.find(type_bits); it != stubs.end()) {
+        // We already have a stub for this type
+        return sol::make_object(s, it->second(self, (*(void***)self)[index], args_converted.data()));
+    }
+
+    asmjit::CodeHolder code{};
+    code.init(rt.environment());
+
+    asmjit::x86::Assembler a{&code};
+    std::array<asmjit::x86::Gpq, 3> gpr_map{asmjit::x86::rdx, asmjit::x86::r8, asmjit::x86::r9};
+    std::array<asmjit::x86::Xmm, 3> xmm_map{asmjit::x86::xmm1, asmjit::x86::xmm2, asmjit::x86::xmm3};
+
+    // r9 will be our temp register that points to the args
+    a.mov(asmjit::x86::r9, asmjit::x86::r8);
+
+    // Store the rest of the args on the stack
+    a.sub(asmjit::x86::rsp, 0x38);
+    a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, 0), asmjit::x86::rcx);
+    a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, 8), asmjit::x86::rdx);
+
+    size_t stack_correction_total = 0x38;
+    size_t stack_correction_args = 0;
+
+    const auto num_stack_args = args.size() > 3 ? args.size() - 3 : 0;
+
+    if (num_stack_args > 0) {
+        // Align the stack to 16 bytes if needed
+        const auto stack_arg_size = num_stack_args * sizeof(void*);
+        if ((stack_correction_total + stack_arg_size) % 16 != 0) {
+            stack_correction_total += 16 - ((stack_correction_total + stack_arg_size) % 16);
+            a.sub(asmjit::x86::rsp, 16 - ((stack_correction_total + stack_arg_size) % 16));
+        }
+    }
+
+    // Start with stack args first
+    for (size_t i = 3; i < args.size(); ++i) {
+        a.sub(asmjit::x86::rsp, sizeof(void*));
+        a.mov(asmjit::x86::rcx, asmjit::x86::qword_ptr(asmjit::x86::r9, i * sizeof(void*)));
+        a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, 0), asmjit::x86::rcx);
+        
+        stack_correction_total += sizeof(void*);
+        stack_correction_args += sizeof(void*);
+    }
+
+    // Then GPRs
+    // We always start after RCX because RCX is always a this pointer.
+    for (size_t i = 0; i < 3; ++i) {
+        const auto type = (TypeBits)((type_bits >> (2 * i)) & 0b11);
+
+        if (type == PRIMITIVE_INTEGER) {
+            if (i < args.size()) {
+                a.mov(gpr_map[i], asmjit::x86::qword_ptr(asmjit::x86::r9, i * sizeof(void*)));
+            } else {
+                a.xor_(gpr_map[i], gpr_map[i]);
+            }
+        } else if (type == PRIMITIVE_FLOAT) {
+            // TODO: DOUBLE?
+            if (i < args.size()) {
+                a.movss(xmm_map[i], asmjit::x86::dword_ptr(asmjit::x86::r9, i * sizeof(void*)));
+            }
+        }
+    }
+
+    // Call the function
+    a.mov(asmjit::x86::rcx, asmjit::x86::qword_ptr(asmjit::x86::rsp, stack_correction_args));
+    a.call(asmjit::x86::qword_ptr(asmjit::x86::rsp, stack_correction_args + 0x8));
+
+    a.add(asmjit::x86::rsp, stack_correction_total);
+    a.ret();
+
+    uintptr_t code_addr{};
+    rt.add(&code_addr, &code);
+
+    OutputDebugStringA(std::format("Generated stub at {:x}", code_addr).c_str());
+
+    auto stub = (Stub)code_addr;
+    stubs[type_bits] = stub;
+    auto result = stub(self, (*(void***)self)[index], args_converted.data());
+
+    return sol::make_object(s, result); // TODO: convert?
 }
 
 int ScriptContext::setup_bindings() {
@@ -546,58 +678,7 @@ int ScriptContext::setup_bindings() {
         "call", [](sol::this_state s, uevr::API::UObject* self, const std::wstring& name, sol::variadic_args args) -> sol::object {
             return lua::utility::call_function(s, self, name, args);
         },
-        "DANGEROUS_call_member_virtual", [](sol::this_state s, uevr::API::UObject* self, size_t index, sol::variadic_args args) -> sol::object {
-            if (args.size() > 5) {
-                throw sol::error("DANGEROUS_call_member_virtual: Too many arguments (max 3)");
-            }
-
-            if (index > 1000) { // Yeah right
-                throw sol::error("DANGEROUS_call_member_virtual: Index too high");
-            }
-
-            void* args_ptr[5]{};
-
-            for (size_t i = 0; i < args.size(); ++i) {
-                if (args[i].is<sol::nil_t>()) {
-                    args_ptr[i] = nullptr;
-                    continue;
-                }
-
-                // Only support basic arguments for now until we can test this more
-                if (args[i].is<uevr::API::UObject*>()) {
-                    args_ptr[i] = args[i].as<uevr::API::UObject*>();
-                } else if (args[i].is<lua::datatypes::StructObject*>()) {
-                    args_ptr[i] = args[i].as<lua::datatypes::StructObject*>()->object;
-                } else if (args[i].is<intptr_t>()) {
-                    args_ptr[i] = (void*)args[i].as<intptr_t>();
-                } else {
-                    // We dont support floats for now because we'd need to JIT the function call
-                    throw sol::error("DANGEROUS_call_member_virtual: Invalid argument type");
-                }
-            }
-
-            void* result{};
-            using fn_t = void*(*)(uevr::API::UObject*, void*, void*, void*, void*, void*);
-            const auto vtable = *(void***)self;
-            if (vtable == nullptr) {
-                throw sol::error("DANGEROUS_call_member_virtual: Object has no vtable");
-            }
-
-            const auto fn = (fn_t)vtable[index];
-            if (fn == nullptr) {
-                throw sol::error("DANGEROUS_call_member_virtual: Function not found in vtable");
-            }
-
-            try {
-                // We need to wrap this in a try-catch block because who knows what the function does
-                result = fn(self, args_ptr[0], args_ptr[1], args_ptr[2], args_ptr[3], args_ptr[4]);
-            } catch (...) {
-                throw sol::error("DANGEROUS_call_member_virtual: Exception thrown");
-                return sol::make_object(s, sol::lua_nil);
-            }
-
-            return sol::make_object(s, result); // TODO: convert?
-        },
+        "DANGEROUS_call_member_virtual", call_member_virtual,
         "write_qword", &lua::utility::write_t<uint64_t>,
         "write_dword", &lua::utility::write_t<uint32_t>,
         "write_word", &lua::utility::write_t<uint16_t>,

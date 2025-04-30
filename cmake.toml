@@ -204,7 +204,8 @@ link-libraries = [
     "lua",
     "sol2",
     "kananlib",
-    "glm"
+    "glm",
+    "asmjit"
 ]
 
 [target.LuaVR]
