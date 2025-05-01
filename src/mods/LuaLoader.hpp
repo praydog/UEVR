@@ -23,10 +23,23 @@ public:
     std::optional<std::string> on_initialize_d3d_thread() override;
 
     std::vector<SidebarEntryInfo> get_sidebar_entries() override {
-        return {
+        if (m_script_panels.empty()) {
+            return {
+                {"Main", true},
+                {"Script UI", true}
+            };
+        }
+
+        std::vector<SidebarEntryInfo> entries{
             {"Main", true},
             {"Script UI", true}
         };
+
+        for (auto& entry : m_script_panels) {
+            entries.emplace_back(entry.name, true);
+        }
+
+        return entries;
     }
 
     void on_draw_sidebar_entry(std::string_view in_entry);
@@ -73,6 +86,12 @@ private:
     std::vector<std::string> m_known_scripts{};
     std::unordered_map<std::string, bool> m_loaded_scripts_map{};
     std::vector<lua_State*> m_states_to_delete{};
+    struct PanelEntry {
+        std::weak_ptr<uevr::ScriptState> state;
+        std::string name;
+        sol::protected_function fn;
+    };
+    std::vector<PanelEntry> m_script_panels{};
 
     bool m_console_spawned{false};
     bool m_needs_first_reset{true};

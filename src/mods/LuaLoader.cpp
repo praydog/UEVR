@@ -221,6 +221,28 @@ void LuaLoader::on_draw_sidebar_entry(std::string_view in_entry) {
 
         ImGui::TreePop();
     }
+
+    for (auto& entry : m_script_panels) {
+        if (entry.state.expired()) {
+            continue;
+        }
+
+        auto state = entry.state.lock();
+        if (state == nullptr) {
+            continue;
+        }
+
+        std::scoped_lock __{ m_access_mutex };
+        std::scoped_lock _{state->context()->get_mutex()};
+
+        try {
+            state->context()->handle_protected_result(entry.fn());
+        } catch (const std::exception& e) {
+            state->context()->log_error(std::format("[LuaLoader] Exception in script panel {}: {}", entry.name, e.what()));
+        } catch (...) {
+            state->context()->log_error(std::format("[LuaLoader] Unknown exception in script panel {}", entry.name));
+        }
+    }
 }
 
 void LuaLoader::reset_scripts() {
@@ -240,6 +262,7 @@ void LuaLoader::reset_scripts() {
 
     m_main_state.reset();
     m_states.clear();
+    m_script_panels.clear();
 
     spdlog::info("[LuaLoader] Destroyed all Lua states.");
 
@@ -296,6 +319,18 @@ void LuaLoader::state_post_init(std::shared_ptr<ScriptState>& state) {
     bindings::open_imgui(state.get());
     bindings::open_json(state.get());
     bindings::open_fs(state.get());
+
+    auto lua_table = lua.create_table();
+
+    lua_table["add_script_panel"] = [this, &state](sol::this_state s, std::string name, sol::function fn) {
+        m_script_panels.emplace_back(PanelEntry{
+            .state = std::weak_ptr<ScriptState>{state},
+            .name = name,
+            .fn = fn
+        });
+    };
+
+    lua["uevr"]["lua"] = lua_table;
 }
 
 void LuaLoader::dispatch_event(std::string_view event_name, std::string_view event_data) {
