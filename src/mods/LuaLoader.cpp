@@ -222,25 +222,32 @@ void LuaLoader::on_draw_sidebar_entry(std::string_view in_entry) {
         ImGui::TreePop();
     }
 
-    for (auto& entry : m_script_panels) {
-        if (entry.state.expired()) {
-            continue;
-        }
-
-        auto state = entry.state.lock();
-        if (state == nullptr) {
-            continue;
-        }
-
+    {
         std::scoped_lock __{ m_access_mutex };
-        std::scoped_lock _{state->context()->get_mutex()};
 
-        try {
-            state->context()->handle_protected_result(entry.fn());
-        } catch (const std::exception& e) {
-            state->context()->log_error(std::format("[LuaLoader] Exception in script panel {}: {}", entry.name, e.what()));
-        } catch (...) {
-            state->context()->log_error(std::format("[LuaLoader] Unknown exception in script panel {}", entry.name));
+        for (auto& entry : m_script_panels) {
+            if (in_entry != entry.name) {
+                continue;
+            }
+
+            if (entry.state.expired()) {
+                continue;
+            }
+    
+            auto state = entry.state.lock();
+            if (state == nullptr) {
+                continue;
+            }
+    
+            std::scoped_lock _{state->context()->get_mutex()};
+    
+            try {
+                state->context()->handle_protected_result(entry.fn());
+            } catch (const std::exception& e) {
+                state->context()->log_error(std::format("[LuaLoader] Exception in script panel {}: {}", entry.name, e.what()));
+            } catch (...) {
+                state->context()->log_error(std::format("[LuaLoader] Unknown exception in script panel {}", entry.name));
+            }
         }
     }
 }
