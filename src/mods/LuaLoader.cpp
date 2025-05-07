@@ -10,6 +10,10 @@
 #include <lstate.h> // weird include order because of sol
 #include <lgc.h>
 
+#include "bindings/ImGui.hpp"
+#include "bindings/FS.hpp"
+#include "bindings/Json.hpp"
+
 std::shared_ptr<LuaLoader>& LuaLoader::get() {
     static auto instance = std::make_shared<LuaLoader>();
     return instance;
@@ -217,6 +221,28 @@ void LuaLoader::on_draw_sidebar_entry(std::string_view in_entry) {
 
         ImGui::TreePop();
     }
+
+    for (auto& entry : m_script_panels) {
+        if (entry.state.expired()) {
+            continue;
+        }
+
+        auto state = entry.state.lock();
+        if (state == nullptr) {
+            continue;
+        }
+
+        std::scoped_lock __{ m_access_mutex };
+        std::scoped_lock _{state->context()->get_mutex()};
+
+        try {
+            state->context()->handle_protected_result(entry.fn());
+        } catch (const std::exception& e) {
+            state->context()->log_error(std::format("[LuaLoader] Exception in script panel {}: {}", entry.name, e.what()));
+        } catch (...) {
+            state->context()->log_error(std::format("[LuaLoader] Unknown exception in script panel {}", entry.name));
+        }
+    }
 }
 
 void LuaLoader::reset_scripts() {
@@ -236,11 +262,16 @@ void LuaLoader::reset_scripts() {
 
     m_main_state.reset();
     m_states.clear();
+    m_script_panels.clear();
 
     spdlog::info("[LuaLoader] Destroyed all Lua states.");
 
     m_main_state = std::make_shared<ScriptState>(make_gc_data(), &g_plugin_initialize_param, true);
     m_states.insert(m_states.begin(), m_main_state);
+
+    for (auto& state : m_states) {
+        state_post_init(state);
+    }
 
     //callback functions for main lua state creation
     /*auto& mods = g_framework->get_mods()->get_mods();
@@ -287,6 +318,30 @@ void LuaLoader::reset_scripts() {
 	
     std::sort(m_known_scripts.begin(), m_known_scripts.end());
     std::sort(m_loaded_scripts.begin(), m_loaded_scripts.end());
+}
+
+void LuaLoader::state_post_init(std::shared_ptr<ScriptState>& state) {
+    std::scoped_lock _{state->context()->get_mutex()};
+    auto& lua = state->lua();
+
+    //auto debug = lua["debug"];
+    //debug["getregistry"] = sol::nil;
+
+    bindings::open_imgui(state.get());
+    bindings::open_json(state.get());
+    bindings::open_fs(state.get());
+
+    auto lua_table = lua.create_table();
+
+    lua_table["add_script_panel"] = [this, &state](sol::this_state s, std::string name, sol::function fn) {
+        m_script_panels.emplace_back(PanelEntry{
+            .state = std::weak_ptr<ScriptState>{state},
+            .name = name,
+            .fn = fn
+        });
+    };
+
+    lua["uevr"]["lua"] = lua_table;
 }
 
 void LuaLoader::dispatch_event(std::string_view event_name, std::string_view event_data) {
