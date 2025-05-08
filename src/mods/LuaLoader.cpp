@@ -290,28 +290,38 @@ void LuaLoader::reset_scripts() {
     m_known_scripts.clear();
 
     const auto autorun_path = Framework::get_persistent_dir() / "scripts";
+    const auto global_autorun_path = Framework::get_persistent_dir()  / ".." / "UEVR" / "scripts";
 
     spdlog::info("[LuaLoader] Creating directories {}", autorun_path.string());
     std::filesystem::create_directories(autorun_path);
     spdlog::info("[LuaLoader] Loading scripts...");
+    namespace fs = std::filesystem;
 
-    for (auto&& entry : std::filesystem::directory_iterator{autorun_path}) {
-        auto&& path = entry.path();
-
-        if (path.has_extension() && path.extension() == ".lua") {
-            if (!m_loaded_scripts_map.contains(path.filename().string())) {
-                m_loaded_scripts_map.emplace(path.filename().string(), true);
-            }
-
-            if (m_loaded_scripts_map[path.filename().string()] == true) {
-                m_main_state->run_script(path.string());
-                m_loaded_scripts.emplace_back(path.filename().string());
-            }
-
-            m_known_scripts.emplace_back(path.filename().string());
+	auto load_scripts_from_dir = [this](std::filesystem::path path) {
+        if (!fs::exists(path) || !fs::is_directory(path)) {
+            return;
         }
-    }
 
+		for (auto&& entry : std::filesystem::directory_iterator{path}) {
+			auto&& path = entry.path();
+
+			if (path.has_extension() && path.extension() == ".lua") {
+				if (!m_loaded_scripts_map.contains(path.filename().string())) {
+					m_loaded_scripts_map.emplace(path.filename().string(), true);
+				}
+
+				if (m_loaded_scripts_map[path.filename().string()] == true) {
+					m_main_state->run_script(path.string());
+					m_loaded_scripts.emplace_back(path.filename().string());
+				}
+
+				m_known_scripts.emplace_back(path.filename().string());
+			}
+		}
+	};
+
+    load_scripts_from_dir(global_autorun_path);
+    load_scripts_from_dir(autorun_path);
     std::sort(m_known_scripts.begin(), m_known_scripts.end());
     std::sort(m_loaded_scripts.begin(), m_loaded_scripts.end());
 }
