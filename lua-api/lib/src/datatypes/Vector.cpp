@@ -82,5 +82,31 @@ namespace lua::datatypes {
         BIND_VECTOR4_LIKE(Vector4d, double),
             sol::meta_function::construct, sol::constructors<Vector4d(double, double, double, double)>()
         BIND_VECTOR4_LIKE_END();
+
+        #define BIND_VECTOR2_LIKE(name, datatype) \
+            lua.new_usertype<name>(#name, \
+                "clone", [](name& v) -> name { return v; }, \
+                "x", &name::x,  \
+                "y", &name::y,  \
+                "dot", [](name& v1, name& v2) { return glm::dot(v1, v2); }, \
+                "length", [](name& v) { return glm::length(v); }, \
+                "normalize", [](name& v) { v = glm::normalize(v); }, \
+                "normalized", [](name& v) { return glm::normalize(v); }, \
+                sol::meta_function::addition, [](name& lhs, name& rhs) { return lhs + rhs; }, \
+                sol::meta_function::subtraction, [](name& lhs, name& rhs) { return lhs - rhs; }, \
+                sol::meta_function::multiplication, [](name& lhs, datatype scalar) { return lhs * scalar; }, \
+                "to_vec3", [](name& v) { return Vector3f{v.x, v.y, 0.0f}; }, \
+                "to_vec4", [](name& v) { return Vector4f{v.x, v.y, 0.0f, 0.0f}; }
+        
+        #define BIND_VECTOR2_LIKE_END() \
+            );
+
+        BIND_VECTOR2_LIKE(Vector2f, float),
+            sol::meta_function::construct, sol::constructors<Vector2f(float, float)>()
+        BIND_VECTOR2_LIKE_END();
+
+        BIND_VECTOR2_LIKE(Vector2d, double),
+            sol::meta_function::construct, sol::constructors<Vector2d(double, double)>()
+        BIND_VECTOR2_LIKE_END();
     }
 }
