@@ -3450,6 +3450,13 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 display_context(value);
             }
             break;
+        case L"UInt64Property"_fnv:
+            {
+                auto& value = *(uint64_t*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+                ImGui::DragScalar(utility::narrow(prop->get_field_name().to_string()).data(), ImGuiDataType_U64, &value, 1);
+                display_context(value);
+            }
+            break;
         case L"BoolProperty"_fnv:
             {
                 auto boolprop = (sdk::FBoolProperty*)prop;
