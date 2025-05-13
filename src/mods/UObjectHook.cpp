@@ -1976,6 +1976,8 @@ void UObjectHook::draw_developer() {
 
                         ImGui::Text("%s (%llu)", utility::narrow(ufunc->get_full_name()).c_str(), m_called_functions[ufunc].call_count);
                     }
+
+                    ImGui::TreePop();
                 }
             }
         } else {
