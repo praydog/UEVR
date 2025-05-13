@@ -178,8 +178,7 @@ std::optional<::fs::path> get_correct_subpath(sol::this_state l, const std::stri
     return path;
 }
 
-void bindings::open_fs(uevr::ScriptState* s) {
-    auto& lua = s->lua();
+void bindings::open_fs(sol::state_view& lua) {
     auto fs = lua.create_table();
 
     fs["glob"] = api::fs::glob;

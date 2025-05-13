@@ -329,16 +329,9 @@ void LuaLoader::reset_scripts() {
 void LuaLoader::state_post_init(std::shared_ptr<ScriptState>& state) {
     std::scoped_lock _{state->context()->get_mutex()};
     auto& lua = state->lua();
-
-    //auto debug = lua["debug"];
-    //debug["getregistry"] = sol::nil;
-
-    bindings::open_imgui(state.get());
-    bindings::open_json(state.get());
-    bindings::open_fs(state.get());
-
     auto lua_table = lua.create_table();
 
+    // TODO: Rework this to be within add_additional_bindings somehow without a weak_ptr
     lua_table["add_script_panel"] = [this, &state](sol::this_state s, std::string name, sol::function fn) {
         m_script_panels.emplace_back(PanelEntry{
             .state = std::weak_ptr<ScriptState>{state},
@@ -348,6 +341,12 @@ void LuaLoader::state_post_init(std::shared_ptr<ScriptState>& state) {
     };
 
     lua["uevr"]["lua"] = lua_table;
+}
+
+void LuaLoader::add_additional_bindings(sol::state_view& lua) {
+    bindings::open_imgui(lua);
+    bindings::open_json(lua);
+    bindings::open_fs(lua);
 }
 
 void LuaLoader::dispatch_event(std::string_view event_name, std::string_view event_data) {

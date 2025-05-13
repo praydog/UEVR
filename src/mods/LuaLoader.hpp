@@ -57,9 +57,14 @@ public:
         return m_states[index];
     }
 
+    std::scoped_lock<std::recursive_mutex> get_access_lock() {
+        return std::scoped_lock<std::recursive_mutex>{m_access_mutex};
+    }
+
     // Resets the ScriptState and runs autorun scripts again.
     void reset_scripts();
     void state_post_init(std::shared_ptr<ScriptState>& state);
+    void add_additional_bindings(sol::state_view& lua);
     void dispatch_event(std::string_view event_name, std::string_view event_data);
 
 private:

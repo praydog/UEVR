@@ -1470,8 +1470,7 @@ void filled_quad(float x1, float y1, float x2, float y2, float x3, float y3, flo
 }
 } // namespace api::draw
 
-void bindings::open_imgui(uevr::ScriptState* s) {
-    auto& lua = s->lua();
+void bindings::open_imgui(sol::state_view& lua) {
     auto imgui = lua.create_table();
 
     imgui["button"] = api::imgui::button;

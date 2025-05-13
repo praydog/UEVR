@@ -30,6 +30,10 @@ namespace uevr {
 class ScriptState;
 } // namespace uevr
 
+namespace sol {
+class state_view;
+} // namespace sol
+
 namespace bindings {
-void open_json(uevr::ScriptState* s);
+void open_json(sol::state_view& lua);
 }

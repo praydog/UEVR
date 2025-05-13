@@ -30,15 +30,14 @@ namespace uevr {
 class ScriptState;
 } // namespace uevr
 
+namespace sol {
+class state_view;
+}
+
 namespace bindings {
-void open_imgui(uevr::ScriptState* s);
+void open_imgui(sol::state_view& s);
 }
 
 namespace api::imgui {
-void cleanup();
-}
-
-namespace api::imnodes {
-// pop the active nodes/editors/attributes etc so we dont crash.
 void cleanup();
 }

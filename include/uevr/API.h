@@ -36,7 +36,7 @@ SOFTWARE.
 #define UEVR_OUT
 
 #define UEVR_PLUGIN_VERSION_MAJOR 2
-#define UEVR_PLUGIN_VERSION_MINOR 38
+#define UEVR_PLUGIN_VERSION_MINOR 39
 #define UEVR_PLUGIN_VERSION_PATCH 0
 
 #define UEVR_RENDERER_D3D11 0
@@ -620,6 +620,13 @@ typedef struct {
     void (*reload_config)();
 } UEVR_VRData;
 
+struct lua_State;
+
+typedef struct {
+    lua_State* (*get_lua_state)();
+    void (*add_additional_bindings)(lua_State* L); /* for external Lua environments. adds json, fs, imgui, etc*/
+} UEVR_LuaData;
+
 typedef struct {
     void* uevr_module;
     const UEVR_PluginVersion* version;
@@ -633,6 +640,8 @@ typedef struct {
 
     /* Engine/Game specific functions and data */
     const UEVR_SDKData* sdk;
+
+    const UEVR_LuaData* lua;
 } UEVR_PluginInitializeParam;
 
 typedef bool (*UEVR_PluginInitializeFn)(const UEVR_PluginInitializeParam*);

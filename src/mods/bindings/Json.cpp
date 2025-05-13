@@ -193,8 +193,7 @@ bool dump_file(const std::string& filepath, sol::object obj, sol::object indent_
 
 } // namespace api::json
 
-void bindings::open_json(ScriptState* s) {
-    auto& lua = s->lua();
+void bindings::open_json(sol::state_view& lua) {
     auto json = lua.create_table();
 
     json["load_string"] = api::json::load_string;

@@ -1648,6 +1648,35 @@ UEVR_OpenXRData g_openxr_data {
     uevr::openxr::get_view_space
 };
 
+UEVR_LuaData g_lua_data {
+    .get_lua_state = []() -> lua_State* {
+        auto& ll = LuaLoader::get();
+        if (ll == nullptr) {
+            return nullptr;
+        }
+
+        auto _ = ll->get_access_lock();
+        auto& script_state = ll->get_state();
+
+        if (script_state == nullptr) {
+            return nullptr;
+        }
+
+        return script_state->lua();
+    },
+    .add_additional_bindings = [](lua_State* L) {
+        auto& ll = LuaLoader::get();
+        if (ll == nullptr) {
+            return;
+        }
+
+        auto _ = ll->get_access_lock();
+        auto sv = sol::state_view(L);
+
+        ll->add_additional_bindings(sv);
+    }
+};
+
 extern "C" __declspec(dllexport) UEVR_PluginInitializeParam g_plugin_initialize_param{
     nullptr, 
     &g_plugin_version, 
@@ -1657,7 +1686,8 @@ extern "C" __declspec(dllexport) UEVR_PluginInitializeParam g_plugin_initialize_
     &g_vr_data,
     &g_openvr_data,
     &g_openxr_data,
-    &g_sdk_data
+    &g_sdk_data,
+    &g_lua_data,
 };
 
 void verify_sdk_pointers() {

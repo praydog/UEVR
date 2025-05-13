@@ -1156,6 +1156,8 @@ int ScriptContext::setup_bindings() {
     out["plugin_callbacks"] = m_plugin_initialize_param->callbacks;
     out["sdk"] = m_plugin_initialize_param->sdk;
 
+    m_plugin_initialize_param->lua->add_additional_bindings(m_lua.lua_state());
+
     return out.push(m_lua.lua_state());
 }
 
