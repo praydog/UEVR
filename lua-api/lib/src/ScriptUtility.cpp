@@ -129,6 +129,15 @@ sol::object prop_to_object(sol::this_state s, void* self, uevr::API::FProperty* 
     }
     case L"NameProperty"_fnv:
         return sol::make_object(s, *(uevr::API::FName*)((uintptr_t)self + offset));
+    case L"StrProperty"_fnv:
+    {
+        using FString = uevr::API::TArray<wchar_t>;
+        const auto& str = *(FString*)((uintptr_t)self + offset);
+        if (str.data == nullptr || str.count == 0) {
+            return sol::make_object(s, "");
+        }
+        return sol::make_object(s, std::wstring(str.data, str.count));
+    }
     case L"InterfaceProperty"_fnv:
     case L"ObjectProperty"_fnv:
         if (*(uevr::API::UObject**)((uintptr_t)self + offset) == nullptr) {
