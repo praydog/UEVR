@@ -240,7 +240,8 @@ private:
     glm::vec3 m_last_right_grip_location{};
     glm::quat m_last_left_aim_rotation{glm::identity<glm::quat>()};
     glm::quat m_last_right_aim_rotation{glm::identity<glm::quat>()};
-
+    glm::quat m_last_head_rotation{glm::identity<glm::quat>()};
+    
     mutable std::shared_mutex m_mutex{};
 
     struct MetaObject {

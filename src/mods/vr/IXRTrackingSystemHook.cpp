@@ -1881,13 +1881,13 @@ void IXRTrackingSystemHook::update_view_rotation(sdk::UObject* reference_obj, Ro
     const auto view_mat_inverse =
     has_double ?
         glm::yawPitchRoll(
-            glm::radians((float)-rot_d->yaw),
-            glm::radians((float)rot_d->pitch),
-            glm::radians((float)-rot_d->roll))
+            glm::radians(-rot_d->yaw),
+            glm::radians(rot_d->pitch),
+            glm::radians(-rot_d->roll))
         : glm::yawPitchRoll(
-            glm::radians(-rot->yaw),
-            glm::radians(rot->pitch),
-            glm::radians(-rot->roll));
+            glm::radians((double)-rot->yaw),
+            glm::radians((double)rot->pitch),
+            glm::radians((double)-rot->roll));
 
     const auto view_quat_inverse = glm::quat {
         view_mat_inverse

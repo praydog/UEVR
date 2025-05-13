@@ -462,13 +462,13 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
 
     const auto view_mat_inverse = !is_double ? 
         glm::yawPitchRoll(
-            glm::radians(-view_rotation->yaw),
-            glm::radians(view_rotation->pitch),
-            glm::radians(-view_rotation->roll)) : 
+            glm::radians((double)-view_rotation->yaw),
+            glm::radians((double)view_rotation->pitch),
+            glm::radians((double)-view_rotation->roll)) :
         glm::yawPitchRoll(
-            glm::radians(-(float)rot_d->yaw),
-            glm::radians((float)rot_d->pitch),
-            glm::radians(-(float)rot_d->roll));
+            glm::radians(-rot_d->yaw),
+            glm::radians(rot_d->pitch),
+            glm::radians(-rot_d->roll));
 
     const auto view_quat_inverse = glm::quat {
         view_mat_inverse
@@ -553,6 +553,15 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
         left_hand_rotation = m_last_left_aim_rotation;
     }
 
+    const auto raw_head_rotation = glm::normalize(vqi_norm * (rotation_offset * glm::quat{vr->get_rotation(0)}));
+    glm::quat head_rotation = raw_head_rotation;
+    if (m_attach_lerp_enabled->value()) {
+        float head_dot = glm::dot(raw_head_rotation, m_last_head_rotation);
+        if (head_dot < 0.0f) head_dot = -head_dot;
+        m_last_head_rotation = glm::slerp(m_last_head_rotation, raw_head_rotation, lerp_speed * head_dot);
+        head_rotation = m_last_head_rotation;
+    }
+
     right_hand_position = glm::vec3{rotation_offset * (right_hand_position - hmd_origin)};
     left_hand_position = glm::vec3{rotation_offset * (left_hand_position - hmd_origin)};
 
@@ -574,7 +583,6 @@ void UObjectHook::tick_attachments(Rotator<float>* view_rotation, const float wo
     //left_hand_rotation = glm::normalize(left_hand_rotation * left_hand_offset_q);
     auto left_hand_euler = glm::degrees(utility::math::euler_angles_from_steamvr(left_hand_rotation));
 
-    const auto head_rotation =  glm::normalize(vqi_norm * (rotation_offset * glm::quat{vr->get_rotation(0)}));
     const auto head_euler = glm::degrees(utility::math::euler_angles_from_steamvr(head_rotation));
 
     update_motion_controller_components(
