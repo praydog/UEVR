@@ -500,7 +500,12 @@ private:
     static void* process_event_hook(sdk::UObject* obj, sdk::UFunction* func, void* params, void* r9);
 
     std::shared_mutex m_function_mutex{};
-    std::unordered_set<sdk::UFunction*> m_called_functions{};
+
+    struct CalledFunctionInfo {
+        size_t call_count{0};
+    };
+
+    std::unordered_map<sdk::UFunction*, CalledFunctionInfo> m_called_functions{};
     std::deque<sdk::UFunction*> m_most_recent_functions{};
     std::unordered_set<sdk::UFunction*> m_ignored_recent_functions{};
 

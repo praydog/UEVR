@@ -211,7 +211,10 @@ void* UObjectHook::process_event_hook(sdk::UObject* obj, sdk::UFunction* func, v
 
     if (hook->m_process_event_listening) {
         std::unique_lock _{hook->m_function_mutex};
-        hook->m_called_functions.insert(func);
+        
+        auto& data = hook->m_called_functions[func];
+        ++data.call_count;
+
         hook->m_most_recent_functions.push_front(func);
 
         if (hook->m_most_recent_functions.size() > 200) {
@@ -1904,9 +1907,15 @@ void UObjectHook::draw_developer() {
             ImGui::Checkbox("ProcessEvent Listener", &m_process_event_listening);
 
             if (m_process_event_listening) {
+                std::shared_lock __{m_function_mutex};
+
+                if (ImGui::Button("Clear Ignored Functions")) {
+                    m_ignored_recent_functions.clear();
+                }
+
                 ImGui::Text("Called functions: %llu", m_called_functions.size());
 
-                if (ImGui::TreeNode("Called Functions")) {
+                if (ImGui::TreeNode("Recent Functions")) {
                     for (auto ufunc : m_most_recent_functions) {
                         if (ufunc == nullptr) {
                             continue;
@@ -1932,6 +1941,41 @@ void UObjectHook::draw_developer() {
                     }
 
                     ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNode("All Called Functions")) {
+                    std::vector<sdk::UFunction*> functions_sorted_by_call_count{};
+                    for (auto& [ufunc, data] : m_called_functions) {
+                        if (ufunc == nullptr) {
+                            continue;
+                        }
+
+                        functions_sorted_by_call_count.push_back(ufunc);
+                    }
+
+                    std::sort(functions_sorted_by_call_count.begin(), functions_sorted_by_call_count.end(), [this](sdk::UFunction* a, sdk::UFunction* b) {
+                        return m_called_functions[a].call_count > m_called_functions[b].call_count;
+                    });
+
+                    for (auto& ufunc : functions_sorted_by_call_count) {
+                        if (m_ignored_recent_functions.contains(ufunc)) {
+                            continue;
+                        }
+
+                        ImGui::PushID(ufunc);
+
+                        utility::ScopeGuard ___{[]() {
+                            ImGui::PopID();
+                        }};
+
+                        if (ImGui::Button("Ignore")) {
+                            m_ignored_recent_functions.insert(ufunc);
+                        }
+
+                        ImGui::SameLine();
+
+                        ImGui::Text("%s (%llu)", utility::narrow(ufunc->get_full_name()).c_str(), m_called_functions[ufunc].call_count);
+                    }
                 }
             }
         } else {
