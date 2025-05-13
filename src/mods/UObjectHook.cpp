@@ -3243,6 +3243,22 @@ void UObjectHook::ui_handle_functions(void* object, sdk::UStruct* uclass) {
                         ImGui::SameLine();
                         ImGui::TextColored(ImVec4{0.0f, 1.0f, 0.0f, 1.0f}, "[Out]");
                     }
+
+                    // Display full name of StructProperty
+                    if (cname == "StructProperty") {
+                        const auto prop = (sdk::FStructProperty*)param;
+                        const auto s = prop->get_struct();
+
+                        if (s != nullptr) {
+                            const auto struct_name = utility::narrow(s->get_full_name());
+                            constexpr auto r = (float)78.0f / 255.0f;
+                            constexpr auto g = (float)201.0f / 255.0f;
+                            constexpr auto b = (float)176.0f / 255.0f;
+
+                            ImGui::SameLine();
+                            ImGui::TextColored(ImVec4{r, g, b, 1.0f}, "[%s]", struct_name.data());
+                        }
+                    }
                 }
             }
 
