@@ -499,10 +499,17 @@ private:
     void hook_process_event();
     static void* process_event_hook(sdk::UObject* obj, sdk::UFunction* func, void* params, void* r9);
 
-    std::shared_mutex m_function_mutex{};
+    std::recursive_mutex m_function_mutex{};
 
     struct CalledFunctionInfo {
         size_t call_count{0};
+
+        struct HeavyData {
+            std::vector<uint8_t> params{};
+        };
+
+        std::unique_ptr<HeavyData> heavy_data{nullptr};
+        bool wants_heavy_data{false};
     };
 
     std::unordered_map<sdk::UFunction*, CalledFunctionInfo> m_called_functions{};

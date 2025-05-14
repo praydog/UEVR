@@ -191,7 +191,7 @@ void UObjectHook::hook_process_event() {
         const auto vt = *(void***)first_obj;
 
         if (vt != nullptr) {
-            std::unique_lock _{m_function_mutex};
+            std::scoped_lock _{m_function_mutex};
             auto fn = vt[process_event_index];
             SPDLOG_INFO("[UObjectHook] ProcessEvent {:x}", (uintptr_t)fn);
             m_process_event_hook = safetyhook::create_inline(fn, &process_event_hook);
@@ -209,8 +209,10 @@ void UObjectHook::hook_process_event() {
 void* UObjectHook::process_event_hook(sdk::UObject* obj, sdk::UFunction* func, void* params, void* r9) {
     auto& hook = UObjectHook::get();
 
+    bool do_heavy_data_once = false;
+
     if (hook->m_process_event_listening) {
-        std::unique_lock _{hook->m_function_mutex};
+        std::scoped_lock _{hook->m_function_mutex};
         
         auto& data = hook->m_called_functions[func];
         ++data.call_count;
@@ -223,6 +225,194 @@ void* UObjectHook::process_event_hook(sdk::UObject* obj, sdk::UFunction* func, v
     }
 
     auto result = hook->m_process_event_hook.unsafe_call<void*>(obj, func, params, r9);
+
+    if (hook->m_process_event_listening) {
+        std::scoped_lock _{hook->m_function_mutex};
+
+        auto& data = hook->m_called_functions[func];
+
+        if (data.heavy_data == nullptr) {
+            do_heavy_data_once = true;
+            data.heavy_data = std::make_unique<CalledFunctionInfo::HeavyData>();
+
+            const auto ps = func->get_properties_size();
+            const auto ma = func->get_min_alignment();
+        
+            if (ma > 1) {
+                data.heavy_data->params.resize(((ps + ma - 1) / ma) * ma);
+            } else {
+                data.heavy_data->params.resize(ps);
+            }
+
+            memset(data.heavy_data->params.data(), 0, data.heavy_data->params.size());
+        }
+
+        if ((data.wants_heavy_data || do_heavy_data_once) && !data.heavy_data->params.empty()) {
+            auto bak = data.heavy_data->params;
+
+            try {
+                memcpy(data.heavy_data->params.data(), params, data.heavy_data->params.size());
+            } catch(...) {
+                //SPDLOG_ERROR("[UObjectHook] Failed to copy params for function {:x}", (uintptr_t)func);
+                return result;
+            }
+    
+            // Go through all properties and look for arrays and upgrade them so we actually own the data
+            // We'll do this by copying the data to a new array
+            for (auto prop = func->get_child_properties(); prop != nullptr; prop = prop->get_next()) {
+                const auto c = prop->get_class();
+                if (c == nullptr) {
+                    continue;
+                }
+    
+                const auto cname = c->get_name().to_string();
+                const auto cname_hash = ::utility::hash(cname);
+    
+                switch (cname_hash) {
+                case L"ArrayProperty"_fnv:
+                {
+                    using GenericArray = sdk::TArray<void*>;
+                    const auto prop_desc = (sdk::FArrayProperty*)prop;
+
+                    size_t inner_size = sizeof(void*);
+                    bool supported = false;
+    
+                    const auto inner = prop_desc->get_inner();
+    
+                    if (inner != nullptr) {
+                        const auto inner_c = inner->get_class();
+    
+                        if (inner_c != nullptr) {
+                            const auto inner_cname = inner_c->get_name().to_string();
+                            const auto inner_cname_hash = ::utility::hash(inner_cname);
+    
+                            // todo... recursive array stuff? good enough for now
+                            switch (inner_cname_hash) {
+                            case L"StructProperty"_fnv:
+                            {
+                                const auto s = ((sdk::FStructProperty*)inner)->get_struct();
+    
+                                if (s == nullptr) {
+                                    break;
+                                }
+    
+                                if (s->is_a(sdk::UScriptStruct::static_class())) {
+                                    inner_size = s->get_struct_size();
+                                } else {
+                                    inner_size = s->get_properties_size();
+                                }
+
+                                supported = true;
+
+                                break;
+                            }
+                            case L"ObjectProperty"_fnv:
+                            case L"InterfaceProperty"_fnv:
+                            {
+                                inner_size = sizeof(void*);
+                                supported = true;
+                                break;
+                            }
+    
+                            default:
+                                break;
+                            }
+                        }
+                    }
+
+                    // uh oh
+                    if (prop_desc->get_offset() >= data.heavy_data->params.size()) {
+                        break;
+                    }
+
+                    auto& arr = *(GenericArray*)((uintptr_t)data.heavy_data->params.data() + prop_desc->get_offset());
+
+                    if (!supported) {
+                        arr.count = 0;
+                        arr.capacity = 0;
+                        arr.data = nullptr;
+                        break;
+                    }
+    
+                    auto& bak_arr = *(GenericArray*)((uintptr_t)bak.data() + prop_desc->get_offset());
+                    auto new_arr = sdk::TArray<void*>{};
+
+                    if (bak_arr.data != nullptr) {
+                        new_arr = std::move(bak_arr);
+    
+                        if (arr.capacity > new_arr.capacity) {
+                            new_arr.data = (void**)sdk::FMalloc::get()->realloc(new_arr.data, arr.capacity * inner_size, sizeof(void*));
+                            new_arr.capacity = arr.capacity;
+                        }
+    
+                        new_arr.count = arr.count;
+                    } else if (arr.capacity > 0) {
+                        new_arr.data = (void**)sdk::FMalloc::get()->malloc(arr.capacity * inner_size, sizeof(void*));
+                        std::memset(new_arr.data, 0, arr.capacity * inner_size);
+                        new_arr.count = arr.count;
+                        new_arr.capacity = arr.capacity;
+                    }
+    
+                    if (arr.data != nullptr && arr.count > 0 && arr.capacity >= arr.count && new_arr.data != nullptr && !IsBadReadPtr((void*)arr.data, arr.capacity * inner_size)) {
+                        memcpy(new_arr.data, arr.data, arr.count * inner_size);
+                        arr.data = nullptr;
+                        arr.count = 0;
+                        arr.capacity = 0;
+                        arr = std::move(new_arr);
+                    } else {
+                        arr.count = 0;  
+                    }
+                }
+                case L"StrProperty"_fnv:
+                {
+                    using FString = sdk::TArray<wchar_t>;
+    
+                    const auto prop_desc = (sdk::FProperty*)prop;
+
+                    // uh oh
+                    if (prop_desc->get_offset() >= data.heavy_data->params.size()) {
+                        break;
+                    }
+
+                    auto& str = *(FString*)((uintptr_t)data.heavy_data->params.data() + prop_desc->get_offset());
+                    auto& bak_str = *(FString*)((uintptr_t)bak.data() + prop_desc->get_offset());
+    
+                    auto new_str = FString{};
+    
+                    // Same thing but much simpler because we know it's wchar_t
+                    if (bak_str.data != nullptr) {
+                        new_str = std::move(bak_str);
+    
+                        if (str.capacity > new_str.capacity) {
+                            new_str.data = (wchar_t*)sdk::FMalloc::get()->realloc(new_str.data, str.capacity * sizeof(wchar_t), sizeof(wchar_t));
+                            new_str.capacity = str.capacity;
+                        }
+    
+                        new_str.count = str.count;
+                    } else if (str.capacity > 0) {
+                        new_str.data = (wchar_t*)sdk::FMalloc::get()->malloc(str.capacity * sizeof(wchar_t), sizeof(wchar_t));
+                        std::memset(new_str.data, 0, str.capacity * sizeof(wchar_t));
+                        new_str.count = str.count;
+                        new_str.capacity = str.capacity;
+                    }
+    
+                    if (str.data != nullptr && str.count > 0 && str.capacity >= str.count && new_str.data != nullptr && !IsBadReadPtr((void*)str.data, str.capacity * sizeof(wchar_t))) {
+                        memcpy(new_str.data, str.data, str.count * sizeof(wchar_t));
+                        str.data = nullptr;
+                        str.count = 0;
+                        str.capacity = 0;
+                        str = std::move(new_str);
+                    } else {
+                        str.count = 0;
+                    }
+                }
+                    break;
+                default:
+                    break;
+                };
+            }
+        }
+    }
 
     return result;
 }
@@ -1829,7 +2019,7 @@ void UObjectHook::on_draw_ui() {
     }
 
     std::shared_lock _{m_mutex};
-    std::shared_lock __{m_function_mutex};
+    std::scoped_lock __{m_function_mutex};
 
     if (m_uobject_hook_disabled) {
         ImGui::TextColored(ImVec4{1.0f, 0.0f, 0.0f, 1.0f}, "UObjectHook is disabled");
@@ -1913,13 +2103,20 @@ void UObjectHook::draw_developer() {
 
                 ImGui::SameLine();
 
+                std::scoped_lock __{m_function_mutex};
+
                 if (ImGui::Button("Clear Called Functions")) {
-                    std::unique_lock _{m_function_mutex};
                     m_called_functions.clear();
                     m_most_recent_functions.clear();
                 }
 
-                std::unique_lock __{m_function_mutex};
+                if (ImGui::Button("Ignore All Called Functions")) {
+                    m_ignored_recent_functions.clear();
+
+                    for (auto& [ufunc, data] : m_called_functions) {
+                        m_ignored_recent_functions.insert(ufunc);
+                    }
+                }
 
                 ImGui::Text("Called functions: %llu", m_called_functions.size());
 
@@ -1993,8 +2190,23 @@ void UObjectHook::draw_developer() {
                         }
 
                         ImGui::SameLine();
+                        
+                        const auto made = ImGui::TreeNode(utility::narrow(ufunc->get_full_name()).c_str());
 
-                        ImGui::Text("%s (%llu)", utility::narrow(ufunc->get_full_name()).c_str(), m_called_functions[ufunc].call_count);
+                        ImGui::SameLine();
+                        ImGui::Text(" (%llu)", m_called_functions[ufunc].call_count);
+
+                        if (made) {
+                            auto& data = m_called_functions[ufunc];
+                            data.wants_heavy_data = true;
+
+                            if (data.heavy_data != nullptr) {
+                                // Param inspector.
+                                ui_handle_struct(data.heavy_data->params.data(), ufunc);
+                            }
+
+                            ImGui::TreePop();
+                        }
                     }
 
                     ImGui::TreePop();
@@ -2002,7 +2214,7 @@ void UObjectHook::draw_developer() {
 
                 if (!functions_to_cleanup.empty()) {
                     spdlog::info("[UObjectHook] Cleaning up {} functions", functions_to_cleanup.size());
-                    
+
                     for (auto& ufunc : functions_to_cleanup) {
                         std::erase_if(m_most_recent_functions, [ufunc](auto& it) {
                             return it == ufunc;
@@ -2479,12 +2691,23 @@ void UObjectHook::ui_handle_object(sdk::UObject* object) {
         return;
     }
 
+    if (!this->exists_unsafe(object)) {
+        ImGui::Text("Invalid object");
+        return;
+    }
+
     ui_standard_object_context_menu(object);
 
     const auto uclass = object->get_class();
 
     if (uclass == nullptr) {
         ImGui::Text("null class");
+        return;
+    }
+
+
+    if (!this->exists_unsafe(uclass)) {
+        ImGui::Text("Invalid class");
         return;
     }
 
