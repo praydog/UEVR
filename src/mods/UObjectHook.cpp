@@ -1907,11 +1907,19 @@ void UObjectHook::draw_developer() {
             ImGui::Checkbox("ProcessEvent Listener", &m_process_event_listening);
 
             if (m_process_event_listening) {
-                std::shared_lock __{m_function_mutex};
-
                 if (ImGui::Button("Clear Ignored Functions")) {
                     m_ignored_recent_functions.clear();
                 }
+
+                ImGui::SameLine();
+
+                if (ImGui::Button("Clear Called Functions")) {
+                    std::unique_lock _{m_function_mutex};
+                    m_called_functions.clear();
+                    m_most_recent_functions.clear();
+                }
+
+                std::shared_lock __{m_function_mutex};
 
                 ImGui::Text("Called functions: %llu", m_called_functions.size());
 
