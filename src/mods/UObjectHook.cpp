@@ -1919,9 +1919,11 @@ void UObjectHook::draw_developer() {
                     m_most_recent_functions.clear();
                 }
 
-                std::shared_lock __{m_function_mutex};
+                std::unique_lock __{m_function_mutex};
 
                 ImGui::Text("Called functions: %llu", m_called_functions.size());
+
+                std::vector<sdk::UFunction*> functions_to_cleanup{};
 
                 if (ImGui::TreeNode("Recent Functions")) {
                     for (auto ufunc : m_most_recent_functions) {
@@ -1930,6 +1932,11 @@ void UObjectHook::draw_developer() {
                         }
                         
                         if (m_ignored_recent_functions.contains(ufunc)) {
+                            continue;
+                        }
+
+                        if (!this->exists(ufunc)) {
+                            functions_to_cleanup.push_back(ufunc);
                             continue;
                         }
 
@@ -1970,6 +1977,11 @@ void UObjectHook::draw_developer() {
                             continue;
                         }
 
+                        if (!this->exists(ufunc)) {
+                            functions_to_cleanup.push_back(ufunc);
+                            continue;
+                        }
+
                         ImGui::PushID(ufunc);
 
                         utility::ScopeGuard ___{[]() {
@@ -1986,6 +1998,18 @@ void UObjectHook::draw_developer() {
                     }
 
                     ImGui::TreePop();
+                }
+
+                if (!functions_to_cleanup.empty()) {
+                    spdlog::info("[UObjectHook] Cleaning up {} functions", functions_to_cleanup.size());
+                    
+                    for (auto& ufunc : functions_to_cleanup) {
+                        std::erase_if(m_most_recent_functions, [ufunc](auto& it) {
+                            return it == ufunc;
+                        });
+
+                        m_called_functions.erase(ufunc);
+                    }
                 }
             }
         } else {
