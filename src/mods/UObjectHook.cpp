@@ -3636,6 +3636,25 @@ void UObjectHook::ui_handle_properties(void* object, sdk::UStruct* uclass) {
                 ImGui::TextColored(ImVec4{3.0f / 255.0f, 232.0f / 255.0f, 252.0f / 255.0f, 1.0f}, "%s", str.data());
             }
             break;
+        case L"StrProperty"_fnv:
+        {
+            using FString = sdk::TArray<wchar_t>;
+            const auto& value = *(FString*)((uintptr_t)object + ((sdk::FProperty*)prop)->get_offset());
+
+            if (value.data != nullptr && value.count > 0) {
+                const auto str = std::wstring_view{value.data, (size_t)value.count};
+                const auto narrow_str = utility::narrow(str);
+
+                ImGui::Text("%s: ", utility::narrow(prop->get_field_name().to_string()).data());
+                ImGui::SameLine(0.0f, 0.0f);
+                ImGui::TextColored(ImVec4{3.0f / 255.0f, 232.0f / 255.0f, 252.0f / 255.0f, 1.0f}, "%s", narrow_str.data());
+            } else {
+                ImGui::Text("%s: ", utility::narrow(prop->get_field_name().to_string()).data());
+                ImGui::SameLine(0.0f, 0.0f);
+                ImGui::TextColored(ImVec4{3.0f / 255.0f, 232.0f / 255.0f, 252.0f / 255.0f, 1.0f}, "[empty string]");
+            }
+            break;
+        }
         default:
             {
                 const auto name = utility::narrow(propc->get_name().to_string());
