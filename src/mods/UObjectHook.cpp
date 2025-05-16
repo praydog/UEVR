@@ -2087,149 +2087,153 @@ void UObjectHook::draw_developer() {
         ImGui::Text("Constructor calls: %llu", m_debug.constructor_calls);
         ImGui::Text("Destructor calls: %llu", m_debug.destructor_calls);
 
-        if (!m_attempted_hook_process_event) {
-            if (ImGui::Button("Create ProcessEvent hook")) {
-                GameThreadWorker::get().enqueue([this]() {
-                    hook_process_event();
-                });
-            }
-        } else if (m_hooked_process_event) {
-            ImGui::Checkbox("ProcessEvent Listener", &m_process_event_listening);
-
-            if (m_process_event_listening) {
-                if (ImGui::Button("Clear Ignored Functions")) {
-                    m_ignored_recent_functions.clear();
-                }
-
-                ImGui::SameLine();
-
-                std::scoped_lock __{m_function_mutex};
-
-                if (ImGui::Button("Clear Called Functions")) {
-                    m_called_functions.clear();
-                    m_most_recent_functions.clear();
-                }
-
-                if (ImGui::Button("Ignore All Called Functions")) {
-                    m_ignored_recent_functions.clear();
-
-                    for (auto& [ufunc, data] : m_called_functions) {
-                        m_ignored_recent_functions.insert(ufunc);
-                    }
-                }
-
-                ImGui::Text("Called functions: %llu", m_called_functions.size());
-
-                std::vector<sdk::UFunction*> functions_to_cleanup{};
-
-                if (ImGui::TreeNode("Recent Functions")) {
-                    for (auto ufunc : m_most_recent_functions) {
-                        if (ufunc == nullptr) {
-                            continue;
-                        }
-                        
-                        if (m_ignored_recent_functions.contains(ufunc)) {
-                            continue;
-                        }
-
-                        if (!this->exists(ufunc)) {
-                            functions_to_cleanup.push_back(ufunc);
-                            continue;
-                        }
-
-                        ImGui::PushID(ufunc);
-
-                        utility::ScopeGuard ___{[]() {
-                            ImGui::PopID();
-                        }};
-
-                        if (ImGui::Button("Ignore")) {
-                            m_ignored_recent_functions.insert(ufunc);
-                        }
-
-                        ImGui::SameLine();
-
-                        ImGui::Text("%s", utility::narrow(ufunc->get_full_name()).c_str());
-                    }
-
-                    ImGui::TreePop();
-                }
-
-                if (ImGui::TreeNode("All Called Functions")) {
-                    std::vector<sdk::UFunction*> functions_sorted_by_call_count{};
-                    for (auto& [ufunc, data] : m_called_functions) {
-                        if (ufunc == nullptr) {
-                            continue;
-                        }
-
-                        functions_sorted_by_call_count.push_back(ufunc);
-                    }
-
-                    std::sort(functions_sorted_by_call_count.begin(), functions_sorted_by_call_count.end(), [this](sdk::UFunction* a, sdk::UFunction* b) {
-                        return m_called_functions[a].call_count > m_called_functions[b].call_count;
-                    });
-
-                    for (auto& ufunc : functions_sorted_by_call_count) {
-                        if (m_ignored_recent_functions.contains(ufunc)) {
-                            continue;
-                        }
-
-                        if (!this->exists(ufunc)) {
-                            functions_to_cleanup.push_back(ufunc);
-                            continue;
-                        }
-
-                        ImGui::PushID(ufunc);
-
-                        utility::ScopeGuard ___{[]() {
-                            ImGui::PopID();
-                        }};
-
-                        if (ImGui::Button("Ignore")) {
-                            m_ignored_recent_functions.insert(ufunc);
-                        }
-
-                        ImGui::SameLine();
-                        
-                        const auto made = ImGui::TreeNode(utility::narrow(ufunc->get_full_name()).c_str());
-
-                        ImGui::SameLine();
-                        ImGui::Text(" (%llu)", m_called_functions[ufunc].call_count);
-
-                        if (made) {
-                            auto& data = m_called_functions[ufunc];
-                            data.wants_heavy_data = true;
-
-                            if (data.heavy_data != nullptr) {
-                                // Param inspector.
-                                ui_handle_struct(data.heavy_data->params.data(), ufunc);
-                            }
-
-                            ImGui::TreePop();
-                        }
-                    }
-
-                    ImGui::TreePop();
-                }
-
-                if (!functions_to_cleanup.empty()) {
-                    spdlog::info("[UObjectHook] Cleaning up {} functions", functions_to_cleanup.size());
-
-                    for (auto& ufunc : functions_to_cleanup) {
-                        std::erase_if(m_most_recent_functions, [ufunc](auto& it) {
-                            return it == ufunc;
-                        });
-
-                        m_called_functions.erase(ufunc);
-                    }
-                }
-            }
-        } else {
-            ImGui::Text("Failed to hook ProcessEvent!");
-        }
-
         ImGui::TreePop();
     }
+
+    ImGui::Separator();
+
+    if (!m_attempted_hook_process_event) {
+        if (ImGui::Button("Create ProcessEvent hook")) {
+            GameThreadWorker::get().enqueue([this]() {
+                hook_process_event();
+            });
+        }
+    } else if (m_hooked_process_event) {
+        ImGui::Checkbox("ProcessEvent Listener", &m_process_event_listening);
+
+        if (m_process_event_listening) {
+            if (ImGui::Button("Clear Ignored Functions")) {
+                m_ignored_recent_functions.clear();
+            }
+
+            ImGui::SameLine();
+
+            std::scoped_lock __{m_function_mutex};
+
+            if (ImGui::Button("Clear Called Functions")) {
+                m_called_functions.clear();
+                m_most_recent_functions.clear();
+            }
+
+            if (ImGui::Button("Ignore All Called Functions")) {
+                m_ignored_recent_functions.clear();
+
+                for (auto& [ufunc, data] : m_called_functions) {
+                    m_ignored_recent_functions.insert(ufunc);
+                }
+            }
+
+            ImGui::Text("Called functions: %llu", m_called_functions.size());
+
+            std::vector<sdk::UFunction*> functions_to_cleanup{};
+
+            if (ImGui::TreeNode("Recent Functions")) {
+                for (auto ufunc : m_most_recent_functions) {
+                    if (ufunc == nullptr) {
+                        continue;
+                    }
+                    
+                    if (m_ignored_recent_functions.contains(ufunc)) {
+                        continue;
+                    }
+
+                    if (!this->exists(ufunc)) {
+                        functions_to_cleanup.push_back(ufunc);
+                        continue;
+                    }
+
+                    ImGui::PushID(ufunc);
+
+                    utility::ScopeGuard ___{[]() {
+                        ImGui::PopID();
+                    }};
+
+                    if (ImGui::Button("Ignore")) {
+                        m_ignored_recent_functions.insert(ufunc);
+                    }
+
+                    ImGui::SameLine();
+
+                    ImGui::Text("%s", utility::narrow(ufunc->get_full_name()).c_str());
+                }
+
+                ImGui::TreePop();
+            }
+
+            if (ImGui::TreeNode("All Called Functions")) {
+                std::vector<sdk::UFunction*> functions_sorted_by_call_count{};
+                for (auto& [ufunc, data] : m_called_functions) {
+                    if (ufunc == nullptr) {
+                        continue;
+                    }
+
+                    functions_sorted_by_call_count.push_back(ufunc);
+                }
+
+                std::sort(functions_sorted_by_call_count.begin(), functions_sorted_by_call_count.end(), [this](sdk::UFunction* a, sdk::UFunction* b) {
+                    return m_called_functions[a].call_count > m_called_functions[b].call_count;
+                });
+
+                for (auto& ufunc : functions_sorted_by_call_count) {
+                    if (m_ignored_recent_functions.contains(ufunc)) {
+                        continue;
+                    }
+
+                    if (!this->exists(ufunc)) {
+                        functions_to_cleanup.push_back(ufunc);
+                        continue;
+                    }
+
+                    ImGui::PushID(ufunc);
+
+                    utility::ScopeGuard ___{[]() {
+                        ImGui::PopID();
+                    }};
+
+                    if (ImGui::Button("Ignore")) {
+                        m_ignored_recent_functions.insert(ufunc);
+                    }
+
+                    ImGui::SameLine();
+                    
+                    const auto made = ImGui::TreeNode(utility::narrow(ufunc->get_full_name()).c_str());
+
+                    ImGui::SameLine();
+                    ImGui::Text(" (%llu)", m_called_functions[ufunc].call_count);
+
+                    if (made) {
+                        auto& data = m_called_functions[ufunc];
+                        data.wants_heavy_data = true;
+
+                        if (data.heavy_data != nullptr) {
+                            // Param inspector.
+                            ui_handle_struct(data.heavy_data->params.data(), ufunc);
+                        }
+
+                        ImGui::TreePop();
+                    }
+                }
+
+                ImGui::TreePop();
+            }
+
+            if (!functions_to_cleanup.empty()) {
+                spdlog::info("[UObjectHook] Cleaning up {} functions", functions_to_cleanup.size());
+
+                for (auto& ufunc : functions_to_cleanup) {
+                    std::erase_if(m_most_recent_functions, [ufunc](auto& it) {
+                        return it == ufunc;
+                    });
+
+                    m_called_functions.erase(ufunc);
+                }
+            }
+        }
+    } else {
+        ImGui::Text("Failed to hook ProcessEvent!");
+    }
+
+    ImGui::Separator();
 
     static std::array<char, 512> address_buffer{};
     ImGui::InputText("Address Lookup", address_buffer.data(), address_buffer.size());
