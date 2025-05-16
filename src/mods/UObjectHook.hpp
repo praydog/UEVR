@@ -516,6 +516,11 @@ private:
     std::deque<sdk::UFunction*> m_most_recent_functions{};
     std::unordered_set<sdk::UFunction*> m_ignored_recent_functions{};
 
+    struct {
+        int32_t max_calls{0};
+        std::array<char, 512> buffer{0};
+    } m_process_event_search{};
+
 public:
     UObjectHook() {
         m_options = {

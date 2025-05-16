@@ -2161,9 +2161,23 @@ void UObjectHook::draw_developer() {
             }
 
             if (ImGui::TreeNode("All Called Functions")) {
+                ImGui::SliderInt("Max Calls", &m_process_event_search.max_calls, 0, 10000);
+                ImGui::InputText("Search", m_process_event_search.buffer.data(), m_process_event_search.buffer.size());
+
+                std::string_view search{m_process_event_search.buffer.data()};
+
                 std::vector<sdk::UFunction*> functions_sorted_by_call_count{};
                 for (auto& [ufunc, data] : m_called_functions) {
                     if (ufunc == nullptr) {
+                        continue;
+                    }
+
+                    if (m_process_event_search.max_calls > 0 && data.call_count > m_process_event_search.max_calls) {
+                        continue;
+                    }
+
+                    // maybe a TODO here for optimization
+                    if (!search.empty() && !utility::narrow(ufunc->get_full_name()).contains(search)) {
                         continue;
                     }
 
