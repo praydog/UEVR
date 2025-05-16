@@ -85,8 +85,54 @@ public:
     }
 
 protected:
-    FRHITexture2D* ui_target{};
-    FRHITexture2D* render_target{};
+    struct VerifiedFTexture2D {
+        VerifiedFTexture2D() = default;
+        VerifiedFTexture2D(FRHITexture2D* tex) 
+            : texture{tex}
+        {
+            if (tex != nullptr) {
+                original_vtable = *(void**)tex;
+            } else {
+                original_vtable = nullptr;
+            }
+        }
+
+        VerifiedFTexture2D& operator=(FRHITexture2D* tex) {
+            texture = tex;
+            if (tex != nullptr) {
+                original_vtable = *(void**)tex;
+            } else {
+                original_vtable = nullptr;
+            }
+
+            return *this;
+        }
+
+        operator FRHITexture2D*&() try {
+            if (texture == nullptr) {
+                return texture;
+            }
+
+            // First line of defense against catching an exception
+            if (original_vtable != *(void**)texture) {
+                texture = nullptr;
+                original_vtable = nullptr;
+            }
+
+            return texture;
+        } catch (...) {
+            // welp
+            texture = nullptr;
+            original_vtable = nullptr;
+            return texture;
+        }
+
+        FRHITexture2D* texture{nullptr};
+        void* original_vtable{nullptr};
+    };
+
+    VerifiedFTexture2D ui_target{};
+    VerifiedFTexture2D render_target{};
     static void pre_texture_hook_callback(safetyhook::Context& ctx); // only used if pixel format cvar is missing
     static void texture_hook_callback(safetyhook::Context& ctx);
 
