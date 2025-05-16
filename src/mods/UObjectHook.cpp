@@ -2165,10 +2165,15 @@ void UObjectHook::draw_developer() {
                 ImGui::InputText("Search", m_process_event_search.buffer.data(), m_process_event_search.buffer.size());
 
                 std::string_view search{m_process_event_search.buffer.data()};
-
                 std::vector<sdk::UFunction*> functions_sorted_by_call_count{};
+                
                 for (auto& [ufunc, data] : m_called_functions) {
                     if (ufunc == nullptr) {
+                        continue;
+                    }
+
+                    if (!this->exists(ufunc)) {
+                        functions_to_cleanup.push_back(ufunc);
                         continue;
                     }
 
