@@ -427,7 +427,7 @@ private:
     static void pre_get_projection_data(safetyhook::Context& ctx);
 
     // Slate
-    static void* slate_draw_window_render_thread(void* renderer, void* command_list, sdk::FViewportInfo* viewport_info, 
+    static void* slate_draw_window_render_thread(void* renderer, void* command_list, void* viewport_info, 
                                                  void* elements, void* params, void* unk1, void* unk2);
 
     // FViewport

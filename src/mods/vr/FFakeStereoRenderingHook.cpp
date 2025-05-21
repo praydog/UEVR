@@ -499,7 +499,7 @@ void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_addres
         }
     }
 
-    if (m_hooked_slate_thread) {
+    if (m_hooked_slate_thread && !alternate) {
         return;
     }
 
@@ -5542,8 +5542,8 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
     g_hook->m_fixed_localplayer_view_count = true;
 }
 
-void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, void* command_list, sdk::FViewportInfo* viewport_info, 
-                                                                void* elements, void* params, void* unk1, void* unk2) 
+void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, void* a2, void* a3, 
+                                                                void* a4, void* params, void* unk1, void* unk2) 
 {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
     SPDLOG_INFO("SlateRHIRenderer::DrawWindow_RenderThread called!");
@@ -5551,26 +5551,140 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
     SPDLOG_INFO_ONCE("SlateRHIRenderer::DrawWindow_RenderThread called!");
 #endif
 
-    if (!g_framework->is_game_data_intialized()) {
-        return g_hook->m_slate_thread_hook.call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
+    if (!g_framework->is_game_data_intialized() || a2 == nullptr) {
+        return g_hook->m_slate_thread_hook.call<void*>(renderer, a2, a3, a4, params, unk1, unk2);
     }
 
-    g_hook->get_slate_thread_worker()->execute((FRHICommandListImmediate*)command_list);
+    auto viewport_info = (sdk::FViewportInfo*)a3;
+    sdk::ISlateViewport* slate_viewport = nullptr; // UE5.5+
+    void** a4_ptr = (void**)a4;
+
+    static bool a4_is_ue_5_5_variant = [&]() -> bool {
+        SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Checking if a4 is UE 5.5 variant...");
+
+        __try {
+            if (a4_ptr[0] == renderer) {
+                SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] a4 is UE 5.5 variant!");
+                return true;
+            }
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            SPDLOG_WARN("Exception occurred while checking if a4 is UE 5.5 variant!");
+        }
+
+        SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] a4 is not UE 5.5 variant!");
+
+        return false;
+    }();
+
+    if (!a4_is_ue_5_5_variant) {
+        // How are we going to fix this on UE5.5?
+        g_hook->get_slate_thread_worker()->execute((FRHICommandListImmediate*)a2);
+    } else {
+        const auto window = (uintptr_t)a4_ptr[2];
+
+        static std::optional<size_t> viewport_offset = [&]() -> std::optional<size_t> {
+            std::optional<size_t> result{};
+            const auto module_within = utility::get_module_within(g_hook->m_slate_thread_hook.target_address());
+
+            utility::ShemuContext ctx{*module_within};
+            ctx.ctx->Registers.RegRip = (ND_UINT64)g_hook->m_slate_thread_hook.trampoline().address();
+            ctx.ctx->Registers.RegRcx = (ND_UINT64)renderer;
+            ctx.ctx->Registers.RegRdx = (ND_UINT64)a2;
+            ctx.ctx->Registers.RegR8 = (ND_UINT64)a3;
+            ctx.ctx->Registers.RegR9 = (ND_UINT64)a4;
+            ctx.ctx->MemThreshold = 1000;
+
+            utility::emulate(*module_within, ctx.ctx->Registers.RegRip, 1000, ctx, [&](const utility::ShemuContextExtended& ctx) -> utility::ExhaustionResult {
+                SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Emulating instruction: {:x}", ctx.ctx->ctx->Registers.RegRip);
+
+                if (ctx.next.writes_to_memory) {
+                    return utility::ExhaustionResult::STEP_OVER;
+                }
+
+                // who cares.
+                if (std::string_view{ctx.next.ix.Mnemonic}.starts_with("CALL")) {
+                    return utility::ExhaustionResult::STEP_OVER;
+                }
+
+                // We're looking for a mov reg, [reg+offset] instruction
+                // where reg contains the pointer to the window
+                // and offset is the offset to the viewport.
+                const auto& cctx = ctx.ctx->ctx;
+                const auto& ix = cctx->Instruction;
+
+                if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_REG && ix.Operands[1].Type == ND_OP_MEM &&
+                    ix.Operands[1].Info.Memory.HasBase && ix.Operands[1].Info.Memory.HasDisp)
+                {
+                    uintptr_t* reg = (uintptr_t*)&((uint64_t*)&cctx->Registers.RegRax)[ix.Operands[1].Info.Memory.Base];
+
+                    if (*reg == window) try {
+                        SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Found window pointer at {:x}!", (uintptr_t)reg);
+                        auto offset = ix.Operands[1].Info.Memory.Disp;
+                        const auto value = *(uintptr_t***)((uintptr_t)window + offset);
+
+                        if (value == nullptr || IsBadReadPtr((void*)value, sizeof(void*))) {
+                            SPDLOG_ERROR("[SlateRHIRenderer::DrawWindow_RenderThread] Skipping invalid offset at {:x}!", (uintptr_t)value);
+                            return utility::ExhaustionResult::CONTINUE;
+                        }
+
+                        if (*value == nullptr || IsBadReadPtr((void*)*value, sizeof(void*))) {
+                            SPDLOG_ERROR("[SlateRHIRenderer::DrawWindow_RenderThread] Skipping invalid vtable at {:x}!", (uintptr_t)*value);
+                            return utility::ExhaustionResult::CONTINUE;
+                        }
+
+                        if (!utility::get_module_within(*value).has_value() || !utility::get_module_within((*value)[0]).has_value()) {
+                            SPDLOG_ERROR("[SlateRHIRenderer::DrawWindow_RenderThread] Skipping invalid module at {:x}!", (uintptr_t)*value);
+                            return utility::ExhaustionResult::CONTINUE;
+                        }
+
+                        const auto behind_value = *(uintptr_t***)((uintptr_t)window + offset - sizeof(void*));
+
+                        if (behind_value != nullptr && !IsBadReadPtr((void*)behind_value, sizeof(void*)) &&
+                            *behind_value != nullptr && !IsBadReadPtr((void*)*behind_value, sizeof(void*)) &&
+                            utility::get_module_within(*behind_value).has_value() && utility::get_module_within((*behind_value)[0]).has_value())
+                        {
+                            SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Adjusting offset by sizeof(void*)!");
+                            offset -= sizeof(void*);
+                        }
+
+                        result = offset;
+
+                        SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Found viewport offset at {:x}!", offset);
+                        return utility::ExhaustionResult::BREAK;
+                    } catch (...) {
+                        SPDLOG_ERROR("[SlateRHIRenderer::DrawWindow_RenderThread] Exception while checking offset!");
+                    }
+                }
+
+                return utility::ExhaustionResult::CONTINUE;
+            });
+
+            if (!result) {
+                SPDLOG_ERROR("[SlateRHIRenderer::DrawWindow_RenderThread] Failed to find viewport offset!");
+            }
+
+            return result;
+        }();
+
+        if (viewport_offset) {
+            slate_viewport = *(sdk::ISlateViewport**)((uintptr_t)window + *viewport_offset);
+        }
+    }
 
     const auto& mods = g_framework->get_mods()->get_mods();
 
     for (auto& mod : mods) {
-        mod->on_pre_slate_draw_window(renderer, command_list, viewport_info);
+        mod->on_pre_slate_draw_window(renderer, a2, viewport_info);
     }
 
     g_hook->m_inside_slate_draw_window = true;
     g_hook->m_slate_draw_window_thread_id = GetCurrentThreadId();
 
     auto call_orig = [&]() {
-        auto ret = g_hook->m_slate_thread_hook.call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
+        auto ret = g_hook->m_slate_thread_hook.call<void*>(renderer, a2, a3, a4, params, unk1, unk2);
 
         for (auto& mod : mods) {
-            mod->on_post_slate_draw_window(renderer, command_list, viewport_info);
+            mod->on_post_slate_draw_window(renderer, a2, viewport_info);
         }
 
         g_hook->m_inside_slate_draw_window = false;
@@ -5592,14 +5706,20 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
         return call_orig();
     }
 
-    const auto viewport_rt_provider = viewport_info->get_rt_provider(g_hook->get_render_target_manager()->get_render_target());
+    sdk::FSlateResource* slate_resource = nullptr;
 
-    if (viewport_rt_provider == nullptr) {
-        SPDLOG_INFO_EVERY_N_SEC(1, "No viewport RT provider, skipping!");
-        return call_orig();
+    if (slate_viewport != nullptr) {
+        slate_resource = slate_viewport->GetViewportRenderTargetTexture();
+    } else {
+        const auto viewport_rt_provider = viewport_info->get_rt_provider(g_hook->get_render_target_manager()->get_render_target());
+
+        if (viewport_rt_provider == nullptr) {
+            SPDLOG_INFO_EVERY_N_SEC(1, "No viewport RT provider, skipping!");
+            return call_orig();
+        }
+    
+        slate_resource = viewport_rt_provider->get_viewport_render_target_texture();
     }
-
-    const auto slate_resource = viewport_rt_provider->get_viewport_render_target_texture();
 
     if (slate_resource == nullptr) {
         SPDLOG_INFO_EVERY_N_SEC(1, "No slate resource, skipping!");
@@ -5613,13 +5733,13 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
 
     // To be seen if we need to resort to a MidHook on this function if the parameters
     // are wildly different between UE versions.
-    const auto ret = g_hook->m_slate_thread_hook.call<void*>(renderer, command_list, viewport_info, elements, params, unk1, unk2);
+    const auto ret = g_hook->m_slate_thread_hook.call<void*>(renderer, a2, a3, a4, params, unk1, unk2);
 
     // Restore the old texture.
     slate_resource->get_mutable_resource() = old_texture;
 
     for (auto& mod : mods) {
-        mod->on_post_slate_draw_window(renderer, command_list, viewport_info);
+        mod->on_post_slate_draw_window(renderer, a2, viewport_info);
     }
     
     // After this we copy over the texture and clear it in the present hook. doing it here just seems to crash sometimes.
