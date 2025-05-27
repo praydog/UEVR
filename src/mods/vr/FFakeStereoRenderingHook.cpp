@@ -3498,13 +3498,39 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
                 once_slate = false;
             }
 
-            auto l = (sdk::FRHICommandListBase*)command_list;
+            static size_t actual_offset = 0;
+            auto l = (sdk::FRHICommandListBase*)((uintptr_t)command_list + actual_offset);
+            const auto is_ue5 = g_hook->has_double_precision();
 
             if (l != nullptr && l->root != nullptr && ((uintptr_t)l->root & (sizeof(void*) - 1)) == 0) {
+                auto new_root = (sdk::FRHICommandBase_New*)l->root;
                 if (!analyzed_root_already) try {
-                    if (utility::get_module_within(*(void**)l->root).value_or(nullptr) == nullptr) {
-                        SPDLOG_INFO("Old FRHICommandBase detected");
-                        is_old_command_base = true;
+                    // so all of this might seem really overkill but
+                    // it's a good way to detect whether we have an FMemStack at the top of the command list
+                    // which we need to skip on UE5.5+
+                    if (utility::get_module_within(*(void**)l->root).value_or(nullptr) == nullptr || 
+                        IsBadReadPtr(*(void**)l->root, sizeof(void*)) || 
+                        utility::get_module_within(**(void***)l->root).value_or(nullptr) == nullptr ||
+                        (!IsBadReadPtr(new_root->next, sizeof(void*)) && (utility::get_module_within(*(void**)new_root->next).value_or(nullptr) == nullptr || utility::get_module_within(**(void***)new_root->next).value_or(nullptr) == nullptr))
+                    )
+                {
+                        if (is_ue5) {
+                            // UE5 is NOT an old command list, we need to bruteforce the offset
+                            for (size_t i = 0; i < 0x50; i += sizeof(void*)) try {
+                                const auto cur_l = (sdk::FRHICommandListBase*)((uintptr_t)command_list + i);
+                                if (utility::get_module_within(*(void**)cur_l->root).value_or(nullptr) != nullptr) {
+                                    actual_offset = i;
+                                    l = cur_l;
+                                    SPDLOG_INFO("Found UE5.5+ command list at offset 0x{:x}", i);
+                                    break;
+                                }
+                            } catch(...) {
+
+                            }
+                        } else {
+                            SPDLOG_INFO("Old FRHICommandBase detected");
+                            is_old_command_base = true;
+                        }
                     } else {
                         SPDLOG_INFO("New FRHICommandBase detected");
                     }
@@ -4974,6 +5000,8 @@ __forceinline void FFakeStereoRenderingHook::render_texture_render_thread(FFakeS
         SPDLOG_INFO(" Return address: {:x}", return_address);
         g_hook->attempt_hook_slate_thread(return_address);
     }
+
+    g_hook->get_slate_thread_worker()->execute(rhi_command_list);
 
     /*const auto return_address = (uintptr_t)_ReturnAddress();
     const auto slate_cvar_usage_location = sdk::vr::get_slate_draw_to_vr_render_target_usage_location();
