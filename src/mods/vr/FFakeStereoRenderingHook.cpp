@@ -5689,7 +5689,7 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
 
                     // Check if RCX != window first. We don't want to skip over the call if it is set to it.
                     // There are inlined and non-inlined versions of this function which is why we need to check this.
-                    if (ctx.ctx->ctx->Registers.RegRcx != window) {
+                    if ((uint8_t*)ctx.ctx->ctx->Registers.RegRcx < window_bounds.data() || (uint8_t*)ctx.ctx->ctx->Registers.RegRcx > window_bounds.data() + window_bounds.size()) {
                         SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Skipping call!");
                         return utility::ExhaustionResult::STEP_OVER;
                     }
