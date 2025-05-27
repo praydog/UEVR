@@ -3516,7 +3516,8 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
                 {
                         if (is_ue5) {
                             // UE5 is NOT an old command list, we need to bruteforce the offset
-                            for (size_t i = sizeof(void*); i < 0x50; i += sizeof(void*)) try {
+                            // Start at 0x10 because that's usually where the pointers in FMemStack end.
+                            for (size_t i = 0x10; i < 0x50; i += sizeof(void*)) try {
                                 const auto cur_l = (sdk::FRHICommandListBase*)((uintptr_t)command_list + i);
                                 if (utility::get_module_within(*(void**)cur_l->root).value_or(nullptr) != nullptr) {
                                     actual_offset = i;
