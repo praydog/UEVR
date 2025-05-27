@@ -534,6 +534,27 @@ void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_addres
             return;
         }
 
+        SPDLOG_INFO("Checking if the assembly listing for {:X} is really small", *func);
+
+        // Check if the assembly listing for this function is really small. It shouldn't be really small.
+        // This will happen on UE 5.5+ where RenderTexture_RenderThread is enqueued inside of a lambda.
+        size_t distance_to_ret = 0;
+        utility::exhaustive_decode((uint8_t*)*func, 1000, [&](utility::ExhaustionContext& ctx2) -> utility::ExhaustionResult {
+            ++distance_to_ret;
+
+            if (ctx2.instrux.BranchInfo.IsBranch && std::string_view{ctx2.instrux.Mnemonic}.starts_with("CALL")) {
+                return utility::ExhaustionResult::STEP_OVER;
+            }
+
+            return utility::ExhaustionResult::CONTINUE;
+        });
+
+        if (distance_to_ret < 50) {
+            SPDLOG_ERROR("FSlateRHIRenderer::DrawWindow_RenderThread function is too small! Distance to RET: {}", distance_to_ret);
+            m_hooked_slate_thread = true; // not actually true but just to stop spamming the scans
+            return;
+        }
+
         SPDLOG_INFO("Found FSlateRHIRenderer::DrawWindow_RenderThread with alternative return address method: {:x}", *func);
     }
 
