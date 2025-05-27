@@ -5607,24 +5607,76 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
             std::optional<size_t> result{};
             const auto module_within = utility::get_module_within(g_hook->m_slate_thread_hook.target_address());
 
+            // Temporarily unhook the DrawWindow_RenderThread hook because we need to emulate the function
+            // We could use the trampoline but bdshemu is picky about whether RIP is
+            // within the "shellcode" or not (e.g. within the module bounds)
+            // and so, the hook must be temporarily unhooked
+            if (!module_within) {
+                SPDLOG_ERROR("[SlateRHIRenderer::DrawWindow_RenderThread] Failed to get module within for target address!");
+                return result;
+            }
+
+            SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Module within: {:x}", (uintptr_t)*module_within);
+
+            if (!g_hook->m_slate_thread_hook.disable().has_value()) {
+                SPDLOG_ERROR("[SlateRHIRenderer::DrawWindow_RenderThread] Failed to disable slate thread hook!");
+                return result;
+            }
+
+            utility::ScopeGuard guard{[&]() {
+                SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Re-enabling slate thread hook!");
+                if (!g_hook->m_slate_thread_hook.enable().has_value()) {
+                    SPDLOG_ERROR("[SlateRHIRenderer::DrawWindow_RenderThread] Failed to re-enable slate thread hook!");
+                }
+            }};
+
             utility::ShemuContext ctx{*module_within};
-            ctx.ctx->Registers.RegRip = (ND_UINT64)g_hook->m_slate_thread_hook.trampoline().address();
+            ctx.ctx->Registers.RegRip = (ND_UINT64)g_hook->m_slate_thread_hook.target_address();
             ctx.ctx->Registers.RegRcx = (ND_UINT64)renderer;
             ctx.ctx->Registers.RegRdx = (ND_UINT64)a2;
             ctx.ctx->Registers.RegR8 = (ND_UINT64)a3;
             ctx.ctx->Registers.RegR9 = (ND_UINT64)a4;
             ctx.ctx->MemThreshold = 1000;
 
-            utility::emulate(*module_within, ctx.ctx->Registers.RegRip, 1000, ctx, [&](const utility::ShemuContextExtended& ctx) -> utility::ExhaustionResult {
-                SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Emulating instruction: {:x}", ctx.ctx->ctx->Registers.RegRip);
+            uint32_t window_getter_callstack_level = 0;
 
-                if (ctx.next.writes_to_memory) {
+            utility::emulate(*module_within, ctx.ctx->Registers.RegRip, 1000, ctx, [&](const utility::ShemuContextExtended& ctx) -> utility::ExhaustionResult {
+                SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Emulating instruction: {:x} ({:X})", ctx.ctx->ctx->Registers.RegRip, ctx.ctx->ctx->Registers.RegRip - (uintptr_t)*module_within);
+
+                // Allow writes to go through if we are inside the window getter.
+                // The downside is this might unintentionally increase the reference count of the window
+                // but it's necessary for the window getter to not give us a nullptr.
+                if (ctx.next.writes_to_memory && window_getter_callstack_level == 0) {
                     return utility::ExhaustionResult::STEP_OVER;
                 }
 
-                // who cares.
                 if (std::string_view{ctx.next.ix.Mnemonic}.starts_with("CALL")) {
-                    return utility::ExhaustionResult::STEP_OVER;
+                    if (window_getter_callstack_level > 0) {
+                        SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Allowing call inside window getter function, continuing!");
+                        ++window_getter_callstack_level;
+                        return utility::ExhaustionResult::CONTINUE;
+                    }
+
+                    // Check if RCX != window first. We don't want to skip over the call if it is set to it.
+                    // There are inlined and non-inlined versions of this function which is why we need to check this.
+                    if (ctx.ctx->ctx->Registers.RegRcx != window) {
+                        SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Skipping call!");
+                        return utility::ExhaustionResult::STEP_OVER;
+                    }
+
+                    SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Allowing call, RCX matches window {:x}!", ctx.next.ix.Operands[0].Info.Register.Reg, window);
+                    SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] RCX: {:x}, RDX: {:x}", ctx.ctx->ctx->Registers.RegRcx, ctx.ctx->ctx->Registers.RegRdx);
+                    ++window_getter_callstack_level;
+                    return utility::ExhaustionResult::CONTINUE;
+                }
+
+                // Check if we hit a ret and are inside the window getter function.
+                if (ctx.next.ix.Instruction == ND_INS_RETN) {
+                    if (window_getter_callstack_level > 0) { 
+                        SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Hit ret inside window getter function, continuing!");
+                        --window_getter_callstack_level;
+                        return utility::ExhaustionResult::CONTINUE;
+                    }
                 }
 
                 // We're looking for a mov reg, [reg+offset] instruction
