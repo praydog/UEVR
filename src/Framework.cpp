@@ -75,7 +75,7 @@ void Framework::hook_monitor() {
     if (g_framework->m_wnd != nullptr) {
         // Check if window is minimzed and just return if it is
         // Because some games don't continuously call present when minimized
-        if (IsIconic(g_framework->m_wnd)) {
+        if (IsWindow(g_framework->m_wnd) && IsIconic(g_framework->m_wnd)) {
             //spdlog::info("Window is minimized, skipping hook monitor");
             m_last_present_time = std::chrono::steady_clock::now() + std::chrono::seconds(5);
             m_last_chance_time = std::chrono::steady_clock::now() + std::chrono::seconds(1);
