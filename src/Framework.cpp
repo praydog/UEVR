@@ -72,6 +72,18 @@ void Framework::hook_monitor() {
         return;
     }
 
+    if (g_framework->m_wnd != nullptr) {
+        // Check if window is minimzed and just return if it is
+        // Because some games don't continuously call present when minimized
+        if (IsIconic(g_framework->m_wnd)) {
+            //spdlog::info("Window is minimized, skipping hook monitor");
+            m_last_present_time = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+            m_last_chance_time = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+            m_has_last_chance = true;
+            return;
+        }
+    }
+
     const auto now = std::chrono::steady_clock::now();
 
     auto& d3d11 = get_d3d11_hook();
@@ -1933,7 +1945,15 @@ bool Framework::init_d3d12() {
         // Create back buffer rtvs.
         auto swapchain = m_d3d12_hook->get_swap_chain();
 
-        for (auto i = 0; i <= (int)D3D12::RTV::BACKBUFFER_8; ++i) {
+        DXGI_SWAP_CHAIN_DESC swap_desc{};
+        swapchain->GetDesc(&swap_desc);
+
+        for (auto i = 0; i < swap_desc.BufferCount; ++i) {
+            if (i > (int)D3D12::RTV::BACKBUFFER_8) {
+                spdlog::warn("[D3D12] Swap chain has more back buffers than we support. Stopping at 8.");
+                break; // assume max
+            }
+
             if (SUCCEEDED(swapchain->GetBuffer(i, IID_PPV_ARGS(&m_d3d12.rts[i])))) {
                 device->CreateRenderTargetView(m_d3d12.rts[i].Get(), nullptr, m_d3d12.get_cpu_rtv(device, (D3D12::RTV)i));
             } else {
