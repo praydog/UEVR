@@ -1682,6 +1682,14 @@ void UObjectHook::update_motion_controller_components(
             continue;
         }
 
+        if (mc->get_outer() == nullptr || !this->exists(mc->get_outer())) {
+            continue;
+        }
+
+        if (!sdk::UObjectReference{mc}.valid()) {
+            continue;
+        }
+
         if (mc->get_player_index() > 0) {
             continue;
         }
