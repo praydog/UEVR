@@ -1929,8 +1929,44 @@ bool FFakeStereoRenderingHook::hook_game_viewport_client() try {
     return false;
 }
 
+void* FFakeStereoRenderingHook::viewport_destructor_hook(void* viewport, void* a2, void* a3, void* a4) {
+    ZoneScopedN(__FUNCTION__);
+
+    SPDLOG_INFO("FViewport::~FViewport called: {:x}", (uintptr_t)_ReturnAddress());
+
+    // Call the original destructor.
+    auto call_orig = [&]() -> void* {
+        ZoneScopedN("FViewport::~FViewport");
+        auto res = g_hook->m_viewport_destructor_hook->get_original<decltype(&viewport_destructor_hook)>()(viewport, a2, a3, a4);
+        g_hook->m_last_destroyed_viewport = viewport;
+
+        return res;
+    };
+
+    if (!g_framework->is_game_data_intialized()) {
+        return call_orig();
+    }
+
+    auto vr = VR::get();
+
+    if (!vr->is_hmd_active()) {
+        return call_orig();
+    }
+
+    static bool once = true;
+
+    if (once) {
+        SPDLOG_INFO("FViewport::Destructor called for the first time.");
+        once = false;
+    }
+
+    return call_orig();
+}
+
 void FFakeStereoRenderingHook::viewport_draw_hook(void* viewport, bool should_present) {
     ZoneScopedN(__FUNCTION__);
+
+    g_hook->m_last_viewport_vtable = *(void***)viewport;
 
     auto call_orig = [&]() {
         ZoneScopedN("FViewport::Draw");
@@ -1940,6 +1976,26 @@ void FFakeStereoRenderingHook::viewport_draw_hook(void* viewport, bool should_pr
     if (!g_framework->is_game_data_intialized()) {
         call_orig();
         return;
+    }
+
+    if (g_hook->m_viewport_destructor_hook == nullptr) {
+        static bool already_tried = false;
+
+        if (!already_tried) {
+            already_tried = true;
+            auto& vtable = *(void***)viewport;
+
+            if (vtable != nullptr && vtable[0] != nullptr) {
+                // Destructors usually have some kind of test reg8, 01 instruction within them.
+                if (utility::find_pattern_in_path((uint8_t*)vtable[0], 0x100, false, "F6 ? 01")) {
+                    SPDLOG_INFO("Found TEST mnemonic for FViewport destructor at {:x}", (uintptr_t)vtable[0]);
+                    SPDLOG_INFO("Hooking FViewport::~FViewport at {:x}", (uintptr_t)vtable[0]);
+                    g_hook->m_viewport_destructor_hook = std::make_unique<PointerHook>(&vtable[0], &viewport_destructor_hook);
+                } else {
+                    SPDLOG_ERROR("Failed to find FViewport destructor pattern at {:x}", (uintptr_t)vtable[0]);
+                }
+            }
+        }
     }
 
     if (g_hook->m_ignore_next_viewport_draw) {
@@ -2314,7 +2370,17 @@ void FFakeStereoRenderingHook::game_viewport_client_draw_hook(sdk::UGameViewport
     // that will allow both views and the world to be drawn in sync with no artifacts.
     if (in_engine_tick && vr->is_using_synchronized_afr() && g_frame_count % 2 == 0) {
         GameThreadWorker::get().enqueue([=]() {
-            if (g_hook->m_viewport_draw_hook) {
+            if (g_hook->m_viewport_draw_hook && viewport != g_hook->m_last_destroyed_viewport) {
+                __try {
+                    if (*(void***)viewport != g_hook->m_last_viewport_vtable) {
+                        SPDLOG_ERROR("FViewport::Draw called on a viewport with a different vtable! This is not expected!");
+                        return;
+                    }
+                } __except (EXCEPTION_EXECUTE_HANDLER) {
+                    SPDLOG_ERROR("FViewport::Draw called with a bad viewport pointer! This is not expected!");
+                    return;
+                }
+
                 const auto viewport_draw = (void (*)(void*, bool))g_hook->m_viewport_draw_hook.target();
                 viewport_draw(viewport, true);
 

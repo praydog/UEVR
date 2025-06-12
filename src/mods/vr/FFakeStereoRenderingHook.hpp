@@ -431,6 +431,7 @@ private:
                                                  void* elements, void* params, void* unk1, void* unk2);
 
     // FViewport
+    static void* viewport_destructor_hook(void* viewport, void* a2, void* a3, void* a4);
     static void viewport_draw_hook(void* viewport, bool should_present);
     static FRHITexture2D** viewport_get_render_target_texture_hook(sdk::FViewport* viewport);
 
@@ -483,6 +484,7 @@ private:
     std::unique_ptr<PointerHook> m_get_view_pass_for_index_hook{};
     std::unique_ptr<PointerHook> m_update_viewport_rhi_hook{};
     std::unique_ptr<PointerHook> m_viewport_get_render_target_texture_hook{};
+    std::unique_ptr<PointerHook> m_viewport_destructor_hook{};
 
     std::unique_ptr<IXRTrackingSystemHook> m_tracking_system_hook{};
 
@@ -547,6 +549,8 @@ private:
     bool m_was_in_viewport_client_draw{false}; // for IsStereoEnabled
     bool m_ignore_next_viewport_draw{false};
     bool m_ignore_next_engine_tick{false};
+    void* m_last_destroyed_viewport{nullptr}; // used to check if the viewport is destroyed when we call FViewport::Draw again
+    void** m_last_viewport_vtable{nullptr};
 
 
     bool m_analyzing_view_extensions{false};
