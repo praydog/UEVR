@@ -3800,10 +3800,10 @@ bool FFakeStereoRenderingHook::setup_view_extensions() try {
 
     // Add a vectored exception handler that catches attempted dereferences of a null XRSystem or HMDDevice
     // The exception handler will then patch out the instructions causing the crash and continue execution
-    static std::vector<Patch::Ptr> xrsystem_patches{};
-    static std::unordered_set<uintptr_t> ignored_addresses{};
-
     AddVectoredExceptionHandler(1, [](PEXCEPTION_POINTERS exception) -> LONG {
+        static std::vector<Patch::Ptr> xrsystem_patches{};
+        static std::unordered_set<uintptr_t> ignored_addresses{};
+
         if (exception->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) {
             const auto exception_address = exception->ContextRecord->Rip;
 
