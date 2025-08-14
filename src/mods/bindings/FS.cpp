@@ -159,7 +159,7 @@ std::optional<::fs::path> get_correct_subpath(sol::this_state l, const std::stri
         return {};
     }
 
-    const auto path = api::fs::detail::get_datadir(filepath) / corrected_subpath;
+    const auto path = api::fs::detail::get_datadir(filepath) / (corrected_subpath.has_filename() ? corrected_subpath.filename() : "");
     const auto extension_lower = [&]() {
         auto ext = path.extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
