@@ -72,12 +72,12 @@ FetchContent_Declare(bddisasm
 )
 FetchContent_MakeAvailable(bddisasm)
 
-message(STATUS "Fetching kananlib (37219bc628c852a1acd65af82fc15faf0ded1e61)...")
+message(STATUS "Fetching kananlib (ac256f2a06c1ad473aaa193d36afb589fd6ca63d)...")
 FetchContent_Declare(kananlib
 	GIT_REPOSITORY
 		"https://github.com/cursey/kananlib"
 	GIT_TAG
-		37219bc628c852a1acd65af82fc15faf0ded1e61
+		ac256f2a06c1ad473aaa193d36afb589fd6ca63d
 )
 FetchContent_MakeAvailable(kananlib)
 
@@ -715,6 +715,7 @@ set(CMKR_TARGET uevr)
 set(uevr_SOURCES "")
 
 list(APPEND uevr_SOURCES
+	"src/EOSHookRemover.cpp"
 	"src/ExceptionHandler.cpp"
 	"src/Framework.cpp"
 	"src/Main.cpp"
@@ -724,6 +725,7 @@ list(APPEND uevr_SOURCES
 	"src/hooks/D3D11Hook.cpp"
 	"src/hooks/D3D12Hook.cpp"
 	"src/hooks/DInputHook.cpp"
+	"src/hooks/OpticalFlow.cpp"
 	"src/hooks/WindowsMessageHook.cpp"
 	"src/hooks/XInputHook.cpp"
 	"src/mods/FrameworkConfig.cpp"
@@ -748,6 +750,7 @@ list(APPEND uevr_SOURCES
 	"src/mods/vr/FFakeStereoRenderingHook.cpp"
 	"src/mods/vr/IXRTrackingSystemHook.cpp"
 	"src/mods/vr/OverlayComponent.cpp"
+	"src/mods/vr/RenderTargetManagerAnalyzer.cpp"
 	"src/mods/vr/RenderTargetPoolHook.cpp"
 	"src/mods/vr/d3d12/CommandContext.cpp"
 	"src/mods/vr/d3d12/DirectXTK.cpp"
@@ -758,6 +761,7 @@ list(APPEND uevr_SOURCES
 	"src/uevr-imgui/imgui_impl_dx12.cpp"
 	"src/uevr-imgui/imgui_impl_win32.cpp"
 	"src/utility/ImGui.cpp"
+	"src/EOSHookRemover.hpp"
 	"src/ExceptionHandler.hpp"
 	"src/Framework.hpp"
 	"src/LicenseStrings.hpp"
@@ -767,6 +771,7 @@ list(APPEND uevr_SOURCES
 	"src/hooks/D3D11Hook.hpp"
 	"src/hooks/D3D12Hook.hpp"
 	"src/hooks/DInputHook.hpp"
+	"src/hooks/OpticalFlow.hpp"
 	"src/hooks/WindowsMessageHook.hpp"
 	"src/hooks/XInputHook.hpp"
 	"src/mods/FrameworkConfig.hpp"
@@ -790,6 +795,7 @@ list(APPEND uevr_SOURCES
 	"src/mods/vr/FFakeStereoRenderingHook.hpp"
 	"src/mods/vr/IXRTrackingSystemHook.hpp"
 	"src/mods/vr/OverlayComponent.hpp"
+	"src/mods/vr/RenderTargetManagerAnalyzer.hpp"
 	"src/mods/vr/RenderTargetPoolHook.hpp"
 	"src/mods/vr/d3d12/ComPtr.hpp"
 	"src/mods/vr/d3d12/CommandContext.hpp"
@@ -804,6 +810,11 @@ list(APPEND uevr_SOURCES
 	"src/uevr-imgui/uevr_imconfig.hpp"
 	"src/utility/ImGui.hpp"
 	"src/utility/Logging.hpp"
+	"src/hooks/NvOFInterface/nvOpticalFlowCommon.h"
+	"src/hooks/NvOFInterface/nvOpticalFlowCuda.h"
+	"src/hooks/NvOFInterface/nvOpticalFlowD3D11.h"
+	"src/hooks/NvOFInterface/nvOpticalFlowD3D12.h"
+	"src/hooks/NvOFInterface/nvOpticalFlowVulkan.h"
 	"src/uevr-imgui/imgui_impl_dx11.h"
 	"src/uevr-imgui/imgui_impl_dx12.h"
 	"src/uevr-imgui/imgui_impl_win32.h"
