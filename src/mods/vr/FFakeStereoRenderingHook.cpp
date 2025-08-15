@@ -739,6 +739,26 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
         return false;
     }
 
+    // Some compiler optimizations cause 31 C0 (xor eax, eax) to be used.
+    bool uses_33_c0 = false;
+
+    for (size_t i = 0; i < 30; ++i) try {
+        const auto fn = ((uintptr_t*)vtable)[i];
+
+        if (fn == 0 || IsBadReadPtr((void*)fn, sizeof(void*))) {
+            SPDLOG_WARN("Found null function pointer at index {}", i);
+            break;
+        }
+
+        if (sdk::is_vfunc_pattern(fn, "33 C0")) {
+            uses_33_c0 = true;
+            SPDLOG_INFO("Found 33 C0 pattern at index {}", i);
+            break;
+        }
+    } catch(...) {
+
+    }
+
     const auto stereo_projection_matrix_index = *stereo_view_offset_index + 1;
     const auto is_4_18_or_lower = *stereo_view_offset_index <= 6;
 
@@ -806,7 +826,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                 return false;
             }
 
-            if (sdk::is_vfunc_pattern(*(uintptr_t*)get_render_target_manager_func_ptr, "33 C0")) {
+            if (sdk::is_vfunc_pattern(*(uintptr_t*)get_render_target_manager_func_ptr, "33 C0") || (!uses_33_c0 && sdk::is_vfunc_pattern(*(uintptr_t*)get_render_target_manager_func_ptr, "31 C0"))) {
                 const auto distance_from_rendertexture_fn = render_target_manager_vtable_index - rendertexture_fn_vtable_index;
 
                 // means it's 4.17 I think. 12 means 4.11.
@@ -840,7 +860,7 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
                             break;
                         }
 
-                        if (!sdk::is_vfunc_pattern(func, "33 C0")) {
+                        if (!sdk::is_vfunc_pattern(func, "33 C0") && !sdk::is_vfunc_pattern(func, "31 C0")) {
                             SPDLOG_INFO("Reached end of double check at index {}, {} appears to be the correct index.", i, render_target_manager_vtable_index);
                             break;
                         }
