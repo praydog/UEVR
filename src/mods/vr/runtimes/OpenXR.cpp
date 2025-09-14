@@ -553,9 +553,13 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         };
     };
 
+    static long int frame_count = -1;
+    frame_count++;
+
+
     // if we've not yet derived an eye projection matrix, or we've changed the projection, derive it here
     // Hacky way to check for an uninitialised eye matrix - is there something better, is this necessary?
-    if (this->should_recalculate_eye_projections || this->last_eye_matrix_nearz != nearz || this->projections[0][2][3] == 0) {
+    if (this->should_recalculate_eye_projections || this->last_eye_matrix_nearz != nearz || this->projections[0][2][3] == 0 || frame_count % 100 == 0) {
         // deriving the texture bounds when modifying projections requires left and right raw projections so get them all before we start:
         std::unique_lock __{this->eyes_mtx};
         const auto& left_fov = this->views[0].fov;
