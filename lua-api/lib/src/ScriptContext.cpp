@@ -480,11 +480,10 @@ int ScriptContext::setup_bindings() {
         "set_decoupled_pitch_enabled", &UEVR_VRData::set_decoupled_pitch_enabled,
         "set_mod_value", &UEVR_VRData::set_mod_value,
         "get_mod_value", [](UEVR_VRData& self, const char* name) {
-            std::string out{};
-            out.resize(256);
+            char out[256]{0};
+            self.get_mod_value(name, out, sizeof(out));
 
-            self.get_mod_value(name, out.data(), out.size());
-            return out;
+            return std::string{out};
         },
         "save_config", &UEVR_VRData::save_config,
         "reload_config", &UEVR_VRData::reload_config
