@@ -212,6 +212,9 @@ public:
     std::vector<XrView> views{};
     std::vector<XrView> stage_views{};
 
+    std::array<XrFovf, 2> last_fovs{}; 
+
+
     //std::deque<std::vector<XrView>> stage_view_queue{};
     struct PipelineState {
         XrFrameState frame_state{XR_TYPE_FRAME_STATE};
