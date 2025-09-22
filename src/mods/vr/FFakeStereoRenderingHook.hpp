@@ -133,13 +133,15 @@ protected:
 
     VerifiedFTexture2D ui_target{};
     VerifiedFTexture2D render_target{};
-    static void pre_texture_hook_callback(safetyhook::Context& ctx); // only used if pixel format cvar is missing
-    static void texture_hook_callback(safetyhook::Context& ctx);
+    static void pre_texture_hook_callback(safetyhook::Context& ctx, bool from_second = false); // only used if pixel format cvar is missing
+    static void texture_hook_callback(safetyhook::Context& ctx, bool from_second = false);
 
     FTexture2DRHIRef* texture_hook_ref{nullptr};
     FTexture2DRHIRef* shader_resource_hook_ref{nullptr};
     safetyhook::MidHook pre_texture_hook{}; // only used if pixel format cvar is missing
+    safetyhook::MidHook pre_texture_hook2{}; // only used if pixel format cvar is missing
     safetyhook::MidHook texture_hook{};
+    safetyhook::MidHook texture_hook2{};
     uint32_t last_texture_index{0};
     bool allocated_views{false};
     bool set_up_texture_hook{false};
@@ -154,6 +156,7 @@ protected:
     uint32_t last_height{0};
 
     std::vector<uint8_t> texture_create_insn_bytes{};
+    std::vector<uint8_t> texture_create_insn_bytes2{};
 
     std::optional<size_t> m_viewport_force_separate_rt_offset{};
     bool m_attempted_find_force_separate_rt{false};

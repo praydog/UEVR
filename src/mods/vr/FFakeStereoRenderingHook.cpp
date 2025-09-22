@@ -6142,7 +6142,7 @@ bool VRRenderTargetManager_Base::need_reallocate_depth_texture(const void* Depth
     return false;
 }
 
-void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& ctx) {
+void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& ctx, bool from_second) {
     SPDLOG_INFO("PreTextureHook called! {}", ctx.r8);
 
     // maybe do some work later to bruteforce the registers/offsets for these
@@ -6178,7 +6178,9 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
 
     SPDLOG_INFO("Attempting to JIT a function to call the original function!");
 
-    const auto ix = utility::decode_one(rtm->texture_create_insn_bytes.data(), rtm->texture_create_insn_bytes.size());
+    auto insn_bytes = !from_second ? rtm->texture_create_insn_bytes : rtm->texture_create_insn_bytes2;
+
+    const auto ix = utility::decode_one(insn_bytes.data(), insn_bytes.size());
 
     if (!ix) {
         SPDLOG_ERROR("Failed to decode instruction!");
@@ -6194,8 +6196,8 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         // Set up the emulator. We will use it to emulate the function call.
         // All we need from it is where the function call lands, so we can call it for real.
         auto emu_ctx = utility::ShemuContext(
-            (uintptr_t)rtm->texture_create_insn_bytes.data(), 
-            rtm->texture_create_insn_bytes.size());
+            (uintptr_t)insn_bytes.data(),
+            insn_bytes.size());
 
         emu_ctx.ctx->Registers.RegRcx = ctx.rcx;
         emu_ctx.ctx->Registers.RegRdx = ctx.rdx;
@@ -6211,9 +6213,10 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         emu_ctx.ctx->Registers.RegR13 = ctx.r13;
         emu_ctx.ctx->Registers.RegR14 = ctx.r14;
         emu_ctx.ctx->Registers.RegR15 = ctx.r15;
+        emu_ctx.ctx->Registers.RegRsp = ctx.rsp;
         emu_ctx.ctx->MemThreshold = 1;
 
-        if (emu_ctx.emulate((uintptr_t)rtm->texture_create_insn_bytes.data(), 1) != SHEMU_SUCCESS) {
+        if (emu_ctx.emulate((uintptr_t)insn_bytes.data(), 1) != SHEMU_SUCCESS) {
             SPDLOG_ERROR("Failed to emulate instruction!: {} RIP: {:x}", emu_ctx.status, emu_ctx.ctx->Registers.RegRip);
             return;
         }
@@ -6222,7 +6225,7 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         func_ptr = emu_ctx.ctx->Registers.RegRip;
     } else {
         const auto target = g_hook->get_render_target_manager()->pre_texture_hook.target_address();
-        func_ptr = target + 5 + *(int32_t*)&rtm->texture_create_insn_bytes.data()[1];
+        func_ptr = target + 5 + *(int32_t*)&insn_bytes.data()[1];
     }
 
     SPDLOG_INFO("Function pointer: {:x}", func_ptr);
@@ -6790,7 +6793,7 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     VR::get()->reinitialize_renderer();
 }
 
-void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx) {
+void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx, bool from_second) {
     auto rtm = g_hook->get_render_target_manager();
 
     SPDLOG_INFO("Post texture hook called!");
@@ -7568,6 +7571,7 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
 
         while(true) {
             if (emu.ctx->InstructionsCount > 200) {
+                SPDLOG_WARN("Emulated too many instructions without finding the call, aborting!");
                 break;
             }
 
@@ -7643,6 +7647,27 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                                         next_call_is_not_the_right_one = true;
                                     }
                                 }
+                            } else {
+                                // Check how many instructions are in the call. If there's <= 30 AND there's no call/jmp in it, this is not the right one
+                                size_t insn_count = 0;
+                                bool encountered_branch = false;
+                                utility::exhaustive_decode((uint8_t*)fn, 200, [&](const utility::ExhaustionContext& ctx) -> utility::ExhaustionResult {
+                                    if (++insn_count >= 30) {
+                                        return utility::ExhaustionResult::BREAK;
+                                    }
+
+                                    if (std::string_view{ctx.instrux.Mnemonic}.starts_with("CALL") || std::string_view{ctx.instrux.Mnemonic}.starts_with("JMP")) {
+                                        encountered_branch = true;
+                                        return utility::ExhaustionResult::BREAK;
+                                    }
+
+                                    return utility::ExhaustionResult::CONTINUE;
+                                });
+
+                                if (insn_count <= 30 && !encountered_branch) {
+                                    SPDLOG_INFO("Function at {:x} only has {} instructions and no calls/branches, skipping this call!", fn, insn_count);
+                                    next_call_is_not_the_right_one = true;
+                                }
                             }
                         }
                     } catch(...) {
@@ -7670,7 +7695,62 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                         this->texture_create_insn_bytes.resize(decoded->Length);
                         memcpy(this->texture_create_insn_bytes.data(), (void*)ip, decoded->Length);
 
-                        auto texture_hook_result = safetyhook::MidHook::create((void*)post_call, &VRRenderTargetManager::texture_hook_callback);
+                        if (this->is_version_greq_5_1 && !this->is_pre_texture_call_e8 && bytes[-7] == 0x48 && bytes[-6] == 0x8B && bytes[-5] == 0x0D && bytes[0] == 0xFF && bytes[1] == 0x94) {
+                            // Scan forward for a similar one and also hook that
+                            auto second_call = utility::scan((uintptr_t)ip + decoded->Length, 0x60, "48 8B 0D ? ? ? ? FF 94 ? ? ? ? ?");
+
+                            if (second_call) {
+                                // So we can call the original texture create function again.
+                                this->texture_create_insn_bytes2.resize(decoded->Length);
+                                memcpy(this->texture_create_insn_bytes2.data(), (void*)(*second_call + 7), decoded->Length);
+
+                                SPDLOG_INFO("Found second call at {:x}", *second_call);
+                                auto post_second_call = *second_call + 7 + decoded->Length;
+                                //auto texture_hook_result = safetyhook::MidHook::create((void*)post_second_call, &VRRenderTargetManager::texture_hook_callback);
+                                auto texture_hook_result = safetyhook::MidHook::create((void*)post_second_call, +[](safetyhook::Context& ctx) -> void {
+                                    VRRenderTargetManager::texture_hook_callback(ctx, true);
+                                });
+
+                                if (!texture_hook_result.has_value()) {
+                                    const auto e = texture_hook_result.error();
+
+                                    if (e.type == safetyhook::MidHook::Error::BAD_ALLOCATION) {
+                                        SPDLOG_ERROR("Failed to create post second texture hook: BAD_ALLOCATION: {}", (uint8_t)e.allocator_error);
+                                    } else {
+                                        SPDLOG_ERROR("Failed to create post second texture hook: BAD_INLINE_HOOK: {}", (uint8_t)e.inline_hook_error.type);
+                                    }
+                                } else {
+                                    this->texture_hook2 = std::move(texture_hook_result.value());
+                                    SPDLOG_INFO("Successfully created second texture hook!");
+                                }
+
+                                auto pre_second_call = *second_call + 7;
+                                //auto pre_texure_hook_result = safetyhook::MidHook::create((void*)pre_second_call, &VRRenderTargetManager::pre_texture_hook_callback);
+                                auto pre_texure_hook_result = safetyhook::MidHook::create((void*)pre_second_call, +[](safetyhook::Context& ctx) -> void {
+                                    VRRenderTargetManager::pre_texture_hook_callback(ctx, true);
+                                });
+
+                                if (!pre_texure_hook_result.has_value()) {
+                                    const auto e = pre_texure_hook_result.error();
+
+                                    if (e.type == safetyhook::MidHook::Error::BAD_ALLOCATION) {
+                                        SPDLOG_ERROR("Failed to create pre second texture hook: BAD_ALLOCATION: {}", (uint8_t)e.allocator_error);
+                                    } else {
+                                        SPDLOG_ERROR("Failed to create pre second texture hook: BAD_INLINE_HOOK: {}", (uint8_t)e.inline_hook_error.type);
+                                    }
+                                } else {
+                                    this->pre_texture_hook2 = std::move(pre_texure_hook_result.value());
+                                    SPDLOG_INFO("Successfully created second pre texture hook!");
+                                }
+                            } else {
+                                SPDLOG_INFO("Second call not detected! Continuing...");
+                            }
+                        }
+
+                        //auto texture_hook_result = safetyhook::MidHook::create((void*)post_call, &VRRenderTargetManager::texture_hook_callback);
+                        auto texture_hook_result = safetyhook::MidHook::create((void*)post_call, +[](safetyhook::Context& ctx) -> void {
+                            VRRenderTargetManager::texture_hook_callback(ctx, false);
+                        });
 
                         if (!texture_hook_result.has_value()) {
                             const auto e = texture_hook_result.error();
@@ -7684,7 +7764,10 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                             this->texture_hook = std::move(texture_hook_result.value());
                         }
 
-                        auto pre_texure_hook_result = safetyhook::MidHook::create((void*)ip, &VRRenderTargetManager::pre_texture_hook_callback);
+                        //auto pre_texure_hook_result = safetyhook::MidHook::create((void*)ip, &VRRenderTargetManager::pre_texture_hook_callback);
+                        auto pre_texure_hook_result = safetyhook::MidHook::create((void*)ip, +[](safetyhook::Context& ctx) -> void {
+                            VRRenderTargetManager::pre_texture_hook_callback(ctx, false);
+                        });
 
                         if (!pre_texure_hook_result.has_value()) {
                             const auto e = pre_texure_hook_result.error();
