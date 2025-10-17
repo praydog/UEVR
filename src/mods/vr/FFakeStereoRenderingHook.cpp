@@ -6185,7 +6185,7 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
 
     SPDLOG_INFO("Attempting to JIT a function to call the original function!");
 
-    auto insn_bytes = !from_second ? rtm->texture_create_insn_bytes : rtm->texture_create_insn_bytes2;
+    auto& insn_bytes = !from_second ? rtm->texture_create_insn_bytes : rtm->texture_create_insn_bytes2;
 
     const auto ix = utility::decode_one(insn_bytes.data(), insn_bytes.size());
 
@@ -6206,6 +6206,11 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
             (uintptr_t)insn_bytes.data(),
             insn_bytes.size());
 
+        SPDLOG_INFO("Insn bytes size: {}", insn_bytes.size());
+        for (size_t i = 0; i < insn_bytes.size(); ++i) {
+            SPDLOG_INFO("Byte[{}]: {:x}", i, insn_bytes[i]);
+        }
+
         emu_ctx.ctx->Registers.RegRcx = ctx.rcx;
         emu_ctx.ctx->Registers.RegRdx = ctx.rdx;
         emu_ctx.ctx->Registers.RegR8 = ctx.r8;
@@ -6220,7 +6225,22 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
         emu_ctx.ctx->Registers.RegR13 = ctx.r13;
         emu_ctx.ctx->Registers.RegR14 = ctx.r14;
         emu_ctx.ctx->Registers.RegR15 = ctx.r15;
-        emu_ctx.ctx->Registers.RegRsp = ctx.rsp;
+
+        // if disasm is call [rsp+N] we need to set RSP to the actual stack
+        // otherwise emulation will fail.
+        // conversely, if we set RSP when it's NOT using RSP in the register
+        // it will also fail.
+        if (ix->Operands[0].Type == ND_OP_MEM && ix->Operands[0].Info.Memory.HasBase &&
+            ix->Operands[0].Info.Memory.Base == NDR_RSP)
+        {
+            emu_ctx.ctx->Registers.RegRsp = ctx.rsp;
+            emu_ctx.ctx->Stack = (ND_UINT8*)ctx.rsp;
+            emu_ctx.ctx->StackBase = ctx.rsp;
+            SPDLOG_INFO("Setting RSP to {:x} for emulation!", ctx.rsp);
+        } else {
+            SPDLOG_INFO("Not setting RSP for emulation!");
+        }
+
         emu_ctx.ctx->MemThreshold = 1;
 
         if (emu_ctx.emulate((uintptr_t)insn_bytes.data(), 1) != SHEMU_SUCCESS) {
@@ -6230,6 +6250,11 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
     
         SPDLOG_INFO("Emu landed at {:x}", emu_ctx.ctx->Registers.RegRip);
         func_ptr = emu_ctx.ctx->Registers.RegRip;
+
+        if (func_ptr == 0) {
+            SPDLOG_ERROR("Function pointer is null after emulation!");
+            return;
+        }
     } else {
         const auto target = g_hook->get_render_target_manager()->pre_texture_hook.target_address();
         func_ptr = target + 5 + *(int32_t*)&insn_bytes.data()[1];
