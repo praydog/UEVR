@@ -7684,10 +7684,6 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                                 size_t insn_count = 0;
                                 bool encountered_branch = false;
                                 utility::exhaustive_decode((uint8_t*)fn, 200, [&](const utility::ExhaustionContext& ctx) -> utility::ExhaustionResult {
-                                    if (++insn_count >= 30) {
-                                        return utility::ExhaustionResult::BREAK;
-                                    }
-
                                     if (std::string_view{ctx.instrux.Mnemonic}.starts_with("CALL") || std::string_view{ctx.instrux.Mnemonic}.starts_with("JMP")) {
                                         encountered_branch = true;
                                         return utility::ExhaustionResult::BREAK;
