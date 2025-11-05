@@ -6512,6 +6512,14 @@ void VRRenderTargetManager_Base::pre_texture_hook_callback(safetyhook::Context& 
 
                     x = size.x;
                     y = size.y;
+
+                    uint8_t* format = (uint8_t*)(ctx.r9 + width_offset.value() + 15);
+
+                    // some games have 10 bit format
+                    if (*format == 18) {
+                        *format = 2; // PF_B8G8R8A8
+                    }
+
                     break;
                 }
             }
@@ -7679,6 +7687,9 @@ bool VRRenderTargetManager_Base::allocate_render_target_texture(uintptr_t return
                                         next_call_is_not_the_right_one = true;
                                     }
                                 }
+                            } else if (utility::find_pattern_in_path((uint8_t*)fn, 30, true, "66 41 C7 40 34 00 FF")) {
+                                SPDLOG_INFO("Found 66 41 C7 40 34 00 FF pattern within the function, skipping this call!");
+                                next_call_is_not_the_right_one = true;
                             } else {
                                 // Check how many instructions are in the call. If there's <= 30 AND there's no call/jmp in it, this is not the right one
                                 size_t insn_count = 0;
