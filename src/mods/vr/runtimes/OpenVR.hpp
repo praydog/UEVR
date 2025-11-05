@@ -7,9 +7,6 @@
 
 namespace runtimes {
 struct OpenVR final : public VRRuntime {
-    OpenVR() {
-        this->custom_stage = SynchronizeStage::VERY_LATE;
-    }
 
     virtual ~OpenVR() {
         this->destroy();
