@@ -2128,7 +2128,7 @@ void VR::on_present() {
 
     const auto is_left_eye_frame = is_using_afr() ? (m_render_frame_count % 2 == m_left_eye_interval) : true;
 
-    if (is_left_eye_frame && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::LATE) {
+    if (is_left_eye_frame && get_synchronize_stage() == VR::SynchronizeStage::LATE) {
         const auto had_sync = runtime->got_first_sync;
         runtime->synchronize_frame();
 
@@ -2141,7 +2141,7 @@ void VR::on_present() {
         // if we don't do this then D3D11 OpenXR freezes for some reason.
         if (!runtime->got_first_sync) {
             SPDLOG_INFO_EVERY_N_SEC(1, "Attempting to sync!");
-            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::LATE) {
+            if (get_synchronize_stage() == VR::SynchronizeStage::LATE) {
                 runtime->synchronize_frame();
             }
 
@@ -2220,7 +2220,7 @@ void VR::on_post_present() {
     const auto is_left_eye_frame = is_using_afr() ? (is_same_frame || (m_render_frame_count % 2 == m_left_eye_interval)) : true;
 
     if (is_left_eye_frame) {
-        if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
+        if (get_synchronize_stage() == VR::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
             const auto had_sync = runtime->got_first_sync;
             runtime->synchronize_frame();
 
@@ -2229,7 +2229,7 @@ void VR::on_post_present() {
             }
         }
 
-        if (runtime->is_openxr() && runtime->ready() && runtime->get_synchronize_stage() > VRRuntime::SynchronizeStage::EARLY) {
+        if (runtime->is_openxr() && runtime->ready() && get_synchronize_stage() > VR::SynchronizeStage::EARLY) {
             if (!m_openxr->frame_began) {
                 m_openxr->begin_frame();
             }
@@ -2651,7 +2651,8 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
             m_fake_stereo_hook->on_draw_ui();
         }
 
-        ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
+        //ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
+        m_sync_mode->draw("Sync Mode");
         ImGui::DragFloat4("Right Bounds", (float*)&m_right_bounds, 0.005f, -2.0f, 2.0f);
         ImGui::DragFloat4("Left Bounds", (float*)&m_left_bounds, 0.005f, -2.0f, 2.0f);
         ImGui::Checkbox("Disable Projection Matrix Override", &m_disable_projection_matrix_override);

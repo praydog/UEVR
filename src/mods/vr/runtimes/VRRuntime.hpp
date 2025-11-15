@@ -30,12 +30,6 @@ struct VRRuntime {
         RIGHT,
     };
 
-    enum class SynchronizeStage : int32_t { 
-        EARLY,
-        LATE,
-        VERY_LATE
-    };
-
     enum Hand : uint8_t {
         LEFT,
         RIGHT,
@@ -93,10 +87,6 @@ struct VRRuntime {
 
     virtual Error update_matrices(float nearz, float farz) {
         return Error::SUCCESS;
-    }
-
-    virtual SynchronizeStage get_synchronize_stage() const {
-        return this->custom_stage;
     }
 
     virtual Error update_input() {
@@ -187,8 +177,6 @@ struct VRRuntime {
     mutable std::shared_mutex pose_mtx{};
 
     Vector4f raw_projections[2]{};
-
-    SynchronizeStage custom_stage{SynchronizeStage::EARLY};
 
     uint32_t internal_frame_count{};
     uint32_t internal_render_frame_count{};

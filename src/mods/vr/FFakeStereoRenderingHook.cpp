@@ -2721,7 +2721,7 @@ struct SceneViewExtensionAnalyzer {
 
         RHIThreadWorker::get().execute();
 
-        if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
+        if (vr->get_synchronize_stage() == VR::SynchronizeStage::EARLY) {
             if (runtime->is_openxr()) {
                 if (g_framework->get_renderer_type() == Framework::RendererType::D3D11) {
                     if (!runtime->got_first_sync || runtime->synchronize_frame(frame_count) != VRRuntime::Error::SUCCESS) {
@@ -2837,7 +2837,7 @@ struct SceneViewExtensionAnalyzer {
 
             RHIThreadWorker::get().execute();
 
-            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
+            if (vr->get_synchronize_stage() == VR::SynchronizeStage::EARLY) {
                 if (runtime->is_openxr()) {
                     if (g_framework->get_renderer_type() == Framework::RendererType::D3D11) {
                         if (!runtime->got_first_sync || runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
@@ -4692,7 +4692,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         }
     }
 
-    /*if (view_index % 2 == 1 && VR::get()->get_runtime()->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
+    /*if (view_index % 2 == 1 && VR::get()->get_synchronize_stage() == VR::SynchronizeStage::EARLY) {
         std::scoped_lock _{ vr->get_runtime()->render_mtx };
         SPDLOG_INFO("SYNCING!!!");
         //vr->get_runtime()->synchronize_frame();

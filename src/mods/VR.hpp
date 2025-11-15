@@ -31,6 +31,12 @@ public:
         ALTERNATING = 2,
     };
 
+    enum SynchronizeStage {
+        EARLY = 0,
+        LATE = 1,
+        VERY_LATE = 2,
+    };
+
     enum SyncedSequentialMethod {
         SKIP_TICK = 0,
         SKIP_DRAW = 1,
@@ -408,6 +414,10 @@ public:
     bool is_using_synchronized_afr() const {
         return m_rendering_method->value() == RenderingMethod::SYNCHRONIZED ||
                (m_extreme_compat_mode->value() && m_rendering_method->value() == RenderingMethod::NATIVE_STEREO);
+    }
+
+    SynchronizeStage get_synchronize_stage() {
+        return (SynchronizeStage) m_sync_mode->value();
     }
 
     SyncedSequentialMethod get_synced_sequential_method() const {
@@ -829,6 +839,12 @@ private:
         "Alternating/AFR",
     };
 
+    static const inline std::vector<std::string> s_sync_mode_names{
+        "Early",
+        "Late",
+        "Very Late",
+    };
+
     static const inline std::vector<std::string> s_synced_afr_method_names {
         "Skip Tick",
         "Skip Draw",
@@ -885,6 +901,7 @@ private:
     const ModCombo::Ptr m_horizontal_projection_override{ModCombo::create(generate_name("HorizontalProjectionOverride"), s_horizontal_projection_override_names)};
     const ModCombo::Ptr m_vertical_projection_override{ModCombo::create(generate_name("VerticalProjectionOverride"), s_vertical_projection_override_names)};
     const ModToggle::Ptr m_grow_rectangle_for_projection_cropping{ModToggle::create(generate_name("GrowRectangleForProjectionCropping"), false)};
+    const ModCombo::Ptr m_sync_mode{ ModCombo::create(generate_name("SynchronizationMode"), s_sync_mode_names, 2) };
 
     // Snap turn settings and globals
     void gamepad_snapturn(XINPUT_STATE& state);
@@ -1078,6 +1095,7 @@ public:
             *m_lerp_camera_yaw,
             *m_lerp_camera_roll,
             *m_lerp_camera_speed,
+            *m_sync_mode,
         };
 
         add_components_vr();
