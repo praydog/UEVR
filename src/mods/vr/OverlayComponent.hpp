@@ -3,6 +3,7 @@
 #include <string>
 #include <optional>
 #include <cstdint>
+#include <algorithm>
 
 #include "Mod.hpp"
 
@@ -42,8 +43,8 @@ public:
         return m_intersect_state;
     }
 
-    bool should_invert_ui_alpha() const {
-        return m_ui_invert_alpha->value();
+    float get_ui_invert_alpha() const {
+        return std::clamp(m_ui_invert_alpha->value(), 0.01f, 0.99f);
     }
 
 private:
@@ -80,6 +81,7 @@ private:
     bool m_just_closed_ui{false};
     bool m_just_opened_ui{false};
     bool m_forced_aim{false};
+    bool m_should_reserialize_ui_invert_alpha{false};
     
     glm::vec2 m_last_mouse_pos{};
     std::chrono::steady_clock::time_point m_last_mouse_move_time{};
@@ -106,7 +108,7 @@ private:
     const ModSlider::Ptr m_slate_size{ ModSlider::create("UI_Size", 0.5f, 10.0f, 2.0f) };
     const ModSlider::Ptr m_slate_cylinder_angle{ ModSlider::create("UI_Cylinder_Angle", 0.0f, 360.0f, 90.0f) };
     const ModToggle::Ptr m_ui_follows_view{ ModToggle::create("UI_FollowView", false) };
-    const ModToggle::Ptr m_ui_invert_alpha{ ModToggle::create("UI_InvertAlpha", false) };
+    const ModSlider::Ptr m_ui_invert_alpha{ ModSlider::create("UI_InvertAlpha", 0.01f, 0.99f, 0.01f) };
 
     const ModSlider::Ptr m_framework_distance{ ModSlider::create("UI_Framework_Distance", 0.5f, 10.0f, 1.75f) };
     const ModSlider::Ptr m_framework_size{ ModSlider::create("UI_Framework_Size", 0.5f, 10.0f, 2.0f) };

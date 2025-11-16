@@ -1,3 +1,12 @@
+#include <algorithm>
+#include <cmath>
+#include <cctype>
+#include <cstdlib>
+#include <limits>
+#include <optional>
+#include <string>
+#include <string_view>
+
 #include <glm/gtx/intersect.hpp>
 #include <imgui_internal.h>
 
@@ -193,12 +202,171 @@ void OverlayComponent::on_config_save(utility::Config& cfg) {
     for (IModValue& option : m_options) {
         option.config_save(cfg);
     }
+
+    if (m_should_reserialize_ui_invert_alpha) {
+        const auto clamped_value = std::clamp(m_ui_invert_alpha->value(), 0.01f, 0.99f);
+        cfg.set<float>(m_ui_invert_alpha->get_config_name(), clamped_value);
+        m_should_reserialize_ui_invert_alpha = false;
+    }
 }
 
 void OverlayComponent::on_config_load(const utility::Config& cfg, bool set_defaults) {
     for (IModValue& option : m_options) {
+        if (&option == m_ui_invert_alpha.get()) {
+            continue;
+        }
+
         option.config_load(cfg, set_defaults);
     }
+
+    if (set_defaults) {
+        const float default_value = m_ui_invert_alpha->default_value();
+        m_ui_invert_alpha->value() = std::clamp(default_value, 0.01f, 0.99f);
+        m_should_reserialize_ui_invert_alpha = false;
+        return;
+    }
+
+    m_should_reserialize_ui_invert_alpha = false;
+
+    const auto config_name = m_ui_invert_alpha->get_config_name();
+
+    constexpr auto slider_min = 0.01f;
+    constexpr auto slider_max = 0.99f;
+
+    auto apply_invert_alpha = [&](float new_value, bool mark_for_reserialize) {
+        const auto clamped_value = std::clamp(new_value, slider_min, slider_max);
+        if (std::abs(clamped_value - new_value) > std::numeric_limits<float>::epsilon()) {
+            mark_for_reserialize = true;
+        }
+
+        m_ui_invert_alpha->value() = clamped_value;
+        m_should_reserialize_ui_invert_alpha |= mark_for_reserialize;
+    };
+
+    auto apply_legacy_toggle = [&](bool enabled) {
+        apply_invert_alpha(enabled ? slider_max : slider_min, true);
+    };
+
+    auto trim = [](std::string_view value) {
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) {
+            value.remove_prefix(1);
+        }
+
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) {
+            value.remove_suffix(1);
+        }
+
+        return value;
+    };
+
+    auto parse_float = [&](std::string_view value) -> std::optional<float> {
+        const auto trimmed = trim(value);
+
+        if (trimmed.empty()) {
+            return std::nullopt;
+        }
+
+        std::string buffer{trimmed};
+        char* end_ptr{};
+        const auto parsed_value = std::strtof(buffer.c_str(), &end_ptr);
+
+        if (end_ptr == buffer.c_str()) {
+            return std::nullopt;
+        }
+
+        while (*end_ptr != '\0') {
+            if (!std::isspace(static_cast<unsigned char>(*end_ptr))) {
+                return std::nullopt;
+            }
+
+            ++end_ptr;
+        }
+
+        return parsed_value;
+    };
+
+    auto try_apply_from_float = [&](std::optional<float> candidate) {
+        if (!candidate) {
+            return false;
+        }
+
+        const auto value = *candidate;
+
+        if (value <= 0.0f || value >= 1.0f) {
+            apply_legacy_toggle(value >= 1.0f);
+            return true;
+        }
+
+        apply_invert_alpha(value, value < slider_min || value > slider_max);
+        return true;
+    };
+
+    auto safe_get_float = [&]() -> std::optional<float> {
+        try {
+            if (auto value = cfg.get<float>(config_name)) {
+                return *value;
+            }
+        } catch (...) {
+        }
+
+        return std::nullopt;
+    };
+
+    if (try_apply_from_float(safe_get_float())) {
+        return;
+    }
+
+    auto safe_get_string = [&]() -> std::optional<std::string> {
+        try {
+            return cfg.get(config_name);
+        } catch (...) {
+            return std::nullopt;
+        }
+    };
+
+    if (auto raw_value = safe_get_string()) {
+        const auto trimmed = trim(*raw_value);
+
+        if (!trimmed.empty()) {
+            std::string lowered{trimmed};
+            std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+
+            if (lowered == "true" || lowered == "false") {
+                apply_legacy_toggle(lowered == "true");
+                return;
+            }
+
+            if (lowered == "1" || lowered == "0") {
+                apply_legacy_toggle(lowered == "1");
+                return;
+            }
+
+            if (auto parsed = parse_float(trimmed)) {
+                apply_invert_alpha(*parsed, true);
+                return;
+            }
+        }
+    }
+
+    auto safe_get_bool = [&]() -> std::optional<bool> {
+        try {
+            if (auto value = cfg.get<bool>(config_name)) {
+                return *value;
+            }
+        } catch (...) {
+        }
+
+        return std::nullopt;
+    };
+
+    if (auto legacy_toggle = safe_get_bool()) {
+        apply_legacy_toggle(*legacy_toggle);
+        return;
+    }
+
+    m_ui_invert_alpha->value() = std::clamp(m_ui_invert_alpha->value(), slider_min, slider_max);
 }
 
 void OverlayComponent::on_draw_ui() {
@@ -223,7 +391,6 @@ void OverlayComponent::on_draw_ui() {
         m_slate_distance->draw("UI Distance");
         m_slate_size->draw("UI Size");
         m_ui_follows_view->draw("UI Follows View");
-        ImGui::SameLine();
         m_ui_invert_alpha->draw("UI Invert Alpha");
 
         m_framework_distance->draw("Framework Distance");

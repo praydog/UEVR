@@ -52,6 +52,8 @@ public:
         RIGHT_JOYSTICK,
         GESTURE_HEAD,
         GESTURE_HEAD_RIGHT,
+        RIGHT_JOYSTICK_CLICK,
+        LEFT_JOYSTICK_CLICK
     };
 
     enum HORIZONTAL_PROJECTION_OVERRIDE : int32_t {
@@ -241,7 +243,6 @@ public:
     void set_rotation_offset(const glm::quat& offset);
     void recenter_view();
     void recenter_horizon();
-
 
     template<typename T = VRRuntime>
     T* get_runtime() const {
@@ -850,6 +851,8 @@ private:
         "Right Joystick (Disables Standard Joystick Input)",
         "Gesture (Head) + Left Joystick",
         "Gesture (Head) + Right Joystick",
+        "Right Joystick Press + Left Joystick (Disables R3)",
+        "Left Joystick Press + Right Joystick (Disables L3)"
     };
 
     static const inline std::vector<std::string> s_horizontal_projection_override_names{
@@ -1006,8 +1009,8 @@ private:
     void load_cameras();
     void load_camera(int index);
     void save_camera(int index);
-
-public:
+	
+	public:
     VR() {
         m_options = {
             *m_rendering_method,
@@ -1088,14 +1091,15 @@ private:
     bool m_wait_for_present{true};
     const ModToggle::Ptr m_controllers_allowed{ ModToggle::create(generate_name("ControllersAllowed"), true) };
     bool m_controller_test_mode{false};
-    
+
     const ModToggle::Ptr m_show_fps{ ModToggle::create(generate_name("ShowFPSOverlay"), false) };
-    bool m_show_fps_state{false};
+    bool m_show_fps_state{ false };
 
     const ModToggle::Ptr m_show_statistics{ ModToggle::create(generate_name("ShowStatsOverlay"), false) };
-    bool m_show_statistics_state{false};
+    bool m_show_statistics_state{ false };
 
     void update_statistics_overlay(sdk::UGameEngine* engine);
+    
 
     int m_game_frame_count{};
     int m_frame_count{};
