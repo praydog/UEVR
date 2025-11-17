@@ -20,6 +20,8 @@ bool TextureContext::setup(ID3D12Device* device, ID3D12Resource* rsrc, std::opti
         return false;
     }
 
+    rsrc->SetName(name);
+
     return create_rtv(device, rtv_format) && create_srv(device, srv_format);
 }
 
