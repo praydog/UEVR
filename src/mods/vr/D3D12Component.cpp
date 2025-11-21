@@ -351,6 +351,10 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
     // Draws the spectator view
     auto clear_rt = [&](d3d12::CommandContext& commands) {
+        if (m_game_ui_tex.texture.Get() == nullptr) {
+            return;
+        }
+
         const float ui_clear_color[] = { 0.0f, 0.0f, 0.0f, ui_should_invert_alpha ? 1.0f : 0.0f };
         commands.clear_rtv(m_game_ui_tex, (float*)&ui_clear_color, ENGINE_SRC_COLOR);
     };
@@ -392,7 +396,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             }
         } else if (is_2d_screen) {
             m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, m_2d_screen_tex[0].texture.Get(), draw_2d_view, clear_rt, ENGINE_SRC_COLOR);
-        } else {
+        } else if (m_game_ui_tex.commands.ready()) {
             m_game_ui_tex.commands.wait(INFINITE);
             draw_2d_view(m_game_ui_tex.commands, nullptr);
             clear_rt(m_game_ui_tex.commands);
