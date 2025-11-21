@@ -263,6 +263,8 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 ffsr->set_should_recreate_textures(true);
             }
         }
+    } else {
+        m_game_ui_tex.reset(); // Probably fixes non-resident errors.
     }
 
     const float clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };

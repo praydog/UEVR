@@ -6835,6 +6835,7 @@ void VRRenderTargetManager_Base::texture_hook_callback(safetyhook::Context& ctx,
     if (!rtm->allocate_texture_called) {
         g_hook->set_should_recreate_textures(true);
         rtm->render_target = nullptr;
+        rtm->ui_target = nullptr;
         rtm->texture_hook_ref = nullptr;
 
         SPDLOG_INFO("[Post texture hook] Allocate texture was not called, skipping...");
