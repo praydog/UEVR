@@ -5,6 +5,7 @@
 #include <filesystem>
 
 #include <spdlog/spdlog.h>
+#include <spdlog/details/registry.h>
 #include <imgui.h>
 
 #include <utility/Address.hpp>
@@ -317,6 +318,7 @@ private:
     std::unique_ptr<WindowsMessageHook> m_windows_message_hook{};
     std::unique_ptr<XInputHook> m_xinput_hook{};
     std::unique_ptr<DInputHook> m_dinput_hook{};
+    std::shared_ptr<spdlog::details::registry> m_spdlog_handler{spdlog::details::registry::instance_shared()};
     std::shared_ptr<spdlog::logger> m_logger{};
     std::unique_ptr<UEVRSharedMemory> m_uevr_shared_memory{};
     Patch::Ptr m_set_cursor_pos_patch{};
