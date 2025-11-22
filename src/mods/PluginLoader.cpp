@@ -109,7 +109,7 @@ int register_inline_hook(void* target, void* dst, void** original) {
     *original = hook.original<void*>();
 
     if (auto enable_result = hook.enable(); !enable_result.has_value()) {
-        spdlog::error("Failed to enable inline hook at {:x}: {}", (uintptr_t)target, enable_result.error().type);
+        spdlog::error("Failed to enable inline hook at {:x}: {}", (uintptr_t)target, (uint32_t)enable_result.error().type);
         return -1;
     }
 

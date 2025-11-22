@@ -1818,7 +1818,7 @@ bool Framework::init_d3d11() {
     backbuffer->GetDesc(&backbuffer_desc);
     backbuffer_desc.BindFlags |= D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 
-    spdlog::info("[D3D11] Back buffer format is {}", backbuffer_desc.Format);
+    spdlog::info("[D3D11] Back buffer format is {}", (uint32_t)backbuffer_desc.Format);
 
     spdlog::info("[D3D11] Creating render targets...");
     {
@@ -1966,7 +1966,7 @@ bool Framework::init_d3d12() {
         auto& backbuffer = m_d3d12.get_rt(D3D12::RTV::BACKBUFFER_0);
         auto desc = backbuffer->GetDesc();
 
-        spdlog::info("[D3D12] Back buffer format is {}", desc.Format);
+        spdlog::info("[D3D12] Back buffer format is {}", (uint32_t)desc.Format);
 
         D3D12_HEAP_PROPERTIES props{};
         props.Type = D3D12_HEAP_TYPE_DEFAULT;
