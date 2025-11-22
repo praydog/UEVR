@@ -42,7 +42,8 @@ add_subdirectory(dependencies/submodules/UESDK)
 type = "static"
 sources = ["dependencies/submodules/spdlog/src/*.cpp"]
 include-directories = ["dependencies/submodules/spdlog/include"]
-compile-definitions = ["SPDLOG_COMPILED_LIB"]
+compile-definitions = ["SPDLOG_COMPILED_LIB", "FMT_UNICODE=0"]
+compile-options = ["/utf-8"]
 alias="spdlog::spdlog"
 
 [target.glm]

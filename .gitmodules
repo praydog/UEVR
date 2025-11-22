@@ -3,7 +3,7 @@
 	url = https://github.com/g-truc/glm
 [submodule "dependencies/submodules/spdlog"]
 	path = dependencies/submodules/spdlog
-	url = https://github.com/gabime/spdlog
+	url = https://github.com/praydog/spdlog-uevr
 [submodule "dependencies/submodules/imgui"]
 	path = dependencies/submodules/imgui
 	url = https://github.com/ocornut/imgui.git
