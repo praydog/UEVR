@@ -23,10 +23,7 @@
 
 namespace runtimes{
 struct OpenXR final : public VRRuntime {
-    OpenXR() {
-        this->custom_stage = SynchronizeStage::VERY_LATE;
-    }
-    
+
     virtual ~OpenXR() {
         this->destroy();
     }

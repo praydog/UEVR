@@ -628,7 +628,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     }
 
     if (is_right_eye_frame) {
-        if ((runtime->ready() && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE) || !runtime->got_first_sync) {
+        if ((runtime->ready() && vr->get_synchronize_stage() == VR::SynchronizeStage::VERY_LATE) || !runtime->got_first_sync) {
             //vr->update_hmd_state();
         }
     }
@@ -1693,7 +1693,7 @@ void D3D12Component::OpenXR::copy(
     }
 
     if (!vr->m_openxr->frame_began) {
-        if (vr->m_openxr->get_synchronize_stage() != VRRuntime::SynchronizeStage::VERY_LATE) {
+        if (vr->get_synchronize_stage() != VR::SynchronizeStage::VERY_LATE) {
             spdlog::error("[VR] OpenXR: Frame not begun when trying to copy.");
             return;
         }
