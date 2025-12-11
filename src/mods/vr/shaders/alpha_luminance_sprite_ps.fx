@@ -42,9 +42,11 @@ float4 SpritePixelShaderUnified(float4 color    : COLOR0,
     float2 texCoord : TEXCOORD0)
 {
    float4 tex = Texture.Sample(TextureSampler, texCoord);
-   float finalAlpha = (1.0 - tex.a);
-      
-   return float4(tex.rgb, finalAlpha) * color;
+   float invertAmount = saturate(color.a);
+   float blendedAlpha = lerp(tex.a, 1.0 - tex.a, invertAmount);
+   float3 blendedColor = tex.rgb * color.rgb;
+
+   return float4(blendedColor, blendedAlpha);
 }
 
 [RootSignature(SpriteStaticRS)]
