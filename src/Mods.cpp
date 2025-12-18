@@ -54,7 +54,8 @@ std::optional<std::string> Mods::on_initialize_d3d_thread() const {
 }
 
 void Mods::reload_config(bool set_defaults) const {
-    utility::Config cfg{ Framework::get_persistent_dir("config.txt").string() };
+    auto path_u8 = Framework::get_persistent_dir("config.txt").u8string();
+    utility::Config cfg{ std::string(path_u8.begin(), path_u8.end()) };
 
     for (auto& mod : m_mods) {
         spdlog::info("{:s}::on_config_load()", mod->get_name().data());
