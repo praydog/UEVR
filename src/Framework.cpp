@@ -188,7 +188,8 @@ void Framework::command_thread() {
 Framework::Framework(HMODULE framework_module)
     : m_framework_module{framework_module}
     , m_game_module{GetModuleHandle(0)},
-    m_logger{spdlog::basic_logger_mt("UnrealVR", (get_persistent_dir() / "log.txt").string(), true)} 
+    m_logger{spdlog::basic_logger_mt("UnrealVR", (get_persistent_dir() / "log.txt").string(), true)},
+    m_vr{std::make_shared<VR>()}
 {
     std::scoped_lock __{m_constructor_mutex};
 

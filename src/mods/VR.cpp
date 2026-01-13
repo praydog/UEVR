@@ -26,8 +26,8 @@
 #include "VR.hpp"
 
 std::shared_ptr<VR>& VR::get() {
-    static std::shared_ptr<VR> instance = std::make_shared<VR>();
-    return instance;
+    //static std::shared_ptr<VR> instance = std::make_shared<VR>();
+    return g_framework->vr();
 }
 
 // Called when the mod is initialized

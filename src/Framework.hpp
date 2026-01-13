@@ -2,6 +2,7 @@
 
 #include <array>
 #include <unordered_set>
+#include <memory>
 #include <filesystem>
 
 #include <spdlog/spdlog.h>
@@ -16,6 +17,7 @@
 #include <mods/vr/d3d12/CommandContext.hpp>
 
 class Mods;
+class VR;
 
 #include "hooks/D3D11Hook.hpp"
 #include "hooks/D3D12Hook.hpp"
@@ -70,6 +72,9 @@ struct SidebarEntryInfo {
 // Global facilitator
 class Framework {
 private:
+    std::shared_ptr<VR> m_vr{};
+
+private:
     void hook_monitor();
     void command_thread();
 
@@ -78,6 +83,7 @@ public:
     virtual ~Framework();
 
     auto get_framework_module() const { return m_framework_module; }
+    auto& vr() { return m_vr; }
 
     bool is_valid() const { return m_valid; }
 
