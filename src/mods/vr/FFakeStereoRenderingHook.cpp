@@ -123,6 +123,7 @@ void FFakeStereoRenderingHook::on_draw_ui() {
         m_recreate_textures_on_reset->draw("Recreate Textures on Reset");
         m_frame_delay_compensation->draw("Frame Delay Compensation");
         m_use_fmalloc_scene_view_extensions->draw("Use FMalloc for ISceneViewExtensions");
+        m_safe_tick_hook->draw("Use Safe Tick Hooking");
 
         if (m_tracking_system_hook != nullptr) {
             m_tracking_system_hook->on_draw_ui();
@@ -379,35 +380,39 @@ void* FFakeStereoRenderingHook::engine_tick_hook(sdk::UGameEngine* engine, float
     }
 
     if (!g_framework->is_game_data_intialized()) {
-        // This allocates memory on the stack.
-        static bool check_canary_once = true;
-        volatile uint64_t shadow_space[64]{};
+        void* result = nullptr;
+        if (hook->m_safe_tick_hook->value()) {
+            result = hook->m_tick_hook.call<void*>(engine, delta, idle);
+        } else {
+            // This allocates memory on the stack.
+            static bool check_canary_once = true;
+            volatile uint64_t shadow_space[64]{};
 
 #ifdef NDEBUG
-        if (check_canary_once) {
+            if (check_canary_once) {
 #endif
-            std::memset((void*)shadow_space, 0, 64 * sizeof(uint64_t));
+                std::memset((void*)shadow_space, 0, 64 * sizeof(uint64_t));
 #ifdef NDEBUG
-        }
-#endif
-        // We're using original here instead of call_unsafe to make sure the canaries are the first thing on the stack.
-        void* result = hook->m_tick_hook.original<void* (*)(sdk::UGameEngine*, float, bool)>()(engine, delta, idle);
-
-        // At least do some logic with the shadow space so it doesn't get optimized out for some reason.
-        // But only do it once in release builds.
-#ifdef NDEBUG
-        if (check_canary_once) {
-#endif
-            for (size_t i = 0; i < 64; ++i) {
-                if (shadow_space[i] != 0) {
-                    SPDLOG_ERROR("[UGameEngine::Tick] Shadow space was overwritten! {:x} @ {}", shadow_space[i], i);
-                }
             }
+#endif
+             result = hook->m_tick_hook.original<void* (*)(sdk::UGameEngine*, float, bool)>()(engine, delta, idle);
+
+            // At least do some logic with the shadow space so it doesn't get optimized out for some reason.
+            // But only do it once in release builds.
+#ifdef NDEBUG
+            if (check_canary_once) {
+#endif
+                for (size_t i = 0; i < 64; ++i) {
+                    if (shadow_space[i] != 0) {
+                        SPDLOG_ERROR("[UGameEngine::Tick] Shadow space was overwritten! {:x} @ {}", shadow_space[i], i);
+                    }
+                }
 
 #ifdef NDEBUG
-            check_canary_once = false;
-        }
+                check_canary_once = false;
+            }
 #endif
+        }
 
         return result;
     }
@@ -440,7 +445,9 @@ void* FFakeStereoRenderingHook::engine_tick_hook(sdk::UGameEngine* engine, float
 
     void* result = nullptr;
 
-    {
+    if (hook->m_safe_tick_hook->value()) {
+        result = hook->m_tick_hook.call<void*>(engine, delta, idle);
+    } else {
         // This allocates memory on the stack.
         static bool check_canary_once = true;
         volatile uint64_t shadow_space[64]{};
