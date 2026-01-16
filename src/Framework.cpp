@@ -1003,7 +1003,8 @@ void Framework::save_config() {
         mod->on_config_save(cfg);
     }
 
-    if (!cfg.save(get_persistent_dir("config.txt").string())) {
+    auto path_u8 = get_persistent_dir("config.txt").u8string();
+    if (!cfg.save(std::string(path_u8.begin(), path_u8.end()))) {
         spdlog::info("Failed to save config");
         return;
     }
