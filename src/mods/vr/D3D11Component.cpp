@@ -334,7 +334,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             D3D11_TEXTURE2D_DESC desc{};
             scene_capture_rt->GetDesc(&desc);
 
-            spdlog::info("[VR] Scene capture texture format: {}, {}x{}", desc.Format, desc.Width, desc.Height);
+            spdlog::info("[VR] Scene capture texture format: {}, {}x{}", (uint32_t)desc.Format, desc.Width, desc.Height);
         }
         m_scene_capture_tex_ref.set(scene_capture_rt, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_B8G8R8A8_UNORM);
     } else {
@@ -1278,7 +1278,7 @@ bool D3D11Component::setup() {
     }
 
     spdlog::info("[VR] W: {}, H: {}", backbuffer_desc.Width, backbuffer_desc.Height);
-    spdlog::info("[VR] Format: {}", backbuffer_desc.Format);
+    spdlog::info("[VR] Format: {}", (uint32_t)backbuffer_desc.Format);
 
     backbuffer_desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
     backbuffer_desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
@@ -2003,7 +2003,7 @@ std::optional<std::string> D3D11Component::OpenXR::create_swapchains() {
             }
 
             spdlog::info("[VR] Depth texture size: {}x{}", depth_desc.Width, depth_desc.Height);
-            spdlog::info("[VR] Depth texture format: {}", depth_desc.Format);
+            spdlog::info("[VR] Depth texture format: {}", (uint32_t)depth_desc.Format);
 
             depth_swapchain_create_info.width = depth_desc.Width;
             depth_swapchain_create_info.height = depth_desc.Height;

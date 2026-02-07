@@ -176,10 +176,10 @@ set(spdlog_SOURCES "")
 
 list(APPEND spdlog_SOURCES
 	"dependencies/submodules/spdlog/src/async.cpp"
+	"dependencies/submodules/spdlog/src/bundled_fmtlib_format.cpp"
 	"dependencies/submodules/spdlog/src/cfg.cpp"
 	"dependencies/submodules/spdlog/src/color_sinks.cpp"
 	"dependencies/submodules/spdlog/src/file_sinks.cpp"
-	"dependencies/submodules/spdlog/src/fmt.cpp"
 	"dependencies/submodules/spdlog/src/spdlog.cpp"
 	"dependencies/submodules/spdlog/src/stdout_sinks.cpp"
 )
@@ -200,6 +200,11 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${spdlog_SOURCES})
 add_library(spdlog::spdlog ALIAS spdlog)
 target_compile_definitions(spdlog PUBLIC
 	SPDLOG_COMPILED_LIB
+	FMT_UNICODE=0
+)
+
+target_compile_options(spdlog PUBLIC
+	"/utf-8"
 )
 
 target_include_directories(spdlog PUBLIC

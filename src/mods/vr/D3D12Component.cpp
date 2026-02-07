@@ -640,7 +640,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     }
 
     if (is_right_eye_frame) {
-        if ((runtime->ready() && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE) || !runtime->got_first_sync) {
+        if ((runtime->ready() && vr->get_synchronize_stage() == VR::SynchronizeStage::VERY_LATE) || !runtime->got_first_sync) {
             //vr->update_hmd_state();
         }
     }
@@ -1167,7 +1167,7 @@ bool D3D12Component::setup() {
 
     auto backbuffer_desc = backbuffer->GetDesc();
 
-    spdlog::info("[VR] D3D12 Real backbuffer width: {}, height: {}, format: {}", real_backbuffer_desc.Width, real_backbuffer_desc.Height, real_backbuffer_desc.Format);
+    spdlog::info("[VR] D3D12 Real backbuffer width: {}, height: {}, format: {}", real_backbuffer_desc.Width, real_backbuffer_desc.Height, (uint32_t)real_backbuffer_desc.Format);
 
     backbuffer_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     backbuffer_desc.Flags &= ~D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
@@ -1177,7 +1177,7 @@ bool D3D12Component::setup() {
         backbuffer_desc.Width /= 2; // The texture we get from UE is both eyes combined. we will copy the regions later.
     }
 
-    spdlog::info("[VR] D3D12 RT width: {}, height: {}, format: {}", backbuffer_desc.Width, backbuffer_desc.Height, backbuffer_desc.Format);
+    spdlog::info("[VR] D3D12 RT width: {}, height: {}, format: {}", backbuffer_desc.Width, backbuffer_desc.Height, (uint32_t)backbuffer_desc.Format);
 
     D3D12_HEAP_PROPERTIES heap_props{};
     heap_props.Type = D3D12_HEAP_TYPE_DEFAULT;
@@ -1580,8 +1580,8 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
             }
 
             spdlog::info("[VR] Depth texture size: {}x{}", depth_desc.Width, depth_desc.Height);
-            spdlog::info("[VR] Depth texture format: {}", depth_desc.Format);
-            spdlog::info("[VR] Depth texture flags: {}", depth_desc.Flags);
+            spdlog::info("[VR] Depth texture format: {}", (uint32_t)depth_desc.Format);
+            spdlog::info("[VR] Depth texture flags: {}", (uint32_t)depth_desc.Flags);
 
             if (depth_desc.Width > hmd_desc.Width || depth_desc.Height > hmd_desc.Height) {
                 spdlog::info("[VR] Depth texture is larger than the HMD");
@@ -1705,7 +1705,7 @@ void D3D12Component::OpenXR::copy(
     }
 
     if (!vr->m_openxr->frame_began) {
-        if (vr->m_openxr->get_synchronize_stage() != VRRuntime::SynchronizeStage::VERY_LATE) {
+        if (vr->get_synchronize_stage() != VR::SynchronizeStage::VERY_LATE) {
             spdlog::error("[VR] OpenXR: Frame not begun when trying to copy.");
             return;
         }

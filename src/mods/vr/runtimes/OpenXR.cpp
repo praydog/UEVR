@@ -411,7 +411,7 @@ VRRuntime::Error OpenXR::consume_events(std::function<void(void*)> callback) {
             const auto ev = (XrEventDataSessionStateChanged*)&edb;
             this->session_state = ev->state;
 
-            spdlog::info("VR: XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED {}", ev->state);
+            spdlog::info("VR: XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED {}", (uint32_t)ev->state);
 
             if (ev->state == XR_SESSION_STATE_READY) {
                 spdlog::info("VR: XR_SESSION_STATE_READY");

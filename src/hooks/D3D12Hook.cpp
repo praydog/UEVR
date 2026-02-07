@@ -552,7 +552,7 @@ HRESULT WINAPI D3D12Hook::resize_buffers(IDXGISwapChain3* swap_chain, UINT buffe
     std::scoped_lock _{g_framework->get_hook_monitor_mutex()};
 
     spdlog::info("D3D12 resize buffers called");
-    spdlog::info(" Parameters: buffer_count {} width {} height {} new_format {} swap_chain_flags {}", buffer_count, width, height, new_format, swap_chain_flags);
+    spdlog::info(" Parameters: buffer_count {} width {} height {} new_format {} swap_chain_flags {}", buffer_count, width, height, (uint32_t)new_format, swap_chain_flags);
 
     auto d3d12 = g_d3d12_hook;
     //auto& hook = d3d12->m_resize_buffers_hook;
