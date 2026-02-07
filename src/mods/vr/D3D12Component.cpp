@@ -4,6 +4,8 @@
 #include <utility/String.hpp>
 #include <utility/ScopeGuard.hpp>
 #include <utility/Logging.hpp>
+#include <array>
+#include <DirectXMath.h>
 
 #include "Framework.hpp"
 #include "../VR.hpp"
@@ -71,7 +73,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         return vr::VRCompositorError_None;
     }
 
-    const auto ui_should_invert_alpha = vr->get_overlay_component().should_invert_ui_alpha();
+    const auto ui_invert_alpha = vr->get_overlay_component().get_ui_invert_alpha();
 
     // Update the UI overlay.
     auto runtime = vr->get_runtime();
@@ -271,8 +273,18 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     const auto is_2d_screen = vr->is_using_2d_screen();
 
     auto draw_2d_view = [&](d3d12::CommandContext& commands, ID3D12Resource* render_target) {
-        if (ui_should_invert_alpha && m_game_ui_tex.texture.Get() != nullptr && m_game_ui_tex.srv_heap != nullptr) {
-            d3d12::render_srv_to_rtv(m_ui_batch_alpha_invert.get(), commands.cmd_list.Get(), m_game_ui_tex, m_game_ui_tex, std::nullopt, ENGINE_SRC_COLOR, ENGINE_SRC_COLOR);
+        if (ui_invert_alpha > 0.0f && m_game_ui_tex.texture.Get() != nullptr && m_game_ui_tex.srv_heap != nullptr) {
+            const std::array<float, 4> blend_factor{ 1.0f, 1.0f, 1.0f, ui_invert_alpha };
+            const DirectX::XMFLOAT4 invert_alpha_tint{ 1.0f, 1.0f, 1.0f, ui_invert_alpha };
+            d3d12::render_srv_to_rtv(
+                m_ui_batch_alpha_invert.get(),
+                commands.cmd_list.Get(),
+                m_game_ui_tex,
+                m_game_ui_tex,
+                ENGINE_SRC_COLOR,
+                ENGINE_SRC_COLOR,
+                blend_factor,
+                invert_alpha_tint);
         }
 
         draw_spectator_view(commands.cmd_list.Get(), is_right_eye_frame);
@@ -351,11 +363,11 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
     // Draws the spectator view
     auto clear_rt = [&](d3d12::CommandContext& commands) {
-        if (m_game_ui_tex.texture.Get() == nullptr) {
+		if (m_game_ui_tex.texture.Get() == nullptr) {
             return;
         }
-
-        const float ui_clear_color[] = { 0.0f, 0.0f, 0.0f, ui_should_invert_alpha ? 1.0f : 0.0f };
+		
+        const float ui_clear_color[] = { 0.0f, 0.0f, 0.0f, ui_invert_alpha };
         commands.clear_rtv(m_game_ui_tex, (float*)&ui_clear_color, ENGINE_SRC_COLOR);
     };
 
@@ -1275,8 +1287,8 @@ bool D3D12Component::setup() {
         bdrt.DestBlend = D3D12_BLEND_ZERO;
         bdrt.BlendOp = D3D12_BLEND_OP_ADD;
 
-        bdrt.SrcBlendAlpha = D3D12_BLEND_ONE;
-        bdrt.DestBlendAlpha = D3D12_BLEND_ZERO;
+        bdrt.SrcBlendAlpha = D3D12_BLEND_BLEND_FACTOR;
+        bdrt.DestBlendAlpha = D3D12_BLEND_INV_BLEND_FACTOR;
         bdrt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
         bdrt.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 

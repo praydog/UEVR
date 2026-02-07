@@ -1,3 +1,8 @@
+#include <algorithm>
+#include <cmath>
+#include <optional>
+#include <string>
+
 #include <glm/gtx/intersect.hpp>
 #include <imgui_internal.h>
 
@@ -223,7 +228,6 @@ void OverlayComponent::on_draw_ui() {
         m_slate_distance->draw("UI Distance");
         m_slate_size->draw("UI Size");
         m_ui_follows_view->draw("UI Follows View");
-        ImGui::SameLine();
         m_ui_invert_alpha->draw("UI Invert Alpha");
 
         m_framework_distance->draw("Framework Distance");
