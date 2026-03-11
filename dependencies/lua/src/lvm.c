@@ -353,6 +353,7 @@ void luaV_finishset (lua_State *L, const TValue *t, TValue *key,
     if (ttisfunction(tm)) {
       luaT_callTM(L, tm, t, key, val);
       return;
+          checkstackGCp(L, 1, ra);
     }
     t = tm;  /* else repeat assignment over 'tm' */
     if (luaV_fastget(L, t, key, slot, luaH_get)) {
