@@ -571,7 +571,7 @@ void FFakeStereoRenderingHook::attempt_hook_slate_thread(uintptr_t return_addres
         return;
     }
 
-    SPDLOG_INFO("Hooked FSlateRHIRenderer::DrawWindow_RenderThread!");
+    SPDLOG_INFO("Hooked FSlateRHIRenderer::DrawWindow_RenderThread @ 0x{:x}!", *func);
 }
 
 namespace detail{
@@ -5760,11 +5760,37 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
             utility::emulate(*module_within, ctx.ctx->Registers.RegRip, 1000, ctx, [&](const utility::ShemuContextExtended& ctx) -> utility::ExhaustionResult {
                 SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Emulating instruction: {:x} ({:X})", ctx.ctx->ctx->Registers.RegRip, ctx.ctx->ctx->Registers.RegRip - (uintptr_t)*module_within);
 
+                auto is_within_stack = [&](uintptr_t addr) -> bool {
+                    return addr >= ctx.ctx->ctx->StackBase && addr < ctx.ctx->ctx->StackBase + ctx.ctx->ctx->StackSize;
+                };
+
                 // Allow writes to go through if we are inside the window getter.
                 // The downside is this might unintentionally increase the reference count of the window
                 // but it's necessary for the window getter to not give us a nullptr.
                 if (ctx.next.writes_to_memory && window_getter_callstack_level == 0) {
-                    return utility::ExhaustionResult::STEP_OVER;
+                    bool allow_write = false;
+
+                    // However, if it writes to the stack, allow it through.
+                    for (size_t i = 0; i < ctx.next.ix.OperandsCount; ++i) {
+                        const auto& op = ctx.next.ix.Operands[i];
+                        
+                        if (op.Type == ND_OP_MEM && op.Access.Write) {
+                            const auto base_reg = op.Info.Memory.HasBase ? ((uint64_t*)&ctx.ctx->ctx->Registers.RegRax)[op.Info.Memory.Base] : 0;
+                            const auto index_reg = op.Info.Memory.HasIndex ? ((uint64_t*)&ctx.ctx->ctx->Registers.RegRax)[op.Info.Memory.Index] : 0;
+                            const auto addr = base_reg + index_reg * op.Info.Memory.Scale + op.Info.Memory.Disp;
+
+                            if (is_within_stack(addr)) {
+                                SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Allowing write to stack at {:x}!", addr);
+                                allow_write = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!allow_write) {
+                        spdlog::info("[SlateRHIRenderer::DrawWindow_RenderThread] Instruction writes to memory but we're not inside the window getter, skipping! ({:x})", ctx.ctx->ctx->Registers.RegRip);
+                        return utility::ExhaustionResult::STEP_OVER;
+                    }
                 }
 
                 if (std::string_view{ctx.next.ix.Mnemonic}.starts_with("CALL")) {
@@ -5774,14 +5800,17 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
                         return utility::ExhaustionResult::CONTINUE;
                     }
 
+                    const auto rcx_within_bounds = (uint8_t*)ctx.ctx->ctx->Registers.RegRcx >= window_bounds.data() && (uint8_t*)ctx.ctx->ctx->Registers.RegRcx < window_bounds.data() + window_bounds.size();
+                    const auto rdx_within_bounds = (uint8_t*)ctx.ctx->ctx->Registers.RegRdx >= window_bounds.data() && (uint8_t*)ctx.ctx->ctx->Registers.RegRdx < window_bounds.data() + window_bounds.size();
+
                     // Check if RCX != window first. We don't want to skip over the call if it is set to it.
                     // There are inlined and non-inlined versions of this function which is why we need to check this.
-                    if ((uint8_t*)ctx.ctx->ctx->Registers.RegRcx < window_bounds.data() || (uint8_t*)ctx.ctx->ctx->Registers.RegRcx > window_bounds.data() + window_bounds.size()) {
-                        SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Skipping call!");
+                    if (!rcx_within_bounds && !rdx_within_bounds) {
+                        SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Skipping call (not within window bounds)!");
                         return utility::ExhaustionResult::STEP_OVER;
                     }
 
-                    SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Allowing call, RCX matches window {:x}!", ctx.next.ix.Operands[0].Info.Register.Reg, window);
+                    SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Allowing call to 0x{:x}, RCX or RDX matches window {:x}!", ctx.next.ix.Operands[0].Info.Register.Reg, window);
                     SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] RCX: {:x}, RDX: {:x}", ctx.ctx->ctx->Registers.RegRcx, ctx.ctx->ctx->Registers.RegRdx);
                     ++window_getter_callstack_level;
                     return utility::ExhaustionResult::CONTINUE;
@@ -5800,16 +5829,43 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
                 // where reg contains the pointer to the window
                 // and offset is the offset to the viewport.
                 const auto& cctx = ctx.ctx->ctx;
-                const auto& ix = cctx->Instruction;
+                const auto& ix = ctx.next.ix;
+
+                // Debug stuff
+#if 0
+                SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Instruction: {:x} ({})", ctx.ctx->ctx->Registers.RegRip, ix.Mnemonic);
+
+                for (uint32_t i = 0; i < ix.OperandsCount; ++i) {
+                    const auto& op = ix.Operands[i];
+
+                    if (op.Type == ND_OP_REG) {
+                        SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Operand {} is register: {}", i, op.Info.Register.Reg);
+                    } else if (op.Type == ND_OP_MEM) {
+                        SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Operand {} is memory: [base: {}, index: {}, scale: {}, disp: {:x}]", i,
+                            op.Info.Memory.HasBase ? op.Info.Memory.Base : 0,
+                            op.Info.Memory.HasIndex ? op.Info.Memory.Index : 0,
+                            op.Info.Memory.Scale,
+                            op.Info.Memory.HasDisp ? op.Info.Memory.Disp : 0);
+                    } else {
+                        SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Operand {} is of type {}", i, static_cast<uint32_t>(op.Type));
+                    }
+                }
+
+                SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] RDI: {:x}", ctx.ctx->ctx->Registers.RegRdi);
+                SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] RDX: {:x}", ctx.ctx->ctx->Registers.RegRdx);
+#endif
 
                 if (ix.Instruction == ND_INS_MOV && ix.Operands[0].Type == ND_OP_REG && ix.Operands[1].Type == ND_OP_MEM &&
                     ix.Operands[1].Info.Memory.HasBase && ix.Operands[1].Info.Memory.HasDisp)
                 {
                     uintptr_t* reg = (uintptr_t*)&((uint64_t*)&cctx->Registers.RegRax)[ix.Operands[1].Info.Memory.Base];
+                    spdlog::info("[SlateRHIRenderer::DrawWindow_RenderThread] Found memory operand with base register {:x} and displacement {:x}!", (uintptr_t)reg, ix.Operands[1].Info.Memory.Disp);
 
                     // Instead of checking the window, we check if the register is within the bounds of the window's memory.
                     // This should allow us to catch all sorts of compiler optimizations.
                     if ((uint8_t*)*reg >= window_bounds.data() && (uint8_t*)*reg < window_bounds.data() + window_bounds.size()) try {
+                        spdlog::info("[SlateRHIRenderer::DrawWindow_RenderThread] Base register {:x} is within window bounds, checking offset...", (uintptr_t)reg);
+
                         SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Found window pointer at {:x}!", (uintptr_t)reg);
                         auto offset = ix.Operands[1].Info.Memory.Disp;
                         const auto value = *(uintptr_t***)((uintptr_t)*reg + offset);
