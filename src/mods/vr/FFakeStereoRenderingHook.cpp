@@ -5619,7 +5619,7 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
                 const auto insn = utility::decode_one((uint8_t*)info->ContextRecord->Rip);
 
                 if (insn) {
-                    spdlog::info("Skipping {} bytes!", insn->Length);
+                    SPDLOG_INFO("Skipping {} bytes!", insn->Length);
                     info->ContextRecord->Rip += insn->Length;
 
                     // Nop out the next function call.
@@ -5788,7 +5788,7 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
                     }
 
                     if (!allow_write) {
-                        spdlog::info("[SlateRHIRenderer::DrawWindow_RenderThread] Instruction writes to memory but we're not inside the window getter, skipping! ({:x})", ctx.ctx->ctx->Registers.RegRip);
+                        SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Instruction writes to memory but we're not inside the window getter, skipping! ({:x})", ctx.ctx->ctx->Registers.RegRip);
                         return utility::ExhaustionResult::STEP_OVER;
                     }
                 }
@@ -5859,12 +5859,12 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
                     ix.Operands[1].Info.Memory.HasBase && ix.Operands[1].Info.Memory.HasDisp)
                 {
                     uintptr_t* reg = (uintptr_t*)&((uint64_t*)&cctx->Registers.RegRax)[ix.Operands[1].Info.Memory.Base];
-                    spdlog::info("[SlateRHIRenderer::DrawWindow_RenderThread] Found memory operand with base register {:x} and displacement {:x}!", (uintptr_t)reg, ix.Operands[1].Info.Memory.Disp);
+                    SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Found memory operand with base register {:x} and displacement {:x}!", (uintptr_t)reg, ix.Operands[1].Info.Memory.Disp);
 
                     // Instead of checking the window, we check if the register is within the bounds of the window's memory.
                     // This should allow us to catch all sorts of compiler optimizations.
                     if ((uint8_t*)*reg >= window_bounds.data() && (uint8_t*)*reg < window_bounds.data() + window_bounds.size()) try {
-                        spdlog::info("[SlateRHIRenderer::DrawWindow_RenderThread] Base register {:x} is within window bounds, checking offset...", (uintptr_t)reg);
+                        SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Base register {:x} is within window bounds, checking offset...", (uintptr_t)reg);
 
                         SPDLOG_INFO("[SlateRHIRenderer::DrawWindow_RenderThread] Found window pointer at {:x}!", (uintptr_t)reg);
                         auto offset = ix.Operands[1].Info.Memory.Disp;
