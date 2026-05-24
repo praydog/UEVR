@@ -2,6 +2,7 @@
 #include <imgui_internal.h>
 #include <openvr.h>
 #include <d3dcompiler.h>
+#include <cstring>
 
 namespace vertex_shader1 {
 #include "shaders/vs.hpp"
@@ -31,6 +32,22 @@ namespace pixel_shader1 {
 //#define AFR_DEPTH_TEMP_DISABLED
 
 namespace vrmod {
+namespace {
+constexpr const char* k_ui_invert_ps_hlsl = R"(
+Texture2D Texture : register(t0);
+SamplerState TextureSampler : register(s0);
+
+float4 SpritePixelShader(float4 color : COLOR0, float2 texCoord : TEXCOORD0) : SV_Target
+{
+    float4 tex = Texture.Sample(TextureSampler, texCoord);
+    float invertAmount = saturate(color.a);
+    float blendedAlpha = lerp(tex.a, 1.0 - tex.a, invertAmount);
+    float3 blendedColor = tex.rgb * color.rgb;
+    return float4(blendedColor, blendedAlpha);
+}
+)";
+} // namespace
+
 class DX11StateBackup {
 public:
     DX11StateBackup(ID3D11DeviceContext* context) {
@@ -390,6 +407,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     }
 
     const auto is_2d_screen = vr->is_using_2d_screen();
+    const auto ui_invert_alpha = vr->get_overlay_component().get_ui_invert_alpha();
 
     auto draw_2d_view = [&]() {
         if (!is_2d_screen || !m_engine_tex_ref.has_texture() || !m_engine_tex_ref.has_srv()) {
@@ -481,8 +499,18 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI_RIGHT, m_2d_screen_tex[1]);
                 }
             } else {
-                if (m_engine_ui_ref.has_texture()) {
-                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, m_engine_ui_ref);
+                if (m_engine_ui_ref.has_texture() && m_engine_ui_ref.has_srv()) {
+                    if (ui_invert_alpha > 0.0f && ensure_ui_invert_resources()) {
+                        m_openxr.copy(
+                            (uint32_t)runtimes::OpenXR::SwapchainIndex::UI,
+                            nullptr,
+                            nullptr,
+                            [&](ID3D11Texture2D* render_target) {
+                                render_ui_invert_to_rt(render_target, m_engine_ui_ref, ui_invert_alpha);
+                            });
+                    } else {
+                        m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, m_engine_ui_ref);
+                    }
                 }
             }
 
@@ -1022,6 +1050,9 @@ void D3D11Component::on_reset(VR* vr) {
     m_constant_buffer.Reset();
     m_backbuffer_batch.reset();
     m_game_batch.reset();
+    m_ui_invert_ps.Reset();
+    m_ui_invert_blend.Reset();
+    m_ui_invert_ready = false;
     m_is_shader_setup = false;
 
     for (auto& tex : m_2d_screen_tex) {
@@ -1210,6 +1241,147 @@ void D3D11Component::render_srv_to_rtv(DirectX::DX11::SpriteBatch* batch, Textur
 
     batch->Draw(srv, dest_rect, &src_rect, DirectX::Colors::White);
     batch->End();
+}
+
+bool D3D11Component::ensure_ui_invert_resources() {
+    if (m_ui_invert_ready) {
+        return m_ui_invert_ps != nullptr && m_ui_invert_blend != nullptr;
+    }
+
+    m_ui_invert_ready = true;
+
+    auto& hook = g_framework->get_d3d11_hook();
+    auto device = hook->get_device();
+
+    if (device == nullptr) {
+        spdlog::error("[VR] D3D11 UI invert: device is null");
+        return false;
+    }
+
+    // Create an opaque blend state (write shader output directly).
+    D3D11_BLEND_DESC blend_desc{};
+    blend_desc.RenderTarget[0].BlendEnable = FALSE;
+    blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+    if (FAILED(device->CreateBlendState(&blend_desc, &m_ui_invert_blend))) {
+        spdlog::error("[VR] D3D11 UI invert: failed to create blend state");
+        m_ui_invert_blend.Reset();
+        return false;
+    }
+
+    ComPtr<ID3DBlob> ps_blob{};
+    ComPtr<ID3DBlob> error_blob{};
+
+    const UINT flags =
+#if defined(_DEBUG)
+        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_ENABLE_STRICTNESS;
+#else
+        D3DCOMPILE_OPTIMIZATION_LEVEL3 | D3DCOMPILE_ENABLE_STRICTNESS;
+#endif
+
+    const auto hr = D3DCompile(
+        k_ui_invert_ps_hlsl,
+        strlen(k_ui_invert_ps_hlsl),
+        "UEVR_UIInvert",
+        nullptr,
+        nullptr,
+        "SpritePixelShader",
+        "ps_4_0",
+        flags,
+        0,
+        &ps_blob,
+        &error_blob);
+
+    if (FAILED(hr)) {
+        if (error_blob != nullptr) {
+            spdlog::error("[VR] D3D11 UI invert: shader compile failed: {}", (const char*)error_blob->GetBufferPointer());
+        } else {
+            spdlog::error("[VR] D3D11 UI invert: shader compile failed (hr=0x{:08x})", (uint32_t)hr);
+        }
+        return false;
+    }
+
+    if (FAILED(device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr, &m_ui_invert_ps))) {
+        spdlog::error("[VR] D3D11 UI invert: failed to create pixel shader");
+        m_ui_invert_ps.Reset();
+        return false;
+    }
+
+    spdlog::info("[VR] D3D11 UI invert shader ready");
+    return true;
+}
+
+void D3D11Component::render_ui_invert_to_rt(ID3D11Texture2D* render_target, TextureContext& srv, float invert_amount) {
+    if (render_target == nullptr || !srv.has_srv()) {
+        return;
+    }
+
+    if (!ensure_ui_invert_resources()) {
+        return;
+    }
+
+    auto& hook = g_framework->get_d3d11_hook();
+    auto device = hook->get_device();
+
+    ComPtr<ID3D11DeviceContext> context{};
+    device->GetImmediateContext(&context);
+
+    DX11StateBackup backup{context.Get()};
+
+    TextureContext rtv{render_target};
+    if (!rtv.has_rtv()) {
+        return;
+    }
+
+    D3D11_TEXTURE2D_DESC dest_desc{};
+    render_target->GetDesc(&dest_desc);
+
+    float clear_color[4]{0.0f, 0.0f, 0.0f, 0.0f};
+    context->ClearRenderTargetView(rtv, clear_color);
+
+    ID3D11RenderTargetView* views[] = { rtv };
+    context->OMSetRenderTargets(1, views, nullptr);
+
+    D3D11_VIEWPORT viewport{};
+    viewport.Width = (float)dest_desc.Width;
+    viewport.Height = (float)dest_desc.Height;
+    viewport.MinDepth = 0.0f;
+    viewport.MaxDepth = 1.0f;
+    viewport.TopLeftX = 0.0f;
+    viewport.TopLeftY = 0.0f;
+
+    m_game_batch->SetViewport(viewport);
+    context->RSSetViewports(1, &viewport);
+
+    D3D11_RECT scissor_rect{};
+    scissor_rect.left = 0;
+    scissor_rect.top = 0;
+    scissor_rect.right = (LONG)dest_desc.Width;
+    scissor_rect.bottom = (LONG)dest_desc.Height;
+    context->RSSetScissorRects(1, &scissor_rect);
+
+    RECT dest_rect{};
+    dest_rect.left = 0;
+    dest_rect.top = 0;
+    dest_rect.right = (LONG)dest_desc.Width;
+    dest_rect.bottom = (LONG)dest_desc.Height;
+
+    const auto tint = DirectX::XMVectorSet(1.0f, 1.0f, 1.0f, invert_amount);
+
+    auto set_custom_shaders = [&]() {
+        context->PSSetShader(m_ui_invert_ps.Get(), nullptr, 0);
+    };
+
+    m_game_batch->Begin(
+        DirectX::DX11::SpriteSortMode_Immediate,
+        m_ui_invert_blend.Get(),
+        nullptr,
+        nullptr,
+        nullptr,
+        set_custom_shaders);
+
+    m_game_batch->Draw(srv, dest_rect, tint);
+    m_game_batch->End();
 }
 
 bool D3D11Component::setup() {

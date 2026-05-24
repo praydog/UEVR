@@ -60,6 +60,9 @@ private:
         TextureContext& rtv,
         const RECT& src_rect);
 
+    bool ensure_ui_invert_resources();
+    void render_ui_invert_to_rt(ID3D11Texture2D* render_target, TextureContext& srv, float invert_amount);
+
     struct ShaderGlobals {
         DirectX::XMMATRIX mvp{};
 		DirectX::XMFLOAT4 resolution{};
@@ -155,6 +158,9 @@ private:
 
     std::unique_ptr<DirectX::DX11::SpriteBatch> m_backbuffer_batch{};
     std::unique_ptr<DirectX::DX11::SpriteBatch> m_game_batch{};
+    ComPtr<ID3D11PixelShader> m_ui_invert_ps{};
+    ComPtr<ID3D11BlendState> m_ui_invert_blend{};
+    bool m_ui_invert_ready{false};
 
     vr::HmdMatrix44_t m_left_eye_proj{};
     vr::HmdMatrix44_t m_right_eye_proj{};
