@@ -2522,10 +2522,13 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Camera Freeze")) {
             float camera_offset[] = {m_camera_forward_offset->value(), m_camera_right_offset->value(), m_camera_up_offset->value()};
-            if (ImGui::SliderFloat3("Camera Offset", camera_offset, -4000.0f, 4000.0f)) {
+            if (ImGui::DragFloat3("Camera Offset", camera_offset, 0.5f, -4000.0f, 4000.0f)) {
                 m_camera_forward_offset->value() = camera_offset[0];
                 m_camera_right_offset->value() = camera_offset[1];
                 m_camera_up_offset->value() = camera_offset[2];
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Drag to adjust. Hold Alt while dragging for fine adjustment.\nHold Shift for faster adjustment.\nCtrl+Click to type a value directly.");
             }
 
             for (auto i = 0; i < m_camera_datas.size(); ++i) {
