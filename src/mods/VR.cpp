@@ -2386,7 +2386,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
 
         if (GetModuleHandleW(L"nvngx_dlssg.dll") != nullptr) {
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-            ImGui::TextWrapped("WARNING: DLSS Frame Generation has been detected. Make sure it is disabled within in-game settings.");
+            ImGui::TextWrapped("WARNING: This game supports DLSS Frame Generation. Make sure it is disabled within in-game settings. Ignore warning if it's already off.");
             ImGui::PopStyleColor();
         }
 
