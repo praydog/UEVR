@@ -32,6 +32,7 @@ public:
     auto& openxr() { return m_openxr; }
 
     auto& get_ui_tex() { return m_ui_tex; }
+    auto& get_spatial_overlay_tex() { return m_spatial_overlay_tex; }
 
     bool clear_tex(ID3D11Resource* rsrc, std::optional<DXGI_FORMAT> format = std::nullopt);
     bool clear_tex(ID3D11Resource* rsrc, float* color, std::optional<DXGI_FORMAT> format = std::nullopt);
@@ -133,6 +134,7 @@ private:
     };
 
     ComPtr<ID3D11Texture2D> m_ui_tex{};
+    ComPtr<ID3D11Texture2D> m_spatial_overlay_tex{}; // double-wide (L|R) world render for the spatial-mode overlay
     TextureContext m_engine_ui_ref{};
     TextureContext m_engine_tex_ref{};
     TextureContext m_scene_capture_tex_ref{};

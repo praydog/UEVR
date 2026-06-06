@@ -67,6 +67,15 @@ std::optional<std::string> OverlayComponent::on_initialize_openvr() {
         }
     }
 
+    // World-locked side-by-side stereo quad for spatial mode (L|R texture halves -> eyes).
+    if (!create_overlay("SpatialWorld", 2.0f, m_spatial_overlay_handle)) {
+        vr::VROverlay()->SetOverlayInputMethod(m_spatial_overlay_handle, vr::VROverlayInputMethod_None);
+        vr::VROverlay()->SetOverlayFlag(m_spatial_overlay_handle, vr::VROverlayFlags_SideBySide_Parallel, true);
+        // The game's backbuffer alpha is meaningless for the world render; don't blend it.
+        vr::VROverlay()->SetOverlayFlag(m_spatial_overlay_handle, vr::VROverlayFlags_IgnoreTextureAlpha, true);
+        vr::VROverlay()->HideOverlay(m_spatial_overlay_handle); // only shown while spatial mode is active
+    }
+
     return std::nullopt;
 }
 
@@ -186,6 +195,7 @@ void OverlayComponent::update_input_mouse_emulation() {
 void OverlayComponent::on_post_compositor_submit() {
     this->update_overlay_openvr();
     this->update_slate_openvr();
+    this->update_spatial_overlay_openvr();
 }
 
 
@@ -339,42 +349,43 @@ void OverlayComponent::update_slate_openvr() {
 
     vr::VROverlay()->SetOverlayTextureBounds(m_slate_overlay_handle, &bounds);
 
-    vr::TrackedDevicePose_t pose{};
-    vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, &pose, 1);
+    if (vr->is_using_spatial()) {
+        // Pin the slate to the same display aperture as the world quad, nudged toward the player.
+        const auto plane = vr->get_spatial_ui_plane();
+        auto glm_matrix = plane.to_matrix();
+        glm_matrix[3] += glm::vec4{plane.normal * 0.01f, 0.0f};
 
-    auto rotation_offset = glm::inverse(vr->get_rotation_offset());
-
-    if (vr->is_decoupled_pitch_enabled() && vr->is_decoupled_pitch_ui_adjust_enabled()) {
-        const auto pre_flat_rotation = vr->get_pre_flattened_rotation();
-        const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
-
-        // Add the inverse of the pitch rotation to the rotation offset
-        rotation_offset = glm::normalize(glm::inverse(pre_flat_pitch * vr->get_rotation_offset()));
-    }
-
-    //auto glm_matrix = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
-    auto glm_matrix = Matrix4x4f{rotation_offset};
-    if (m_ui_follows_view->value()) {
-        const auto mat = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
-        glm_matrix = glm::extractMatrixRotation(mat);
-        glm_matrix[3] += mat[3];
+        const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(glm_matrix)};
+        vr::VROverlay()->SetOverlayTransformAbsolute(m_slate_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
+        vr::VROverlay()->SetOverlayWidthInMeters(m_slate_overlay_handle, plane.display_size(vr->get_spatial_size()).x);
     } else {
-        glm_matrix[3] += vr->get_standing_origin();
+        glm::mat4 glm_matrix{1.0f};
+
+        if (m_ui_follows_view->value()) {
+            vr::TrackedDevicePose_t pose{};
+            vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, &pose, 1);
+
+            const auto mat = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
+            glm_matrix = glm::extractMatrixRotation(mat);
+            glm_matrix[3] += mat[3];
+            glm_matrix[3] -= glm_matrix[2] * m_slate_distance->value();
+            glm_matrix[3] += m_slate_x_offset->value() * glm_matrix[0];
+            glm_matrix[3] += m_slate_y_offset->value() * glm_matrix[1];
+            glm_matrix[3].w = 1.0f;
+        } else {
+            // World-locked: the canonical UI plane (single source of the slate placement math).
+            glm_matrix = get_ui_plane().to_matrix();
+        }
+
+        const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(glm_matrix)};
+        vr::VROverlay()->SetOverlayTransformAbsolute(m_slate_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
+
+        const auto is_d3d12 = g_framework->get_renderer_type() == Framework::RendererType::D3D12;
+        const auto size = is_d3d12 ? g_framework->get_d3d12_rt_size() : g_framework->get_d3d11_rt_size();
+        const auto aspect = size.x / size.y;
+        const auto width_meters = get_effective_slate_size() * aspect;
+        vr::VROverlay()->SetOverlayWidthInMeters(m_slate_overlay_handle, width_meters);
     }
-
-    glm_matrix[3] -= glm_matrix[2] * m_slate_distance->value();
-    glm_matrix[3] += m_slate_x_offset->value() * glm_matrix[0];
-    glm_matrix[3] += m_slate_y_offset->value() * glm_matrix[1];
-    glm_matrix[3].w = 1.0f;
-    
-    const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(glm_matrix)};
-    vr::VROverlay()->SetOverlayTransformAbsolute(m_slate_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
-
-    const auto is_d3d12 = g_framework->get_renderer_type() == Framework::RendererType::D3D12;
-    const auto size = is_d3d12 ? g_framework->get_d3d12_rt_size() : g_framework->get_d3d11_rt_size();
-    const auto aspect = size.x / size.y;
-    const auto width_meters = m_slate_size->value() * aspect;
-    vr::VROverlay()->SetOverlayWidthInMeters(m_slate_overlay_handle, width_meters);
 
     if (is_d3d11) {
         if (vr->m_d3d11.get_ui_tex().Get() == nullptr) {
@@ -397,6 +408,53 @@ void OverlayComponent::update_slate_openvr() {
         vr::Texture_t ui_tex{(void*)&overlay_tex, vr::TextureType_DirectX12, vr::ColorSpace_Auto};
         vr::VROverlay()->SetOverlayTexture(m_slate_overlay_handle, &ui_tex);   
     }
+}
+
+void OverlayComponent::update_spatial_overlay_openvr() {
+    auto& vr = VR::get();
+
+    if (!vr->get_runtime()->is_openvr()) {
+        return;
+    }
+
+    // Not gated on is_gui_enabled: the GUI toggle hides only the UI slate; the world stays up
+    // (the eye submits are black whenever spatial is on).
+    if (!vr->is_using_spatial()) {
+        vr::VROverlay()->HideOverlay(m_spatial_overlay_handle);
+        return;
+    }
+
+    const auto is_d3d11 = g_framework->get_renderer_type() == Framework::RendererType::D3D11;
+
+    // D3D12 parity is a later increment; only D3D11 feeds the world quad.
+    ID3D11Texture2D* world_tex = is_d3d11 ? vr->m_d3d11.get_spatial_overlay_tex().Get() : nullptr;
+    if (world_tex == nullptr) {
+        vr::VROverlay()->HideOverlay(m_spatial_overlay_handle);
+        return;
+    }
+
+    vr::VROverlay()->ShowOverlay(m_spatial_overlay_handle);
+
+    // Side-by-side flag splits the full texture L|R, so submit the whole thing.
+    vr::VRTextureBounds_t bounds{0.0f, 0.0f, 1.0f, 1.0f};
+    vr::VROverlay()->SetOverlayTextureBounds(m_spatial_overlay_handle, &bounds);
+
+    const auto plane = vr->get_spatial_ui_plane();
+
+    const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(plane.to_matrix())};
+    vr::VROverlay()->SetOverlayTransformAbsolute(m_spatial_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
+
+    // Stretch the ~square per-eye texels to the content aspect so the window matches the UI slate.
+    D3D11_TEXTURE2D_DESC desc{};
+    world_tex->GetDesc(&desc);
+    const float tex_aspect_per_eye = ((float)desc.Width * 0.5f) / (float)desc.Height;
+    const float content_aspect = plane.half_width / glm::max(plane.half_height, 0.0001f);
+    vr::VROverlay()->SetOverlayTexelAspect(m_spatial_overlay_handle, content_aspect / tex_aspect_per_eye);
+
+    vr::VROverlay()->SetOverlayWidthInMeters(m_spatial_overlay_handle, plane.display_size(vr->get_spatial_size()).x);
+
+    vr::Texture_t tex{(void*)world_tex, vr::TextureType_DirectX, vr::ColorSpace_Auto};
+    vr::VROverlay()->SetOverlayTexture(m_spatial_overlay_handle, &tex);
 }
 
 bool OverlayComponent::update_wrist_overlay_openvr() {
@@ -807,13 +865,53 @@ void OverlayComponent::update_overlay_openvr() {
     }
 }
 
+float OverlayComponent::get_effective_slate_size() const {
+    return m_slate_size->value();
+}
+
+OverlayComponent::UIPlaneTransform OverlayComponent::get_ui_plane() const {
+    auto& vr = VR::get();
+    UIPlaneTransform plane{};
+
+    // World-locked placement, mirroring generate_slate_quad's "UI follows view == false" branch.
+    auto rotation_offset = glm::inverse(vr->get_rotation_offset());
+
+    if (vr->is_decoupled_pitch_enabled() && vr->is_decoupled_pitch_ui_adjust_enabled()) {
+        const auto pre_flat_rotation = vr->get_pre_flattened_rotation();
+        const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
+        rotation_offset = glm::normalize(glm::inverse(pre_flat_pitch * vr->get_rotation_offset()));
+    }
+
+    glm::mat4 glm_matrix = Matrix4x4f{rotation_offset};
+    glm_matrix[3] += vr->get_standing_origin();
+    glm_matrix[3] -= glm_matrix[2] * m_slate_distance->value();
+    glm_matrix[3] += m_slate_x_offset->value() * glm_matrix[0];
+    glm_matrix[3] += m_slate_y_offset->value() * glm_matrix[1];
+    glm_matrix[3].w = 1.0f;
+
+    const auto is_d3d12 = g_framework->get_renderer_type() == Framework::RendererType::D3D12;
+    const auto rt = is_d3d12 ? g_framework->get_d3d12_rt_size() : g_framework->get_d3d11_rt_size();
+    const float aspect = (rt.y != 0) ? ((float)rt.x / (float)rt.y) : (16.0f / 9.0f);
+    const float size_meters = get_effective_slate_size();
+
+    plane.center = glm::vec3{glm_matrix[3]};
+    plane.right = glm::normalize(glm::vec3{glm_matrix[0]});
+    plane.up = glm::normalize(glm::vec3{glm_matrix[1]});
+    plane.normal = glm::normalize(glm::vec3{glm_matrix[2]});
+    plane.half_width = 0.5f * size_meters * aspect;
+    plane.half_height = 0.5f * size_meters;
+
+    return plane;
+}
+
 std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::OpenXR::generate_slate_quad(
-    runtimes::OpenXR::SwapchainIndex swapchain, 
-    XrEyeVisibility eye) 
+    runtimes::OpenXR::SwapchainIndex swapchain,
+    XrEyeVisibility eye)
 {
     auto& vr = VR::get();
 
-    if (!vr->is_gui_enabled()) {
+    // In spatial mode this quad carries the world, so it stays up when the GUI is hidden.
+    if (!vr->is_gui_enabled() && !vr->is_using_spatial()) {
         m_parent->m_intersect_state.intersecting = false;
         return std::nullopt;
     }
@@ -837,40 +935,45 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
     layer.eyeVisibility = eye;
 
     auto glm_matrix = glm::identity<glm::mat4>();
+    float meters_w = 0.0f;
+    float meters_h = 0.0f;
 
-    if (vr->m_overlay_component.m_ui_follows_view->value()) {
-        layer.space = vr->m_openxr->view_space;
-    } else {
-        auto rotation_offset = glm::inverse(vr->get_rotation_offset());
+    if (vr->is_using_spatial()) {
+        // The slate IS the display aperture -- the same cached plane the off-axis projections are
+        // built from, scaled by Spatial Size.
+        const auto plane = vr->get_spatial_ui_plane();
+        glm_matrix = plane.to_matrix();
 
-        if (vr->is_decoupled_pitch_enabled() && vr->is_decoupled_pitch_ui_adjust_enabled()) {
-            const auto pre_flat_rotation = vr->get_pre_flattened_rotation();
-            const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
-
-            // Add the inverse of the pitch rotation to the rotation offset
-            rotation_offset = glm::normalize(glm::inverse(pre_flat_pitch * vr->get_rotation_offset()));
-        }
-
-        glm_matrix = Matrix4x4f{rotation_offset};   
-        glm_matrix[3] += vr->get_standing_origin();
+        const auto size = plane.display_size(vr->get_spatial_size());
+        meters_w = size.x;
+        meters_h = size.y;
         layer.space = vr->m_openxr->stage_space;
+    } else {
+        const auto size_meters = m_parent->get_effective_slate_size();
+        meters_w = (float)ui_swapchain.width / (float)ui_swapchain.height * size_meters;
+        meters_h = size_meters;
+
+        if (vr->m_overlay_component.m_ui_follows_view->value()) {
+            layer.space = vr->m_openxr->view_space;
+            glm_matrix[3] -= glm_matrix[2] * m_parent->m_slate_distance->value();
+            glm_matrix[3] += m_parent->m_slate_x_offset->value() * glm_matrix[0];
+            glm_matrix[3] += m_parent->m_slate_y_offset->value() * glm_matrix[1];
+            glm_matrix[3].w = 1.0f;
+        } else {
+            // World-locked: the canonical UI plane (single source of the slate placement math).
+            glm_matrix = m_parent->get_ui_plane().to_matrix();
+            layer.space = vr->m_openxr->stage_space;
+        }
     }
 
-    const auto size_meters = m_parent->m_slate_size->value();
-    const auto meters_w = (float)ui_swapchain.width / (float)ui_swapchain.height * size_meters;
-    const auto meters_h = size_meters;
     layer.size = {meters_w, meters_h};
-
-    glm_matrix[3] -= glm_matrix[2] * m_parent->m_slate_distance->value();
-    glm_matrix[3] += m_parent->m_slate_x_offset->value() * glm_matrix[0];
-    glm_matrix[3] += m_parent->m_slate_y_offset->value() * glm_matrix[1];
-    glm_matrix[3].w = 1.0f;
 
     layer.pose.orientation = runtimes::OpenXR::to_openxr(glm::quat_cast(glm_matrix));
     layer.pose.position = runtimes::OpenXR::to_openxr(glm_matrix[3]);
 
-    // Check if the controller pointer intersects with the quad, and we can use this to emulate the mouse
-    if (vr->is_using_controllers()) {
+    // Controller mouse emulation. The quad pose is identical for both per-eye layers, so compute
+    // once per frame on the left/both call; gated on the GUI actually showing.
+    if (is_left_eye && vr->is_using_controllers() && vr->is_gui_enabled()) {
         // Right only for now for testing
         const auto controller_index = !vr->m_swap_controllers->value() ? vr->get_right_controller_index() : vr->get_left_controller_index();
         const auto right_controller_rot = glm::quat{vr->get_rotation(controller_index, false)};
@@ -908,7 +1011,7 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
                 m_parent->m_intersect_state.intersecting = false;
             }
         }
-    } else {
+    } else if (is_left_eye) {
         m_parent->m_intersect_state.intersecting = false;
     }
 
@@ -916,8 +1019,8 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
 }
 
 std::optional<std::reference_wrapper<XrCompositionLayerCylinderKHR>> OverlayComponent::OpenXR::generate_slate_cylinder(
-    runtimes::OpenXR::SwapchainIndex swapchain, 
-    XrEyeVisibility eye) 
+    runtimes::OpenXR::SwapchainIndex swapchain,
+    XrEyeVisibility eye)
 {
     auto& vr = VR::get();
 
@@ -963,7 +1066,7 @@ std::optional<std::reference_wrapper<XrCompositionLayerCylinderKHR>> OverlayComp
         layer.space = vr->m_openxr->stage_space;
     }
 
-    const auto size_meters = m_parent->m_slate_size->value();
+    const auto size_meters = m_parent->get_effective_slate_size();
     const auto meters_w = (float)ui_swapchain.width / (float)ui_swapchain.height * size_meters;
     const auto meters_h = size_meters;
 
@@ -991,6 +1094,15 @@ std::optional<std::reference_wrapper<XrCompositionLayerBaseHeader>> OverlayCompo
     runtimes::OpenXR::SwapchainIndex swapchain, 
     XrEyeVisibility eye)
 {
+    // Spatial pins the slate to the flat aperture; a cylinder can't fit it.
+    if (VR::get()->is_using_spatial()) {
+        if (auto result = generate_slate_quad(swapchain, eye); result.has_value()) {
+            return *(XrCompositionLayerBaseHeader*)&result.value().get();
+        }
+
+        return std::nullopt;
+    }
+
     switch ((OverlayComponent::OverlayType)m_parent->m_slate_overlay_type->value()) {
     default:
     case OverlayComponent::OverlayType::QUAD:

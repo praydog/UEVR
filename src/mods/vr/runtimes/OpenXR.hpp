@@ -209,6 +209,9 @@ public:
     std::vector<XrView> views{};
     std::vector<XrView> stage_views{};
 
+    // Per-eye off-axis projections from the cached aperture plane (shared VRRuntime helper).
+    void update_spatial_projections(float nearz);
+
     //std::deque<std::vector<XrView>> stage_view_queue{};
     struct PipelineState {
         XrFrameState frame_state{XR_TYPE_FRAME_STATE};

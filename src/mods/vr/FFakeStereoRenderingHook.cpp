@@ -4791,10 +4791,31 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         const auto is_2d_screen = vr->is_using_2d_screen();
 
         const auto rotation_offset = vr->get_rotation_offset();
-        const auto current_hmd_rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(0)});
         const auto current_eye_rotation_offset = glm::normalize(glm::quat{vr->get_eye_transform(true_index)});
 
-        const auto new_rotation = glm::normalize(vqi_norm * current_hmd_rotation * current_eye_rotation_offset);
+        glm::quat new_rotation{};
+        glm::quat eye_separation_rotation{};
+
+        if (vr->is_using_spatial()) {
+            // Face the cached aperture plane -- the same basis the off-axis frustum is built in,
+            // so the render camera and the projection cannot drift apart. Head POSITION still
+            // drives parallax.
+            const auto plane = vr->get_spatial_ui_plane();
+            const auto spatial_facing = glm::quat_cast(glm::mat3{plane.right, plane.up, plane.normal});
+            const auto window_rotation = glm::normalize(rotation_offset * spatial_facing);
+
+            // Orientation is frozen window-facing with no eye cant (matching the frustum), but the
+            // IPD must follow the ACTUAL head orientation or the eye apex drifts off the
+            // projection's apex and stereo fights at the window edges.
+            new_rotation = glm::normalize(vqi_norm * window_rotation); // window normal, no cant
+            const auto actual_hmd_rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(0)});
+            eye_separation_rotation = glm::normalize(vqi_norm * actual_hmd_rotation * current_eye_rotation_offset);
+        } else {
+            const auto current_hmd_rotation = glm::normalize(rotation_offset * glm::quat{vr->get_rotation(0)});
+            new_rotation = glm::normalize(vqi_norm * current_hmd_rotation * current_eye_rotation_offset);
+            eye_separation_rotation = new_rotation;
+        }
+
         const auto eye_offset = glm::vec3{vr->get_eye_offset((VRRuntime::Eye)(true_index))};
 
 
@@ -4806,7 +4827,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
 
         const auto head_offset = quat_converter * (vqi_norm * (pos * world_scale));
         const auto head_offset_flat = quat_converter * (vqi_norm * (pos_flat * world_scale));
-        const auto eye_separation = quat_converter * (glm::normalize(new_rotation) * (eye_offset * world_scale));
+        const auto eye_separation = quat_converter * (eye_separation_rotation * (eye_offset * world_scale));
 
         if (!has_double_precision) {
             if (!is_2d_screen) {

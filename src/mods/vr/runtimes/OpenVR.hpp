@@ -34,6 +34,9 @@ struct OpenVR final : public VRRuntime {
     VRRuntime::Error consume_events(std::function<void(void*)> callback) override;
     VRRuntime::Error update_matrices(float nearz, float farz) override;
 
+    // Per-eye off-axis projections from the cached aperture plane (shared VRRuntime helper).
+    void update_spatial_projections(float nearz);
+
     void destroy() override;
 
     void enqueue_render_poses(uint32_t frame_count) override;

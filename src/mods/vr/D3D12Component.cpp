@@ -269,6 +269,9 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
     const float clear_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
     const auto is_2d_screen = vr->is_using_2d_screen();
+    // Spatial (OpenXR) reuses the 2D-screen frame structure: content on quads, projection layer black.
+    const auto is_spatial_screen = vr->is_using_spatial() && runtime->is_openxr();
+    const auto is_screen_capture = is_2d_screen || is_spatial_screen;
 
     auto draw_2d_view = [&](d3d12::CommandContext& commands, ID3D12Resource* render_target) {
         if (ui_should_invert_alpha && m_game_ui_tex.texture.Get() != nullptr && m_game_ui_tex.srv_heap != nullptr) {
@@ -277,7 +280,10 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
         draw_spectator_view(commands.cmd_list.Get(), is_right_eye_frame);
 
-        if (is_2d_screen && m_game_tex.texture.Get() != nullptr && m_game_tex.srv_heap != nullptr) {
+        if (is_screen_capture && m_game_tex.texture.Get() != nullptr && m_game_tex.srv_heap != nullptr) {
+            // In spatial mode the GUI toggle hides only the UI; the world stays on the quad.
+            const bool composite_ui = is_2d_screen || vr->is_gui_enabled();
+
             // Clear previous frame
             for (auto& screen : m_2d_screen_tex) {
                 commands.clear_rtv(screen, clear_color, ENGINE_SRC_COLOR);
@@ -294,7 +300,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 ENGINE_SRC_COLOR
             );
 
-            if (m_game_ui_tex.texture.Get() != nullptr && m_game_ui_tex.srv_heap != nullptr) {
+            if (composite_ui && m_game_ui_tex.texture.Get() != nullptr && m_game_ui_tex.srv_heap != nullptr) {
                 d3d12::render_srv_to_rtv(
                     m_game_batch.get(),
                     commands.cmd_list.Get(),
@@ -306,7 +312,8 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             }
 
             if (!is_afr) {
-                // Render right side to right screen tex
+                // Render right side to right screen tex. With Native Stereo Fix the right eye renders
+                // into the scene capture target (the double-wide's right half is empty), so prefer it.
                 if (m_scene_capture_tex.texture.Get() != nullptr) {
                     d3d12::render_srv_to_rtv(
                         m_game_batch.get(),
@@ -328,7 +335,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                     );
                 }
 
-                if (m_game_ui_tex.texture.Get() != nullptr && m_game_ui_tex.srv_heap != nullptr) {
+                if (composite_ui && m_game_ui_tex.texture.Get() != nullptr && m_game_ui_tex.srv_heap != nullptr) {
                     d3d12::render_srv_to_rtv(
                         m_game_batch.get(),
                         commands.cmd_list.Get(),
@@ -378,7 +385,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         m_openvr.ui_tex.commands.execute();
     } else if (runtime->is_openxr() && runtime->ready() && vr->m_openxr->frame_began) {
         if (is_right_eye_frame) {
-            if (is_2d_screen) {
+            if (is_screen_capture) {
                 if (is_afr) {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI_RIGHT, m_2d_screen_tex[0].texture.Get(), draw_2d_view, clear_rt, ENGINE_SRC_COLOR);
                 } else {
@@ -394,7 +401,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             if (fw_rt && g_framework->is_drawing_anything()) {
                 m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, g_framework->get_rendertarget_d3d12().Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             }
-        } else if (is_2d_screen) {
+        } else if (is_screen_capture) {
             m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, m_2d_screen_tex[0].texture.Get(), draw_2d_view, clear_rt, ENGINE_SRC_COLOR);
         } else if (m_game_ui_tex.commands.ready()) {
             m_game_ui_tex.commands.wait(INFINITE);
@@ -648,7 +655,11 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
             auto& openxr_overlay = vr->get_overlay_component().get_openxr();
 
-            if (vr->m_2d_screen_mode->value()) {
+            // Spatial shares 2D-screen mode's layer structure: one content quad per eye (posed at the
+            // aperture by generate_slate_quad) over a real-but-black projection layer. One quad per
+            // eye keeps the aperture edge flush; the projection layer keeps runtimes that mishandle
+            // quad-only frames (Oculus) anchored.
+            if (vr->is_using_spatial() || vr->m_2d_screen_mode->value()) {
                 const auto left_layer = openxr_overlay.generate_slate_layer(runtimes::OpenXR::SwapchainIndex::UI, XrEyeVisibility::XR_EYE_VISIBILITY_LEFT);
                 const auto right_layer = openxr_overlay.generate_slate_layer(runtimes::OpenXR::SwapchainIndex::UI_RIGHT, XrEyeVisibility::XR_EYE_VISIBILITY_RIGHT);
 

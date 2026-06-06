@@ -186,6 +186,55 @@ struct VRRuntime {
     // used to crop the rendered eye textures to account for projection adjustments
     float view_bounds[2][4] = {0, 1, 0, 1, 0, 1, 0, 1};
 
+    // The world-locked aperture rectangle spatial mode looks through (mirrors
+    // OverlayComponent::UIPlaneTransform, which can't be included here without a cycle).
+    struct SpatialAperture {
+        glm::vec3 center{};
+        glm::vec3 right{};
+        glm::vec3 up{};
+        glm::vec3 normal{}; // toward the player
+        float half_width{};
+        float half_height{};
+    };
+
+    // Off-axis (fishtank) projection for one eye through the aperture, in the GAME's
+    // runtime-agnostic convention; shared by OpenVR and OpenXR so the math cannot drift.
+    // NB: the vertical skew must be (sum_tb * -inv_tb) -- flipping it inverts vertical parallax
+    // (a swim that tracks head pitch). Also resets view_bounds[eye] to the full texture.
+    void set_spatial_projection(uint32_t eye, const glm::vec3& eye_pos, const SpatialAperture& ap, float nearz) {
+        // Eye offset in aperture axes; the render camera faces the aperture normal (frozen in
+        // calculate_stereo_view_offset), so this is a standard off-axis frustum.
+        const glm::vec3 e = eye_pos - ap.center;
+        const float ex = glm::dot(e, ap.right);
+        const float ey = glm::dot(e, ap.up);
+        float d = glm::dot(e, ap.normal); // distance from the aperture plane (eye on the +N / player side)
+        if (d < 0.05f) {
+            d = 0.05f;
+        }
+
+        const float left   = (-ap.half_width  - ex) / d;
+        const float right  = ( ap.half_width  - ex) / d;
+        const float top    = ( ap.half_height - ey) / d;
+        const float bottom = (-ap.half_height - ey) / d;
+
+        const float sum_rl = right + left;
+        const float sum_tb = top + bottom;
+        const float inv_rl = 1.0f / (right - left);
+        const float inv_tb = 1.0f / (top - bottom);
+
+        this->projections[eye] = Matrix4x4f {
+            (2.0f * inv_rl), 0.0f, 0.0f, 0.0f,
+            0.0f, (2.0f * inv_tb), 0.0f, 0.0f,
+            (sum_rl * -inv_rl), (sum_tb * -inv_tb), 0.0f, 1.0f,
+            0.0f, 0.0f, nearz, 0.0f
+        };
+
+        this->view_bounds[eye][0] = 0.0f;
+        this->view_bounds[eye][1] = 1.0f;
+        this->view_bounds[eye][2] = 0.0f;
+        this->view_bounds[eye][3] = 1.0f;
+    }
+
     float last_eye_matrix_nearz = 0.01f;
     bool should_update_eye_matrices{true};
     bool should_recalculate_eye_projections{false};
