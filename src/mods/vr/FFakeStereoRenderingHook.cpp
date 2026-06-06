@@ -4652,7 +4652,12 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         index_starts_from_one = false;
     }
 
-    const auto is_full_pass = view_index == 0 && !index_was_ever_two && !index_was_ever_negative;
+    // On UE5 (detected via double-precision LWC math) eye indices are always 0/1 and a genuine
+    // mono/full pass arrives as INDEX_NONE (-1), which is already ignored above. UE <= 5.4
+    // happened to send -1 (or 2) early enough to flip the flags below, but UE 5.5/5.6 only ever
+    // sends 0/1 - leaving view 0 permanently misclassified as a "full pass", which skips per-eye
+    // transforms/callbacks for one eye only and produces a heavily doubled image.
+    const auto is_full_pass = view_index == 0 && !index_was_ever_two && !index_was_ever_negative && !g_hook->m_has_double_precision;
 
     auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
     const auto has_double_precision = g_hook->m_has_double_precision;
