@@ -449,6 +449,11 @@ public:
     }
 
     bool is_decoupled_pitch_enabled() const {
+        // Spatial mode gets its own decoupled-pitch toggle, independent of the global VR setting.
+        if (is_using_spatial()) {
+            return m_spatial_decoupled_pitch->value();
+        }
+
         return m_decoupled_pitch->value();
     }
 
@@ -573,7 +578,43 @@ public:
     }
 
     bool is_using_2d_screen() const {
-        return m_2d_screen_mode->value();
+        // 2D screen and spatial mode are mutually exclusive; spatial takes precedence
+        // if both flags are somehow set (e.g. a config saved before the toggles were exclusive).
+        return m_2d_screen_mode->value() && !m_spatial_mode->value();
+    }
+
+    bool is_using_spatial() const {
+        if (!m_spatial_mode->value()) {
+            return false;
+        }
+
+        // Combos with no spatial display backend no-op to normal VR: OpenVR+D3D12 (the capture /
+        // black eye submits are D3D11-only) and extreme compatibility mode (single-eye frame layout).
+        if (is_extreme_compatibility_mode_enabled()) {
+            return false;
+        }
+
+        if (get_runtime()->is_openvr() && g_framework->is_dx12()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    // Spatial Size: display-only shrink of the aperture quad (1.0 = life-size). The same content on
+    // a smaller quad shrinks world + UI together into a coherent miniature; the render is untouched.
+    float get_spatial_size() const { return m_spatial_size->value(); }
+
+    // Cached UI/slate plane. Written on the game thread; read by render/present threads which hold
+    // pose_mtx and must NOT re-lock it. Its own mutex prevents torn reads while the plane moves.
+    vrmod::OverlayComponent::UIPlaneTransform get_spatial_ui_plane() const {
+        std::shared_lock _{m_spatial_ui_plane_mtx};
+        return m_spatial_ui_plane;
+    }
+    void update_spatial_ui_plane() {
+        const auto plane = m_overlay_component.get_ui_plane(); // takes pose/rotation locks; keep outside ours
+        std::unique_lock _{m_spatial_ui_plane_mtx};
+        m_spatial_ui_plane = plane;
     }
 
     bool is_roomscale_enabled() const {
@@ -895,6 +936,11 @@ private:
     const ModToggle::Ptr m_decoupled_pitch_ui_adjust{ ModToggle::create(generate_name("DecoupledPitchUIAdjust"), true) };
     const ModToggle::Ptr m_load_blueprint_code{ ModToggle::create(generate_name("LoadBlueprintCode"), false, true) };
     const ModToggle::Ptr m_2d_screen_mode{ ModToggle::create(generate_name("2DScreenMode"), false) };
+    const ModToggle::Ptr m_spatial_mode{ ModToggle::create(generate_name("SpatialMode"), false) };
+    const ModSlider::Ptr m_spatial_size{ ModSlider::create(generate_name("SpatialSize"), 0.1f, 1.0f, 1.0f) };
+    const ModToggle::Ptr m_spatial_decoupled_pitch{ ModToggle::create(generate_name("SpatialDecoupledPitch"), false) };
+    vrmod::OverlayComponent::UIPlaneTransform m_spatial_ui_plane{};
+    mutable std::shared_mutex m_spatial_ui_plane_mtx{};
     const ModToggle::Ptr m_roomscale_movement{ ModToggle::create(generate_name("RoomscaleMovement"), false) };
     const ModToggle::Ptr m_roomscale_sweep{ ModToggle::create(generate_name("RoomscaleMovementSweep"), true) };
     const ModToggle::Ptr m_swap_controllers{ ModToggle::create(generate_name("SwapControllerInputs"), false) };
@@ -978,6 +1024,7 @@ private:
     const ModKey::Ptr m_keybind_load_camera_2{ ModKey::create(generate_name("LoadCamera2Key")) };
 
     const ModKey::Ptr m_keybind_toggle_2d_screen{ ModKey::create(generate_name("Toggle2DScreenKey")) };
+    const ModKey::Ptr m_keybind_toggle_spatial{ ModKey::create(generate_name("ToggleSpatialModeKey")) };
     const ModKey::Ptr m_keybind_disable_vr{ ModKey::create(generate_name("DisableVRKey")) };
     bool m_disable_vr{false}; // definitely should not be persistent
 
@@ -1041,6 +1088,9 @@ public:
             *m_decoupled_pitch_ui_adjust,
             *m_load_blueprint_code,
             *m_2d_screen_mode,
+            *m_spatial_mode,
+            *m_spatial_size,
+            *m_spatial_decoupled_pitch,
             *m_roomscale_movement,
             *m_roomscale_sweep,
             *m_swap_controllers,
@@ -1085,6 +1135,7 @@ public:
             *m_keybind_load_camera_1,
             *m_keybind_load_camera_2,
             *m_keybind_toggle_2d_screen,
+            *m_keybind_toggle_spatial,
             *m_keybind_disable_vr,
             *m_keybind_toggle_gui,
             *m_requested_runtime_name,

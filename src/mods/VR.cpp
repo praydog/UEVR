@@ -1396,6 +1396,11 @@ void VR::on_pre_calculate_stereo_view_offset(void* stereo_device, const int32_t 
         return;
     }
 
+    // Refresh the plane cache on the game thread; render-thread consumers must not take the pose locks.
+    if (is_using_spatial()) {
+        update_spatial_ui_plane();
+    }
+
     const auto now = std::chrono::high_resolution_clock::now();
     const auto delta = std::chrono::duration<float, std::chrono::seconds::period>(now - m_last_lerp_update).count();
 
@@ -1752,6 +1757,11 @@ void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
         option.config_load(cfg, set_defaults);
     }
 
+    // 2D screen and spatial are mutually exclusive; spatial wins if a config has both set.
+    if (m_spatial_mode->value() && m_2d_screen_mode->value()) {
+        m_2d_screen_mode->value() = false;
+    }
+
     if (get_runtime() != nullptr && get_runtime()->loaded) {
         get_runtime()->on_config_load(cfg, set_defaults);
 
@@ -1772,8 +1782,13 @@ void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
 
     m_overlay_component.on_config_load(cfg, set_defaults);
 
+    // Seed the aperture plane if spatial loaded enabled, before anything consumes the default plane.
+    if (m_spatial_mode->value()) {
+        update_spatial_ui_plane();
+    }
+
     if (m_cvar_manager != nullptr) {
-        m_cvar_manager->on_config_load(cfg, set_defaults);   
+        m_cvar_manager->on_config_load(cfg, set_defaults);
     }
 
     // Load camera offsets
@@ -1950,6 +1965,19 @@ void VR::handle_keybinds() {
 
     if (m_keybind_toggle_2d_screen->is_key_down_once()) {
         m_2d_screen_mode->toggle();
+        if (m_2d_screen_mode->value() && m_spatial_mode->value()) {
+            m_spatial_mode->value() = false; // mutually exclusive
+            get_runtime()->should_recalculate_eye_projections = true; // drop the stale off-axis projection
+        }
+    }
+
+    if (m_keybind_toggle_spatial->is_key_down_once()) {
+        m_spatial_mode->toggle();
+        if (m_spatial_mode->value()) {
+            m_2d_screen_mode->value() = false; // mutually exclusive
+            update_spatial_ui_plane(); // seed the aperture now; consumers must never see the default plane
+        }
+        get_runtime()->should_recalculate_eye_projections = true;
     }
 
     if (m_keybind_disable_vr->is_key_down_once()) {
@@ -2250,7 +2278,7 @@ void VR::on_post_present() {
 }
 
 uint32_t VR::get_hmd_width() const {
-    if (m_2d_screen_mode->value()) {
+    if (is_using_2d_screen()) {
         if (get_runtime()->is_openxr()) {
             return g_framework->get_rt_size().x * m_openxr->resolution_scale->value();
         }
@@ -2266,7 +2294,7 @@ uint32_t VR::get_hmd_width() const {
 }
 
 uint32_t VR::get_hmd_height() const {
-    if (m_2d_screen_mode->value()) {
+    if (is_using_2d_screen()) {
         if (get_runtime()->is_openxr()) {
             return g_framework->get_rt_size().y * m_openxr->resolution_scale->value();
         }
@@ -2394,7 +2422,26 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
 
         m_desktop_fix->draw("Desktop Spectator View");
         ImGui::SameLine();
-        m_2d_screen_mode->draw("2D Screen Mode");
+        if (m_2d_screen_mode->draw("2D Screen Mode") && m_2d_screen_mode->value()) {
+            // 2D screen and spatial mode are mutually exclusive
+            if (m_spatial_mode->value()) {
+                get_runtime()->should_recalculate_eye_projections = true; // drop the stale off-axis projection
+            }
+            m_spatial_mode->value() = false;
+        }
+
+        bool spatial_changed = m_spatial_mode->draw("Spatial Mode");
+        if (spatial_changed && m_spatial_mode->value()) {
+            m_2d_screen_mode->value() = false;
+            update_spatial_ui_plane(); // seed the aperture now; consumers must never see the default plane
+        }
+        if (m_spatial_mode->value()) {
+            spatial_changed |= m_spatial_size->draw("Spatial Size");
+        }
+        if (spatial_changed) {
+            // regenerate eye projection matrices so the new framing takes effect
+            get_runtime()->should_recalculate_eye_projections = true;
+        }
 
         ImGui::TextWrapped("Render Resolution (per-eye): %d x %d", get_runtime()->get_width(), get_runtime()->get_height());
         ImGui::TextWrapped("Total Render Resolution: %d x %d", get_runtime()->get_width() * 2, get_runtime()->get_height());
@@ -2578,7 +2625,8 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
 
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Decoupled Pitch")) {
-            m_decoupled_pitch->draw("Enabled");
+            m_decoupled_pitch->draw("Enabled VR");
+            m_spatial_decoupled_pitch->draw("Enabled Spatial");
             m_decoupled_pitch_ui_adjust->draw("Auto Adjust UI");
 
             ImGui::TreePop();
@@ -2607,6 +2655,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_::ImGuiCond_Once);
         if (ImGui::TreeNode("Overlay/Runtime Keys")) {
             m_keybind_toggle_2d_screen->draw("Toggle 2D Screen Mode Key");
+            m_keybind_toggle_spatial->draw("Toggle Spatial Mode Key");
             m_keybind_toggle_gui->draw("Toggle In-Game UI Key");
             m_keybind_disable_vr->draw("Disable VR Key");
 

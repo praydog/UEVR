@@ -482,6 +482,15 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
     this->eyes[1] = Matrix4x4f{OpenXR::to_glm(right_pose.orientation)};
     this->eyes[1][3] = Vector4f{*(Vector3f*)&right_pose.position, 1.0f};
 
+    // Spatial: off-axis projections recomputed every frame (parallax), bypassing the cached path.
+    if (VR::get()->is_using_spatial() && this->stage_views.size() >= 2) {
+        std::unique_lock __{this->eyes_mtx};
+        this->update_spatial_projections(nearz);
+        this->last_eye_matrix_nearz = nearz;
+        this->should_update_eye_matrices = false;
+        return VRRuntime::Error::SUCCESS;
+    }
+
     auto get_mat = [&](int eye) {
         const auto& vr = VR::get();
         std::array<float, 4> tan_half_fov{};
@@ -576,6 +585,23 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
     // don't allow the eye matrices to be derived again until after the next frame sync
     this->should_update_eye_matrices = false;
     return VRRuntime::Error::SUCCESS;
+}
+
+void OpenXR::update_spatial_projections(float nearz) {
+    const auto& vr = VR::get();
+
+    // The aperture IS the UI/slate plane, so the two stay locked.
+    // NB: must read the cached plane -- we hold pose_mtx here; get_standing_origin() would deadlock.
+    const auto plane = vr->get_spatial_ui_plane();
+    const SpatialAperture aperture{plane.center, plane.right, plane.up, plane.normal, plane.half_width, plane.half_height};
+
+    for (uint32_t eye = 0; eye < 2; ++eye) {
+        const auto& pose = this->stage_views[eye].pose;
+        const glm::vec3 eye_pos{pose.position.x, pose.position.y, pose.position.z};
+        this->set_spatial_projection(eye, eye_pos, aperture, nearz);
+    }
+
+    this->should_recalculate_eye_projections = false;
 }
 
 VRRuntime::Error OpenXR::update_input() {
@@ -1873,11 +1899,13 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
             layers.push_back((XrCompositionLayerBaseHeader*)&dummy_projection_layer);
         }
 
+        // Always push the projection layer -- in 2D/spatial it's black (content rides the quads),
+        // and quad-only frames break per-eye quad compositing on some runtimes (Oculus).
         for (auto& l : this->projection_layer_cache) {
             layers.push_back((XrCompositionLayerBaseHeader*)&l);
         }
 
-        for (auto& l : quad_layers) {   
+        for (auto& l : quad_layers) {
             layers.push_back(l);
         }
     }

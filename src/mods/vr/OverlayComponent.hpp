@@ -75,6 +75,7 @@ private:
     vr::VROverlayHandle_t m_overlay_handle{};
     vr::VROverlayHandle_t m_thumbnail_handle{};
     vr::VROverlayHandle_t m_slate_overlay_handle{};
+    vr::VROverlayHandle_t m_spatial_overlay_handle{}; // world-locked stereo quad for spatial mode (OpenVR)
 
     bool m_closed_ui{false};
     bool m_just_closed_ui{false};
@@ -115,7 +116,34 @@ private:
     const ModToggle::Ptr m_framework_mouse_emulation{ ModToggle::create("UI_Framework_MouseEmulation", true) };
 
 public:
-    OverlayComponent() 
+    // World-locked transform of the game UI (slate) plane in stage space. Mirrors the slate-quad
+    // placement (UI Distance / UI Size / offsets + recenter). Used to anchor spatial mode.
+    struct UIPlaneTransform {
+        glm::vec3 center{0.0f};
+        glm::vec3 right{1.0f, 0.0f, 0.0f};
+        glm::vec3 up{0.0f, 1.0f, 0.0f};
+        glm::vec3 normal{0.0f, 0.0f, 1.0f};
+        float half_width{1.0f};
+        float half_height{1.0f};
+
+        // Basis + center as a world pose; every quad pinned to this plane builds its pose here.
+        glm::mat4 to_matrix() const {
+            glm::mat4 m{glm::mat3{right, up, normal}};
+            m[3] = glm::vec4{center, 1.0f};
+            return m;
+        }
+
+        // Displayed quad size: the full content rectangle scaled by Spatial Size.
+        glm::vec2 display_size(float scale) const {
+            return {2.0f * half_width * scale, 2.0f * half_height * scale};
+        }
+    };
+    UIPlaneTransform get_ui_plane() const;
+
+    // Content-rectangle size = the user's UI Size. Spatial Size is applied at quad generation, not here.
+    float get_effective_slate_size() const;
+
+    OverlayComponent()
         : m_openxr{this}
     {
         m_options = { 
@@ -158,7 +186,7 @@ private:
             XrEyeVisibility eye = XR_EYE_VISIBILITY_BOTH
         );
         std::optional<std::reference_wrapper<XrCompositionLayerQuad>> generate_framework_ui_quad();
-        
+
     private:
         XrCompositionLayerQuad m_slate_layer{};
         XrCompositionLayerQuad m_slate_layer_right{};
@@ -176,4 +204,5 @@ private:
     void update_overlay_openvr();
     bool update_wrist_overlay_openvr();
     void update_slate_openvr();
+    void update_spatial_overlay_openvr();
 };}

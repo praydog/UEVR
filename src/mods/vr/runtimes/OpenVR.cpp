@@ -193,6 +193,14 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz) {
     this->eyes[vr::Eye_Left] = glm::rowMajor4(Matrix4x4f{ *(Matrix3x4f*)&local_left } );
     this->eyes[vr::Eye_Right] = glm::rowMajor4(Matrix4x4f{ *(Matrix3x4f*)&local_right } );
 
+    // Spatial: off-axis projections recomputed every frame (parallax), bypassing the cached path.
+    if (VR::get()->is_using_spatial()) {
+        this->update_spatial_projections(nearz);
+        this->last_eye_matrix_nearz = nearz;
+        this->should_update_eye_matrices = false;
+        return VRRuntime::Error::SUCCESS;
+    }
+
     auto get_mat = [&](vr::EVREye eye) {
         const auto& vr = VR::get();
         std::array<float, 4> tan_half_fov{};
@@ -276,6 +284,24 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz) {
     // don't allow the eye matrices to be derived again until after the next frame sync
     this->should_update_eye_matrices = false;
     return VRRuntime::Error::SUCCESS;
+}
+
+void OpenVR::update_spatial_projections(float nearz) {
+    const auto& vr = VR::get();
+
+    // The cached plane and the eye positions below share the TrackingUniverseStanding frame.
+    const auto plane = vr->get_spatial_ui_plane();
+    const SpatialAperture aperture{plane.center, plane.right, plane.up, plane.normal, plane.half_width, plane.half_height};
+
+    const auto current_hmd = this->get_current_hmd_pose();
+    const auto hmd_pose = glm::rowMajor4(Matrix4x4f{ *(Matrix3x4f*)&current_hmd });
+
+    for (uint32_t eye = 0; eye < 2; ++eye) {
+        const auto eye_to_absolute = hmd_pose * this->eyes[eye];
+        this->set_spatial_projection(eye, glm::vec3{eye_to_absolute[3]}, aperture, nearz);
+    }
+
+    this->should_recalculate_eye_projections = false;
 }
 
 void OpenVR::destroy() {

@@ -390,9 +390,12 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     }
 
     const auto is_2d_screen = vr->is_using_2d_screen();
+    // Spatial (OpenXR) reuses the 2D-screen frame structure: content on quads, projection layer black.
+    const auto is_spatial_screen = vr->is_using_spatial() && runtime->is_openxr();
+    const auto is_screen_capture = is_2d_screen || is_spatial_screen;
 
     auto draw_2d_view = [&]() {
-        if (!is_2d_screen || !m_engine_tex_ref.has_texture() || !m_engine_tex_ref.has_srv()) {
+        if (!is_screen_capture || !m_engine_tex_ref.has_texture() || !m_engine_tex_ref.has_srv()) {
             return;
         }
 
@@ -413,7 +416,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             RECT{0, 0, (LONG)((float)m_backbuffer_size[0] / 2.0f), (LONG)m_backbuffer_size[1]}
         );
 
-        if (m_engine_ui_ref.has_texture() && m_engine_ui_ref.has_srv()) {
+        // In spatial mode the GUI toggle hides only the UI; the world stays on the quad.
+        const bool composite_ui = is_2d_screen || vr->is_gui_enabled();
+
+        if (composite_ui && m_engine_ui_ref.has_texture() && m_engine_ui_ref.has_srv()) {
             render_srv_to_rtv(
                 m_game_batch.get(),
                 m_engine_ui_ref,
@@ -422,7 +428,8 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         }
 
         if (!is_afr) {
-            // Render right side to right screen tex
+            // Render right side to right screen tex. With Native Stereo Fix the right eye renders
+            // into the scene capture target (the double-wide's right half is empty), so prefer it.
             if (m_scene_capture_tex_ref.has_texture() && m_scene_capture_tex_ref.has_srv()) {
                 render_srv_to_rtv(
                     m_game_batch.get(),
@@ -438,7 +445,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 );
             }
 
-            if (m_engine_ui_ref.has_texture() && m_engine_ui_ref.has_srv()) {
+            if (composite_ui && m_engine_ui_ref.has_texture() && m_engine_ui_ref.has_srv()) {
                 render_srv_to_rtv(
                     m_game_batch.get(),
                     m_engine_ui_ref,
@@ -455,7 +462,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         }
     };
 
-    if (is_2d_screen) {
+    if (is_screen_capture) {
         draw_2d_view();
     }
 
@@ -473,7 +480,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         }
     } else if (runtime->is_openxr() && vr->m_openxr->frame_began) {
         if (is_right_eye_frame) {
-            if (is_2d_screen) {
+            if (is_screen_capture) {
                 if (is_afr) {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI_RIGHT, m_2d_screen_tex[0]);
                 } else {
@@ -491,7 +498,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             if (fw_rt != nullptr && g_framework->is_drawing_anything()) {
                 m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, fw_rt.Get());
             }
-        } else if (is_2d_screen) {
+        } else if (is_screen_capture) {
             m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::UI, m_2d_screen_tex[0]);
         }
     }
@@ -534,22 +541,28 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         if (runtime->is_openxr() && runtime->ready()) {
             LOG_VERBOSE("Copying left eye");
             //m_openxr.copy(0, backbuffer.Get());
-            D3D11_BOX src_box{};
-            src_box.left = 0;
-            src_box.top = 0;
-            src_box.bottom = m_backbuffer_size[1];
-            src_box.front = 0;
-            src_box.back = 1;
-
-            if (vr->is_extreme_compatibility_mode_enabled()) {
-                src_box.right = m_backbuffer_size[0];
+            if (is_screen_capture) {
+                // 2D/spatial: the projection layer is black by design -- clear instead of copying.
+                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_LEFT_EYE, nullptr, nullptr,
+                    [&](ID3D11Texture2D* rt) { clear_tex(rt); });
             } else {
-                src_box.right = m_backbuffer_size[0] / 2;
+                D3D11_BOX src_box{};
+                src_box.left = 0;
+                src_box.top = 0;
+                src_box.bottom = m_backbuffer_size[1];
+                src_box.front = 0;
+                src_box.back = 1;
+
+                if (vr->is_extreme_compatibility_mode_enabled()) {
+                    src_box.right = m_backbuffer_size[0];
+                } else {
+                    src_box.right = m_backbuffer_size[0] / 2;
+                }
+
+                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_LEFT_EYE, backbuffer.Get(), &src_box);
             }
 
-            m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_LEFT_EYE, backbuffer.Get(), &src_box);
-
-            if (scene_depth_tex != nullptr) {
+            if (scene_depth_tex != nullptr && !is_screen_capture) {
                 m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_DEPTH_LEFT_EYE, scene_depth_tex.Get(), nullptr);
             }
 
@@ -559,28 +572,42 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         }
 
         if (runtime->is_openvr()) {
-            D3D11_BOX src_box{};
-            src_box.left = 0;
-            src_box.top = 0;
-            src_box.bottom = m_backbuffer_size[1];
-            src_box.front = 0;
-            src_box.back = 1;
-
-            if (vr->is_extreme_compatibility_mode_enabled()) {
-                src_box.right = m_backbuffer_size[0];
-            } else {
-                src_box.right = m_backbuffer_size[0] / 2;
-            }
-
-            context->CopySubresourceRegion(m_left_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
-
             const auto submit_pose = vr->m_openvr->get_pose_for_submit();
 
-            if (m_is_shader_setup) {
-                ID3D11RenderTargetView* views[] = { m_left_eye_rtv.Get() };
-                context->OMSetRenderTargets(1, views, nullptr);
-                //context->ClearRenderTargetView(m_right_eye_rtv.Get(), clear_color);
-                invoke_shader(vr->m_frame_count, 0, m_backbuffer_size[0] / 2, m_backbuffer_size[1]);
+            if (vr->is_using_spatial() && m_spatial_overlay_tex != nullptr) {
+                // Spatial (alternating AFR): accumulate this eye into the side-by-side overlay,
+                // then submit the scene black (the eye copy + postprocess would be discarded).
+                D3D11_BOX eye_box{ 0, 0, 0, (UINT)(m_backbuffer_size[0] / 2), (UINT)m_backbuffer_size[1], 1 };
+                context->CopySubresourceRegion(m_spatial_overlay_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &eye_box);
+
+                const float clear_color[4]{};
+                if (m_left_eye_rtv != nullptr) {
+                    context->ClearRenderTargetView(m_left_eye_rtv.Get(), clear_color);
+                } else {
+                    clear_tex(m_left_eye_tex.Get());
+                }
+            } else {
+                D3D11_BOX src_box{};
+                src_box.left = 0;
+                src_box.top = 0;
+                src_box.bottom = m_backbuffer_size[1];
+                src_box.front = 0;
+                src_box.back = 1;
+
+                if (vr->is_extreme_compatibility_mode_enabled()) {
+                    src_box.right = m_backbuffer_size[0];
+                } else {
+                    src_box.right = m_backbuffer_size[0] / 2;
+                }
+
+                context->CopySubresourceRegion(m_left_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
+
+                if (m_is_shader_setup) {
+                    ID3D11RenderTargetView* views[] = { m_left_eye_rtv.Get() };
+                    context->OMSetRenderTargets(1, views, nullptr);
+                    //context->ClearRenderTargetView(m_right_eye_rtv.Get(), clear_color);
+                    invoke_shader(vr->m_frame_count, 0, m_backbuffer_size[0] / 2, m_backbuffer_size[1]);
+                }
             }
 
             vr::VRTextureWithPose_t left_eye{
@@ -603,24 +630,35 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         }};
 
         if (runtime->ready() && runtime->is_openxr()) {
+            // 2D/spatial: the projection layer is black by design -- clear the swapchains instead of
+            // copying, and skip depth (nothing to reproject).
+            const auto clear_swapchain = [&](runtimes::OpenXR::SwapchainIndex idx) {
+                m_openxr.copy((uint32_t)idx, nullptr, nullptr, [&](ID3D11Texture2D* rt) { clear_tex(rt); });
+            };
+
             if (is_actually_afr && !is_afr && !m_submitted_left_eye) {
                 LOG_VERBOSE("Copying left eye");
-                D3D11_BOX src_box{};
-                src_box.left = 0;
-                src_box.top = 0;
-                src_box.bottom = m_backbuffer_size[1];
-                src_box.front = 0;
-                src_box.back = 1;
 
-                if (vr->is_extreme_compatibility_mode_enabled()) {
-                    src_box.right = m_backbuffer_size[0];
+                if (is_screen_capture) {
+                    clear_swapchain(runtimes::OpenXR::SwapchainIndex::AFR_LEFT_EYE);
                 } else {
-                    src_box.right = m_backbuffer_size[0] / 2;
+                    D3D11_BOX src_box{};
+                    src_box.left = 0;
+                    src_box.top = 0;
+                    src_box.bottom = m_backbuffer_size[1];
+                    src_box.front = 0;
+                    src_box.back = 1;
+
+                    if (vr->is_extreme_compatibility_mode_enabled()) {
+                        src_box.right = m_backbuffer_size[0];
+                    } else {
+                        src_box.right = m_backbuffer_size[0] / 2;
+                    }
+
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_LEFT_EYE, backbuffer.Get(), &src_box);
                 }
 
-                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_LEFT_EYE, backbuffer.Get(), &src_box);
-
-                if (scene_depth_tex != nullptr) {
+                if (scene_depth_tex != nullptr && !is_screen_capture) {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_DEPTH_LEFT_EYE, scene_depth_tex.Get(), nullptr);
                 }
             }
@@ -628,40 +666,46 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             LOG_VERBOSE("Copying right eye");
 
             if (is_actually_afr) {
-                D3D11_BOX src_box{};
-                if (!vr->is_extreme_compatibility_mode_enabled()) {
-                    if (!is_afr) {
-                        src_box.left = m_backbuffer_size[0] / 2;
+                if (is_screen_capture) {
+                    clear_swapchain(runtimes::OpenXR::SwapchainIndex::AFR_RIGHT_EYE);
+                } else {
+                    D3D11_BOX src_box{};
+                    if (!vr->is_extreme_compatibility_mode_enabled()) {
+                        if (!is_afr) {
+                            src_box.left = m_backbuffer_size[0] / 2;
+                            src_box.right = m_backbuffer_size[0];
+                            src_box.top = 0;
+                            src_box.bottom = m_backbuffer_size[1];
+                            src_box.front = 0;
+                            src_box.back = 1;
+                        } else { // Copy the left eye on AFR
+                            src_box.left = 0;
+                            src_box.right = m_backbuffer_size[0] / 2;
+                            src_box.top = 0;
+                            src_box.bottom = m_backbuffer_size[1];
+                            src_box.front = 0;
+                            src_box.back = 1;
+                        }
+                    } else {
+                        src_box.left = 0;
                         src_box.right = m_backbuffer_size[0];
                         src_box.top = 0;
                         src_box.bottom = m_backbuffer_size[1];
                         src_box.front = 0;
                         src_box.back = 1;
-                    } else { // Copy the left eye on AFR
-                        src_box.left = 0;
-                        src_box.right = m_backbuffer_size[0] / 2;
-                        src_box.top = 0;
-                        src_box.bottom = m_backbuffer_size[1];
-                        src_box.front = 0;
-                        src_box.back = 1;
-                    }   
-                } else {
-                    src_box.left = 0;
-                    src_box.right = m_backbuffer_size[0];
-                    src_box.top = 0;
-                    src_box.bottom = m_backbuffer_size[1];
-                    src_box.front = 0;
-                    src_box.back = 1;
+                    }
+
+                    m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_RIGHT_EYE, backbuffer.Get(), &src_box);
                 }
 
-                m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_RIGHT_EYE, backbuffer.Get(), &src_box);
-
-                if (scene_depth_tex != nullptr) {
+                if (scene_depth_tex != nullptr && !is_screen_capture) {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_DEPTH_RIGHT_EYE, scene_depth_tex.Get(), nullptr);
                 }
             } else {
                 // Copy over the entire double wide back buffer instead
-                if (!m_scene_capture_tex_ref.has_texture()) {
+                if (is_screen_capture) {
+                    clear_swapchain(runtimes::OpenXR::SwapchainIndex::DOUBLE_WIDE);
+                } else if (!m_scene_capture_tex_ref.has_texture()) {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DOUBLE_WIDE, backbuffer.Get(), nullptr);
                 } else {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DOUBLE_WIDE, nullptr, nullptr, [&](ID3D11Texture2D* render_target) {
@@ -679,7 +723,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                     });
                 }
 
-                if (scene_depth_tex != nullptr) {
+                if (scene_depth_tex != nullptr && !is_screen_capture) {
                     m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DEPTH, scene_depth_tex.Get(), nullptr);
                 }
             }
@@ -689,7 +733,11 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
             auto& openxr_overlay = vr->get_overlay_component().get_openxr();
 
-            if (vr->m_2d_screen_mode->value()) {
+            // Spatial shares 2D-screen mode's layer structure: one content quad per eye (posed at the
+            // aperture by generate_slate_quad) over a real-but-black projection layer. One quad per
+            // eye keeps the aperture edge flush; the projection layer keeps runtimes that mishandle
+            // quad-only frames (Oculus) anchored.
+            if (vr->is_using_spatial() || vr->m_2d_screen_mode->value()) {
                 const auto left_layer = openxr_overlay.generate_slate_layer(runtimes::OpenXR::SwapchainIndex::UI, XrEyeVisibility::XR_EYE_VISIBILITY_LEFT);
                 const auto right_layer = openxr_overlay.generate_slate_layer(runtimes::OpenXR::SwapchainIndex::UI_RIGHT, XrEyeVisibility::XR_EYE_VISIBILITY_RIGHT);
 
@@ -716,7 +764,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 }
             }
             
-            auto result = vr->m_openxr->end_frame(quad_layers, scene_depth_tex != nullptr);
+            auto result = vr->m_openxr->end_frame(quad_layers, scene_depth_tex != nullptr && !is_screen_capture);
 
             vr->m_openxr->needs_pose_update = true;
             vr->m_submitted = result == XR_SUCCESS;
@@ -726,29 +774,62 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             auto openvr = vr->get_runtime<runtimes::OpenVR>();
             const auto submit_pose = openvr->get_pose_for_submit();
 
+            // Spatial: capture the world for the overlay quad; the scene below is submitted black.
+            const bool is_spatial = vr->is_using_spatial();
+            if (is_spatial && m_spatial_overlay_tex != nullptr) {
+                if (!is_afr) {
+                    // Double-wide capture -- except with Native Stereo Fix, where the right eye
+                    // lives in the scene capture target.
+                    if (m_scene_capture_tex_ref.has_texture()) {
+                        D3D11_BOX half_box{ 0, 0, 0, (UINT)(m_backbuffer_size[0] / 2), (UINT)m_backbuffer_size[1], 1 };
+                        context->CopySubresourceRegion(m_spatial_overlay_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &half_box);
+                        context->CopySubresourceRegion(m_spatial_overlay_tex.Get(), 0, (UINT)(m_backbuffer_size[0] / 2), 0, 0, m_scene_capture_tex_ref.tex.Get(), 0, &half_box);
+                    } else {
+                        D3D11_BOX full_box{ 0, 0, 0, (UINT)m_backbuffer_size[0], (UINT)m_backbuffer_size[1], 1 };
+                        context->CopySubresourceRegion(m_spatial_overlay_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &full_box);
+                    }
+                } else if (!vr->is_extreme_compatibility_mode_enabled()) {
+                    // Alternating AFR: accumulate this frame's eye into the overlay's right half
+                    // (the left half came from the previous left-eye frame).
+                    D3D11_BOX eye_box{ 0, 0, 0, (UINT)(m_backbuffer_size[0] / 2), (UINT)m_backbuffer_size[1], 1 };
+                    context->CopySubresourceRegion(m_spatial_overlay_tex.Get(), 0, (UINT)(m_backbuffer_size[0] / 2), 0, 0, backbuffer.Get(), 0, &eye_box);
+                }
+            }
+
             vr::EVRCompositorError e = vr::VRCompositorError_None;
 
             if (!is_afr) {
-                D3D11_BOX src_box{};
-                src_box.left = 0;
-                src_box.top = 0;
-                src_box.bottom = m_backbuffer_size[1];
-                src_box.front = 0;
-                src_box.back = 1;
-
-                if (vr->is_extreme_compatibility_mode_enabled()) {
-                    src_box.right = m_backbuffer_size[0];
+                if (is_spatial) {
+                    // Black scene; the world rides the overlay. The skipped eye copy + postprocess
+                    // would be discarded anyway.
+                    const float clear_color[4]{};
+                    if (m_left_eye_rtv != nullptr) {
+                        context->ClearRenderTargetView(m_left_eye_rtv.Get(), clear_color);
+                    } else {
+                        clear_tex(m_left_eye_tex.Get());
+                    }
                 } else {
-                    src_box.right = m_backbuffer_size[0] / 2;
-                }
+                    D3D11_BOX src_box{};
+                    src_box.left = 0;
+                    src_box.top = 0;
+                    src_box.bottom = m_backbuffer_size[1];
+                    src_box.front = 0;
+                    src_box.back = 1;
 
-                context->CopySubresourceRegion(m_left_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
+                    if (vr->is_extreme_compatibility_mode_enabled()) {
+                        src_box.right = m_backbuffer_size[0];
+                    } else {
+                        src_box.right = m_backbuffer_size[0] / 2;
+                    }
 
-                if (m_is_shader_setup) {
-                    ID3D11RenderTargetView* views[] = { m_left_eye_rtv.Get() };
-                    context->OMSetRenderTargets(1, views, nullptr);
-                    //context->ClearRenderTargetView(m_right_eye_rtv.Get(), clear_color);
-                    invoke_shader(vr->m_frame_count, 0, m_backbuffer_size[0] / 2, m_backbuffer_size[1]);
+                    context->CopySubresourceRegion(m_left_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
+
+                    if (m_is_shader_setup) {
+                        ID3D11RenderTargetView* views[] = { m_left_eye_rtv.Get() };
+                        context->OMSetRenderTargets(1, views, nullptr);
+                        //context->ClearRenderTargetView(m_right_eye_rtv.Get(), clear_color);
+                        invoke_shader(vr->m_frame_count, 0, m_backbuffer_size[0] / 2, m_backbuffer_size[1]);
+                    }
                 }
 
                 vr::VRTextureWithPose_t left_eye{
@@ -766,53 +847,63 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 }
             }
 
-            // Copy the back buffer to the right eye texture.
-            if (!m_scene_capture_tex_ref.has_texture()) {
-                D3D11_BOX src_box{};
-                if (!vr->is_extreme_compatibility_mode_enabled()) {
-                    if (!is_afr) {
-                        src_box.left = m_backbuffer_size[0] / 2;
+            if (is_spatial) {
+                // Black scene; the world rides the overlay.
+                const float clear_color[4]{};
+                if (m_right_eye_rtv != nullptr) {
+                    context->ClearRenderTargetView(m_right_eye_rtv.Get(), clear_color);
+                } else {
+                    clear_tex(m_right_eye_tex.Get());
+                }
+            } else {
+                // Copy the back buffer to the right eye texture.
+                if (!m_scene_capture_tex_ref.has_texture()) {
+                    D3D11_BOX src_box{};
+                    if (!vr->is_extreme_compatibility_mode_enabled()) {
+                        if (!is_afr) {
+                            src_box.left = m_backbuffer_size[0] / 2;
+                            src_box.right = m_backbuffer_size[0];
+                            src_box.top = 0;
+                            src_box.bottom = m_backbuffer_size[1];
+                            src_box.front = 0;
+                            src_box.back = 1;
+                        } else { // Copy the left eye on AFR
+                            src_box.left = 0;
+                            src_box.right = m_backbuffer_size[0] / 2;
+                            src_box.top = 0;
+                            src_box.bottom = m_backbuffer_size[1];
+                            src_box.front = 0;
+                            src_box.back = 1;
+                        }
+                    } else {
+                        src_box.left = 0;
                         src_box.right = m_backbuffer_size[0];
                         src_box.top = 0;
                         src_box.bottom = m_backbuffer_size[1];
                         src_box.front = 0;
                         src_box.back = 1;
-                    } else { // Copy the left eye on AFR
-                        src_box.left = 0;
-                        src_box.right = m_backbuffer_size[0] / 2;
-                        src_box.top = 0;
-                        src_box.bottom = m_backbuffer_size[1];
-                        src_box.front = 0;
-                        src_box.back = 1;
-                    }   
+                    }
+
+                    context->CopySubresourceRegion(m_right_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
                 } else {
-                    src_box.left = 0;
-                    src_box.right = m_backbuffer_size[0];
-                    src_box.top = 0;
-                    src_box.bottom = m_backbuffer_size[1];
-                    src_box.front = 0;
-                    src_box.back = 1;
+                    D3D11_BOX left_src_box{
+                        .left = 0,
+                        .top = 0,
+                        .front = 0,
+                        .right = m_backbuffer_size[0] / 2,
+                        .bottom = m_backbuffer_size[1],
+                        .back = 1
+                    };
+
+                    context->CopySubresourceRegion(m_right_eye_tex.Get(), 0, 0, 0, 0, m_scene_capture_tex_ref.tex.Get(), 0, &left_src_box);
                 }
 
-                context->CopySubresourceRegion(m_right_eye_tex.Get(), 0, 0, 0, 0, backbuffer.Get(), 0, &src_box);
-            } else {
-                D3D11_BOX left_src_box{
-                    .left = 0,
-                    .top = 0,
-                    .front = 0,
-                    .right = m_backbuffer_size[0] / 2,
-                    .bottom = m_backbuffer_size[1],
-                    .back = 1
-                };
-
-                context->CopySubresourceRegion(m_right_eye_tex.Get(), 0, 0, 0, 0, m_scene_capture_tex_ref.tex.Get(), 0, &left_src_box);
-            }
-
-            if (m_is_shader_setup) {
-                ID3D11RenderTargetView* views[] = { m_right_eye_rtv.Get() };
-                context->OMSetRenderTargets(1, views, nullptr);
-                invoke_shader(vr->m_frame_count, 1, m_backbuffer_size[0] / 2, m_backbuffer_size[1]);
-                //context->OMSetRenderTargets(1, &prev_rtv, prev_depth_rtv.Get());     
+                if (m_is_shader_setup) {
+                    ID3D11RenderTargetView* views[] = { m_right_eye_rtv.Get() };
+                    context->OMSetRenderTargets(1, views, nullptr);
+                    invoke_shader(vr->m_frame_count, 1, m_backbuffer_size[0] / 2, m_backbuffer_size[1]);
+                    //context->OMSetRenderTargets(1, &prev_rtv, prev_depth_rtv.Get());
+                }
             }
 
             vr::VRTextureWithPose_t right_eye{
@@ -1014,6 +1105,7 @@ void D3D11Component::on_reset(VR* vr) {
     m_left_eye_srv.Reset();
     m_right_eye_srv.Reset();
     m_ui_tex.Reset();
+    m_spatial_overlay_tex.Reset();
     m_vs_shader_blob.Reset();
     m_ps_shader_blob.Reset();
     m_vs_shader.Reset();
@@ -1297,6 +1389,17 @@ bool D3D11Component::setup() {
     backbuffer_desc.Width = (uint32_t)g_framework->get_d3d11_rt_size().x;
     backbuffer_desc.Height = (uint32_t)g_framework->get_d3d11_rt_size().y;
     device->CreateTexture2D(&backbuffer_desc, nullptr, &m_ui_tex);
+
+    // World overlay texture for OpenVR spatial mode (OpenXR spatial rides the 2D-screen textures).
+    if (vr->get_runtime()->is_openvr()) {
+        D3D11_TEXTURE2D_DESC spatial_desc = backbuffer_desc;
+        spatial_desc.Width = m_backbuffer_size[0];
+        spatial_desc.Height = m_backbuffer_size[1];
+        spatial_desc.BindFlags |= D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+        if (FAILED(device->CreateTexture2D(&spatial_desc, nullptr, &m_spatial_overlay_tex))) {
+            spdlog::error("[VR] Failed to create spatial overlay texture (D3D11).");
+        }
+    }
 
     for (auto& ctx : m_2d_screen_tex) {
         ComPtr<ID3D11Texture2D> tex{};
