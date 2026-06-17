@@ -3484,7 +3484,11 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
         }
 
         if (mid != 0) {
-            const auto candidate = utility::find_virtual_function_start(mid);
+            // unwind first to find the actual function start.
+            // find_virtual_function_start doesnt use unwind, (it subtracts by 1)
+            // it can find false positives or nothing at all.
+            const auto unwind = utility::find_function_start_unwind(mid);
+            const auto candidate = utility::find_virtual_function_start(unwind ? *unwind : mid);
 
             if (candidate) {
                 begin_rendering_view_family_real_fn = (BeginRenderViewFamilyRealFn)*candidate;
