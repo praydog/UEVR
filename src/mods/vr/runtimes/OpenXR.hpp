@@ -202,7 +202,6 @@ public:
     XrSpaceLocation view_space_location{XR_TYPE_SPACE_LOCATION};
 
     std::unordered_set<std::string> enabled_extensions{};
-    std::vector<XrCompositionLayerProjection> projection_layer_cache{};
 
     std::vector<XrViewConfigurationView> view_configs{};
     std::unordered_map<uint32_t, Swapchain> swapchains{}; // SwapchainIndex -> Swapchain
@@ -220,6 +219,22 @@ public:
     /*std::array<std::vector<XrView>, 3> stage_view_queue{};
     std::array<XrSpaceLocation, 3> view_space_location_queue{};
     std::array<XrFrameState, 3> frame_state_queue{};*/
+    
+    // Reusable scratch for end-frame (so we don't use thread_local)
+    // Should be cleared on every call to end_frame.
+    struct EndFrameData {
+        std::vector<XrCompositionLayerBaseHeader*> layers{};
+        std::vector<XrCompositionLayerProjectionView> projection_layer_views{};
+        std::vector<XrCompositionLayerDepthInfoKHR> depth_layers{};
+        std::vector<XrCompositionLayerProjection> projection_layer_cache{};
+
+        void clear() {
+            layers.clear();
+            projection_layer_views.clear();
+            depth_layers.clear();
+            projection_layer_cache.clear();
+        }
+    } end_frame_data{};
 
     static constexpr auto QUEUE_SIZE = 6;
     std::array<PipelineState, QUEUE_SIZE> pipeline_states{};

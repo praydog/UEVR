@@ -1747,11 +1747,13 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
         spdlog::warn("[VR] No stage views to submit");
     }
 
-    this->projection_layer_cache.clear();
+    // Reset size of end frame data containers to 0.
+    this->end_frame_data.clear();
 
-    std::vector<XrCompositionLayerBaseHeader*> layers{};
-    std::vector<XrCompositionLayerProjectionView> projection_layer_views{};
-    std::vector<XrCompositionLayerDepthInfoKHR> depth_layers{};
+    auto& projection_layer_cache = this->end_frame_data.projection_layer_cache;
+    auto& projection_layer_views = this->end_frame_data.projection_layer_views;
+    auto& depth_layers           = this->end_frame_data.depth_layers;
+    auto& layers                 = this->end_frame_data.layers;
 
     // Dummy projection layers for Virtual Desktop. If we don't do this, timewarp does not work correctly on VD.
     // the reasoning from ggodin (VD dev) is that VD composites all layers using the top layer's pose (apparently)
@@ -1862,7 +1864,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
             }
         }
 
-        auto& layer = this->projection_layer_cache.emplace_back();
+        auto& layer = projection_layer_cache.emplace_back();
         layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
         layer.space = this->stage_space;
         layer.viewCount = (uint32_t)projection_layer_views.size();
@@ -1873,7 +1875,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
             layers.push_back((XrCompositionLayerBaseHeader*)&dummy_projection_layer);
         }
 
-        for (auto& l : this->projection_layer_cache) {
+        for (auto& l : projection_layer_cache) {
             layers.push_back((XrCompositionLayerBaseHeader*)&l);
         }
 

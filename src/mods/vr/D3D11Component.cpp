@@ -685,7 +685,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             }
 
             LOG_VERBOSE("Ending frame");
-            std::vector<XrCompositionLayerBaseHeader*> quad_layers{};
+            thread_local std::vector<XrCompositionLayerBaseHeader*> quad_layers{}; quad_layers.clear();
 
             auto& openxr_overlay = vr->get_overlay_component().get_openxr();
 
