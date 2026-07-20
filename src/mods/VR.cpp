@@ -6,6 +6,7 @@
 #include <dbt.h>
 
 #include <imgui.h>
+#include <glm/gtc/color_space.hpp>
 #include <utility/Module.hpp>
 #include <utility/Registry.hpp>
 #include <utility/ScopeGuard.hpp>
@@ -2407,6 +2408,29 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
 
         m_overlay_component.on_draw_ui();
 
+        if (ImGui::TreeNode("Passthrough")) {
+            m_void_passthrough->draw("Chroma Key Void");
+
+            if (m_void_passthrough->value()) {
+                const auto key = get_void_key_color_srgb();
+                float col[3]{key.x, key.y, key.z};
+
+                if (ImGui::ColorEdit3("Key Color", col)) {
+                    // Clamp: CTRL+click typed input is not range-limited by ImGui.
+                    const auto to_byte = [](float v) { return (int32_t)(std::clamp(v, 0.0f, 1.0f) * 255.0f + 0.5f); };
+                    m_void_color->value() = (to_byte(col[0]) << 16) | (to_byte(col[1]) << 8) | to_byte(col[2]);
+                }
+
+                ImGui::TextWrapped("Fills the void around the 2D screen with a chroma key. Set the same color in Virtual Desktop's passthrough settings.");
+
+                if (get_runtime()->is_openvr()) {
+                    ImGui::TextWrapped("Requires an OpenXR runtime.");
+                }
+            }
+
+            ImGui::TreePop();
+        }
+
         ImGui::TreePop();
     }
 
@@ -3219,6 +3243,36 @@ void VR::set_standing_origin(const Vector4f& origin) {
     std::unique_lock _{ get_runtime()->pose_mtx };
     
     m_standing_origin = origin;
+}
+
+glm::vec4 VR::get_void_key_color_srgb() const {
+    const auto packed = (uint32_t)m_void_color->value();
+    return {
+        ((packed >> 16) & 0xFF) / 255.0f,
+        ((packed >> 8) & 0xFF) / 255.0f,
+        (packed & 0xFF) / 255.0f,
+        1.0f};
+}
+
+glm::vec4 VR::get_void_key_color_linear() const {
+    // sRGB-view render targets take linear clear values; convert so the displayed bytes match the
+    // picked key exactly (what the runtime's chroma filter sees).
+    const auto srgb = get_void_key_color_srgb();
+    return {glm::convertSRGBToLinear(glm::vec3{srgb}), 1.0f};
+}
+
+glm::vec4 VR::get_screen_capture_clear_color() const {
+    if (!is_chroma_void_active()) {
+        return {0.0f, 0.0f, 0.0f, 1.0f};
+    }
+
+    // Dashboard/system overlays dim the scene; a dimmed key no longer matches the runtime's chroma
+    // filter and shows as a solid glow -- fall back to a black void until focus returns.
+    if (m_openxr->session_state != XR_SESSION_STATE_FOCUSED) {
+        return {0.0f, 0.0f, 0.0f, 1.0f};
+    }
+
+    return get_void_key_color_linear();
 }
 
 glm::quat VR::get_rotation_offset() {

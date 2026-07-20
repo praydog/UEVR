@@ -790,6 +790,7 @@ list(APPEND uevr_SOURCES
 	"src/mods/pluginloader/UScriptStructFunctions.hpp"
 	"src/mods/uobjecthook/SDKDumper.hpp"
 	"src/mods/vr/CVarManager.hpp"
+	"src/mods/vr/ChromaVoid.hpp"
 	"src/mods/vr/D3D11Component.hpp"
 	"src/mods/vr/D3D12Component.hpp"
 	"src/mods/vr/FFakeStereoRenderingHook.hpp"

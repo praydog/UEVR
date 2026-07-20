@@ -576,6 +576,20 @@ public:
         return m_2d_screen_mode->value();
     }
 
+    // Chroma-key void is live: the void around the 2D screen clears to the user's key so runtimes
+    // like Virtual Desktop can composite camera passthrough in its place. OpenXR only -- the OpenVR
+    // 2D path has no void surface to color.
+    bool is_chroma_void_active() const {
+        return m_void_passthrough->value() && is_using_2d_screen() && get_runtime()->is_openxr();
+    }
+
+    // The configured chroma key, ungated. sRGB variant for UNORM-view surfaces (screen textures --
+    // also the space the runtime's chroma filter sees); linear for sRGB-view clears.
+    glm::vec4 get_void_key_color_srgb() const;
+    glm::vec4 get_void_key_color_linear() const;
+    // Void clear color for this frame: the key, or black while inactive/unfocused.
+    glm::vec4 get_screen_capture_clear_color() const;
+
     bool is_roomscale_enabled() const {
         return m_roomscale_movement->value() && !m_aim_temp_disabled;
     }
@@ -895,6 +909,9 @@ private:
     const ModToggle::Ptr m_decoupled_pitch_ui_adjust{ ModToggle::create(generate_name("DecoupledPitchUIAdjust"), true) };
     const ModToggle::Ptr m_load_blueprint_code{ ModToggle::create(generate_name("LoadBlueprintCode"), false, true) };
     const ModToggle::Ptr m_2d_screen_mode{ ModToggle::create(generate_name("2DScreenMode"), false) };
+    // Chroma-key void for runtime passthrough (e.g. Virtual Desktop). Color packed 0xRRGGBB.
+    const ModToggle::Ptr m_void_passthrough{ ModToggle::create(generate_name("PassthroughVoid"), false) };
+    const ModInt32::Ptr m_void_color{ ModInt32::create(generate_name("PassthroughVoidColor"), 0xFF00FF) };
     const ModToggle::Ptr m_roomscale_movement{ ModToggle::create(generate_name("RoomscaleMovement"), false) };
     const ModToggle::Ptr m_roomscale_sweep{ ModToggle::create(generate_name("RoomscaleMovementSweep"), true) };
     const ModToggle::Ptr m_swap_controllers{ ModToggle::create(generate_name("SwapControllerInputs"), false) };
@@ -1041,6 +1058,8 @@ public:
             *m_decoupled_pitch_ui_adjust,
             *m_load_blueprint_code,
             *m_2d_screen_mode,
+            *m_void_passthrough,
+            *m_void_color,
             *m_roomscale_movement,
             *m_roomscale_sweep,
             *m_swap_controllers,

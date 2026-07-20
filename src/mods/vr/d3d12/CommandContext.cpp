@@ -287,7 +287,7 @@ void CommandContext::copy_region_stereo(ID3D12Resource* srcleft, ID3D12Resource*
     this->has_commands = true;
 }
 
-void CommandContext::clear_rtv(ID3D12Resource* dst, D3D12_CPU_DESCRIPTOR_HANDLE rtv, const float* color, D3D12_RESOURCE_STATES dst_state) {
+void CommandContext::clear_rtv(ID3D12Resource* dst, D3D12_CPU_DESCRIPTOR_HANDLE rtv, const float* color, D3D12_RESOURCE_STATES dst_state, const D3D12_RECT* rects, uint32_t num_rects) {
     std::scoped_lock _{this->mtx};
 
     if (dst == nullptr) {
@@ -311,7 +311,7 @@ void CommandContext::clear_rtv(ID3D12Resource* dst, D3D12_CPU_DESCRIPTOR_HANDLE 
     }
 
     // Clear the resource.
-    this->cmd_list->ClearRenderTargetView(rtv, color, 0, nullptr);
+    this->cmd_list->ClearRenderTargetView(rtv, color, num_rects, rects);
 
     // Switch back to present.
     dst_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -331,6 +331,14 @@ void CommandContext::clear_rtv(d3d12::TextureContext& tex, const float* color, D
     }
 
     this->clear_rtv(tex.texture.Get(), tex.get_rtv(), color, dst_state);
+}
+
+void CommandContext::clear_rtv(d3d12::TextureContext& tex, const float* color, const D3D12_RECT* rects, uint32_t num_rects, D3D12_RESOURCE_STATES dst_state) {
+    if (tex.texture == nullptr || tex.rtv_heap == nullptr) {
+        return;
+    }
+
+    this->clear_rtv(tex.texture.Get(), tex.get_rtv(), color, dst_state, rects, num_rects);
 }
 
 void CommandContext::execute() {

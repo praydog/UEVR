@@ -5,6 +5,7 @@
 #include "../VR.hpp"
 #include "../utility/ImGui.hpp"
 
+#include "ChromaVoid.hpp"
 #include "OverlayComponent.hpp"
 
 namespace vrmod {
@@ -829,7 +830,10 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
     layer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
     const auto& ui_swapchain = vr->m_openxr->swapchains[(uint32_t)swapchain];
     layer.subImage.swapchain = ui_swapchain.handle;
-    layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+    // 2D screen mode: the quad is a solid virtual screen carrying the composited world (+UI); the
+    // scene's backbuffer alpha is meaningless (often 0 -> an alpha-blended quad shows the scene as
+    // black, e.g. UE5.5+ titles), so submit opaque. The normal-VR UI slate stays source-alpha.
+    layer.layerFlags = vr->is_using_2d_screen() ? 0 : XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
     layer.subImage.imageRect.offset.x = 0;
     layer.subImage.imageRect.offset.y = 0;
     layer.subImage.imageRect.extent.width = ui_swapchain.width;
@@ -899,8 +903,14 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
                 m_parent->m_intersect_state.intersecting = true;
 
                 if (auto it = vr->m_openxr->swapchains.find((uint32_t)runtimes::OpenXR::SwapchainIndex::UI); it != vr->m_openxr->swapchains.end()) {
-                    const auto client_x = (int32_t)((float)it->second.width * x);
-                    const auto client_y = (int32_t)((float)it->second.height * y);
+                    const auto w = (float)it->second.width;
+                    const auto h = (float)it->second.height;
+
+                    // Chroma padding insets the game content; map into the inset region so the
+                    // cursor lands on game pixels, not the key border.
+                    const auto pad = vr->is_chroma_void_active() ? (float)chroma::clamped_pad((LONG)w, (LONG)h) : 0.0f;
+                    const auto client_x = (int32_t)(pad + (w - 2.0f * pad) * x);
+                    const auto client_y = (int32_t)(pad + (h - 2.0f * pad) * y);
 
                     m_parent->m_intersect_state.swapchain_intersection_point = {client_x, client_y};
                 }
@@ -936,7 +946,8 @@ std::optional<std::reference_wrapper<XrCompositionLayerCylinderKHR>> OverlayComp
     layer.type = XR_TYPE_COMPOSITION_LAYER_CYLINDER_KHR;
     const auto& ui_swapchain = vr->m_openxr->swapchains[(uint32_t)swapchain];
     layer.subImage.swapchain = ui_swapchain.handle;
-    layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+    // Carries the composited world in 2D mode -- same opaque rule as the quad.
+    layer.layerFlags = vr->is_using_2d_screen() ? 0 : XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
     layer.subImage.imageRect.offset.x = 0;
     layer.subImage.imageRect.offset.y = 0;
     layer.subImage.imageRect.extent.width = ui_swapchain.width;

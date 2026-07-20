@@ -1,6 +1,7 @@
 #pragma once
 
 #include <d3d11.h>
+#include <d3d11_1.h>
 #include <dxgi.h>
 #include <openvr.h>
 #include <wrl.h>
@@ -59,6 +60,17 @@ private:
         TextureContext& srv,
         TextureContext& rtv,
         const RECT& src_rect);
+
+    void render_srv_to_rtv(
+        DirectX::DX11::SpriteBatch* batch,
+        TextureContext& srv,
+        TextureContext& rtv,
+        std::optional<RECT> src_rect,
+        const RECT& dest_rect);
+
+    // Void clear with edge guard: black base + inset key interior, placed inside the submitted
+    // view-bounds region. eye = 0/1, or -1 for a double-wide target (both eyes).
+    bool clear_void_tex(ID3D11DeviceContext* context, ID3D11Resource* tex, const glm::vec4& void_color, int eye);
 
     struct ShaderGlobals {
         DirectX::XMMATRIX mvp{};
@@ -155,6 +167,11 @@ private:
 
     std::unique_ptr<DirectX::DX11::SpriteBatch> m_backbuffer_batch{};
     std::unique_ptr<DirectX::DX11::SpriteBatch> m_game_batch{};
+
+    // Cached 11.1 interface for rect clears (immutable for the device's lifetime).
+    ComPtr<ID3D11DeviceContext1> m_context1{};
+    // Extreme compat leaves the 2D screen views sRGB; ring colors must match the view gamma.
+    bool m_2d_screen_srgb_views{false};
 
     vr::HmdMatrix44_t m_left_eye_proj{};
     vr::HmdMatrix44_t m_right_eye_proj{};
