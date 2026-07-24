@@ -694,6 +694,11 @@ bool FFakeStereoRenderingHook::hook() {
             SPDLOG_WARN("Failed to find version in executable");
         }
 
+        // Check for version 5.54.0.0
+        if (check_file_version(0x50005, 0x40000)) {
+            return nonstandard_create_stereo_device_hook_5_54();
+        }
+
         // Check for version 4.27.2.0
         // 4.26 also works here
         if (check_file_version(0x4001B, 0x20000) || found_version.value_or(L"") == L"4.26") {
@@ -1468,6 +1473,129 @@ bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook() {
     setup_view_extensions();
 
     SPDLOG_INFO("Finished creating stereo device for the game using nonstandard method");
+
+    m_finished_hooking = true;
+
+    return true;
+}
+
+bool FFakeStereoRenderingHook::nonstandard_create_stereo_device_hook_5_54() {
+    SPDLOG_INFO("Attempting to create a stereo device for the game using nonstandard method (5.5.4)");
+
+    auto engine = sdk::UEngine::get();
+
+    if (engine == nullptr) {
+        SPDLOG_ERROR("Failed to get engine pointer! Cannot create stereo device!");
+        return false;
+    }
+
+    m_fallback_vtable.resize(30);
+
+    // Give all of the functions placeholders.
+    for (auto i = 0; i < m_fallback_vtable.size(); ++i) {
+        m_fallback_vtable[i] = +[](FFakeStereoRendering* stereo) -> void* {
+            return nullptr;
+        };
+    }
+
+    // 5.5.4 vtable: all DeviceIs* functions are static, GetViewIndexForPass removed.
+    constexpr auto DESTRUCTOR_INDEX = 0;
+    constexpr auto IS_STEREO_ENABLED_INDEX = 1;
+    constexpr auto IS_STEREO_ENABLED_ON_NEXT_FRAME_INDEX = 2;
+    constexpr auto ENABLE_STEREO_INDEX = 3;
+
+    constexpr auto GET_DESIRED_NUMBER_OF_VIEWS_INDEX = 4;
+    constexpr auto GET_VIEW_PASS_FOR_INDEX_INDEX = 5;
+
+    constexpr auto GET_LOD_VIEW_INDEX_INDEX = 6;
+    constexpr auto IS_STANDALONE_STEREO_ONLY_DEVICE_INDEX = 7;
+
+    constexpr auto ADJUST_VIEW_RECT_INDEX = 8;
+    constexpr auto SET_FINAL_VIEW_RECT_INDEX = 9;
+    constexpr auto GET_TEXT_SAFE_REGION_BOUNDS_INDEX = 10;
+    constexpr auto CALCULATE_STEREO_VIEW_OFFSET_INDEX = 11;
+    constexpr auto CALCULATE_STEREO_PROJECTION_MATRIX_INDEX = 12;
+    constexpr auto INIT_CANVAS_FROM_VIEW_INDEX = 13;
+    constexpr auto RENDER_TEXTURE_RENDER_THREAD_INDEX = 14;
+    constexpr auto GET_RENDER_TARGET_MANAGER_INDEX = 15;
+
+    auto stereo_rendering_device_offset = sdk::UEngine::get_stereo_rendering_device_offset();
+    if (!stereo_rendering_device_offset) {
+        SPDLOG_ERROR("Failed to find stereo rendering device offset for 5.54, cannot create stereo device!");
+        return false;
+    }
+
+    m_fallback_vtable[DESTRUCTOR_INDEX] = +[](FFakeStereoRendering* stereo) -> void { SPDLOG_INFO("Destructor called?"); };
+    m_fallback_vtable[IS_STEREO_ENABLED_INDEX] = +[](FFakeStereoRendering* stereo) -> bool {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("IsStereoEnabled called: {:x}", (uintptr_t)_ReturnAddress());
+#endif
+
+        return g_hook->is_stereo_enabled(stereo);
+    };
+
+    m_fallback_vtable[IS_STEREO_ENABLED_ON_NEXT_FRAME_INDEX] = +[](FFakeStereoRendering* stereo) -> bool { return g_hook->is_stereo_enabled(stereo); };
+    m_fallback_vtable[ENABLE_STEREO_INDEX] = +[](FFakeStereoRendering* stereo) -> bool { return g_hook->is_stereo_enabled(stereo); };
+
+    m_fallback_vtable[GET_DESIRED_NUMBER_OF_VIEWS_INDEX] = +[](FFakeStereoRendering* stereo, bool stereo_enabled) -> int32_t {
+        return g_hook->get_desired_number_of_views_hook(stereo, stereo_enabled);
+    };
+
+    m_fallback_vtable[GET_VIEW_PASS_FOR_INDEX_INDEX] = +[](FFakeStereoRendering* stereo, bool stereo_requested, const uint32_t view_index) -> EStereoscopicPass {
+    #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("GetViewPassForIndex called: {:x} {} ", (uintptr_t)_ReturnAddress(), view_index);
+    #endif
+
+        return g_hook->get_view_pass_for_index_hook(stereo, stereo_requested, view_index);
+    };
+
+    m_fallback_vtable[ADJUST_VIEW_RECT_INDEX] = +[](FFakeStereoRendering* stereo, int32_t index, int* x, int* y, uint32_t* w, uint32_t* h) {
+        return g_hook->adjust_view_rect(stereo, index, x, y, w, h);
+    };
+
+    m_fallback_vtable[CALCULATE_STEREO_VIEW_OFFSET_INDEX] =
+    +[](FFakeStereoRendering* stereo, const int32_t view_index, Rotator<float>* view_rotation, const float world_to_meters, Vector3f* view_location) {
+        return g_hook->calculate_stereo_view_offset(stereo, view_index, view_rotation, world_to_meters, view_location);
+    };
+
+    m_fallback_vtable[CALCULATE_STEREO_PROJECTION_MATRIX_INDEX] = +[](FFakeStereoRendering* stereo, Matrix4x4f* out, const int32_t view_index) {
+#ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
+        SPDLOG_INFO("CalculateStereoProjectionMatrix called: {:x} {} {:x}", (uintptr_t)_ReturnAddress(), view_index, (uintptr_t)out);
+#endif
+
+        if (!g_hook->m_has_double_precision) {
+            (*out)[3][2] = 0.1f;
+        } else {
+            auto dmat = (Matrix4x4d*)out;
+            (*dmat)[3][2] = 0.1;
+        }
+
+        return g_hook->calculate_stereo_projection_matrix(stereo, out, view_index);
+    };
+
+    m_fallback_vtable[RENDER_TEXTURE_RENDER_THREAD_INDEX] =
+    +[](FFakeStereoRendering* stereo, FRHICommandListImmediate* rhi_command_list, FRHITexture2D* backbuffer, FRHITexture2D* src_texture, double window_size) {
+        return g_hook->render_texture_render_thread(stereo, rhi_command_list, backbuffer, src_texture, window_size);
+    };
+
+    m_fallback_vtable[GET_RENDER_TARGET_MANAGER_INDEX] = +[](FFakeStereoRendering* stereo) { return g_hook->get_render_target_manager_hook(stereo); };
+
+    m_special_detected_5_54 = true;
+    m_manually_constructed = true;
+    m_fallback_device.vtable = m_fallback_vtable.data();
+    m_has_double_precision = true;
+    m_uses_old_rendertarget_manager = false;
+
+    auto& current_device = *(uintptr_t*)((uintptr_t)engine + *stereo_rendering_device_offset);
+    SPDLOG_INFO("Current device: {:x}", current_device);
+    current_device = (uintptr_t)&m_fallback_device;
+
+    s_stereo_rendering_device_offset = *stereo_rendering_device_offset;
+
+    hook_game_viewport_client();
+    setup_view_extensions();
+
+    SPDLOG_INFO("Finished creating stereo device for the game using nonstandard method (5.5.4)");
 
     m_finished_hooking = true;
 
@@ -4656,7 +4784,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         index_starts_from_one = false;
     }
 
-    const auto is_full_pass = view_index == 0 && !index_was_ever_two && !index_was_ever_negative;
+    const auto is_full_pass = view_index == 0 && !index_was_ever_two && !index_was_ever_negative && !g_hook->m_has_double_precision;
 
     auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
     const auto has_double_precision = g_hook->m_has_double_precision;

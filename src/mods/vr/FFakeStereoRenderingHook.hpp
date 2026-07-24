@@ -385,6 +385,7 @@ private:
     bool hook();
     bool standard_fake_stereo_hook(uintptr_t vtable);
     bool nonstandard_create_stereo_device_hook();
+    bool nonstandard_create_stereo_device_hook_5_54();
     bool nonstandard_create_stereo_device_hook_4_27();
     bool nonstandard_create_stereo_device_hook_4_22();
     bool nonstandard_create_stereo_device_hook_4_18();
@@ -532,6 +533,7 @@ private:
     bool m_special_detected_4_18{false};
     bool m_special_detected_4_22{false};
     bool m_special_detected_4_27{false};
+    bool m_special_detected_5_54{false};
     bool m_manually_constructed{false};
     bool m_pixel_format_cvar_found{false};
     bool m_injected_stereo_at_runtime{false};
