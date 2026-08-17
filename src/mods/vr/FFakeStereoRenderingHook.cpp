@@ -4,7 +4,9 @@
 #include <winternl.h>
 
 #include <asmjit/asmjit.h>
+#include <algorithm>
 #include <future>
+#include <string_view>
 
 #include <spdlog/spdlog.h>
 #include <utility/Memory.hpp>
@@ -65,6 +67,40 @@
 FFakeStereoRenderingHook* g_hook = nullptr;
 uint32_t g_frame_count{};
 
+namespace detail {
+// True for scalar (SD) and packed (PD) double-precision *arithmetic*, in both the legacy
+// SSE2 and the VEX/EVEX encodings. Games built with /arch:AVX or newer emit only the
+// V-prefixed forms, which carry entirely different bddisasm instruction IDs
+// (ND_INS_VADDSD is 734, ND_INS_ADDSD is 21), so matching on the enum alone misses them.
+//
+// Conversions are deliberately excluded: a float-precision binary can legitimately contain
+// a stray CVTSS2SD for an unrelated double literal, which proves nothing about the layout
+// of the struct this function operates on.
+bool is_double_precision_arithmetic(std::string_view mnemonic) {
+    if (mnemonic.size() > 1 && mnemonic.front() == 'V') {
+        mnemonic.remove_prefix(1); // VEX/EVEX encoding of the same operation
+    }
+
+    if (!mnemonic.ends_with("SD") && !mnemonic.ends_with("PD")) {
+        return false;
+    }
+
+    if (mnemonic.starts_with("CVT")) {
+        return false;
+    }
+
+    // FMA mnemonics carry an operand-order suffix (FMADD231SD), so match on the root.
+    static constexpr std::string_view roots[]{
+        "ADD", "SUB", "MUL", "DIV", "SQRT", "MAX", "MIN",
+        "FMADD", "FMSUB", "FNMADD", "FNMSUB", "HADD", "HSUB",
+    };
+
+    return std::any_of(std::begin(roots), std::end(roots), [mnemonic](std::string_view root) {
+        return mnemonic.starts_with(root);
+    });
+}
+}
+
 // Scan through function instructions to detect usage of double
 // floating point precision instructions.
 bool is_using_double_precision(uintptr_t addr) {
@@ -73,24 +109,34 @@ bool is_using_double_precision(uintptr_t addr) {
     bool result = false;
 
     utility::exhaustive_decode((uint8_t*)addr, 50, [&](INSTRUX& ix, uintptr_t ip) -> utility::ExhaustionResult {
-        if (std::string_view{ix.Mnemonic}.starts_with("CALL")) {
+        const std::string_view mnemonic{ix.Mnemonic};
+
+        if (mnemonic.starts_with("CALL")) {
             return utility::ExhaustionResult::STEP_OVER;
         }
 
-        if (ix.Instruction == ND_INS_MOVSD && ix.Operands[0].Type == ND_OP_MEM && ix.Operands[1].Type == ND_OP_REG) {
-            SPDLOG_INFO("[UE5 Detected] Detected Double precision MOVSD at {:x}", (uintptr_t)ip);
+        // A store of a scalar double to memory is the strongest possible signal: it means
+        // the struct field being written is 8 bytes wide.
+        if ((ix.Instruction == ND_INS_MOVSD || ix.Instruction == ND_INS_VMOVSD) &&
+            ix.Operands[0].Type == ND_OP_MEM && ix.Operands[1].Type == ND_OP_REG)
+        {
+            SPDLOG_INFO("[UE5 Detected] Detected Double precision store ({}) at {:x}", mnemonic, (uintptr_t)ip);
             result = true;
             return utility::ExhaustionResult::BREAK;
         }
 
-        if (ix.Instruction == ND_INS_ADDSD) {
-            SPDLOG_INFO("[UE5 Detected] Detected Double precision ADDSD at {:x}", (uintptr_t)ip);
+        if (detail::is_double_precision_arithmetic(mnemonic)) {
+            SPDLOG_INFO("[UE5 Detected] Detected Double precision arithmetic ({}) at {:x}", mnemonic, (uintptr_t)ip);
             result = true;
             return utility::ExhaustionResult::BREAK;
         }
 
         return utility::ExhaustionResult::CONTINUE;
     });
+
+    if (!result) {
+        SPDLOG_INFO("No double precision usage found at {:x}", addr);
+    }
 
     return result;
 }
@@ -1020,6 +1066,11 @@ bool FFakeStereoRenderingHook::standard_fake_stereo_hook(uintptr_t vtable) {
     SPDLOG_INFO("IsStereoEnabled: {:x}", (uintptr_t)*is_stereo_enabled_func_ptr);
 
     m_has_double_precision = is_using_double_precision(stereo_view_offset_func) || is_using_double_precision(calculate_stereo_projection_matrix_func);
+
+    // Getting this wrong silently corrupts every FVector/FRotator/FMatrix written back into
+    // the engine, so state the verdict outright rather than leaving it implicit in the
+    // absence of a detection message.
+    SPDLOG_INFO("Double precision (LWC) view math: {}", m_has_double_precision ? "YES" : "NO");
 
     {
         m_adjust_view_rect_hook = safetyhook::create_inline((void*)adjust_view_rect_func, adjust_view_rect);
