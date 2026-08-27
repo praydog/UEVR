@@ -2596,6 +2596,12 @@ struct SceneViewExtensionAnalyzer {
     static inline uint32_t pre_render_viewfamily_renderthread_index{0};
     static inline uint32_t frame_count_offset{0};
 
+    // What turns the game's frame number into the key UEVR gives its pose pipeline. Maintained in
+    // begin_render_viewfamily on the game thread, added by everything that publishes a frame number, so
+    // the two publishers cannot disagree. Read from the render thread; relaxed because the cost of
+    // reading it a frame late is a frame, and the alternative is a lock on the hot path.
+    static inline std::atomic<uint32_t> frame_key_offset{};
+
     template<int N>
     static bool analysis_dummy_stage1(ISceneViewExtension* extension, uintptr_t a2, uintptr_t a3, uintptr_t a4) {
         if (N == 0) {
@@ -3464,8 +3470,118 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
 
     //vr->update_hmd_state(true, frame_count);
     auto runtime = vr->get_runtime();
-    runtime->internal_frame_count = frame_count;
-    runtime->on_pre_render_game_thread(frame_count);
+
+    // The key UEVR gives its pose pipeline has to move forward, and only forward.
+    //
+    // Poses live in pipeline_states[key % QUEUE_SIZE], and OpenXR::on_pre_render_game_thread refreshes a
+    // slot only when it is empty or when the key jumped FORWARD past it. Any other revisit keeps the
+    // predicted display time already in the slot, so xrLocateViews predicts for a moment that has
+    // passed. On screen the image comes loose and swims against the head, faster the staler it is.
+    //
+    // The game's own number is not that key: it freezes while some games are paused, and it restarts
+    // from scratch on a level load. Both revisit slots out of order.
+    //
+    //   number grows      key grows with it, offset untouched
+    //   number freezes    key keeps moving on its own, so the slots keep rotating
+    //   number restarts   key carries on one above the highest it reached
+    //   number repeats    key stays put -- it is still the same frame
+    //
+    // Kept as an offset rather than a counter of our own, so a game that behaves stays on its own
+    // numbering and the offset stays zero.
+    //
+    // Progress is "exceeded the highest number seen", not "differs from the previous one". A game can
+    // push several view families per frame, and that breaks an equality test both ways:
+    //
+    //   repeated numbers   passes during ordinary play, shifting the key a frame every frame; the view
+    //                      answers head movement with amplified jitter. Seen in Gylt and Silent Hill 2
+    //   alternating        almost never passes, so a real stall goes unnoticed
+    //
+    // Which one a game shows is up to the game, so a single title proves nothing either way.
+
+    // A restart drops the number by orders of magnitude; extra view families differ by a few.
+    constexpr uint32_t restart_slack = 64;
+
+    static uint32_t highest_game_frame_count{};
+    static uint32_t key_carry{};
+
+    if (frame_count > highest_game_frame_count) {
+        highest_game_frame_count = frame_count;
+        vr->notify_game_frame_advanced();
+    } else if (frame_count + restart_slack < highest_game_frame_count) {
+        // One above the highest, so the key never falls back to the game's new number.
+        key_carry += highest_game_frame_count + 1 - frame_count;
+
+        SPDLOG_INFO("Game restarted its frame numbering ({} after a high of {}), carrying the key on to {}",
+            frame_count, highest_game_frame_count, frame_count + key_carry);
+
+        highest_game_frame_count = frame_count;
+        vr->notify_game_frame_advanced();
+    }
+
+    // Report which pattern the game submits, once each, because it is not visible any other way.
+    //
+    // A repeat only counts while the run stays short. A stalled game repeats its number on every call,
+    // so an unbounded test would report every stall as the very pattern it has to be told apart from:
+    // several view families make a run of several, a stall makes a run of hundreds. A restart is
+    // excluded from the alternating case for the same reason -- it also arrives below the previous
+    // number, and it is handled above.
+    constexpr uint32_t max_families_per_frame = 4;
+
+    static uint32_t previous_frame_count{};
+    static uint32_t repeat_run{};
+
+    if (frame_count == previous_frame_count) {
+        ++repeat_run;
+    } else {
+        if (frame_count > previous_frame_count) {
+            if (repeat_run > 0 && repeat_run <= max_families_per_frame) {
+                SPDLOG_INFO_ONCE("Game submits repeated frame numbers within a frame (saw {} {} times in a row)",
+                    previous_frame_count, repeat_run + 1);
+            }
+        } else if (previous_frame_count - frame_count <= restart_slack) {
+            SPDLOG_INFO_ONCE("Game alternates frame numbers per frame ({} after {})", frame_count, previous_frame_count);
+        }
+
+        repeat_run = 0;
+    }
+
+    previous_frame_count = frame_count;
+
+    // When a stall ends its frames are folded into the carry, not dropped: handing the key back is the
+    // same backwards jump a restart makes, and measured stalls reach 159 frames.
+    static uint32_t stall_frames{};
+    static bool was_stalled{};
+
+    const auto stalled = vr->is_game_frame_stalled();
+    const auto stalled_for = stall_frames;
+
+    if (stalled) {
+        ++stall_frames;
+    } else if (stall_frames != 0) {
+        key_carry += stall_frames;
+        stall_frames = 0;
+    }
+
+    // Both edges, once per stall: the game keeps rendering, so nothing else in the log changes when its
+    // number freezes. The key is reported with them, so a log alone shows whether it went backwards.
+    if (stalled != was_stalled) {
+        was_stalled = stalled;
+
+        if (stalled) {
+            SPDLOG_INFO("Game stopped advancing its frame number, holding {}", frame_count);
+        } else {
+            SPDLOG_INFO("Game resumed advancing its frame number at {}, after {} frames of stall, key at {}",
+                frame_count, stalled_for, frame_count + key_carry);
+        }
+    }
+
+    const auto effective_frame_count = frame_count + key_carry + stall_frames;
+
+    // Published for the render thread, which adds it to the same game frame number.
+    SceneViewExtensionAnalyzer::frame_key_offset.store(key_carry + stall_frames, std::memory_order_relaxed);
+
+    runtime->internal_frame_count = effective_frame_count;
+    runtime->on_pre_render_game_thread(effective_frame_count);
 
     // This is a HACKHACKHACK to get splitscreen working on around 4.20 to 4.27 something
     // This is completely borked on UE5
@@ -3695,7 +3811,11 @@ void FFakeStereoRenderingHook::pre_render_viewfamily_renderthread(ISceneViewExte
         cmd_list = *(sdk::FRHICommandListBase**)((uintptr_t)cmd_list + ue5_command_offset);
     }
 
-    const auto compensation = g_hook->get_frame_delay_compensation();
+    // The same offset the game thread applied, so both publishers name a frame the same way. Without it
+    // the two disagree by the width of a stall or of a numbering restart, and a pose stored under one key
+    // is looked up under another.
+    const auto key_offset = (int32_t)SceneViewExtensionAnalyzer::frame_key_offset.load(std::memory_order_relaxed);
+    const auto compensation = g_hook->get_frame_delay_compensation() + key_offset;
 
     // Using slate's draw window hook is the safest way to do this without
     // false positives on the command list in this function
