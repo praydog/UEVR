@@ -38,11 +38,11 @@ void render_srv_to_rtv(
     D3D12_RESOURCE_BARRIER barrier{};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Transition.pResource = dst.texture.Get();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
     if (dst_state != D3D12_RESOURCE_STATE_RENDER_TARGET) {
-        barrier.Transition.StateBefore = src_state;
+        barrier.Transition.StateBefore = dst_state;
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         command_list->ResourceBarrier(1, &barrier);
     }
 
@@ -115,11 +115,11 @@ void render_srv_to_rtv(
     D3D12_RESOURCE_BARRIER barrier{};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Transition.pResource = dst.texture.Get();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
     if (dst_state != D3D12_RESOURCE_STATE_RENDER_TARGET) {
-        barrier.Transition.StateBefore = src_state;
+        barrier.Transition.StateBefore = dst_state;
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         command_list->ResourceBarrier(1, &barrier);
     }
 
@@ -201,11 +201,11 @@ void render_srv_to_rtv(
     D3D12_RESOURCE_BARRIER barrier{};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Transition.pResource = dst.texture.Get();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
     if (dst_state != D3D12_RESOURCE_STATE_RENDER_TARGET) {
-        barrier.Transition.StateBefore = src_state;
+        barrier.Transition.StateBefore = dst_state;
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         command_list->ResourceBarrier(1, &barrier);
     }
 
