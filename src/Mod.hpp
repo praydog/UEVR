@@ -126,7 +126,7 @@ public:
         return m_value;
     }
 
-    T& default_value() {
+    const T& default_value() const {
         return m_default_value;
     }
 
