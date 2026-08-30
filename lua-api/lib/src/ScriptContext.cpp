@@ -1,4 +1,5 @@
 // This can be considered a binding of the C API.
+#include <cmath>
 #include <iostream>
 #include <memory>
 
@@ -457,6 +458,63 @@ int ScriptContext::setup_bindings() {
         "get_transform", &UEVR_VRData::get_transform,
         "get_eye_offset", &UEVR_VRData::get_eye_offset,
         "get_ue_projection_matrix", &UEVR_VRData::get_ue_projection_matrix,
+        // The field of view of an eye, in degrees.
+        //
+        // The headset decides the real field of view while the game keeps believing its own,
+        // so a game that draws first person geometry through a separate field of view has to
+        // be told the real one, or that geometry is distorted and drifts against the world.
+        // get_ue_projection_matrix carries the same information, but reading angles out of it
+        // means knowing the convention below, so it is done here once instead of in every
+        // script.
+        //
+        // The matrix is built from the tangents of the half angles as
+        //     m[0][0] = 2/(r-l)    m[2][0] = -(r+l)/(r-l)
+        //     m[1][1] = 2/(t-b)    m[2][1] = -(t+b)/(t-b)
+        // with l and b negative, which inverts to
+        //     r = (1 - m[2][0]) / m[0][0]    l = (-1 - m[2][0]) / m[0][0]
+        // and the same shape vertically.
+        //
+        // Returns a flat table: left, right, up and down as signed angles, plus the
+        // horizontal and vertical totals. Asymmetric projections are normal in VR, so the
+        // halves are kept separate instead of being averaged away.
+        "get_projection_fov", [](sol::this_state s, UEVR_VRData* self, unsigned int eye) -> sol::object {
+            sol::state_view lua{s};
+
+            if (self == nullptr || self->get_ue_projection_matrix == nullptr) {
+                return sol::make_object(s, sol::nil);
+            }
+
+            UEVR_Matrix4x4f projection{};
+            self->get_ue_projection_matrix((UEVR_Eye)eye, &projection);
+
+            const auto xx = projection.m[0][0];
+            const auto yy = projection.m[1][1];
+
+            // An uninitialised or degenerate projection would divide by zero here, and a
+            // script has no way to tell a bogus angle from a real one afterwards.
+            if (xx == 0.0f || yy == 0.0f) {
+                return sol::make_object(s, sol::nil);
+            }
+
+            const auto tan_right = (1.0f - projection.m[2][0]) / xx;
+            const auto tan_left = (-1.0f - projection.m[2][0]) / xx;
+            const auto tan_up = (1.0f - projection.m[2][1]) / yy;
+            const auto tan_down = (-1.0f - projection.m[2][1]) / yy;
+
+            constexpr auto to_degrees = 57.2957795131f;
+
+            auto out = lua.create_table();
+
+            out["left"] = std::atan(tan_left) * to_degrees;
+            out["right"] = std::atan(tan_right) * to_degrees;
+            out["up"] = std::atan(tan_up) * to_degrees;
+            out["down"] = std::atan(tan_down) * to_degrees;
+
+            out["horizontal"] = (std::atan(tan_right) - std::atan(tan_left)) * to_degrees;
+            out["vertical"] = (std::atan(tan_up) - std::atan(tan_down)) * to_degrees;
+
+            return sol::make_object(s, out);
+        },
         "get_left_joystick_source", &UEVR_VRData::get_left_joystick_source,
         "get_right_joystick_source", &UEVR_VRData::get_right_joystick_source,
         "get_action_handle", &UEVR_VRData::get_action_handle,
