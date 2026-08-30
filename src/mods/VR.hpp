@@ -58,6 +58,8 @@ public:
         RIGHT_JOYSTICK,
         GESTURE_HEAD,
         GESTURE_HEAD_RIGHT,
+        RIGHT_JOYSTICK_CLICK,
+        LEFT_JOYSTICK_CLICK
     };
 
     enum HORIZONTAL_PROJECTION_OVERRIDE : int32_t {
@@ -866,6 +868,8 @@ private:
         "Right Joystick (Disables Standard Joystick Input)",
         "Gesture (Head) + Left Joystick",
         "Gesture (Head) + Right Joystick",
+        "Right Joystick Press + Left Joystick (Disables R3)",
+        "Left Joystick Press + Right Joystick (Disables L3)"
     };
 
     static const inline std::vector<std::string> s_horizontal_projection_override_names{
