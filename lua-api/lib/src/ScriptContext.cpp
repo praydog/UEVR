@@ -1147,6 +1147,57 @@ int ScriptContext::setup_bindings() {
         }
     );
 
+    // Lua's stock print writes to stdout, which the game process does not have, so it needs
+    // a binding to reach the log at all. print and log.info go through ScriptContext::log,
+    // log.warn and log.error take the matching API levels. Arguments run through Lua's own
+    // tostring, so any type works and they are tab separated, same as stock print.
+    {
+        auto stringify = [](sol::this_state s, sol::variadic_args args) -> std::string {
+            sol::state_view lua{s};
+            sol::function tostring = lua["tostring"];
+
+            std::string out{};
+
+            for (auto arg : args) {
+                if (!out.empty()) {
+                    out += "\t";
+                }
+
+                auto piece = tostring(arg);
+
+                if (piece.valid() && piece.get_type() == sol::type::string) {
+                    out += piece.get<std::string>();
+                } else {
+                    out += "<?>";
+                }
+            }
+
+            return out;
+        };
+
+        m_lua["print"] = [stringify](sol::this_state s, sol::variadic_args args) {
+            ScriptContext::log(stringify(s, args));
+        };
+
+        auto log_table = m_lua.create_table();
+
+        log_table["info"] = [stringify](sol::this_state s, sol::variadic_args args) {
+            ScriptContext::log(stringify(s, args));
+        };
+
+        log_table["warn"] = [stringify](sol::this_state s, sol::variadic_args args) {
+            const auto msg = stringify(s, args);
+            uevr::API::get()->log_warn("[LuaVR] %s", msg.c_str());
+        };
+
+        log_table["error"] = [stringify](sol::this_state s, sol::variadic_args args) {
+            const auto msg = stringify(s, args);
+            uevr::API::get()->log_error("[LuaVR] %s", msg.c_str());
+        };
+
+        m_lua["log"] = log_table;
+    }
+
     setup_callback_bindings();
 
     auto out = m_lua.create_table();
