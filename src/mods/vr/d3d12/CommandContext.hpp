@@ -30,9 +30,12 @@ struct CommandContext {
         UINT dstright_x, UINT dstright_y, UINT dstright_z,
         D3D12_RESOURCE_STATES src_state = D3D12_RESOURCE_STATE_PRESENT,
         D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    void clear_rtv(ID3D12Resource* dst, D3D12_CPU_DESCRIPTOR_HANDLE rtv, const float* color, 
-        D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    void clear_rtv(ID3D12Resource* dst, D3D12_CPU_DESCRIPTOR_HANDLE rtv, const float* color,
+        D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+        const D3D12_RECT* rects = nullptr, uint32_t num_rects = 0);
     void clear_rtv(TextureContext& tex, const float* color, D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    void clear_rtv(TextureContext& tex, const float* color, const D3D12_RECT* rects, uint32_t num_rects,
+        D3D12_RESOURCE_STATES dst_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     void execute();
 
     bool ready() const {
