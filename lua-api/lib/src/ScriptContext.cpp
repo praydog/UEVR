@@ -380,9 +380,25 @@ int ScriptContext::setup_bindings() {
     );
 
     m_lua.new_usertype<UEVR_PluginFunctions>("UEVR_PluginFunctions",
-        "log_error", &UEVR_PluginFunctions::log_error,
-        "log_warn", &UEVR_PluginFunctions::log_warn,
-        "log_info", &UEVR_PluginFunctions::log_info,
+        // Wrapped rather than bound directly, because these are C variadics in API.h: a ':'
+        // call would leave self in the format parameter and printf would read the struct
+        // pointer as a format string. Passing a ready string as an argument to "%s" also
+        // keeps percent signs in the message harmless.
+        "log_error", [](UEVR_PluginFunctions* self, const char* message) {
+            if (self != nullptr && message != nullptr) {
+                self->log_error("%s", message);
+            }
+        },
+        "log_warn", [](UEVR_PluginFunctions* self, const char* message) {
+            if (self != nullptr && message != nullptr) {
+                self->log_warn("%s", message);
+            }
+        },
+        "log_info", [](UEVR_PluginFunctions* self, const char* message) {
+            if (self != nullptr && message != nullptr) {
+                self->log_info("%s", message);
+            }
+        },
         "is_drawing_ui", &UEVR_PluginFunctions::is_drawing_ui,
 
         "get_commit_hash", &UEVR_PluginFunctions::get_commit_hash,
@@ -1130,6 +1146,57 @@ int ScriptContext::setup_bindings() {
             api->dispatch_custom_event(event_name, event_data);
         }
     );
+
+    // Lua's stock print writes to stdout, which the game process does not have, so it needs
+    // a binding to reach the log at all. print and log.info go through ScriptContext::log,
+    // log.warn and log.error take the matching API levels. Arguments run through Lua's own
+    // tostring, so any type works and they are tab separated, same as stock print.
+    {
+        auto stringify = [](sol::this_state s, sol::variadic_args args) -> std::string {
+            sol::state_view lua{s};
+            sol::function tostring = lua["tostring"];
+
+            std::string out{};
+
+            for (auto arg : args) {
+                if (!out.empty()) {
+                    out += "\t";
+                }
+
+                auto piece = tostring(arg);
+
+                if (piece.valid() && piece.get_type() == sol::type::string) {
+                    out += piece.get<std::string>();
+                } else {
+                    out += "<?>";
+                }
+            }
+
+            return out;
+        };
+
+        m_lua["print"] = [stringify](sol::this_state s, sol::variadic_args args) {
+            ScriptContext::log(stringify(s, args));
+        };
+
+        auto log_table = m_lua.create_table();
+
+        log_table["info"] = [stringify](sol::this_state s, sol::variadic_args args) {
+            ScriptContext::log(stringify(s, args));
+        };
+
+        log_table["warn"] = [stringify](sol::this_state s, sol::variadic_args args) {
+            const auto msg = stringify(s, args);
+            uevr::API::get()->log_warn("[LuaVR] %s", msg.c_str());
+        };
+
+        log_table["error"] = [stringify](sol::this_state s, sol::variadic_args args) {
+            const auto msg = stringify(s, args);
+            uevr::API::get()->log_error("[LuaVR] %s", msg.c_str());
+        };
+
+        m_lua["log"] = log_table;
+    }
 
     setup_callback_bindings();
 
