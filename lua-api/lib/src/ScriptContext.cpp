@@ -380,9 +380,25 @@ int ScriptContext::setup_bindings() {
     );
 
     m_lua.new_usertype<UEVR_PluginFunctions>("UEVR_PluginFunctions",
-        "log_error", &UEVR_PluginFunctions::log_error,
-        "log_warn", &UEVR_PluginFunctions::log_warn,
-        "log_info", &UEVR_PluginFunctions::log_info,
+        // Wrapped rather than bound directly, because these are C variadics in API.h: a ':'
+        // call would leave self in the format parameter and printf would read the struct
+        // pointer as a format string. Passing a ready string as an argument to "%s" also
+        // keeps percent signs in the message harmless.
+        "log_error", [](UEVR_PluginFunctions* self, const char* message) {
+            if (self != nullptr && message != nullptr) {
+                self->log_error("%s", message);
+            }
+        },
+        "log_warn", [](UEVR_PluginFunctions* self, const char* message) {
+            if (self != nullptr && message != nullptr) {
+                self->log_warn("%s", message);
+            }
+        },
+        "log_info", [](UEVR_PluginFunctions* self, const char* message) {
+            if (self != nullptr && message != nullptr) {
+                self->log_info("%s", message);
+            }
+        },
         "is_drawing_ui", &UEVR_PluginFunctions::is_drawing_ui,
 
         "get_commit_hash", &UEVR_PluginFunctions::get_commit_hash,
