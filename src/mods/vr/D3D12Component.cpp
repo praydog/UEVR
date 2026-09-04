@@ -184,8 +184,20 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             .back = 1
         };
 
+        // A game that has stopped advancing its frame number has stopped drawing the world into its own
+        // backbuffer, while the scene capture feeding the right eye keeps rendering one:
+        //
+        //   left eye   backbuffer      -- menu only
+        //   right eye  scene capture   -- still the world
+        //
+        // Measured symptom: a frozen world in the right eye against a black left one, which reads as the
+        // image rotating the wrong way when the head turns. Both eyes from the backbuffer while stalled,
+        // so both show whatever the game is actually presenting.
+        auto* const right_source = vr->is_game_frame_stalled() ? m_game_tex.texture.Get()
+                                                              : m_scene_capture_tex.texture.Get();
+
         commands.copy_region_stereo(
-            m_game_tex.texture.Get(), m_scene_capture_tex.texture.Get(), render_target,
+            m_game_tex.texture.Get(), right_source, render_target,
             &left_src_box, &left_src_box,
             0, 0, 0, m_backbuffer_size[0] / 2, 0, 0,
             D3D12_RESOURCE_STATE_RENDER_TARGET,

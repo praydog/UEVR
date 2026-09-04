@@ -550,6 +550,25 @@ public:
         return m_native_stereo_fix_same_pass->value();
     }
 
+    // Called when the game's frame number exceeds the highest seen, which is the only reliable sign of a
+    // new frame. Why the highest and not the previous one: begin_render_viewfamily.
+    void notify_game_frame_advanced() {
+        m_last_game_frame_advance = std::chrono::steady_clock::now();
+    }
+
+    // True while the game has stopped producing frames, which some games do while a fullscreen menu is up.
+    //
+    // Answered here, at the point of use, rather than precomputed where the number is published: if the
+    // game stops running that path altogether, a stored flag would be stuck at its last value.
+    //
+    // Some threshold is unavoidable, because "produced no frame" and "produces frames more slowly than we
+    // present" differ only in duration, and time is the steadiest unit for it -- a count of presents would
+    // depend on the game's frame rate against the headset's, a count of calls on how many view families
+    // the game pushes per frame. 250ms outlasts any plausible slow frame and is invisible when a menu opens.
+    bool is_game_frame_stalled() const {
+        return (std::chrono::steady_clock::now() - m_last_game_frame_advance) >= std::chrono::milliseconds(250);
+    }
+
     bool is_ahud_compatibility_enabled() const {
         return m_compatibility_ahud->value();
     }
@@ -1136,6 +1155,9 @@ private:
     bool m_has_hw_scheduling{false}; // hardware accelerated GPU scheduling
     bool m_spoofed_gamepad_connection{false};
     bool m_aim_temp_disabled{false};
+    // Written where the view family begins, read while presenting. Unsynchronized on purpose, like the
+    // timestamps above it: a torn read costs one frame sourcing the wrong eye texture.
+    std::chrono::steady_clock::time_point m_last_game_frame_advance{std::chrono::steady_clock::now()};
 
     struct {
         bool draw{false};
