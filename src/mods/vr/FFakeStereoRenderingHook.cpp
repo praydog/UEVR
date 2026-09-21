@@ -3066,7 +3066,7 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
 
     last_frame_count = g_frame_count;
 
-    const auto true_index = vr->is_using_afr() ? (g_frame_count + last_index) % 2 : last_index;
+    const auto true_index = vr->is_using_alternating_eyes() ? (g_frame_count + last_index) % 2 : (vr->is_using_mono() ? 0 : last_index);
 
     if (vr->is_splitscreen_compatibility_enabled() || vr->is_sceneview_compatibility_enabled()) {
         int32_t w = vr->get_hmd_width();
@@ -3177,7 +3177,7 @@ sdk::FSceneView* FFakeStereoRenderingHook::sceneview_constructor(sdk::FSceneView
         }
     }
 
-    if (init_options_scene_state != nullptr && !new_scene_state_inserted_this_frame && vr->is_ghosting_fix_enabled() && !known_scene_states.empty() && vr->is_using_afr() && true_index == 1) {
+    if (init_options_scene_state != nullptr && !new_scene_state_inserted_this_frame && vr->is_ghosting_fix_enabled() && !known_scene_states.empty() && vr->is_using_alternating_eyes() && true_index == 1) {
         init_options->set_stereo_pass(EStereoscopicPass::eSSP_PRIMARY);
 
         // Set the scene state to the one that isn't the current one
@@ -3507,7 +3507,7 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
             int32_t x = 0;
             int32_t y = 0;
 
-            const auto true_index = vr->is_using_afr() ? (frame_count + 1) % 2 : view_index;
+            const auto true_index = vr->is_using_alternating_eyes() ? (frame_count + 1) % 2 : (vr->is_using_mono() ? 0 : view_index);
 
             if (!vr->is_using_afr() && true_index == 1) {
                 x += w;
@@ -4790,10 +4790,12 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
     const auto has_double_precision = g_hook->m_has_double_precision;
     const auto rot_d = (Rotator<double>*)view_rotation;
 
-    if (vr->is_using_afr() && !is_full_pass) {
-        true_index = g_frame_count % 2;
+    const auto is_mono = vr->is_using_mono();
 
-        if (!vr->is_using_synchronized_afr()) {
+    if (vr->is_using_afr() && !is_full_pass) {
+        true_index = is_mono ? 0 : g_frame_count % 2;
+
+        if (!vr->is_using_synchronized_afr() && !is_mono) {
             if (g_hook->m_has_double_precision) {
                 if (true_index == 1) {
                     *rot_d = g_hook->m_last_afr_rotation_double;
@@ -4809,6 +4811,9 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
             }
         }
     }
+
+    // Mono only has a single pass per frame, so it has to act as both the first (left) and the last (right) eye pass.
+    const auto is_last_eye_pass = true_index == 1 || (is_mono && !is_full_pass);
 
     if (true_index == 0 && !is_full_pass) {
         if (has_double_precision) {
@@ -4927,7 +4932,10 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         const auto current_eye_rotation_offset = glm::normalize(glm::quat{vr->get_eye_transform(true_index)});
 
         const auto new_rotation = glm::normalize(vqi_norm * current_hmd_rotation * current_eye_rotation_offset);
-        const auto eye_offset = glm::vec3{vr->get_eye_offset((VRRuntime::Eye)(true_index))};
+        // Mono renders from the point directly between the eyes.
+        const auto eye_offset = is_mono ?
+            (glm::vec3{vr->get_eye_offset(VRRuntime::Eye::LEFT)} + glm::vec3{vr->get_eye_offset(VRRuntime::Eye::RIGHT)}) * 0.5f :
+            glm::vec3{vr->get_eye_offset((VRRuntime::Eye)(true_index))};
 
 
         const auto standing_delta = vr->get_position(0) - vr->get_standing_origin();
@@ -4971,7 +4979,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         // Roomscale movement
         // only do it on the right eye pass
         // if we did it on the left, there would be eye desyncs when the right eye is rendered
-        if (true_index == 1 && (vr->is_roomscale_enabled() || vr->is_aim_pawn_control_rotation_enabled())) {
+        if (is_last_eye_pass && (vr->is_roomscale_enabled() || vr->is_aim_pawn_control_rotation_enabled())) {
             const auto world = sdk::UEngine::get()->get_world();
 
             if (const auto controller = sdk::UGameplayStatics::get()->get_player_controller(world, 0); controller != nullptr) {
@@ -5040,7 +5048,7 @@ __forceinline void FFakeStereoRenderingHook::calculate_stereo_view_offset(
         }
 
         // Modify Player Control Rotation
-        if (true_index == 1 && vr->is_aim_modify_player_control_rotation_enabled() && vr->is_any_aim_method_active()) {
+        if (is_last_eye_pass && vr->is_aim_modify_player_control_rotation_enabled() && vr->is_any_aim_method_active()) {
             if (g_hook->m_tracking_system_hook != nullptr) {
                 g_hook->m_tracking_system_hook->manual_update_control_rotation();
             }
@@ -5166,7 +5174,7 @@ __forceinline Matrix4x4f* FFakeStereoRenderingHook::calculate_stereo_projection_
         auto true_index = index_starts_from_one ? ((view_index + 1) % 2) : (view_index % 2);
     
         if (vr->is_using_afr()) {
-            true_index = g_frame_count % 2;
+            true_index = vr->is_using_mono() ? 0 : g_frame_count % 2;
         }
 
         auto& double_matrix = *(Matrix4x4d*)out;
@@ -5352,7 +5360,7 @@ uint32_t FFakeStereoRenderingHook::get_desired_number_of_views_hook(FFakeStereoR
     if (!is_stereo_enabled || (vr->is_using_afr() && !vr->is_splitscreen_compatibility_enabled())) {
         // We need to know about the second scene state to fix ghosting, so set the view count to 2
         // after we know about it, we can continue returning 1.
-        if (is_stereo_enabled && vr->is_ghosting_fix_enabled() && vr->is_using_afr() &&
+        if (is_stereo_enabled && vr->is_ghosting_fix_enabled() && vr->is_using_alternating_eyes() &&
             g_hook->m_sceneview_data.known_scene_states.size() < 2 && g_hook->m_fixed_localplayer_view_count &&
             !!g_hook->m_sceneview_data.constructor_hook && g_hook->m_has_view_extensions_installed)
         {

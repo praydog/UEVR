@@ -1561,7 +1561,7 @@ void VR::update_hmd_state(bool from_view_extensions, uint32_t frame_count) {
         }
     }
 
-    if (frame_count != 0 && is_using_afr() && frame_count % 2 == 0) {
+    if (frame_count != 0 && is_using_alternating_eyes() && frame_count % 2 == 0) {
         if (runtime->is_openxr()) {
             std::scoped_lock __{ m_openxr->sync_assignment_mtx };
 
@@ -2060,7 +2060,7 @@ void VR::on_present() {
     m_present_thread_id = GetCurrentThreadId();
 
     utility::ScopeGuard _guard {[&]() {
-        if (!is_using_afr() || (m_render_frame_count + 1) % 2 == m_left_eye_interval) {
+        if (!is_using_alternating_eyes() || (m_render_frame_count + 1) % 2 == m_left_eye_interval) {
             SetEvent(m_present_finished_event);
         }
 
@@ -2069,7 +2069,7 @@ void VR::on_present() {
 
     m_frame_count = get_runtime()->internal_render_frame_count;
 
-    if (!is_using_afr() || m_render_frame_count % 2 == m_left_eye_interval) {
+    if (!is_using_alternating_eyes() || m_render_frame_count % 2 == m_left_eye_interval) {
         ResetEvent(m_present_finished_event);
     }
 
@@ -2126,7 +2126,7 @@ void VR::on_present() {
     const auto renderer = g_framework->get_renderer_type();
     vr::EVRCompositorError e = vr::EVRCompositorError::VRCompositorError_None;
 
-    const auto is_left_eye_frame = is_using_afr() ? (m_render_frame_count % 2 == m_left_eye_interval) : true;
+    const auto is_left_eye_frame = is_using_alternating_eyes() ? (m_render_frame_count % 2 == m_left_eye_interval) : true;
 
     if (is_left_eye_frame && get_synchronize_stage() == VR::SynchronizeStage::LATE) {
         const auto had_sync = runtime->got_first_sync;
@@ -2217,7 +2217,7 @@ void VR::on_post_present() {
 
     detect_controllers();
 
-    const auto is_left_eye_frame = is_using_afr() ? (is_same_frame || (m_render_frame_count % 2 == m_left_eye_interval)) : true;
+    const auto is_left_eye_frame = is_using_alternating_eyes() ? (is_same_frame || (m_render_frame_count % 2 == m_left_eye_interval)) : true;
 
     if (is_left_eye_frame) {
         if (get_synchronize_stage() == VR::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
@@ -2411,7 +2411,11 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
     }
 
     if (selected_page == PAGE_UNREAL) {
-        m_rendering_method->draw("Rendering Method");
+        if (m_rendering_method->draw("Rendering Method")) {
+            // Mono forces its own projection overrides, so the eye projections need to be regenerated when switching.
+            get_runtime()->should_recalculate_eye_projections = true;
+        }
+
         m_synced_afr_method->draw("Synced Sequential Method");
 
         m_world_scale->draw("World Scale");

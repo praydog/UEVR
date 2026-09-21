@@ -29,6 +29,7 @@ public:
         NATIVE_STEREO = 0,
         SYNCHRONIZED = 1,
         ALTERNATING = 2,
+        MONO = 3,
     };
 
     enum SynchronizeStage {
@@ -408,7 +409,20 @@ public:
     bool is_using_afr() const {
         return m_rendering_method->value() == RenderingMethod::ALTERNATING || 
                m_rendering_method->value() == RenderingMethod::SYNCHRONIZED ||
+               m_rendering_method->value() == RenderingMethod::MONO ||
                m_extreme_compat_mode->value() == true;
+    }
+
+    // Mono renders a single centered view every frame and submits it to both eyes.
+    // It shares the single view/single wide render target layout with AFR (is_using_afr() is true)
+    // but does not alternate eyes between frames.
+    bool is_using_mono() const {
+        return m_rendering_method->value() == RenderingMethod::MONO;
+    }
+
+    // Whether the left and right eyes are rendered on separate (alternating) frames.
+    bool is_using_alternating_eyes() const {
+        return is_using_afr() && !is_using_mono();
     }
 
     bool is_using_synchronized_afr() const {
@@ -624,11 +638,20 @@ public:
         return m_extreme_compat_mode->value();
     }
 
-    auto get_horizontal_projection_override() const {
+    // Mono needs both eyes to share the exact same frustum, the per-eye view bounds then crop the shared image.
+    int32_t get_horizontal_projection_override() const {
+        if (is_using_mono()) {
+            return HORIZONTAL_PROJECTION_OVERRIDE::HORIZONTAL_SYMMETRIC;
+        }
+
         return m_horizontal_projection_override->value();
     }
 
-    auto get_vertical_projection_override() const {
+    int32_t get_vertical_projection_override() const {
+        if (is_using_mono() && m_vertical_projection_override->value() == VERTICAL_PROJECTION_OVERRIDE::VERTICAL_DEFAULT) {
+            return VERTICAL_PROJECTION_OVERRIDE::VERTICAL_MATCHED;
+        }
+
         return m_vertical_projection_override->value();
     }
 
@@ -837,6 +860,7 @@ private:
         "Native Stereo",
         "Synchronized Sequential",
         "Alternating/AFR",
+        "Mono",
     };
 
     static const inline std::vector<std::string> s_sync_mode_names{

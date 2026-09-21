@@ -259,8 +259,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     const auto is_same_frame = m_last_rendered_frame > 0 && m_last_rendered_frame == vr->m_render_frame_count;
     m_last_rendered_frame = vr->m_render_frame_count;
 
+    // Mono uses the AFR texture layout, but every frame is submitted to both eyes (like the is_same_frame case)
+    const auto is_mono = vr->is_using_mono();
     const auto is_actually_afr = vr->is_using_afr();
-    const auto is_afr = !is_same_frame && vr->is_using_afr();
+    const auto is_afr = !is_same_frame && vr->is_using_alternating_eyes();
     const auto is_left_eye_frame = is_afr && vr->m_render_frame_count % 2 == vr->m_left_eye_interval;
     const auto is_right_eye_frame = !is_afr || vr->m_render_frame_count % 2 == vr->m_right_eye_interval;
 
@@ -423,7 +425,14 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
 
         if (!is_afr) {
             // Render right side to right screen tex
-            if (m_scene_capture_tex_ref.has_texture() && m_scene_capture_tex_ref.has_srv()) {
+            if (is_mono) {
+                render_srv_to_rtv(
+                    m_game_batch.get(),
+                    m_engine_tex_ref,
+                    m_2d_screen_tex[1],
+                    RECT{0, 0, (LONG)((float)m_backbuffer_size[0] / 2.0f), (LONG)m_backbuffer_size[1]}
+                );
+            } else if (m_scene_capture_tex_ref.has_texture() && m_scene_capture_tex_ref.has_srv()) {
                 render_srv_to_rtv(
                     m_game_batch.get(),
                     m_scene_capture_tex_ref,
@@ -630,7 +639,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             if (is_actually_afr) {
                 D3D11_BOX src_box{};
                 if (!vr->is_extreme_compatibility_mode_enabled()) {
-                    if (!is_afr) {
+                    if (!is_afr && !is_mono) {
                         src_box.left = m_backbuffer_size[0] / 2;
                         src_box.right = m_backbuffer_size[0];
                         src_box.top = 0;
@@ -770,7 +779,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             if (!m_scene_capture_tex_ref.has_texture()) {
                 D3D11_BOX src_box{};
                 if (!vr->is_extreme_compatibility_mode_enabled()) {
-                    if (!is_afr) {
+                    if (!is_afr && !is_mono) {
                         src_box.left = m_backbuffer_size[0] / 2;
                         src_box.right = m_backbuffer_size[0];
                         src_box.top = 0;
