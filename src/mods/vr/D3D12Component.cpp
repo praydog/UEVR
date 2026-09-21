@@ -79,8 +79,10 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     const auto is_same_frame = m_last_rendered_frame > 0 && m_last_rendered_frame == vr->m_render_frame_count;
     m_last_rendered_frame = vr->m_render_frame_count;
 
+    // Mono uses the AFR texture layout, but every frame is submitted to both eyes (like the is_same_frame case)
+    const auto is_mono = vr->is_using_mono();
     const auto is_actually_afr = vr->is_using_afr();
-    const auto is_afr = !is_same_frame && vr->is_using_afr();
+    const auto is_afr = !is_same_frame && vr->is_using_alternating_eyes();
     const auto is_left_eye_frame = is_afr && vr->m_render_frame_count % 2 == vr->m_left_eye_interval;
     const auto is_right_eye_frame = !is_afr || vr->m_render_frame_count % 2 == vr->m_right_eye_interval;
 
@@ -307,7 +309,17 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
             if (!is_afr) {
                 // Render right side to right screen tex
-                if (m_scene_capture_tex.texture.Get() != nullptr) {
+                if (is_mono) {
+                    d3d12::render_srv_to_rtv(
+                        m_game_batch.get(),
+                        commands.cmd_list.Get(),
+                        m_game_tex,
+                        m_2d_screen_tex[1],
+                        RECT{0, 0, (LONG)((float)m_backbuffer_size[0] / 2.0f), (LONG)m_backbuffer_size[1]},
+                        ENGINE_SRC_COLOR,
+                        ENGINE_SRC_COLOR
+                    );
+                } else if (m_scene_capture_tex.texture.Get() != nullptr) {
                     d3d12::render_srv_to_rtv(
                         m_game_batch.get(),
                         commands.cmd_list.Get(),
@@ -519,7 +531,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 D3D12_BOX src_box{};
 
                 if (!vr->is_extreme_compatibility_mode_enabled()) {
-                    if (!is_afr) {
+                    if (!is_afr && !is_mono) {
                         src_box.left = m_backbuffer_size[0] / 2;
                         src_box.right = m_backbuffer_size[0];
                         src_box.top = 0;
@@ -591,7 +603,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 }
             }
 
-            if (!is_afr) {
+            if (!is_afr && !is_mono) {
                 if (m_scene_capture_tex.texture.Get() == nullptr) {
                     m_openvr.copy_right(backbuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
                 } else {

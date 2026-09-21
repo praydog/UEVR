@@ -168,7 +168,7 @@ VRRuntime::Error OpenXR::synchronize_frame(std::optional<uint32_t> frame_count) 
             this->pipeline_states[next_frame].frame_state = this->frame_state;
             this->pipeline_states[next_frame].prev_frame_count = this->last_submit_state.frame_count;
 
-            if (VR::get()->is_using_afr()) {
+            if (VR::get()->is_using_alternating_eyes()) {
                 const auto afr_frame = (next_frame + 1) % OpenXR::QUEUE_SIZE;
                 this->pipeline_states[afr_frame].frame_state = this->frame_state;
                 this->pipeline_states[afr_frame].prev_frame_count = next_frame;
@@ -177,7 +177,7 @@ VRRuntime::Error OpenXR::synchronize_frame(std::optional<uint32_t> frame_count) 
             this->pipeline_states[*frame_count % OpenXR::QUEUE_SIZE].frame_state = this->frame_state;
             this->pipeline_states[*frame_count % OpenXR::QUEUE_SIZE].prev_frame_count = *frame_count;
 
-            if (VR::get()->is_using_afr()) {
+            if (VR::get()->is_using_alternating_eyes()) {
                 this->pipeline_states[(*frame_count + 1) % OpenXR::QUEUE_SIZE].frame_state = this->frame_state;
                 this->pipeline_states[(*frame_count + 1) % OpenXR::QUEUE_SIZE].prev_frame_count = *frame_count;
             }
