@@ -5811,7 +5811,61 @@ void FFakeStereoRenderingHook::post_init_properties(uintptr_t localplayer) {
     g_hook->m_fixed_localplayer_view_count = true;
 }
 
-void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, void* a2, void* a3, 
+// Returns the viewport of the first window in a TArray of per-window args, or nullptr when anything on
+// the way does not look like a live object. Only the first window is used: the game viewport is the main window.
+static sdk::ISlateViewport* get_windows_array_viewport(void* args_array, const sdk::slate::WindowsArrayOffsets& offsets) {
+    // A TConstArrayView, not a TArray: there is no capacity after num, and the word there is garbage (measured 0).
+    struct TArrayHeader {
+        uintptr_t data;
+        int32_t num;
+    };
+
+    constexpr int32_t MAX_WINDOWS = 64;
+
+    auto is_object = [](uintptr_t obj) {
+        if (obj == 0 || IsBadReadPtr((void*)obj, sizeof(void*))) {
+            return false;
+        }
+
+        const auto vtable = *(uintptr_t*)obj;
+        return vtable != 0 && utility::get_module_within(vtable).has_value();
+    };
+
+    if (args_array == nullptr || IsBadReadPtr(args_array, sizeof(TArrayHeader))) {
+        return nullptr;
+    }
+
+    const auto& header = *(TArrayHeader*)args_array;
+
+    // TArray data is heap memory. On builds that pass FViewportInfo& here the first field is a vtable
+    // inside the image, which this rejects before anything is dereferenced.
+    if (header.num < 1 || header.num > MAX_WINDOWS || header.data == 0 ||
+        utility::get_module_within(header.data).has_value() ||
+        IsBadReadPtr((void*)(header.data + offsets.window), sizeof(void*)))
+    {
+        SPDLOG_INFO_EVERY_N_SEC(5, "[SlateRHIRenderer::DrawWindow_RenderThread] a3 is not a windows array (data {:x}, num {})", header.data, header.num);
+        return nullptr;
+    }
+
+    const auto window = *(uintptr_t*)(header.data + offsets.window);
+
+    if (!is_object(window) || IsBadReadPtr((void*)(window + offsets.viewport), sizeof(void*))) {
+        SPDLOG_INFO_EVERY_N_SEC(5, "[SlateRHIRenderer::DrawWindow_RenderThread] No live window at args + 0x{:x} ({:x})", offsets.window, window);
+        return nullptr;
+    }
+
+    const auto viewport = *(uintptr_t*)(window + offsets.viewport);
+
+    if (!is_object(viewport)) {
+        SPDLOG_INFO_EVERY_N_SEC(5, "[SlateRHIRenderer::DrawWindow_RenderThread] Window {:x} has no viewport at 0x{:x}", window, offsets.viewport);
+        return nullptr;
+    }
+
+    SPDLOG_INFO_ONCE("[SlateRHIRenderer::DrawWindow_RenderThread] Using viewport {:x} of window {:x} ({} windows)", viewport, window, header.num);
+    return (sdk::ISlateViewport*)viewport;
+}
+
+void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, void* a2, void* a3,
                                                                 void* a4, void* params, void* unk1, void* unk2) 
 {
 #ifdef FFAKE_STEREO_RENDERING_LOG_ALL_CALLS
@@ -5848,6 +5902,13 @@ void* FFakeStereoRenderingHook::slate_draw_window_render_thread(void* renderer, 
     if (!a4_is_ue_5_5_variant) {
         // How are we going to fix this on UE5.5?
         g_hook->get_slate_thread_worker()->execute((FRHICommandListImmediate*)a2);
+
+        // UE5.5 builds that draw all windows in one call pass TArray<args> in a3 (seen on Stalker 2, 5.5.4).
+        static const auto windows_array_offsets = sdk::slate::locate_windows_array_offsets((uintptr_t)g_hook->m_slate_thread_hook.target_address());
+
+        if (windows_array_offsets) {
+            slate_viewport = get_windows_array_viewport(a3, *windows_array_offsets);
+        }
     } else {
         const auto window = (uintptr_t)a4_ptr[2];
 
