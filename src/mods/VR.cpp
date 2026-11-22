@@ -2065,6 +2065,7 @@ void VR::on_present() {
         }
 
         m_last_frame_count = m_render_frame_count;
+        get_runtime()->on_paired_poses_present();
     }};
 
     m_frame_count = get_runtime()->internal_render_frame_count;
