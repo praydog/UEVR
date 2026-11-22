@@ -2432,6 +2432,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         if (ImGui::TreeNode("Native Stereo Fix")) {
             m_native_stereo_fix->draw("Enabled");
             m_native_stereo_fix_same_pass->draw("Use Same Stereo Pass");
+            m_native_stereo_fix_primary_pass->draw("Render Second Eye As Primary View");
             ImGui::TreePop();
         }
 

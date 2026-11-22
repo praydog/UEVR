@@ -3293,6 +3293,60 @@ void FFakeStereoRenderingHook::localplayer_setup_viewpoint(void* localplayer, vo
     g_hook->m_localplayer_get_viewpoint_hook.call<void>(localplayer, view_info, pass);
 }
 
+namespace {
+std::optional<size_t> g_sceneview_stereo_pass_offset{};
+bool g_attempted_sceneview_stereo_pass_offset{false};
+
+void learn_sceneview_stereo_pass_offset(sdk::FSceneView* left, sdk::FSceneView* right) {
+    if (g_sceneview_stereo_pass_offset || g_attempted_sceneview_stereo_pass_offset) {
+        return;
+    }
+
+    constexpr size_t scan_bytes = 0x2000;
+
+    if (left == nullptr || right == nullptr || IsBadReadPtr(left, scan_bytes) || IsBadReadPtr(right, scan_bytes)) {
+        return;
+    }
+
+    g_attempted_sceneview_stereo_pass_offset = true;
+
+    std::optional<size_t> found{};
+    std::optional<size_t> strict_found{};
+    size_t matches = 0;
+    size_t strict_matches = 0;
+
+    for (size_t offset = 0; offset + 12 <= scan_bytes; offset += 4) {
+        const auto l = (int32_t*)((uintptr_t)left + offset);
+        const auto r = (int32_t*)((uintptr_t)right + offset);
+
+        if (l[0] != (int32_t)EStereoscopicPass::eSSP_PRIMARY || r[0] != (int32_t)EStereoscopicPass::eSSP_SECONDARY || l[1] != 0 || r[1] != 1) {
+            continue;
+        }
+
+        SPDLOG_INFO("[NativeStereoFix] Stereo pass candidate at FSceneView offset {:x}, next ints {} {}", offset, l[2], r[2]);
+        found = offset;
+        ++matches;
+
+        if (l[2] == 0 && r[2] == 0) {
+            strict_found = offset;
+            ++strict_matches;
+        }
+    }
+
+    if (matches == 1) {
+        g_sceneview_stereo_pass_offset = found;
+    } else if (strict_matches == 1) {
+        g_sceneview_stereo_pass_offset = strict_found;
+    }
+
+    if (g_sceneview_stereo_pass_offset) {
+        SPDLOG_INFO("[NativeStereoFix] FSceneView stereo pass offset {:x}", *g_sceneview_stereo_pass_offset);
+    } else {
+        SPDLOG_ERROR("[NativeStereoFix] {} stereo pass candidates, second eye will not be rendered as a primary view", matches);
+    }
+}
+}
+
 void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module, sdk::FCanvas* canvas, sdk::FSceneViewFamily* view_family_candidate) {
     ZoneScopedN("BeginRenderViewFamilyReal");
 
@@ -3337,6 +3391,11 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
 
     auto& views = *views_ptr;
     const auto prev_count = views.count;
+    const auto wants_primary_pass = vr->is_native_stereo_fix_primary_pass_enabled();
+
+    if (wants_primary_pass && views.count == 2) {
+        learn_sceneview_stereo_pass_offset(views[0], views[1]);
+    }
 
     const auto rt = rtm->get_scene_capture_utexture();
     const auto rtrsrc = rt != nullptr ? (sdk::FTextureRenderTargetResource*)rt->get_resource() : nullptr;
@@ -3360,7 +3419,7 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
     }
 
     bool wants_swap = false;
-    if (views.count > 1) {
+    if (views.count > 1 && (!wants_primary_pass || g_sceneview_stereo_pass_offset)) {
         views.count = 1;
         wants_swap = true;
 
@@ -3421,8 +3480,23 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
         
         std::swap(views[0], views[1]);
 
+        int32_t* converted_pass = nullptr;
+
+        if (wants_primary_pass && g_sceneview_stereo_pass_offset) {
+            const auto pass = (int32_t*)((uintptr_t)views[0] + *g_sceneview_stereo_pass_offset);
+
+            if (*pass == (int32_t)EStereoscopicPass::eSSP_SECONDARY) {
+                *pass = (int32_t)EStereoscopicPass::eSSP_PRIMARY;
+                converted_pass = pass;
+            }
+        }
+
         // Call it again
         g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(render_module, canvas, view_family_candidate);
+
+        if (converted_pass != nullptr) {
+            *converted_pass = (int32_t)EStereoscopicPass::eSSP_SECONDARY;
+        }
 
         std::swap(views[0], views[1]);
 
@@ -3603,21 +3677,27 @@ void FFakeStereoRenderingHook::begin_render_viewfamily(ISceneViewExtension* exte
         uintptr_t stack[max_stack_depth]{};
 
         const auto depth = RtlCaptureStackBackTrace(0, max_stack_depth, (void**)&stack, nullptr);
+        constexpr auto max_frames_to_search = 4;
         uintptr_t mid = 0;
+        std::optional<uintptr_t> candidate{};
 
-        for (int i = 1; i < depth; i++) {
+        for (int i = 1; i < depth && i <= max_frames_to_search; i++) {
             SPDLOG_INFO(" {:x}", (uintptr_t)stack[i]);
             mid = stack[i];
-            break;
-        }
 
-        if (mid != 0) {
             // unwind first to find the actual function start.
             // find_virtual_function_start doesnt use unwind, (it subtracts by 1)
             // it can find false positives or nothing at all.
             const auto unwind = utility::find_function_start_unwind(mid);
-            const auto candidate = utility::find_virtual_function_start(unwind ? *unwind : mid);
+            candidate = utility::find_virtual_function_start(unwind ? *unwind : mid);
 
+            if (candidate) {
+                SPDLOG_INFO("BeginRenderingViewFamily real function candidate from stack frame {}", i);
+                break;
+            }
+        }
+
+        if (mid != 0) {
             if (candidate) {
                 begin_rendering_view_family_real_fn = (BeginRenderViewFamilyRealFn)*candidate;
 
