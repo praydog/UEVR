@@ -2065,6 +2065,7 @@ void VR::on_present() {
         }
 
         m_last_frame_count = m_render_frame_count;
+        get_runtime()->on_paired_poses_present();
     }};
 
     m_frame_count = get_runtime()->internal_render_frame_count;
@@ -2431,6 +2432,7 @@ void VR::on_draw_sidebar_entry(std::string_view name) {
         if (ImGui::TreeNode("Native Stereo Fix")) {
             m_native_stereo_fix->draw("Enabled");
             m_native_stereo_fix_same_pass->draw("Use Same Stereo Pass");
+            m_native_stereo_fix_primary_pass->draw("Render Second Eye As Primary View");
             ImGui::TreePop();
         }
 

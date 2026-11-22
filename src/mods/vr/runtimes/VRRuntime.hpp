@@ -1,6 +1,8 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
+#include <deque>
 #include <string_view>
 #include <functional>
 #include <mutex>
@@ -97,6 +99,49 @@ struct VRRuntime {
 
     }
 
+    void enqueue_render_poses_paired(uint32_t frame_count) {
+        std::scoped_lock _{ paired_poses_mtx };
+
+        paired_poses_active = true;
+
+        if (!paired_poses_pending) {
+            paired_poses_queue.clear();
+            paired_poses_pending = true;
+            enqueue_render_poses(frame_count);
+            return;
+        }
+
+        if (!paired_poses_queue.empty()) {
+            enqueue_render_poses(paired_poses_queue.front());
+            paired_poses_queue.pop_front();
+        }
+
+        paired_poses_queue.push_back(frame_count);
+    }
+
+    void on_paired_poses_present() {
+        std::scoped_lock _{ paired_poses_mtx };
+
+        if (!paired_poses_active) {
+            return;
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+
+        if (paired_poses_last_present && now - *paired_poses_last_present > std::chrono::milliseconds(250)) {
+            paired_poses_queue.clear();
+        }
+
+        paired_poses_last_present = now;
+        paired_poses_pending = false;
+
+        if (!paired_poses_queue.empty()) {
+            enqueue_render_poses(paired_poses_queue.front());
+            paired_poses_queue.pop_front();
+            paired_poses_pending = true;
+        }
+    }
+
     virtual bool is_depth_allowed() const {
         return false;
     }
@@ -181,6 +226,12 @@ struct VRRuntime {
     uint32_t internal_frame_count{};
     uint32_t internal_render_frame_count{};
     bool has_render_frame_count{false};
+
+    std::mutex paired_poses_mtx{};
+    std::deque<uint32_t> paired_poses_queue{};
+    std::optional<std::chrono::steady_clock::time_point> paired_poses_last_present{};
+    bool paired_poses_pending{false};
+    bool paired_poses_active{false};
 
     // view bounds proportions - left xmin, xmax, ymin, ymax then right xmin, xmax, ymin, ymax
     // used to crop the rendered eye textures to account for projection adjustments
